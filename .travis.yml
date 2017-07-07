@@ -1,5 +1,15 @@
-sudo: required
 services:
   - docker
-script:
-  - /bin/bash run_centos_docker_workflow.sh
+matrix:
+  include:
+  - os: linux
+    sudo: required
+before_install:
+  - docker pull demonchild2112/grr_centos:7
+  - docker create -it demonchild2112/grr_centos:7
+  - docker start $(docker ps -a -q)
+  - docker exec --user 0 $(docker ps -a -q) adduser -m grrbot
+  - docker cp run_centos_docker_workflow.sh $(docker ps -a -q):/home/grrbot
+  - docker exec --user 0 $(docker ps -a -q) chown grrbot:grrbot /home/grrbot/run_centos_docker_workflow.sh
+install:
+  - docker exec -it --user grrbot $(docker ps -a -q) /home/grrbot/run_centos_docker_workflow.sh

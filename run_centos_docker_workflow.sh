@@ -2,15 +2,22 @@
 
 set -e
 
-DOCKER_USR=grrbot
-DOCKER_IMG=travis_test
+cd $HOME && git clone https://github.com/google/grr.git
 
-sudo docker build --tag "$DOCKER_IMG" --build-arg user="$DOCKER_USR" .
+cd $HOME/grr
 
-container_id=$(sudo docker create "$DOCKER_IMG")
+travis/install_protobuf.sh linux
 
-sudo docker cp "$container_id:/home/$DOCKER_USR/protobuf/readme.txt" .
+virtualenv "$HOME/INSTALL" --python=/usr/local/bin/python2.7
 
-sudo docker rm "$container_id"
+export PROTOC=${PROTOC:-$HOME/protobuf/bin/protoc}
 
-cat 'readme.txt'
+travis/install.sh
+
+source "${HOME}/INSTALL/bin/activate"
+
+grr_client_build build --output built_templates
+
+grr_client_build build_components --output built_templates
+
+grr_client_build --verbose --secondary_configs grr/config/grr-response-test/test_data/dummyconfig.yaml repack --template built_templates/*.zip --output_dir built_templates/
