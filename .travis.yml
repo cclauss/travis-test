@@ -1,0 +1,4 @@
+sudo: required
+script:
+  - run_centos_docker_workflow.sh
+
