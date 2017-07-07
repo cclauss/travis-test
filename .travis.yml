@@ -1,4 +1,5 @@
 sudo: required
+services:
+  - docker
 script:
-  - run_centos_docker_workflow.sh
-
+  - /bin/bash run_centos_docker_workflow.sh
