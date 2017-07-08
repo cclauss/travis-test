@@ -4,6 +4,7 @@ matrix:
   include:
   - os: linux
     sudo: required
+    language: python
 before_install:
   - docker pull demonchild2112/grr_centos:7
   - docker create -it demonchild2112/grr_centos:7
