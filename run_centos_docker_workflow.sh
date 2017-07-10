@@ -6,6 +6,8 @@ cd $HOME && git clone https://github.com/google/grr.git
 
 cd $HOME/grr
 
+export TRAVIS_OS_NAME=${TRAVIS_OS_NAME:-linux}
+
 travis/install_protobuf.sh linux
 
 virtualenv "$HOME/INSTALL" --python=/usr/local/bin/python2.7
