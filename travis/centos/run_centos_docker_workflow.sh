@@ -4,7 +4,7 @@ set -e
 
 #cd $HOME/grr
 
-cd /mnt/grr
+cd /mnt
 
 export TRAVIS_OS_NAME=${TRAVIS_OS_NAME:-linux}
 

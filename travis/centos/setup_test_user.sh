@@ -14,3 +14,5 @@ else
   GROUP=$(getent group $TARGET_GID | cut -d: -f1)
   usermod -a -G $GROUP grrbot
 fi
+
+chmod -R g+w /mnt
