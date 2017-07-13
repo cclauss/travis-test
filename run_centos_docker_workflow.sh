@@ -10,7 +10,7 @@ export TRAVIS_OS_NAME=${TRAVIS_OS_NAME:-linux}
 
 travis/install_protobuf.sh linux
 
-virtualenv "$HOME/INSTALL" --python=/usr/local/bin/python2.7
+virtualenv "$HOME/INSTALL"
 
 export PROTOC=${PROTOC:-$HOME/protobuf/bin/protoc}
 
