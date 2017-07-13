@@ -14,7 +14,8 @@ yum install -y \
   gcc-c++ \
   redhat-rpm-config \
   rpm-build \
-  rpm-sign \
+  rpm-sign
+
 yum install -y python-pip
 # yum groupinstall -y "Development Tools"
 pip install virtualenv

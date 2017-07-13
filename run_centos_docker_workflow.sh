@@ -2,9 +2,9 @@
 
 set -e
 
-# cd $HOME && git clone https://github.com/google/grr.git
+#cd $HOME/grr
 
-cd $HOME/grr
+cd /mnt/grr
 
 export TRAVIS_OS_NAME=${TRAVIS_OS_NAME:-linux}
 

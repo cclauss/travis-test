@@ -3,15 +3,19 @@ services:
   - docker
 before_install:
   - sudo docker pull centos:7
-  - sudo docker create -it centos:7
-  - sudo docker start $(docker ps -a -q)
-  - sudo docker exec --user 0 $(docker ps -a -q) adduser -m grrbot
-  - sudo docker cp bare_centos_preinstall.sh $(docker ps -a -q):/root
-  - sudo docker cp run_centos_docker_workflow.sh $(docker ps -a -q):/home/grrbot
-  - sudo docker cp grr $(docker ps -a -q):/home/grrbot
-  - sudo docker exec --user 0 $(docker ps -a -q) chown -R grrbot:grrbot /home/grrbot
-  - sudo docker exec --user 0 $(docker ps -a -q) /root/bare_centos_preinstall.sh
+  - sudo docker create -it -v $PWD:/mnt --name grr_container centos:7
+  - sudo docker start grr_container
+  - sudo docker exec --user 0 grr_container chmod +x /mnt/*.sh
+  - sudo docker exec --user 0 grr_container /mnt/bare_centos_preinstall.sh
+  - sudo docker exec --user 0 grr_container /mnt/setup_test_user.sh
+  #- sudo docker exec --user 0 grr_container adduser --home /home/grrbot grrbot
+  #- sudo docker cp bare_centos_preinstall.sh grr_container:/root
+  #- sudo docker cp run_centos_docker_workflow.sh grr_container:/home/grrbot
+  #- sudo docker cp grr grr_container:/home/grrbot
+  #- sudo docker exec --user 0 grr_container chown -R grrbot:grrbot /home/grrbot
+  #- sudo docker exec --user 0 grr_container chmod +x /root/bare_centos_preinstall.sh
+  #- sudo docker exec --user 0 grr_container /root/bare_centos_preinstall.sh
 install:
-  - sudo docker exec -it --user grrbot $(docker ps -a -q) /home/grrbot/run_centos_docker_workflow.sh
+  - sudo docker exec --user grrbot grr_container /mnt/run_centos_docker_workflow.sh
 script:
-  - sudo docker exec -it --user 0 $(docker ps -a -q) rpm -vih /home/grrbot/grr/built_templates/*.rpm
+  - sudo docker exec -it --user 0 grr_container rpm -vih /mnt/grr/built_templates/*.rpm

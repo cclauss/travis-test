@@ -1,6 +1,6 @@
 FROM demonchild2112/grr_centos:7
 LABEL maintainer="denver@ogaro.net"
-ARG user
+ARG users
 ENV GRR_USER=${user:-grrbot}
 RUN useradd -m $GRR_USER
 USER $GRR_USER
