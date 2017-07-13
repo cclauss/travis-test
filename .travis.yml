@@ -2,11 +2,16 @@ sudo: required
 services:
   - docker
 before_install:
-  - sudo docker pull demonchild2112/grr_centos:7
-  - sudo docker create -it demonchild2112/grr_centos:7
+  - sudo docker pull centos:7
+  - sudo docker create -it centos:7
   - sudo docker start $(docker ps -a -q)
   - sudo docker exec --user 0 $(docker ps -a -q) adduser -m grrbot
+  - sudo docker cp bare_centos_preinstall.sh $(docker ps -a -q):/root
   - sudo docker cp run_centos_docker_workflow.sh $(docker ps -a -q):/home/grrbot
-  - sudo docker exec --user 0 $(docker ps -a -q) chown grrbot:grrbot /home/grrbot/run_centos_docker_workflow.sh
+  - sudo docker cp grr $(docker ps -a -q):/home/grrbot
+  - sudo docker exec --user 0 $(docker ps -a -q) chown -R grrbot:grrbot /home/grrbot
+  - sudo docker exec --user 0 $(docker ps -a -q) /root/bare_centos_preinstall.sh
 install:
   - sudo docker exec -it --user grrbot $(docker ps -a -q) /home/grrbot/run_centos_docker_workflow.sh
+script:
+  - sudo docker exec -it --user 0 $(docker ps -a -q) rpm -vih /home/grrbot/grr/built_templates/*.rpm
