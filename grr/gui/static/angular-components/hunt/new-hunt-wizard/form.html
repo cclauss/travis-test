@@ -1,0 +1,53 @@
+<grr-wizard-form title="New Hunt" on-resolve="controller.resolve()" on-reject="onReject()">
+
+  <!-- Configure flow -->
+  <grr-wizard-form-page title="What to run?"
+                        is-valid="createHuntArgs.value.flow_name.value">
+
+    <grr-configure-flow-page flow-name="createHuntArgs.value.flow_name.value"
+                             flow-arguments="createHuntArgs.value.flow_args"
+                             hunt-runner-args="createHuntArgs.value.hunt_runner_args">
+    </grr-configure-flow-page>
+
+  </grr-wizard-form-page>
+
+  <!-- Configure output plugins -->
+  <grr-wizard-form-page title="Define Output Processing">
+
+    <grr-configure-output-plugins-page
+      output-plugins="createHuntArgs.value.hunt_runner_args.value.output_plugins">
+    </grr-configure-output-plugins-page>
+
+  </grr-wizard-form-page>
+
+  <!-- Configure rules -->
+  <grr-wizard-form-page title="Where to run?">
+
+    <grr-configure-rules-page
+        client-rule-set="createHuntArgs.value.hunt_runner_args.value.client_rule_set">
+    </grr-configure-rules-page>
+
+  </grr-wizard-form-page>
+
+  <!-- Review -->
+  <grr-wizard-form-page title="Review"
+                        next-button-label="Create Hunt">
+
+    <grr-new-hunt-review-page create-hunt-args="createHuntArgs">
+    </grr-new-hunt-review-page>
+
+  </grr-wizard-form-page>
+
+  <!-- Submit the hunt and show the status -->
+  <grr-wizard-form-page title="Result"
+                        is-valid="controller.serverResponse != null"
+                        on-show="controller.sendRequest()"
+                        next-button-label="Done"
+                        no-back-button="true">
+
+    <grr-new-hunt-status-page response="controller.serverResponse">
+    </grr-new-hunt-status-page>
+
+  </grr-wizard-form-page>
+
+</grr-wizard-form>
