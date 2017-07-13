@@ -2,7 +2,7 @@
 
 set -e
 
-cd $HOME && git clone https://github.com/google/grr.git
+# cd $HOME && git clone https://github.com/google/grr.git
 
 cd $HOME/grr
 
