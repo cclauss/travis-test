@@ -1,6 +1,6 @@
 #!/bin/bash
 
-readonly TEST_USER=${TEST_USER:-grrbot}
+readonly DOCKER_USER=${DOCKER_USER:-grrbot}
 
 install_prereqs() {
   yum install -y \
@@ -36,7 +36,7 @@ set_up_mountdir_permissions() {
     mountdir_gname=$(getent group "${mountdir_gid}" | cut -d: -f1)
   fi
 
-  usermod -a -G "${mountdir_gname}" "${TEST_USER}"
+  usermod -a -G "${mountdir_gname}" "${DOCKER_USER}"
 
   # Give the group owner write permission to the GRR repo.
   # Note that any changes the test user makes inside
@@ -47,6 +47,6 @@ set_up_mountdir_permissions() {
 
 install_prereqs
 
-adduser -m "${TEST_USER}"
+adduser -m "${DOCKER_USER}"
 
 set_up_mountdir_permissions
