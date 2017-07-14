@@ -2,6 +2,8 @@
 #
 # This is run in the 'before_install' stage of Travis builds.
 
+set -e
+
 readonly DOCKER_IMG=${DOCKER_IMG:-centos:7}
 readonly DOCKER_CONTAINER=${DOCKER_CONTAINER:-grr_container}
 

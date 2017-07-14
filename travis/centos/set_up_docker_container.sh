@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -e
+
 readonly DOCKER_USER=${DOCKER_USER:-grrbot}
 
 install_prereqs() {
