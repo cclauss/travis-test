@@ -2,6 +2,8 @@
 
 set -e
 
+pip install google-compute-engine
+
 gcloud version || ( wget -q https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-sdk-116.0.0-linux-x86_64.tar.gz && tar zxf google-cloud-sdk-116.0.0-linux-x86_64.tar.gz -C "${HOME}" )
 
 openssl aes-256-cbc \
