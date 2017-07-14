@@ -25,15 +25,15 @@ install_prereqs() {
 
 set_up_mountdir_permissions() {
   # Group that owns the mounted GRR repo.
-  mountdir_gid=$(stat -c '%g' /mnt)
-  mountdir_grp_exists=$(cat /etc/group | grep "${mountdir_gid}" | wc -l)
+  mountdir_gid="$(stat -c '%g' /mnt)"
+  mountdir_grp_exists="$(cat /etc/group | grep ${mountdir_gid} | wc -l)"
 
   # Create group in container if it does not exist.
   mountdir_gname='mntgrp'
-  if [ "${mountdir_grp_exists}" == '0' ]; then
+  if [[ "${mountdir_grp_exists}" == '0' ]]; then
     groupadd -g "${mountdir_gid}" "${mountdir_gname}"
   else
-    mountdir_gname=$(getent group "${mountdir_gid}" | cut -d: -f1)
+    mountdir_gname="$(getent group ${mountdir_gid} | cut -d: -f1)"
   fi
 
   usermod -a -G "${mountdir_gname}" "${DOCKER_USER}"

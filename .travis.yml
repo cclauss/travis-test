@@ -12,4 +12,4 @@ install:
   - if [[ "${DOCKER}" == 'true' ]]; then sudo docker exec --user "${DOCKER_USER}" "${DOCKER_CONTAINER}" /mnt/travis/centos/docker_install.sh; fi
 script:
   - if [[ "${DOCKER}" == 'true' ]]; then sudo docker exec --user "${DOCKER_USER}" "${DOCKER_CONTAINER}" /mnt/travis/centos/docker_script.sh; fi
-  - if [[ "${DOCKER}" == 'true' ]]; then sudo docker exec --user root grr_container rpm -vih /mnt/built_templates/*.rpm; fi
+  - if [[ "${DOCKER}" == 'true' ]]; then sudo docker exec --user root "${DOCKER_CONTAINER}" rpm -vih /mnt/built_templates/*.rpm; fi
