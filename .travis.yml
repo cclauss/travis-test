@@ -1,4 +1,9 @@
-sudo: required
+matrix:
+  include:
+  - os: linux
+    language: python
+    python: 2.7
+    sudo: required
 services:
   - docker
 before_install:
@@ -7,13 +12,6 @@ before_install:
   - sudo docker start grr_container
   - sudo docker exec grr_container /mnt/travis/centos/bare_centos_preinstall.sh
   - sudo docker exec grr_container /mnt/travis/centos/setup_test_user.sh
-  #- sudo docker exec --user 0 grr_container adduser --home /home/grrbot grrbot
-  #- sudo docker cp bare_centos_preinstall.sh grr_container:/root
-  #- sudo docker cp run_centos_docker_workflow.sh grr_container:/home/grrbot
-  #- sudo docker cp grr grr_container:/home/grrbot
-  #- sudo docker exec --user 0 grr_container chown -R grrbot:grrbot /home/grrbot
-  #- sudo docker exec --user 0 grr_container chmod +x /root/bare_centos_preinstall.sh
-  #- sudo docker exec --user 0 grr_container /root/bare_centos_preinstall.sh
 install:
   - sudo docker exec --user grrbot grr_container /mnt/travis/centos/run_centos_docker_workflow.sh
 script:
