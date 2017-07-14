@@ -1,9 +1,15 @@
 matrix:
   include:
-  - os: linux
-    dist: trusty
-    sudo: required
-    env: DOCKER=true DOCKER_IMG=centos:7 DOCKER_CONTAINER=grr_container DOCKER_USER=grrbot
+    - os: linux
+      dist: trusty
+      sudo: required
+      env:
+        - DOCKER=true
+        - DOCKER_IMG=centos:7
+        - DOCKER_CONTAINER=grr_container
+        - DOCKER_USER=grrbot
+        - PATH=$PATH:${HOME}/google-cloud-sdk/bin
+        - CLOUDSDK_CORE_DISABLE_PROMPTS=1
 services:
   - docker
 before_install:
