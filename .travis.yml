@@ -13,3 +13,5 @@ install:
 script:
   - if [[ "${DOCKER}" == 'true' ]]; then sudo docker exec --user "${DOCKER_USER}" "${DOCKER_CONTAINER}" /mnt/travis/centos/docker_script.sh; fi
   - if [[ "${DOCKER}" == 'true' ]]; then sudo docker exec --user root "${DOCKER_CONTAINER}" rpm -vih /mnt/built_templates/*.rpm; fi
+  - if [[ "${DOCKER}" == 'true' ]]; then /bin/bash travis/centos/deploy.sh
+
