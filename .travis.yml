@@ -12,11 +12,19 @@ matrix:
         - DOCKER_USER=grrbot
         - PATH=$PATH:${HOME}/google-cloud-sdk/bin
         - CLOUDSDK_CORE_DISABLE_PROMPTS=1
-before_install:
-  - if [[ "${DOCKER}" == 'true' ]]; then sudo /bin/bash travis/centos/before_install.sh; fi
-install:
-  - if [[ "${DOCKER}" == 'true' ]]; then sudo docker exec --user "${DOCKER_USER}" "${DOCKER_CONTAINER}" /mnt/travis/centos/docker_install.sh; fi
-script:
-  - if [[ "${DOCKER}" == 'true' ]]; then sudo docker exec --user "${DOCKER_USER}" "${DOCKER_CONTAINER}" /mnt/travis/centos/docker_script.sh; fi
-  - if [[ "${DOCKER}" == 'true' ]]; then sudo docker exec --user root "${DOCKER_CONTAINER}" rpm -vih /mnt/built_templates/*.rpm; fi
-  - if [[ "${DOCKER}" == 'true' ]]; then /bin/bash travis/centos/deploy.sh; fi
+      before_install:
+        - sudo /bin/bash travis/centos/before_install.sh
+      install:
+        - sudo docker exec --user "${DOCKER_USER}" "${DOCKER_CONTAINER}" /mnt/travis/centos/docker_install.sh
+      script:
+        - sudo docker exec --user "${DOCKER_USER}" "${DOCKER_CONTAINER}" /mnt/travis/centos/docker_script.sh
+        - sudo docker exec --user root "${DOCKER_CONTAINER}" rpm -vih /mnt/built_templates/*.rpm
+        - /bin/bash travis/centos/deploy.sh
+#before_install:
+#  - if [[ "${DOCKER}" == 'true' ]]; then sudo /bin/bash travis/centos/before_install.sh; fi
+#install:
+#  - if [[ "${DOCKER}" == 'true' ]]; then sudo docker exec --user "${DOCKER_USER}" "${DOCKER_CONTAINER}" /mnt/travis/centos/docker_install.sh; fi
+#script:
+#  - if [[ "${DOCKER}" == 'true' ]]; then sudo docker exec --user "${DOCKER_USER}" "${DOCKER_CONTAINER}" /mnt/travis/centos/docker_script.sh; fi
+#  - if [[ "${DOCKER}" == 'true' ]]; then sudo docker exec --user root "${DOCKER_CONTAINER}" rpm -vih /mnt/built_templates/*.rpm; fi
+#  - if [[ "${DOCKER}" == 'true' ]]; then /bin/bash travis/centos/deploy.sh; fi
