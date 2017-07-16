@@ -28,3 +28,11 @@ matrix:
 #  - if [[ "${DOCKER}" == 'true' ]]; then sudo docker exec --user "${DOCKER_USER}" "${DOCKER_CONTAINER}" /mnt/travis/centos/docker_script.sh; fi
 #  - if [[ "${DOCKER}" == 'true' ]]; then sudo docker exec --user root "${DOCKER_CONTAINER}" rpm -vih /mnt/built_templates/*.rpm; fi
 #  - if [[ "${DOCKER}" == 'true' ]]; then /bin/bash travis/centos/deploy.sh; fi
+before_install:
+  - echo "I am executing the before install step."
+script:
+  - echo "I am executing the script step."
+addons:
+  apt:
+    packages:
+    - libffi-dev
