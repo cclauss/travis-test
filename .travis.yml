@@ -3,6 +3,8 @@ matrix:
     - os: linux
       dist: trusty
       sudo: required
+      services:
+        - docker
       env:
         - DOCKER=true
         - DOCKER_IMG=centos:7
@@ -10,8 +12,6 @@ matrix:
         - DOCKER_USER=grrbot
         - PATH=$PATH:${HOME}/google-cloud-sdk/bin
         - CLOUDSDK_CORE_DISABLE_PROMPTS=1
-services:
-  - docker
 before_install:
   - if [[ "${DOCKER}" == 'true' ]]; then sudo /bin/bash travis/centos/before_install.sh; fi
 install:
