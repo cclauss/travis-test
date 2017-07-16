@@ -13,8 +13,7 @@ openssl aes-256-cbc \
   -out travis/centos/travis_uploader_service_account.json -d
 
 gcloud auth activate-service-account --key-file travis/centos/travis_uploader_service_account.json
-cloud_bucket="gs://grr-releases-testing/${TRAVIS_JOB_NUMBER}"
+cloud_bucket="gs://ogaro-travis-test/${TRAVIS_JOB_NUMBER}"
 echo "Uploading templates to ${cloud_bucket}"
 gsutil -m cp built_templates/* "${cloud_bucket}"
 shred -u travis/centos/travis_uploader_service_account.json
-
