@@ -59,8 +59,8 @@ echo Uploading templates to "gs://ogaro-travis-test/${TRAVIS_JOB_NUMBER}"
 gsutil -m cp built_templates/* "gs://ogaro-travis-test/${TRAVIS_JOB_NUMBER}/"
 
 if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then
-  shred -u travis/travis_uploader_service_account.json
+  shred -u travis/centos/travis_uploader_service_account.json
 fi
 if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then
-  srm -sz travis/travis_uploader_service_account.json
+  srm -sz travis/centos/travis_uploader_service_account.json
 fi
