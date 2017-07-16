@@ -1,9 +1,3 @@
-env:
-  global:  # These variables are common to all jobs.
-    - PROTOC="${HOME}/protobuf/bin/protoc"
-    - PATH=$PATH:${HOME}/google-cloud-sdk/bin
-    - CLOUDSDK_CORE_DISABLE_PROMPTS=1
-
 matrix:
   include:
     # Ubuntu (the default OS for Travis)
@@ -17,6 +11,10 @@ matrix:
             - libffi-dev
             - libssl-dev
             - python-dev
+      env:
+        - PROTOC="${HOME}/protobuf/bin/protoc"
+        - PATH=$PATH:${HOME}/google-cloud-sdk/bin
+        - CLOUDSDK_CORE_DISABLE_PROMPTS=1
       before_install:
         - /bin/bash travis/install_protobuf.sh $TRAVIS_OS_NAME
         # We upgrade pip inside the virtualenv to avoid sudo here.
@@ -36,6 +34,11 @@ matrix:
       language: generic
       python: 2.7
       sudo: required
+      env:
+        - PROTOC="${HOME}/protobuf/bin/protoc"
+        - PATH=$PATH:${HOME}/google-cloud-sdk/bin
+        - CLOUDSDK_CORE_DISABLE_PROMPTS=1
+
       before_install:
         - /bin/bash travis/install_protobuf.sh $TRAVIS_OS_NAME
         - brew update
@@ -54,6 +57,7 @@ matrix:
         - /bin/bash travis/deploy_to_gcs.sh
 
     # Centos docker container inside an Ubuntu host
+    # TODO(ogaro): Set language.
     - os: linux
       dist: trusty
       sudo: required
