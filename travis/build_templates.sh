@@ -12,7 +12,7 @@ grr_client_build \
   --secondary_configs grr/config/grr-response-test/test_data/dummyconfig.yaml \
   repack \
   --template built_templates/*.zip \
-  --output_dir built_template
+  --output_dir built_templates
 
 # We don't install on linux because we're running on travis container
 # infrastructure that doesn't allow for sudo (but has startup time and

@@ -69,20 +69,18 @@ matrix:
         - PATH=$PATH:${HOME}/google-cloud-sdk/bin
         - CLOUDSDK_CORE_DISABLE_PROMPTS=1
       before_install:
+        - pip install google-compute-engine  # Needed for deploying to GCE
         # Create a Docker container which mounts the GRR repo in the
         # /mnt directory
-        - sudo docker create -it -v "${PWD}:/mnt" --name "${DOCKER_CONTAINER}" "${DOCKER_IMG}"
+        - sudo docker create -it -v "${PWD}:/mnt" -e TRAVIS_OS_NAME="${TRAVIS_OS_NAME}" -e PROTOC="${PROTOC}" --name "${DOCKER_CONTAINER}" "${DOCKER_IMG}"
         - sudo docker start "${DOCKER_CONTAINER}"
         - sudo docker exec "${DOCKER_CONTAINER}" /mnt/travis/centos/set_up_docker_container.sh
-        - sudo docker exec --user "${DOCKER_USER}" "${DOCKER_CONTAINER}" export TRAVIS_OS_NAME="${TRAVIS_OS_NAME}"
-        - sudo docker exec --user "${DOCKER_USER}" "${DOCKER_CONTAINER}" export PROTOC="${PROTOC}"
         - sudo docker exec --user "${DOCKER_USER}" "${DOCKER_CONTAINER}" /mnt/travis/install_protobuf.sh "${TRAVIS_OS_NAME}"
         - sudo docker exec --user "${DOCKER_USER}" "${DOCKER_CONTAINER}" virtualenv "/home/${DOCKER_USER}/INSTALL"
-        - pip install google-compute-engine  # Needed for deploying to GCE
       install:
         - sudo docker exec --user "${DOCKER_USER}" "${DOCKER_CONTAINER}" /mnt/travis/install.sh
       script:
-        - sudo docker exec --user "${DOCKER_USER}" "${DOCKER_CONTAINER}" cd /mnt && travis/build_templates.sh
+        - sudo docker exec --user "${DOCKER_USER}" "${DOCKER_CONTAINER}" /bin/bash -c 'cd /mnt && travis/build_templates.sh'
         # Test installing the built rpm (as root)
         - sudo docker exec --user "${DOCKER_CONTAINER}" rpm -vih /mnt/built_templates/*.rpm
         - /bin/bash travis/deploy_to_gcs.sh
