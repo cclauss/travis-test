@@ -17,7 +17,6 @@ matrix:
         - CLOUDSDK_CORE_DISABLE_PROMPTS=1
       before_install:
         - /bin/bash travis/install_protobuf.sh $TRAVIS_OS_NAME
-        # We upgrade pip inside the virtualenv to avoid sudo here.
         - pip install --upgrade virtualenv
         - virtualenv ${HOME}/INSTALL
       install:
@@ -25,6 +24,7 @@ matrix:
       script:
         - source ${HOME}/INSTALL/bin/activate
         - grr_run_tests --processes=2
+        - /bin/bash travis/build_templates.sh
         - /bin/bash travis/deploy_to_gcs.sh
 
     # OSX
@@ -38,7 +38,6 @@ matrix:
         - PROTOC="${HOME}/protobuf/bin/protoc"
         - PATH=$PATH:${HOME}/google-cloud-sdk/bin
         - CLOUDSDK_CORE_DISABLE_PROMPTS=1
-
       before_install:
         - /bin/bash travis/install_protobuf.sh $TRAVIS_OS_NAME
         - brew update
@@ -46,7 +45,6 @@ matrix:
         - git clone https://github.com/MacPython/terryfy
         - source terryfy/travis_tools.sh
         - get_python_environment macpython 2.7.11
-        # We upgrade pip inside the virtualenv to avoid sudo here.
         - pip install --upgrade virtualenv
         - virtualenv ${HOME}/INSTALL
       install:
@@ -54,29 +52,40 @@ matrix:
       script:
         - source ${HOME}/INSTALL/bin/activate
         - grr_run_tests --processes=2 --labels=client_action
+        - /bin/bash travis/build_templates.sh
         - /bin/bash travis/deploy_to_gcs.sh
 
-    # Centos docker container inside an Ubuntu host
+    # Centos docker container inside an Ubuntu host, for rpm builds
     # TODO(ogaro): Set language.
     - os: linux
       dist: trusty
       sudo: required
       services:
         - docker
-      env: # TODO(ogaro): Set protoc and travis os name explicitly here.
+      env:
         - DOCKER_IMG=centos:7
         - DOCKER_CONTAINER=grr_container
         - DOCKER_USER=grrbot
         - PATH=$PATH:${HOME}/google-cloud-sdk/bin
         - CLOUDSDK_CORE_DISABLE_PROMPTS=1
       before_install:
-        - sudo /bin/bash travis/centos/before_install.sh
+        # Create a Docker container which mounts the GRR repo in the
+        # /mnt directory
+        - sudo docker create -it -v "${PWD}:/mnt" --name "${DOCKER_CONTAINER}" "${DOCKER_IMG}"
+        - sudo docker start "${DOCKER_CONTAINER}"
+        - sudo docker exec "$DOCKER_CONTAINER}" /mnt/travis/centos/set_up_docker_container.sh
+        - sudo docker exec --user "${DOCKER_USER}" "${DOCKER_CONTAINER}" export TRAVIS_OS_NAME="${TRAVIS_OS_NAME}"
+        - sudo docker exec --user "${DOCKER_USER}" "${DOCKER_CONTAINER}" export PROTOC="${PROTOC}"
+        - sudo docker exec --user "${DOCKER_USER}" "${DOCKER_CONTAINER}" /mnt/travis/install_protobuf.sh "${TRAVIS_OS_NAME}"
+        - sudo docker exec --user "${DOCKER_USER}" "${DOCKER_CONTAINER}" virtualenv "/home/${DOCKER_USER}/INSTALL"
+        - pip install google-compute-engine  # Needed for deploying to GCE
       install:
-        - sudo docker exec --user "${DOCKER_USER}" "${DOCKER_CONTAINER}" /mnt/travis/centos/docker_install.sh
+        - sudo docker exec --user "${DOCKER_USER}" "${DOCKER_CONTAINER}" /mnt/travis/install.sh
       script:
-        - sudo docker exec --user "${DOCKER_USER}" "${DOCKER_CONTAINER}" /mnt/travis/centos/docker_script.sh
-        - sudo docker exec --user root "${DOCKER_CONTAINER}" rpm -vih /mnt/built_templates/*.rpm
-        - /bin/bash travis/centos/deploy.sh
+        - sudo docker exec --user "${DOCKER_USER}" "${DOCKER_CONTAINER}" cd /mnt && travis/build_templates.sh
+        # Test installing the built rpm (as root)
+        - sudo docker exec --user "${DOCKER_CONTAINER}" rpm -vih /mnt/built_templates/*.rpm
+        - /bin/bash travis/deploy_to_gcs.sh
 
 cache:
   directories:
