@@ -74,7 +74,7 @@ matrix:
         # /mnt directory
         - sudo docker create -it --volume "${PWD}:/mnt" --workdir /mnt --env TRAVIS_OS_NAME="${TRAVIS_OS_NAME}" --env PROTOC="/home/${DOCKER_USER}/protobuf/bin/protoc" --name "${DOCKER_CONTAINER}" "${DOCKER_IMG}"
         - sudo docker start "${DOCKER_CONTAINER}"
-        - sudo docker exec "${DOCKER_CONTAINER}" /mnt/travis/centos/set_up_docker_container.sh
+        - sudo docker exec "${DOCKER_CONTAINER}" /mnt/travis/set_up_centos_docker_container.sh
         - sudo docker exec --user "${DOCKER_USER}" "${DOCKER_CONTAINER}" /mnt/travis/install_protobuf.sh "${TRAVIS_OS_NAME}"
         - sudo docker exec --user "${DOCKER_USER}" "${DOCKER_CONTAINER}" virtualenv "/home/${DOCKER_USER}/INSTALL"
       install:
@@ -82,7 +82,7 @@ matrix:
       script:
         - sudo docker exec --user "${DOCKER_USER}" "${DOCKER_CONTAINER}" travis/build_templates.sh
         # Test installing the built rpm (as root)
-        - sudo docker exec --user "${DOCKER_CONTAINER}" rpm -vih /mnt/built_templates/*.rpm
+        - sudo docker exec "${DOCKER_CONTAINER}" rpm -vih /mnt/built_templates/*.rpm
         - /bin/bash travis/deploy_to_gcs.sh
 
 cache:
