@@ -72,7 +72,7 @@ matrix:
         - pip install google-compute-engine  # Needed for deploying to GCE
         # Create a Docker container which mounts the GRR repo in the
         # /mnt directory
-        - sudo docker create -it --volume "${PWD}:/mnt" --workdir /mnt --env TRAVIS_OS_NAME="${TRAVIS_OS_NAME}" --env PROTOC="${PROTOC}" --name "${DOCKER_CONTAINER}" "${DOCKER_IMG}"
+        - sudo docker create -it --volume "${PWD}:/mnt" --workdir /mnt --env TRAVIS_OS_NAME="${TRAVIS_OS_NAME}" --env PROTOC="/home/${DOCKER_USER}/protobuf/bin/protoc" --name "${DOCKER_CONTAINER}" "${DOCKER_IMG}"
         - sudo docker start "${DOCKER_CONTAINER}"
         - sudo docker exec "${DOCKER_CONTAINER}" /mnt/travis/centos/set_up_docker_container.sh
         - sudo docker exec --user "${DOCKER_USER}" "${DOCKER_CONTAINER}" /mnt/travis/install_protobuf.sh "${TRAVIS_OS_NAME}"
