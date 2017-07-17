@@ -4,7 +4,8 @@ matrix:
     - os: linux
       language: python
       python: 2.7
-      sudo: false
+      sudo: required
+      dist: trusty
       addons:
         apt:
           packages:
@@ -23,7 +24,7 @@ matrix:
         - /bin/bash travis/install.sh
       script:
         - source "${HOME}/INSTALL/bin/activate"
-        - grr_run_tests --processes=2
+        - grr_run_tests --processes=5
         - /bin/bash travis/build_templates.sh
         - /bin/bash travis/deploy_to_gcs.sh
 
@@ -51,7 +52,7 @@ matrix:
         - /bin/bash travis/install.sh
       script:
         - source "${HOME}/INSTALL/bin/activate"
-        - grr_run_tests --processes=2 --labels=client_action
+        - grr_run_tests --processes=5 --labels=client_action
         - /bin/bash travis/build_templates.sh
         - /bin/bash travis/deploy_to_gcs.sh
 
@@ -75,6 +76,7 @@ matrix:
           sudo docker create -it
           --volume "${PWD}:/mnt"
           --workdir /mnt
+          --env DOCKER_USER="${DOCKER_USER}"
           --env TRAVIS_OS_NAME="${TRAVIS_OS_NAME}"
           --env PROTOC="/home/${DOCKER_USER}/protobuf/bin/protoc"
           --name "${DOCKER_CONTAINER}"
