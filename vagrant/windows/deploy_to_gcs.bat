@@ -1,4 +1,5 @@
-:: See https://www.appveyor.com/docs/how-to/secure-files/
+set PATH=%PATH%;C:\grr_deps\google-cloud-sdk\bin
+
 powershell gcloud auth activate-service-account --key-file C:\grr_src\vagrant\windows\ogaro.appveyor-test.json
 
 :: TODO(ogaro): Sort.
