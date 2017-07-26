@@ -13,7 +13,7 @@ cache:
 install:
   - C:\grr_src\vagrant\windows\install_for_build.bat
   - nuget install secure-file -ExcludeVersion
-  - secure-file\tools\secure-file -decrypt C:\grr_src\vagrant\windows\ogaro.appveyor-test.json.enc -secret %gce_secret%
+  - secure-file\tools\secure-file -decrypt C:\grr_src\vagrant\windows\ogaro.appveyor-test.json.enc -secret %GCE_ENCRYPTION_KEY%
   - C:\grr_src\vagrant\windows\deploy_to_gcs.bat
 
 build_script:
@@ -26,6 +26,6 @@ artifacts:
     type: zip
 
 environment:
-  gce_secret:
+  GCE_ENCRYPTION_KEY:
     # See https://www.appveyor.com/docs/how-to/secure-files/
     secure: V50YB9ZMPxsSwcmEPaD5qw==
