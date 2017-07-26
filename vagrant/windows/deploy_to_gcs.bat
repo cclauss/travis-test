@@ -1,3 +1,6 @@
+rem TODO(ogaro): Move this to the installation stage.
+set PATH=%PATH%;C:\grr_deps\google-cloud-sdk\bin
+
 rem See https://www.appveyor.com/docs/how-to/secure-files/
 powershell gcloud auth activate-service-account --key-file C:\grr_src\vagrant\windows\ogaro.appveyor-test.json
 
