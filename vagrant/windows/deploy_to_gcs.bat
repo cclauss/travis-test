@@ -1,6 +1,6 @@
 set PATH=%PATH%;C:\grr_deps\google-cloud-sdk\bin
 
-gcloud auth activate-service-account --key-file C:\grr_src\vagrant\windows\ogaro.appveyor-test.json
+powershell gcloud auth activate-service-account --key-file C:\grr_src\vagrant\windows\ogaro.appveyor-test.json
 
 :: TODO(ogaro): Sort.
 :: set GCE_DEST=gs://ogaro-travis-test/%APPVEYOR_REPO_COMMIT_TIMESTAMP%_%APPVEYOR_REPO_COMMIT%/appveyor_%APPVEYOR_BUILD_ID%_%APPVEYOR_JOB_ID%/
