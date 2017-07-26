@@ -7,7 +7,7 @@ $raw_commit_dt = [DateTime]$env:APPVEYOR_REPO_COMMIT_TIMESTAMP
 
 $short_commit_dt = $raw_commit_dt.ToString("yyyy-MM-ddTHH:mmUTC")
 
-$GCE_DEST = "gs://ogaro-travis-test/$short_commit_dt_$env:APPVEYOR_REPO_COMMIT/appveyor_build_$env:APPVEYOR_BUILD_NUMBER_job_$env:APPVEYOR_JOB_NUMBER/"
+$GCE_DEST = "gs://ogaro-travis-test/{0}_{1}/appveyor_build_{2}_job_{3}/" -f $short_commit_dt, $env:APPVEYOR_REPO_COMMIT, $env:APPVEYOR_BUILD_NUMBER, $env:APPVEYOR_JOB_NUMBER
 
 :: echo Uploading templates to gs://ogaro-travis-test/%APPVEYOR_REPO_COMMIT_TIMESTAMP%_%APPVEYOR_REPO_COMMIT%/appveyor_%APPVEYOR_BUILD_ID%_%APPVEYOR_JOB_ID%/
 echo Uploading templates to $GCE_DEST
