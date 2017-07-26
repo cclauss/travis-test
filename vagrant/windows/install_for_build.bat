@@ -44,7 +44,7 @@ C:\grr_deps\protoc\bin\protoc.exe --version || echo "proto compiler install fail
 :: Install Google Cloud SDK
 echo Installing Google Cloud SDK
 powershell -NoProfile -ExecutionPolicy unrestricted -Command "(new-object System.Net.WebClient).DownloadFile('https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-sdk-163.0.0-windows-x86_64.zip', 'C:\grr_deps\google-cloud-sdk-163.0.0-windows-x86_64.zip')"
-C:\Python27-x64\python.exe -m "zipfile" -e C:\grr_deps\google-cloud-sdk-163.0.0-windows-x86_64.zip
+C:\Python27-x64\python.exe -m "zipfile" -e C:\grr_deps\google-cloud-sdk-163.0.0-windows-x86_64.zip C:\grr_deps
 dir C:\grr_deps\google-cloud-sdk
 C:\grr_deps\google-cloud-sdk\install.bat --quiet
 
