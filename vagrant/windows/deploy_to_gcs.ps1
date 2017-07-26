@@ -1,4 +1,4 @@
-env:PATH += ";C:\grr_deps\google-cloud-sdk\bin"
+$env:PATH += ";C:\grr_deps\google-cloud-sdk\bin"
 
 gcloud auth activate-service-account --key-file C:\grr_src\vagrant\windows\ogaro.appveyor-test.json
 
