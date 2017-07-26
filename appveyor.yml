@@ -14,7 +14,7 @@ install:
   - C:\grr_src\vagrant\windows\install_for_build.bat
   - nuget install secure-file -ExcludeVersion
   - secure-file\tools\secure-file -decrypt C:\grr_src\vagrant\windows\ogaro.appveyor-test.json.enc -secret %GCE_ENCRYPTION_KEY%
-  - C:\grr_src\vagrant\windows\deploy_to_gcs.bat
+  - ps C:\grr_src\vagrant\windows\deploy_to_gcs.ps1
 
 build_script:
   - C:\Python27-x64\python.exe C:\grr_src\vagrant\windows\build_windows_templates.py --grr_src=C:\grr_src --output_dir=C:\grr_src\output --test_repack_install
