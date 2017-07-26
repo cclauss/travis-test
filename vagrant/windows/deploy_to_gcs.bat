@@ -1,5 +1,5 @@
 rem See https://www.appveyor.com/docs/how-to/secure-files/
-gcloud auth activate-service-account --key-file C:\grr_src\vagrant\windows\ogaro.appveyor-test.json.enc
+gcloud auth activate-service-account --key-file C:\grr_src\vagrant\windows\ogaro.appveyor-test.json
 
 echo Uploading templates to "gs://ogaro-travis-test/appveyor"
 
