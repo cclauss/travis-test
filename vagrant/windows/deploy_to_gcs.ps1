@@ -27,6 +27,6 @@ $upload_duration = $stop_watch.Elapsed.TotalSeconds
 
 # gsutil will print an info message recommending using the -m option (parallel
 # object upload) when copying objects to GCP. For some reason however, that
-# doesn't seem to work properly on Appveyor. Some files fail to upload
-# with unhelpful error messages like 'Duplicate type [0:0:2]'
+# doesn't seem to work properly on Appveyor. Some files arbitrarily fail to
+# upload with unhelpful error messages like 'Duplicate type [0:0:2]'
 echo "Sequential object upload took $copy_duration seconds"
