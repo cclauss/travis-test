@@ -2,6 +2,10 @@ $env:PATH += ";C:\grr_deps\google-cloud-sdk\bin"
 
 gcloud auth activate-service-account --key-file C:\grr_src\vagrant\windows\ogaro.appveyor-test.json
 
+if (!$?) {
+  exit 1
+}
+
 # Parse appveyor IS0 8601 commit date string (e.g 2017-07-26T16:49:31.0000000Z)
 # into a Powershell DateTime object
 $raw_commit_dt = [DateTime]$env:APPVEYOR_REPO_COMMIT_TIMESTAMP
@@ -13,8 +17,8 @@ $gce_dest = "gs://ogaro-travis-test/{0}_{1}/appveyor_build_{2}_job_{3}/" -f $sho
 
 echo "Uploading templates to $gce_dest"
 
-gsutil -m cp "C:\grr_src\output\*" $gce_dest
+gsutil cp "C:\grr_src\output\*" $gce_dest
 
 if (!$?) {
-  exit 1
+  exit 2
 }
