@@ -14,3 +14,7 @@ $gce_dest = "gs://ogaro-travis-test/{0}_{1}/appveyor_build_{2}_job_{3}/" -f $sho
 echo "Uploading templates to $gce_dest"
 
 gsutil -m cp "C:\grr_src\output\*" $gce_dest
+
+if ($?) {
+  exit 1
+}
