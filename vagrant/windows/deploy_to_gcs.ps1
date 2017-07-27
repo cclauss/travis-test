@@ -15,6 +15,6 @@ echo "Uploading templates to $gce_dest"
 
 gsutil -m cp "C:\grr_src\output\*" $gce_dest
 
-if ($?) {
+if (!$?) {
   exit 1
 }
