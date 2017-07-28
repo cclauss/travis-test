@@ -24,7 +24,7 @@ matrix:
         - /bin/bash travis/install.sh
       script:
         - source "${HOME}/INSTALL/bin/activate"
-        - grr_run_tests --processes=2
+        # TODO(ogaro): Uncomment - grr_run_tests --processes=2
         - /bin/bash travis/build_templates.sh
         - /bin/bash travis/deploy_to_gcs.sh
 
@@ -52,7 +52,7 @@ matrix:
         - /bin/bash travis/install.sh
       script:
         - source "${HOME}/INSTALL/bin/activate"
-        - grr_run_tests --processes=2 --labels=client_action
+        # TODO(ogaro): Uncomment - grr_run_tests --processes=2 --labels=client_action
         - /bin/bash travis/build_templates.sh
         - /bin/bash travis/deploy_to_gcs.sh
 
