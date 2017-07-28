@@ -9,6 +9,7 @@ matrix:
         apt:
           packages:
             - fakeroot
+            - debhelper
             - libffi-dev
             - libssl-dev
             - python-dev
