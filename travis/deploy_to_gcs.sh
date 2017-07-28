@@ -44,8 +44,10 @@ openssl aes-256-cbc -K "${encrypted_b85fe3a43822_key}" \
   -out travis/travis_uploader_service_account.json -d
 
 gcloud auth activate-service-account --key-file travis/travis_uploader_service_account.json
-echo Uploading templates to "gs://ogaro-travis-test/${TRAVIS_JOB_NUMBER}"
-gsutil -m cp built_templates/* "gs://ogaro-travis-test/${TRAVIS_JOB_NUMBER}/"
+gcs_dest="gs://ogaro-travis-test/TODOTIMESTAMP_${TRAVIS_COMMIT}/travis_job_${TRAVIS_JOB_NUMBER}/"
+echo "${TRAVIS_COMMIT_MESSAGE}"
+echo Uploading templates to $gcs_dest
+gsutil -m cp built_templates/* $gcs_dest
 
 if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then
   shred -u travis/travis_uploader_service_account.json
