@@ -35,4 +35,4 @@ artifacts:
 
 environment:
   GCS_ENCRYPTION_KEY:
-    secure: secure: V50YB9ZMPxsSwcmEPaD5qw==
+    secure: V50YB9ZMPxsSwcmEPaD5qw==
