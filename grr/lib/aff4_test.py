@@ -11,7 +11,6 @@ import time
 import mock
 
 from grr.lib import aff4
-from grr.lib import config_lib
 from grr.lib import data_store
 from grr.lib import flags
 from grr.lib import flow
@@ -1284,16 +1283,18 @@ class AFF4Tests(test_lib.AFF4ObjectTest):
       session_ids.append(
           flow.GRRFlow.StartFlow(
               client_id=self.client_id,
-              flow_name="FlowOrderTest",
+              flow_name=test_lib.FlowOrderTest.__name__,
               token=self.token))
 
     # Try to open a single flow.
     flow_obj = aff4.FACTORY.Open(session_ids[0], mode="r", token=self.token)
 
-    self.assertEqual(flow_obj.runner_args.flow_name, "FlowOrderTest")
+    self.assertEqual(flow_obj.runner_args.flow_name,
+                     test_lib.FlowOrderTest.__name__)
     self.assertEqual(flow_obj.session_id, session_ids[0])
 
-    self.assertEqual(flow_obj.__class__.__name__, "FlowOrderTest")
+    self.assertEqual(flow_obj.__class__.__name__,
+                     test_lib.FlowOrderTest.__name__)
 
   def testMultiOpen(self):
     root_urn = aff4.ROOT_URN.Add("path")
@@ -1381,7 +1382,7 @@ class AFF4Tests(test_lib.AFF4ObjectTest):
     self.assertEqual(children[0].age,
                      rdfvalue.RDFDatetime().FromSecondsFromEpoch(100))
 
-    latest_time = 100 + config_lib.CONFIG["AFF4.intermediate_cache_age"] - 1
+    latest_time = 100 + aff4.FACTORY.intermediate_cache_age - 1
     with utils.Stubber(time, "time", lambda: latest_time):
       fd = aff4.FACTORY.Create(
           self.client_id.Add("parent").Add("child2"),
@@ -1409,7 +1410,7 @@ class AFF4Tests(test_lib.AFF4ObjectTest):
     self.assertEqual(children[0].age,
                      rdfvalue.RDFDatetime().FromSecondsFromEpoch(100))
 
-    latest_time = 100 + config_lib.CONFIG["AFF4.intermediate_cache_age"] + 1
+    latest_time = 100 + aff4.FACTORY.intermediate_cache_age + 1
     with utils.Stubber(time, "time", lambda: latest_time):
       fd = aff4.FACTORY.Create(
           self.client_id.Add("parent").Add("child2"),

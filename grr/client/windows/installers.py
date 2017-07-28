@@ -13,12 +13,10 @@ We also set shell=True because that seems to avoid having an extra cmd.exe
 window pop up.
 """
 import os
-import re
 import shutil
 import subprocess
 import sys
 import time
-import _winreg
 import pywintypes
 import win32process
 import win32service
@@ -26,9 +24,8 @@ import win32serviceutil
 
 import logging
 
+from grr import config
 from grr.client import installer
-from grr.lib import config_lib
-from grr.lib import utils
 
 
 class CheckForWow64(installer.Installer):
@@ -43,11 +40,11 @@ class CheckForWow64(installer.Installer):
 class CopyToSystemDir(installer.Installer):
   """Copy the distribution from the temp directory to the target."""
 
-  pre = ["CheckForWow64"]
+  pre = [CheckForWow64]
 
   def StopPreviousService(self):
     """Wait until the service can be stopped."""
-    service = config_lib.CONFIG["Nanny.service_name"]
+    service = config.CONFIG["Nanny.service_name"]
 
     # QueryServiceStatus returns: scvType, svcState, svcControls, err,
     # svcErr, svcCP, svcWH
@@ -71,7 +68,7 @@ class CopyToSystemDir(installer.Installer):
       status = win32serviceutil.QueryServiceStatus(service)[1]
 
     if status != win32service.SERVICE_STOPPED:
-      service_binary = config_lib.CONFIG["Nanny.service_binary_name"]
+      service_binary = config.CONFIG["Nanny.service_binary_name"]
 
       # Taskkill will fail on systems predating Windows XP, this is a best
       # effort fallback solution.
@@ -96,9 +93,9 @@ class CopyToSystemDir(installer.Installer):
     self.StopPreviousService()
 
     executable_directory = os.path.dirname(sys.executable)
-    install_path = config_lib.CONFIG["Client.install_path"]
+    install_path = config.CONFIG["Client.install_path"]
     logging.info("Installing binaries %s -> %s", executable_directory,
-                 config_lib.CONFIG["Client.install_path"])
+                 config.CONFIG["Client.install_path"])
 
     try:
       shutil.rmtree(install_path)
@@ -134,7 +131,7 @@ class CopyToSystemDir(installer.Installer):
 class WindowsInstaller(installer.Installer):
   """Install the windows client binary."""
 
-  pre = ["CopyToSystemDir", "UpdateClients"]
+  pre = [CopyToSystemDir]
 
   # These options will be copied to the registry to configure the nanny service.
   nanny_options = ("Nanny.child_binary", "Nanny.child_command_line",
@@ -144,17 +141,17 @@ class WindowsInstaller(installer.Installer):
     """Install the nanny program."""
     # We need to copy the nanny sections to the registry to ensure the
     # service is correctly configured.
-    new_config = config_lib.CONFIG.MakeNewConfig()
-    new_config.SetWriteBack(config_lib.CONFIG["Config.writeback"])
+    new_config = config.CONFIG.MakeNewConfig()
+    new_config.SetWriteBack(config.CONFIG["Config.writeback"])
 
     for option in self.nanny_options:
-      new_config.Set(option, config_lib.CONFIG.Get(option))
+      new_config.Set(option, config.CONFIG.Get(option))
 
     new_config.Write()
 
     args = [
-        config_lib.CONFIG["Nanny.binary"], "--service_key",
-        config_lib.CONFIG["Nanny.service_key"], "install"
+        config.CONFIG["Nanny.binary"], "--service_key",
+        config.CONFIG["Nanny.service_key"], "install"
     ]
 
     logging.debug("Calling %s", (args,))
@@ -164,36 +161,3 @@ class WindowsInstaller(installer.Installer):
 
   def Run(self):
     self.InstallNanny()
-
-
-class UpdateClients(installer.Installer):
-  """Copy configuration from old clients."""
-
-  def Run(self):
-    try:
-      new_config = config_lib.CONFIG.MakeNewConfig()
-      new_config.SetWriteBack(config_lib.CONFIG["Config.writeback"])
-
-      for mapping in config_lib.CONFIG["Installer.old_key_map"]:
-        try:
-          src, parameter_name = mapping.split("->")
-          src_components = re.split(r"[/\\]", src.strip())
-          parameter_name = parameter_name.strip()
-
-          key_name = "\\".join(src_components[1:-1])
-          value_name = src_components[-1]
-          key = _winreg.CreateKeyEx(
-              getattr(_winreg, src_components[0]), key_name, 0,
-              _winreg.KEY_ALL_ACCESS)
-
-          value, _ = _winreg.QueryValueEx(key, value_name)
-
-          new_config.SetRaw(parameter_name, utils.SmartStr(value))
-
-          _winreg.DeleteValue(key, value_name)
-
-          logging.info("Migrated old parameter %s", src)
-        except (OSError, AttributeError, IndexError, ValueError) as e:
-          logging.debug("mapping %s ignored: %s", mapping, e)
-    finally:
-      new_config.Write()

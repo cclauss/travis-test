@@ -61,7 +61,6 @@ import traceback
 
 import logging
 from grr.lib import aff4
-from grr.lib import config_lib
 from grr.lib import data_store
 from grr.lib import events
 from grr.lib import grr_collections
@@ -95,6 +94,14 @@ class FlowRunner(object):
   all the requests that arrive regardless of any order such that one client that
   doesn't respond does not make the whole hunt wait.
   """
+
+  # The queue manager retries to work on requests it could not
+  # complete after this many seconds.
+  notification_retry_interval = 30
+
+  # Flows who got stuck in the worker for more than this time (in
+  # seconds) are forcibly terminated.
+  stuck_flows_timeout = 60 * 60 * 6
 
   def __init__(self, flow_obj, parent_runner=None, runner_args=None,
                token=None):
@@ -227,7 +234,6 @@ class FlowRunner(object):
         creator=parent_creator or self.token.username,
         current_state="Start",
         output_plugins_states=output_plugins_states,
-        remaining_cpu_quota=args.cpu_limit,
         state=rdf_flows.FlowContext.State.RUNNING,
 
         # Have we sent a notification to the user.
@@ -343,9 +349,7 @@ class FlowRunner(object):
     # requests. If we're stuck for some reason, the notification
     # will be delivered later and the stuck flow will get
     # terminated.
-    stuck_flows_timeout = rdfvalue.Duration(
-        config_lib.CONFIG["Worker.stuck_flows_timeout"])
-    kill_timestamp = (rdfvalue.RDFDatetime().Now() + stuck_flows_timeout)
+    kill_timestamp = (rdfvalue.RDFDatetime().Now() + self.stuck_flows_timeout)
     with queue_manager.QueueManager(token=self.token) as manager:
       manager.QueueNotification(
           session_id=self.session_id,
@@ -367,10 +371,8 @@ class FlowRunner(object):
             start=self.context.kill_timestamp,
             end=self.context.kill_timestamp + rdfvalue.Duration("1s"))
 
-        stuck_flows_timeout = rdfvalue.Duration(
-            config_lib.CONFIG["Worker.stuck_flows_timeout"])
         self.context.kill_timestamp = (
-            rdfvalue.RDFDatetime().Now() + stuck_flows_timeout)
+            rdfvalue.RDFDatetime().Now() + self.stuck_flows_timeout)
         manager.QueueNotification(
             session_id=self.session_id,
             in_progress=True,
@@ -397,7 +399,7 @@ class FlowRunner(object):
         # could not process that request. This might be a race
         # condition in the data store so we reschedule the
         # notification in the future.
-        delay = config_lib.CONFIG["Worker.notification_retry_interval"]
+        delay = self.notification_retry_interval
         notification.ttl -= 1
         if notification.ttl:
           manager.QueueNotification(
@@ -704,9 +706,6 @@ class FlowRunner(object):
         payload=request,
         generate_task_id=True)
 
-    if self.context.remaining_cpu_quota:
-      msg.cpu_limit = int(self.context.remaining_cpu_quota)
-
     cpu_usage = self.context.client_resources.cpu_usage
     if self.runner_args.cpu_limit:
       msg.cpu_limit = max(self.runner_args.cpu_limit - cpu_usage.user_cpu_time -
@@ -722,7 +721,6 @@ class FlowRunner(object):
         raise FlowRunnerError("Network limit exceeded.")
 
     state.request = msg
-
     self.QueueRequest(state, timestamp=start_time)
 
   def Publish(self, event_name, msg, delay=0):
@@ -1033,7 +1031,6 @@ class FlowRunner(object):
     _ = request
     status = responses.status
     if status:
-      # Do this last since it may raise "CPU limit exceeded".
       self.UpdateProtoResources(status)
 
   def _QueueRequest(self, request, timestamp=None):

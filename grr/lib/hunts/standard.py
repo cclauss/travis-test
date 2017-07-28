@@ -18,8 +18,11 @@ from grr.lib import registry
 from grr.lib import stats
 from grr.lib import utils
 from grr.lib.aff4_objects import cronjobs
+from grr.lib.flows.general import transfer
 from grr.lib.hunts import implementation
 from grr.lib.rdfvalues import client as rdf_client
+from grr.lib.rdfvalues import flows as rdf_flows
+from grr.lib.rdfvalues import hunts as rdf_hunts
 from grr.lib.rdfvalues import paths as rdf_paths
 from grr.lib.rdfvalues import structs as rdf_structs
 from grr.proto import flows_pb2
@@ -29,8 +32,35 @@ class Error(Exception):
   pass
 
 
+class GenericHuntArgs(rdf_structs.RDFProtoStruct):
+  """Arguments to the generic hunt."""
+  protobuf = flows_pb2.GenericHuntArgs
+  rdf_deps = [
+      rdf_flows.FlowRunnerArgs,
+      output_plugin.OutputPluginDescriptor,
+  ]
+
+  def Validate(self):
+    self.flow_runner_args.Validate()
+    self.flow_args.Validate()
+
+  def GetFlowArgsClass(self):
+    if self.flow_runner_args.flow_name:
+      flow_cls = flow.GRRFlow.classes.get(self.flow_runner_args.flow_name)
+      if flow_cls is None:
+        raise ValueError("Flow '%s' not known by this implementation." %
+                         self.flow_runner_args.flow_name)
+
+      # The required protobuf for this class is in args_type.
+      return flow_cls.args_type
+
+
 class CreateGenericHuntFlowArgs(rdf_structs.RDFProtoStruct):
   protobuf = flows_pb2.CreateGenericHuntFlowArgs
+  rdf_deps = [
+      GenericHuntArgs,
+      rdf_hunts.HuntRunnerArgs,
+  ]
 
 
 class CreateGenericHuntFlow(flow.GRRFlow):
@@ -94,14 +124,14 @@ class SampleHunt(implementation.GRRHunt):
 
   Scheduling the hunt works like this:
 
-  > hunt = hunts.SampleHunt()
+  > hunt = standard.SampleHunt()
 
   # We want to schedule on clients that run windows and OS_RELEASE 7.
   > int_rule = rdf_foreman.ForemanAttributeInteger(
                    attribute_name=client.Schema.OS_RELEASE.name,
                    operator=rdf_foreman.ForemanAttributeInteger.Operator.EQUAL,
                    value=7)
-  > regex_rule = hunts.GRRHunt.MATCH_WINDOWS
+  > regex_rule = implementation.GRRHunt.MATCH_WINDOWS
 
   # Run the hunt when both those rules match.
   > hunt.AddRule([int_rule, regex_rule])
@@ -128,7 +158,7 @@ class SampleHunt(implementation.GRRHunt):
 
     for client_id in responses:
       self.CallFlow(
-          "GetFile",
+          transfer.GetFile.__name__,
           pathspec=pathspec,
           next_state="StoreResults",
           client_id=client_id)
@@ -163,6 +193,9 @@ class MultiHuntVerificationSummaryError(HuntVerificationError):
 
 class VerifyHuntOutputPluginsCronFlowArgs(rdf_structs.RDFProtoStruct):
   protobuf = flows_pb2.VerifyHuntOutputPluginsCronFlowArgs
+  rdf_deps = [
+      rdfvalue.Duration,
+  ]
 
 
 class VerifyHuntOutputPluginsCronFlow(cronjobs.SystemCronFlow):
@@ -322,25 +355,6 @@ class VerifyHuntOutputPluginsCronFlow(cronjobs.SystemCronFlow):
       self._WriteVerificationResults(hunt_urn, results)
 
 
-class GenericHuntArgs(rdf_structs.RDFProtoStruct):
-  """Arguments to the generic hunt."""
-  protobuf = flows_pb2.GenericHuntArgs
-
-  def Validate(self):
-    self.flow_runner_args.Validate()
-    self.flow_args.Validate()
-
-  def GetFlowArgsClass(self):
-    if self.flow_runner_args.flow_name:
-      flow_cls = flow.GRRFlow.classes.get(self.flow_runner_args.flow_name)
-      if flow_cls is None:
-        raise ValueError("Flow '%s' not known by this implementation." %
-                         self.flow_runner_args.flow_name)
-
-      # The required protobuf for this class is in args_type.
-      return flow_cls.args_type
-
-
 class GenericHunt(implementation.GRRHunt):
   """This is a hunt to start any flow on multiple clients."""
 
@@ -381,8 +395,8 @@ class GenericHunt(implementation.GRRHunt):
       grr_collections.RDFUrnCollection.StaticAdd(
           self.started_flows_collection_urn, self.token, flow_urn)
 
-  def Stop(self):
-    super(GenericHunt, self).Stop()
+  def Stop(self, reason=None):
+    super(GenericHunt, self).Stop(reason=reason)
 
     started_flows = grr_collections.RDFUrnCollection(
         self.started_flows_collection_urn, token=self.token)
@@ -428,30 +442,20 @@ class GenericHunt(implementation.GRRHunt):
 
     return [x[0] for _, x in flows]
 
-  def StoreResourceUsage(self, responses, client_id):
-    """Open child flow and account its' reported resource usage."""
-    flow_path = responses.status.child_session_id
-    status = responses.status
-
-    resources = rdf_client.ClientResources()
-    resources.client_id = client_id
-    resources.session_id = flow_path
-    resources.cpu_usage.user_cpu_time = status.cpu_time_used.user_cpu_time
-    resources.cpu_usage.system_cpu_time = status.cpu_time_used.system_cpu_time
-    resources.network_bytes_sent = status.network_bytes_sent
-    self.context.usage_stats.RegisterResources(resources)
-
   @flow.StateHandler()
   def MarkDone(self, responses):
     """Mark a client as done."""
     client_id = responses.request.client_id
-    self.StoreResourceUsage(responses, client_id)
     self.AddResultsToCollection(responses, client_id)
     self.MarkClientDone(client_id)
 
 
 class FlowRequest(rdf_structs.RDFProtoStruct):
   protobuf = flows_pb2.FlowRequest
+  rdf_deps = [
+      rdf_client.ClientURN,
+      rdf_flows.FlowRunnerArgs,
+  ]
 
   def GetFlowArgsClass(self):
     if self.runner_args.flow_name:
@@ -466,6 +470,10 @@ class FlowRequest(rdf_structs.RDFProtoStruct):
 
 class VariableGenericHuntArgs(rdf_structs.RDFProtoStruct):
   protobuf = flows_pb2.VariableGenericHuntArgs
+  rdf_deps = [
+      FlowRequest,
+      output_plugin.OutputPluginDescriptor,
+  ]
 
 
 class VariableGenericHunt(GenericHunt):

@@ -259,6 +259,8 @@ class VFSGRRClient(standard.VFSDirectory):
     if attribute == "CONTAINS":
       flow_id = flow.GRRFlow.StartFlow(
           client_id=self.client_id,
+          # TODO(user): dependency loop with flows/general/discover.py
+          # flow_name=discovery.Interrogate.__name__,
           flow_name="Interrogate",
           token=self.token,
           priority=priority)
@@ -342,6 +344,9 @@ class VFSGRRClient(standard.VFSDirectory):
 
 class UpdateVFSFileArgs(rdf_structs.RDFProtoStruct):
   protobuf = flows_pb2.UpdateVFSFileArgs
+  rdf_deps = [
+      rdfvalue.RDFURN,
+  ]
 
 
 class UpdateVFSFile(flow.GRRFlow):
@@ -412,6 +417,8 @@ class VFSFile(VFSAnalysisFile):
     pathspec = self.Get(self.Schema.STAT).pathspec
     flow_urn = flow.GRRFlow.StartFlow(
         client_id=client_id,
+        # TODO(user): dependency loop between aff4_grr.py and transfer.py
+        # flow_name=transfer.MultiGetFile.__name__,
         flow_name="MultiGetFile",
         token=self.token,
         pathspecs=[pathspec],
@@ -614,7 +621,7 @@ class GRRAFF4Init(registry.InitHook):
   """Ensure critical AFF4 objects exist for GRR."""
 
   # Must run after the AFF4 subsystem is ready.
-  pre = ["AFF4InitHook"]
+  pre = [aff4.AFF4InitHook]
 
   def Run(self):
     try:

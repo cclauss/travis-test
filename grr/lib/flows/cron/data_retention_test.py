@@ -5,18 +5,18 @@
 
 import re
 
+from grr import config
 from grr.lib import aff4
-from grr.lib import config_lib
 from grr.lib import data_store
 from grr.lib import flags
 from grr.lib import flow
-from grr.lib import hunts
 from grr.lib import rdfvalue
 from grr.lib import test_lib
 from grr.lib import utils
 from grr.lib.aff4_objects import cronjobs
 from grr.lib.aff4_objects import standard as aff4_standard
 from grr.lib.flows.cron import data_retention
+from grr.lib.hunts import implementation
 from grr.lib.hunts import standard
 
 
@@ -31,7 +31,7 @@ class CleanHuntsTest(test_lib.FlowTestsBaseclass):
     self.hunts_urns = []
     with test_lib.FakeTime(40):
       for i in range(self.NUM_HUNTS):
-        hunt = hunts.GRRHunt.StartHunt(
+        hunt = implementation.GRRHunt.StartHunt(
             hunt_name=standard.SampleHunt.__name__,
             expiry_time=rdfvalue.Duration("1m") * i,
             token=self.token)
@@ -101,7 +101,7 @@ class CleanHuntsTest(test_lib.FlowTestsBaseclass):
               self.assertNotIn(hunt_id, utils.SmartUnicode(value))
 
   def testKeepsHuntsWithRetainLabel(self):
-    exception_label_name = config_lib.CONFIG[
+    exception_label_name = config.CONFIG[
         "DataRetention.hunts_ttl_exception_label"]
 
     for hunt_urn in self.hunts_urns[:3]:
@@ -270,7 +270,7 @@ class CleanTempTest(test_lib.FlowTestsBaseclass):
                                 latest_timestamp - rdfvalue.Duration("300s"))
 
   def testKeepsTempWithRetainLabel(self):
-    exception_label_name = config_lib.CONFIG[
+    exception_label_name = config.CONFIG[
         "DataRetention.tmp_ttl_exception_label"]
 
     for tmp_urn in self.tmp_urns[:3]:
@@ -349,7 +349,7 @@ class CleanInactiveClientsTest(test_lib.FlowTestsBaseclass):
             latest_timestamp - rdfvalue.Duration("300s"))
 
   def testKeepsClientsWithRetainLabel(self):
-    exception_label_name = config_lib.CONFIG[
+    exception_label_name = config.CONFIG[
         "DataRetention.inactive_client_ttl_exception_label"]
 
     for client_urn in self.client_urns[:3]:

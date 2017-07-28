@@ -7,14 +7,13 @@ import time
 
 import logging
 
+from grr import config
 from grr.endtoend_tests import base
 from grr.lib import access_control
 from grr.lib import aff4
-from grr.lib import config_lib
 from grr.lib import data_store
 from grr.lib import export_utils
 from grr.lib import flow
-from grr.lib import hunts
 from grr.lib import rdfvalue
 from grr.lib import utils
 from grr.lib.aff4_objects import aff4_grr
@@ -22,6 +21,7 @@ from grr.lib.aff4_objects import cronjobs
 from grr.lib.aff4_objects import stats as aff4_stats
 from grr.lib.flows.general import discovery as flows_discovery
 from grr.lib.flows.general import endtoend as flows_endtoend
+from grr.lib.hunts import implementation as hunts_implementation
 from grr.lib.hunts import standard as hunts_standard
 from grr.lib.rdfvalues import flows as rdf_flows
 from grr.lib.rdfvalues import stats as rdfstats
@@ -281,10 +281,11 @@ class InterrogateClientsCronFlow(cronjobs.SystemCronFlow):
 
   @flow.StateHandler()
   def Start(self):
-    with hunts.GRRHunt.StartHunt(
-        hunt_name="GenericHunt",
+    with hunts_implementation.GRRHunt.StartHunt(
+        hunt_name=hunts_standard.GenericHunt.__name__,
         client_limit=0,
-        flow_runner_args=rdf_flows.FlowRunnerArgs(flow_name="Interrogate"),
+        flow_runner_args=rdf_flows.FlowRunnerArgs(
+            flow_name=flows_discovery.Interrogate.__name__),
         flow_args=flows_discovery.InterrogateArgs(lightweight=False),
         output_plugins=self.GetOutputPlugins(),
         token=self.token) as hunt:
@@ -360,7 +361,8 @@ class EndToEndTests(cronjobs.SystemCronFlow):
     # targets without an approval.
     token = access_control.ACLToken(
         username="GRRWorker", reason="Running endtoend tests.").SetUID()
-    runner_args = rdf_flows.FlowRunnerArgs(flow_name="EndToEndTestFlow")
+    runner_args = rdf_flows.FlowRunnerArgs(
+        flow_name=flows_endtoend.EndToEndTestFlow.__name__)
 
     flow_request = hunts_standard.FlowRequest(
         client_ids=self.state.client_ids,
@@ -380,8 +382,8 @@ class EndToEndTests(cronjobs.SystemCronFlow):
 
     hunt_args.output_plugins = self.GetOutputPlugins()
 
-    with hunts.GRRHunt.StartHunt(
-        hunt_name="VariableGenericHunt",
+    with hunts_implementation.GRRHunt.StartHunt(
+        hunt_name=hunts_standard.VariableGenericHunt.__name__,
         args=hunt_args,
         client_rule_set=client_rule_set,
         client_rate=0,
@@ -398,7 +400,7 @@ class EndToEndTests(cronjobs.SystemCronFlow):
     # not so long that the flow lease will expire.
 
     wait_duration = rdfvalue.Duration(
-        config_lib.CONFIG.Get("Test.end_to_end_result_check_wait"))
+        config.CONFIG.Get("Test.end_to_end_result_check_wait"))
     completed_time = rdfvalue.RDFDatetime.Now() + wait_duration
 
     self.CallState(next_state="CheckResults", start_time=completed_time)

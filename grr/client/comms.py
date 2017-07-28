@@ -5,12 +5,6 @@ The GRR client uses HTTP to communicate with the server.
 
 The client connections are controlled via a number of config parameters:
 
-- Client.retry_error_limit: Number of times the client will try existing
-  connections before giving up.
-
-- Client.connection_error_limit: The client will exit after this many
-  consecutive errors.
-
 - Client.error_poll_min: Time to wait between retries in an ERROR state.
 
 - Client.server_urls: A list of URLs for the base control server.
@@ -54,12 +48,12 @@ The client goes through a state machine:
    server is temporarily down. The client will switch to the RETRY state and
    retry sending the data with a fixed frequency determined by
    Client.error_poll_min to the same URL/Proxy combination. The client will
-   retry for Client.retry_error_limit times (default 10) before exiting the
+   retry for retry_error_limit times before exiting the
    CONNECTED state and returning to the INITIAL state (i.e. the client will
    start searching for a new URL/Proxy combination). If a retry is successful,
    the client will return to its designated polling frequency.
 
-7) If there are Client.connection_error_limit failures, the client will
+7) If there are connection_error_limit failures, the client will
    exit. Hopefully the nanny will restart the client.
 
 Examples:
@@ -68,7 +62,7 @@ Examples:
    combination once every Client.poll_max (default 10 minutes).
 
 2) Client connects successful but loses network connectivity. Client will re-try
-   Client.retry_error_limit (10 times) every Client.error_poll_min (1 Min) to
+   retry_error_limit (10 times) every Client.error_poll_min (1 Min) to
    resent the last message. If it does not succeed it starts searching for a new
    URL/Proxy combination as in example 1.
 
@@ -91,13 +85,16 @@ import traceback
 import psutil
 import requests
 
+from google.protobuf import json_format
+
 import logging
 
+from grr import config
 from grr.client import actions
 from grr.client import client_stats
 from grr.client import client_utils
+from grr.client.components.rekall_support import rekall_types as rdf_rekall_types
 from grr.lib import communicator
-from grr.lib import config_lib
 from grr.lib import flags
 from grr.lib import queues
 from grr.lib import rdfvalue
@@ -136,6 +133,14 @@ class HTTPManager(object):
   threads.
   """
 
+  # If the client encounters this many connection errors, it searches
+  # for a new proxy/server url combination.
+  retry_error_limit = 10
+
+  # If the client encounters this many connection errors, it exits and
+  # restarts. Retries are one minute apart.
+  connection_error_limit = 60 * 24
+
   def __init__(self, heart_beat_cb=None):
     self.heart_beat_cb = heart_beat_cb
     self.proxies = self._GetProxies()
@@ -146,20 +151,19 @@ class HTTPManager(object):
     self.last_base_url_index = 0
 
     # If we have connected previously but now suddenly fail to connect, we try
-    # the connection a few times (Client.retry_error_limit) before we determine
+    # the connection a few times (retry_error_limit) before we determine
     # that it is failed.
     self.consecutive_connection_errors = 0
-    self.retry_error_limit = config_lib.CONFIG["Client.retry_error_limit"]
 
     self.active_base_url = None
-    self.error_poll_min = config_lib.CONFIG["Client.error_poll_min"]
+    self.error_poll_min = config.CONFIG["Client.error_poll_min"]
 
   def _GetBaseURLs(self):
     """Gathers a list of base URLs we will try."""
-    result = config_lib.CONFIG["Client.server_urls"]
+    result = config.CONFIG["Client.server_urls"]
     if not result:
       # Backwards compatibility - deduce server_urls from Client.control_urls.
-      for control_url in config_lib.CONFIG["Client.control_urls"]:
+      for control_url in config.CONFIG["Client.control_urls"]:
         result.append(posixpath.dirname(control_url) + "/")
 
     # Check the URLs for trailing /. This traps configuration errors.
@@ -178,7 +182,7 @@ class HTTPManager(object):
     result.append("")
 
     # Also try all proxies configured in the config system.
-    result.extend(config_lib.CONFIG["Client.proxy_servers"])
+    result.extend(config.CONFIG["Client.proxy_servers"])
 
     return result
 
@@ -370,7 +374,7 @@ class HTTPManager(object):
       try:
         now = time.time()
         if not timeout:
-          timeout = config_lib.CONFIG["Client.http_timeout"]
+          timeout = config.CONFIG["Client.http_timeout"]
 
         result = requests.request(**request_args)
         # By default requests doesn't raise on HTTP error codes.
@@ -427,6 +431,9 @@ class HTTPManager(object):
       if self.heart_beat_cb:
         self.heart_beat_cb()
 
+  def ErrorLimitReached(self):
+    return self.consecutive_connection_errors > self.connection_error_limit
+
 
 class Timer(object):
   """Implements the polling policy.
@@ -435,11 +442,13 @@ class Timer(object):
   timing policy.
   """
 
+  # Slew of poll time.
+  poll_slew = 1.15
+
   def __init__(self, heart_beat_cb=None):
     self.heart_beat_cb = heart_beat_cb
-    self.poll_min = config_lib.CONFIG["Client.poll_min"]
-    self.sleep_time = self.poll_max = config_lib.CONFIG["Client.poll_max"]
-    self.poll_slew = config_lib.CONFIG["Client.poll_slew"]
+    self.poll_min = config.CONFIG["Client.poll_min"]
+    self.sleep_time = self.poll_max = config.CONFIG["Client.poll_max"]
 
   def FastPoll(self):
     """Switch to fast poll mode."""
@@ -547,10 +556,6 @@ class GRRClientWorker(object):
     self.last_stats_sent_time = None
 
     self.proc = psutil.Process(os.getpid())
-
-    # We store suspended actions in this dict. We can retrieve the suspended
-    # client action from here if needed.
-    self.suspended_actions = {}
 
     # Use this to control the nanny transaction log.
     self.nanny_controller = client_utils.NannyController()
@@ -725,7 +730,7 @@ class GRRClientWorker(object):
     # And then encrypt it.
     server_certificate = rdf_crypto.RDFX509Cert(self.client.server_certificate)
     fd = uploads.EncryptStream(server_certificate.GetPublicKey(),
-                               config_lib.CONFIG["Client.private_key"], gzip_fd)
+                               config.CONFIG["Client.private_key"], gzip_fd)
     response = self.http_manager.OpenServerEndpoint(
         u"/upload",
         data=FileGenerator(fd),
@@ -742,6 +747,18 @@ class GRRClientWorker(object):
         bytes_uploaded=gzip_fd.total_read,
         file_id=response.data,
         hash=gzip_fd.HashObject(),)
+
+  def GetRekallProfile(self, profile_name, version="v1.0"):
+    response = self.http_manager.OpenServerEndpoint(u"/rekall_profiles/%s/%s" %
+                                                    (version, profile_name))
+
+    if response.code != 200:
+      return None
+
+    pb = rdf_rekall_types.RekallProfile.protobuf()
+    json_format.Parse(response.data.lstrip(")]}'\n"), pb)
+    return rdf_rekall_types.RekallProfile.FromSerializedString(
+        pb.SerializeToString())
 
   @utils.Synchronized
   def ChargeBytesToSession(self, session_id, length, limit=0):
@@ -777,21 +794,16 @@ class GRRClientWorker(object):
 
     Args:
         message: The GrrMessage that was delivered from the server.
+    Raises:
+        RuntimeError: The client action requested was not found.
     """
     self._is_active = True
     try:
-      # Try to retrieve a suspended action from the client worker.
-      try:
-        suspended_action_id = message.payload.iterator.suspended_action
-        action = self.suspended_actions[suspended_action_id]
+      action_cls = actions.ActionPlugin.classes.get(message.name)
+      if action_cls is None:
+        raise RuntimeError("Client action %r not known" % message.name)
 
-      except (AttributeError, KeyError):
-        # Otherwise make a new action instance.
-        action_cls = actions.ActionPlugin.classes.get(message.name)
-        if action_cls is None:
-          raise RuntimeError("Client action %r not known" % message.name)
-
-        action = action_cls(grr_worker=self)
+      action = action_cls(grr_worker=self)
 
       # Write the message to the transaction log.
       self.nanny_controller.WriteTransactionLog(message)
@@ -833,7 +845,7 @@ class GRRClientWorker(object):
     # As long as our output queue has some room we can process some
     # input messages:
     while self._in_queue and (self._out_queue_size <
-                              config_lib.CONFIG["Client.max_out_queue"]):
+                              config.CONFIG["Client.max_out_queue"]):
       message = self._in_queue.pop(0)
 
       try:
@@ -855,7 +867,7 @@ class GRRClientWorker(object):
   def MemoryExceeded(self):
     """Returns True if our memory footprint is too large."""
     rss_size = self.proc.memory_info().rss
-    return rss_size / 1024 / 1024 > config_lib.CONFIG["Client.rss_max"]
+    return rss_size / 1024 / 1024 > config.CONFIG["Client.rss_max"]
 
   def InQueueSize(self):
     """Returns the number of protobufs ready to be sent in the queue."""
@@ -1036,7 +1048,7 @@ class GRRThreadedWorker(GRRClientWorker, threading.Thread):
       # The size of the output queue controls the worker thread. Once this queue
       # is too large, the worker thread will block until the queue is drained.
       self._out_queue = SizeQueue(
-          maxsize=config_lib.CONFIG["Client.max_out_queue"],
+          maxsize=config.CONFIG["Client.max_out_queue"],
           nanny=self.nanny_controller)
 
     self.daemon = True
@@ -1235,7 +1247,7 @@ class GRRHTTPClient(object):
     """
     self.ca_cert = ca_cert
     if private_key is None:
-      private_key = config_lib.CONFIG.Get("Client.private_key", default=None)
+      private_key = config.CONFIG.Get("Client.private_key", default=None)
 
     # The server's PEM encoded certificate.
     self.server_certificate = None
@@ -1334,7 +1346,7 @@ class GRRHTTPClient(object):
 
     # Verify the response is as it should be from the control endpoint.
     response = self.http_manager.OpenServerEndpoint(
-        path="control?api=%s" % config_lib.CONFIG["Network.api"],
+        path="control?api=%s" % config.CONFIG["Network.api"],
         verify_cb=self.VerifyServerControlResponse,
         data=data,
         headers={"Content-Type": "binary/octet-stream"})
@@ -1368,7 +1380,7 @@ class GRRHTTPClient(object):
     if self.http_manager.consecutive_connection_errors == 0:
       # Grab some messages to send
       message_list = self.client_worker.Drain(
-          max_size=config_lib.CONFIG["Client.max_post_size"])
+          max_size=config.CONFIG["Client.max_post_size"])
     else:
       message_list = rdf_flows.MessageList()
 
@@ -1490,11 +1502,11 @@ class GRRHTTPClient(object):
     """The main run method of the client.
 
     This method does not normally return. Only if there have been more than
-    Client.connection_error_limit failures, the method returns and allows the
+    connection_error_limit failures, the method returns and allows the
     client to exit.
     """
     while True:
-      if self.http_manager.consecutive_connection_errors > config_lib.CONFIG["Client.connection_error_limit"]:
+      if self.http_manager.ErrorLimitReached():
         return
 
       # Check if there is a message from the nanny to be sent.
@@ -1503,7 +1515,7 @@ class GRRHTTPClient(object):
       now = time.time()
       # Check with the foreman if we need to
       if (now > self.last_foreman_check +
-          config_lib.CONFIG["Client.foreman_check_frequency"]):
+          config.CONFIG["Client.foreman_check_frequency"]):
         # We must not queue messages from the comms thread with blocking=True
         # or we might deadlock. If the output queue is full, we can't accept
         # more work from the foreman anyways so it's ok to drop the message.
@@ -1605,7 +1617,7 @@ class ClientCommunicator(communicator.Communicator):
 
     # We either have an invalid key or no key. We just generate a new one.
     key = rdf_crypto.RSAPrivateKey.GenerateKey(
-        bits=config_lib.CONFIG["Client.rsa_key_length"])
+        bits=config.CONFIG["Client.rsa_key_length"])
 
     self.common_name = rdf_client.ClientURN.FromPrivateKey(key)
     logging.info("Client pending enrolment %s", self.common_name)
@@ -1627,9 +1639,9 @@ class ClientCommunicator(communicator.Communicator):
   def SavePrivateKey(self, private_key):
     """Store the new private key on disk."""
     self.private_key = private_key
-    config_lib.CONFIG.Set("Client.private_key",
-                          self.private_key.SerializeToString())
-    config_lib.CONFIG.Write()
+    config.CONFIG.Set("Client.private_key",
+                      self.private_key.SerializeToString())
+    config.CONFIG.Write()
 
   def LoadServerCertificate(self, server_certificate=None, ca_certificate=None):
     """Loads and verifies the server certificate."""
@@ -1643,15 +1655,15 @@ class ClientCommunicator(communicator.Communicator):
     # Make sure that the serial number is higher.
     server_cert_serial = server_certificate.GetSerialNumber()
 
-    if server_cert_serial < config_lib.CONFIG["Client.server_serial_number"]:
+    if server_cert_serial < config.CONFIG["Client.server_serial_number"]:
       # We can not accept this serial number...
       raise IOError("Server cert is too old.")
-    elif server_cert_serial > config_lib.CONFIG["Client.server_serial_number"]:
+    elif server_cert_serial > config.CONFIG["Client.server_serial_number"]:
       logging.info("Server serial number updated to %s", server_cert_serial)
-      config_lib.CONFIG.Set("Client.server_serial_number", server_cert_serial)
+      config.CONFIG.Set("Client.server_serial_number", server_cert_serial)
 
       # Save the new data to the config file.
-      config_lib.CONFIG.Write()
+      config.CONFIG.Write()
 
     self.server_name = server_certificate.GetCN()
     self.server_certificate = server_certificate
@@ -1660,7 +1672,7 @@ class ClientCommunicator(communicator.Communicator):
 
   def EncodeMessages(self, message_list, result, **kwargs):
     # Force the right API to be used
-    kwargs["api_version"] = config_lib.CONFIG["Network.api"]
+    kwargs["api_version"] = config.CONFIG["Network.api"]
     return super(ClientCommunicator, self).EncodeMessages(
         message_list, result, **kwargs)
 

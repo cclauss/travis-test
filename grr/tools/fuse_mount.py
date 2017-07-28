@@ -9,15 +9,16 @@ import sys
 
 
 # pylint: disable=unused-import,g-bad-import-order
+from grr.lib.flows.general import filesystem
 from grr.lib import server_plugins
 # pylint: enable=unused-import,g-bad-import-order
 
 import logging
 
+from grr import config
 from grr.config import contexts
 from grr.lib import access_control
 from grr.lib import aff4
-from grr.lib import config_lib
 from grr.lib import data_store
 from grr.lib import flags
 from grr.lib import flow_utils
@@ -490,7 +491,7 @@ class GRRFuse(GRRFuseDatastoreOnly):
     flow_utils.StartFlowAndWait(
         client_id,
         token=self.token,
-        flow_name="UpdateSparseImageChunks",
+        flow_name=filesystem.UpdateSparseImageChunks.__name__,
         file_urn=fd.urn,
         chunks_to_fetch=missing_chunks)
 
@@ -514,7 +515,7 @@ class GRRFuse(GRRFuseDatastoreOnly):
         flow_utils.StartFlowAndWait(
             client_id,
             token=self.token,
-            flow_name="MakeNewAFF4SparseImage",
+            flow_name=filesystem.MakeNewAFF4SparseImage.__name__,
             pathspec=pathspec,
             size_threshold=self.size_threshold)
 
@@ -526,7 +527,7 @@ class GRRFuse(GRRFuseDatastoreOnly):
           flow_utils.StartFlowAndWait(
               client_id,
               token=self.token,
-              flow_name="FetchBufferForSparseImage",
+              flow_name=filesystem.FetchBufferForSparseImage.__name__,
               file_urn=self.root.Add(path),
               length=length,
               offset=offset)
@@ -548,8 +549,8 @@ def Usage():
 
 
 def main(unused_argv):
-  config_lib.CONFIG.AddContext(contexts.COMMAND_LINE_CONTEXT,
-                               "Context applied for all command line tools")
+  config.CONFIG.AddContext(contexts.COMMAND_LINE_CONTEXT,
+                           "Context applied for all command line tools")
   server_startup.Init()
 
   if fuse is None:

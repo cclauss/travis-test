@@ -6,13 +6,21 @@ import stat
 
 from grr.lib import flow
 from grr.lib import server_stubs
+from grr.lib.flows.general import filesystem
+from grr.lib.flows.general import transfer
 from grr.lib.rdfvalues import client as rdf_client
+from grr.lib.rdfvalues import paths
 from grr.lib.rdfvalues import structs as rdf_structs
 from grr.proto import flows_pb2
 
 
 class SearchFileContentArgs(rdf_structs.RDFProtoStruct):
   protobuf = flows_pb2.SearchFileContentArgs
+  rdf_deps = [
+      rdf_client.BareGrepSpec,
+      paths.GlobExpression,
+      paths.PathSpec,
+  ]
 
 
 class SearchFileContent(flow.GRRFlow):
@@ -56,7 +64,7 @@ class SearchFileContent(flow.GRRFlow):
   def Start(self):
     """Run the glob first."""
     self.CallFlow(
-        "Glob",
+        filesystem.Glob.__name__,
         next_state="Grep",
         root_path=self.args.root_path,
         paths=self.args.paths,
@@ -99,6 +107,6 @@ class SearchFileContent(flow.GRRFlow):
 
     if self.args.also_download:
       self.CallFlow(
-          "MultiGetFile",
+          transfer.MultiGetFile.__name__,
           pathspecs=[x.pathspec for x in hits],
           next_state="End")

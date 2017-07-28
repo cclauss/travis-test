@@ -8,7 +8,6 @@ import time
 
 from grr.lib import action_mocks
 from grr.lib import aff4
-from grr.lib import config_lib
 from grr.lib import flags
 from grr.lib import rdfvalue
 from grr.lib import test_lib
@@ -188,7 +187,7 @@ class HashFileStoreTest(test_lib.AFF4ObjectTest):
         filestore.HashFileStore.GetClientsForHash(hashes[0], token=self.token))
     self.assertEqual(len(hits), 1)
 
-    latest_time = 42 + config_lib.CONFIG["AFF4.intermediate_cache_age"] - 1
+    latest_time = 42 + aff4.FACTORY.intermediate_cache_age - 1
     with utils.Stubber(time, "time", lambda: latest_time):
       filestore_test_lib.AddFileToFileStore(
           rdf_paths.PathSpec(
@@ -228,7 +227,7 @@ class HashFileStoreTest(test_lib.AFF4ObjectTest):
         filestore.HashFileStore.GetClientsForHash(hashes[0], token=self.token))
     self.assertEqual(len(hits), 1)
 
-    latest_time = 42 + config_lib.CONFIG["AFF4.intermediate_cache_age"] + 1
+    latest_time = 42 + aff4.FACTORY.intermediate_cache_age + 1
     with utils.Stubber(time, "time", lambda: latest_time):
       filestore_test_lib.AddFileToFileStore(
           rdf_paths.PathSpec(

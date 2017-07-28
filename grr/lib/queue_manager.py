@@ -9,7 +9,7 @@ import time
 
 import logging
 
-from grr.lib import config_lib
+from grr import config
 from grr.lib import data_store
 from grr.lib import rdfvalue
 from grr.lib import registry
@@ -96,6 +96,8 @@ class QueueManager(object):
 
   notification_shard_counters = {}
 
+  notification_expiry_time = 600
+
   def __init__(self, store=None, token=None):
     self.token = token
     if store is None:
@@ -116,7 +118,7 @@ class QueueManager(object):
     self.prev_frozen_timestamps = []
     self.frozen_timestamp = None
 
-    self.num_notification_shards = config_lib.CONFIG["Worker.queue_shards"]
+    self.num_notification_shards = config.CONFIG["Worker.queue_shards"]
 
   def GetNotificationShard(self, queue):
     queue_name = str(queue)
@@ -577,14 +579,13 @@ class QueueManager(object):
     """Does the actual queuing."""
     notification_list = []
     now = rdfvalue.RDFDatetime.Now()
-    expiry_time = config_lib.CONFIG["Worker.notification_expiry_time"]
     for notification in notifications:
       if not notification.first_queued:
         notification.first_queued = (self.frozen_timestamp or
                                      rdfvalue.RDFDatetime.Now())
       else:
         diff = now - notification.first_queued
-        if diff.seconds >= expiry_time:
+        if diff.seconds >= self.notification_expiry_time:
           # This notification has been around for too long, we drop it.
           logging.debug("Dropping notification: %s", str(notification))
           continue
@@ -680,7 +681,8 @@ class QueueManager(object):
       user = self.token.username
     # Do the real work in a transaction
     try:
-      lock = self.data_store.LockRetryWrapper(queue, token=self.token)
+      lock = self.data_store.LockRetryWrapper(
+          queue, lease_time=lease_seconds, token=self.token)
       return self._QueryAndOwn(
           lock.subject, lease_seconds=lease_seconds, limit=limit, user=user)
     except data_store.DBSubjectLockError:

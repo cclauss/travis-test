@@ -25,6 +25,7 @@ from grr.lib import config_lib
 from grr.lib import rdfvalue
 from grr.lib import type_info
 from grr.lib import utils
+from grr.lib.rdfvalues import standard
 from grr.lib.rdfvalues import structs as rdf_structs
 
 from grr.proto import jobs_pb2
@@ -163,11 +164,17 @@ class RDFX509Cert(rdfvalue.RDFValue):
     builder = builder.not_valid_after(now_plus_year.AsDatetime())
     now_minus_ten = now - rdfvalue.Duration("10s")
     builder = builder.not_valid_before(now_minus_ten.AsDatetime())
-    ca_cert = config_lib.CONFIG["CA.certificate"]
+    # TODO(user): dependency loop with grr/config/client.py.
+    # pylint: disable=protected-access
+    ca_cert = config_lib._CONFIG["CA.certificate"]
+    # pylint: enable=protected-access
     builder = builder.issuer_name(ca_cert.GetIssuer())
     builder = builder.public_key(csr.GetPublicKey().GetRawPublicKey())
 
-    ca_key = config_lib.CONFIG["PrivateKeys.ca_key"]
+    # TODO(user): dependency loop with grr/config/client.py.
+    # pylint: disable=protected-access
+    ca_key = config_lib._CONFIG["PrivateKeys.ca_key"]
+    # pylint: enable=protected-access
 
     return RDFX509Cert(
         builder.sign(
@@ -401,10 +408,13 @@ class RSAPrivateKey(rdfvalue.RDFValue):
       # allow_prompt was not set, we use the context we are in to see if it
       # makes sense to ask.
       elif self.allow_prompt == None:
-        if "Commandline Context" not in config_lib.CONFIG.context:
+        # TODO(user): dependency loop with grr/config/client.py.
+        # pylint: disable=protected-access
+        if "Commandline Context" not in config_lib._CONFIG.context:
           raise type_info.TypeValueError("Private key invalid: %s" % e)
+        # pylint: enable=protected-access
 
-      # pylint: enable=g-explicit-bool-comparison, g-equals-none
+        # pylint: enable=g-explicit-bool-comparison, g-equals-none
 
     try:
       # The private key is encrypted and we can ask the user for the passphrase.
@@ -456,6 +466,10 @@ class PEMPublicKey(RSAPublicKey):
 class Hash(rdf_structs.RDFProtoStruct):
   """A hash object containing multiple digests."""
   protobuf = jobs_pb2.Hash
+  rdf_deps = [
+      standard.AuthenticodeSignedData,
+      rdfvalue.HashDigest,
+  ]
 
 
 class SignedBlob(rdf_structs.RDFProtoStruct):
@@ -666,6 +680,9 @@ class AES128CBCCipher(object):
 class SymmetricCipher(rdf_structs.RDFProtoStruct):
   """Abstract symmetric cipher operations."""
   protobuf = jobs_pb2.SymmetricCipher
+  rdf_deps = [
+      EncryptionKey,
+  ]
 
   @classmethod
   def Generate(cls, algorithm):

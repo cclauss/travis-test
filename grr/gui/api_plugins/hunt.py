@@ -8,18 +8,19 @@ import re
 
 import logging
 
+from grr import config
 from grr.gui import api_call_handler_base
 from grr.gui import api_call_handler_utils
+from grr.gui.api_plugins import client as api_client
 from grr.gui.api_plugins import output_plugin as api_output_plugin
-from grr.gui.api_plugins import vfs as api_vfs
 
+from grr.gui.api_plugins import vfs as api_vfs
 from grr.lib import aff4
-from grr.lib import config_lib
 from grr.lib import data_store
 from grr.lib import events
 from grr.lib import flow
-from grr.lib import hunts
 from grr.lib import instant_output_plugin
+from grr.lib import output_plugin
 from grr.lib import rdfvalue
 from grr.lib import utils
 from grr.lib.aff4_objects import aff4_grr
@@ -29,12 +30,14 @@ from grr.lib.flows.general import export
 
 from grr.lib.hunts import implementation
 from grr.lib.hunts import standard
+from grr.lib.rdfvalues import client as rdf_client
 from grr.lib.rdfvalues import flows as rdf_flows
 from grr.lib.rdfvalues import hunts as rdf_hunts
-from grr.lib.rdfvalues import stats as stats_rdf
+from grr.lib.rdfvalues import stats as rdf_stats
 from grr.lib.rdfvalues import structs as rdf_structs
 
 from grr.proto.api import hunt_pb2
+from grr.server import foreman
 
 HUNTS_ROOT_PATH = rdfvalue.RDFURN("aff4:/hunts")
 
@@ -101,6 +104,12 @@ class ApiHunt(rdf_structs.RDFProtoStruct):
   the UI and and to not expose implementation defails.
   """
   protobuf = hunt_pb2.ApiHunt
+  rdf_deps = [
+      foreman.ForemanClientRuleSet,
+      rdf_hunts.HuntRunnerArgs,
+      rdfvalue.RDFDatetime,
+      rdfvalue.SessionID,
+  ]
 
   def GetFlowArgsClass(self):
     if self.flow_name:
@@ -119,6 +128,7 @@ class ApiHunt(rdf_structs.RDFProtoStruct):
     self.urn = hunt.urn
     self.name = hunt.runner_args.hunt_name
     self.state = str(hunt.Get(hunt.Schema.STATE))
+    self.crash_limit = hunt.runner_args.crash_limit
     self.client_limit = hunt.runner_args.client_limit
     self.client_rate = hunt.runner_args.client_rate
     self.created = context.create_time
@@ -155,7 +165,13 @@ class ApiHunt(rdf_structs.RDFProtoStruct):
 
 
 class ApiHuntResult(rdf_structs.RDFProtoStruct):
+  """API hunt results object."""
+
   protobuf = hunt_pb2.ApiHuntResult
+  rdf_deps = [
+      api_client.ApiClientId,
+      rdfvalue.RDFDatetime,
+  ]
 
   def GetPayloadClass(self):
     return rdfvalue.RDFValue.classes[self.payload_type]
@@ -170,12 +186,35 @@ class ApiHuntResult(rdf_structs.RDFProtoStruct):
     return self
 
 
+class ApiHuntClientPendingRequest(rdf_structs.RDFProtoStruct):
+  protobuf = hunt_pb2.ApiHuntClientPendingRequest
+  rdf_deps = [
+      rdfvalue.RDFURN,
+  ]
+
+
+class ApiHuntClient(rdf_structs.RDFProtoStruct):
+  protobuf = hunt_pb2.ApiHuntClient
+  rdf_deps = [
+      api_client.ApiClientId,
+      ApiHuntClientPendingRequest,
+      rdf_client.CpuSeconds,
+      rdfvalue.RDFURN,
+  ]
+
+
 class ApiListHuntsArgs(rdf_structs.RDFProtoStruct):
   protobuf = hunt_pb2.ApiListHuntsArgs
+  rdf_deps = [
+      rdfvalue.Duration,
+  ]
 
 
 class ApiListHuntsResult(rdf_structs.RDFProtoStruct):
   protobuf = hunt_pb2.ApiListHuntsResult
+  rdf_deps = [
+      ApiHunt,
+  ]
 
 
 class ApiListHuntsHandler(api_call_handler_base.ApiCallHandler):
@@ -249,7 +288,7 @@ class ApiListHuntsHandler(api_call_handler_base.ApiCallHandler):
     hunt_list = []
     for hunt in fd.OpenChildren(children=children):
       # Legacy hunts may have hunt.context == None: we just want to skip them.
-      if not isinstance(hunt, hunts.GRRHunt) or not hunt.context:
+      if not isinstance(hunt, implementation.GRRHunt) or not hunt.context:
         continue
 
       hunt_list.append(hunt)
@@ -280,7 +319,7 @@ class ApiListHuntsHandler(api_call_handler_base.ApiCallHandler):
     active_children_map = {}
     for hunt in fd.OpenChildren(children=active_children):
       # Legacy hunts may have hunt.context == None: we just want to skip them.
-      if (not isinstance(hunt, hunts.GRRHunt) or not hunt.context or
+      if (not isinstance(hunt, implementation.GRRHunt) or not hunt.context or
           not filter_func(hunt)):
         continue
       active_children_map[hunt.urn] = hunt
@@ -317,6 +356,9 @@ class ApiListHuntsHandler(api_call_handler_base.ApiCallHandler):
 
 class ApiGetHuntArgs(rdf_structs.RDFProtoStruct):
   protobuf = hunt_pb2.ApiGetHuntArgs
+  rdf_deps = [
+      ApiHuntId,
+  ]
 
 
 class ApiGetHuntHandler(api_call_handler_base.ApiCallHandler):
@@ -328,7 +370,7 @@ class ApiGetHuntHandler(api_call_handler_base.ApiCallHandler):
   def Handle(self, args, token=None):
     try:
       hunt = aff4.FACTORY.Open(
-          args.hunt_id.ToURN(), aff4_type=hunts.GRRHunt, token=token)
+          args.hunt_id.ToURN(), aff4_type=implementation.GRRHunt, token=token)
 
       return ApiHunt().InitFromAff4Object(hunt, with_full_summary=True)
     except aff4.InstantiationError:
@@ -338,10 +380,16 @@ class ApiGetHuntHandler(api_call_handler_base.ApiCallHandler):
 
 class ApiListHuntResultsArgs(rdf_structs.RDFProtoStruct):
   protobuf = hunt_pb2.ApiListHuntResultsArgs
+  rdf_deps = [
+      ApiHuntId,
+  ]
 
 
 class ApiListHuntResultsResult(rdf_structs.RDFProtoStruct):
   protobuf = hunt_pb2.ApiListHuntResultsResult
+  rdf_deps = [
+      ApiHuntResult,
+  ]
 
 
 class ApiListHuntResultsHandler(api_call_handler_base.ApiCallHandler):
@@ -363,10 +411,16 @@ class ApiListHuntResultsHandler(api_call_handler_base.ApiCallHandler):
 
 class ApiListHuntCrashesArgs(rdf_structs.RDFProtoStruct):
   protobuf = hunt_pb2.ApiListHuntCrashesArgs
+  rdf_deps = [
+      ApiHuntId,
+  ]
 
 
 class ApiListHuntCrashesResult(rdf_structs.RDFProtoStruct):
   protobuf = hunt_pb2.ApiListHuntCrashesResult
+  rdf_deps = [
+      rdf_client.ClientCrash,
+  ]
 
 
 class ApiListHuntCrashesHandler(api_call_handler_base.ApiCallHandler):
@@ -386,6 +440,9 @@ class ApiListHuntCrashesHandler(api_call_handler_base.ApiCallHandler):
 
 class ApiGetHuntResultsExportCommandArgs(rdf_structs.RDFProtoStruct):
   protobuf = hunt_pb2.ApiGetHuntResultsExportCommandArgs
+  rdf_deps = [
+      ApiHuntId,
+  ]
 
 
 class ApiGetHuntResultsExportCommandResult(rdf_structs.RDFProtoStruct):
@@ -406,7 +463,7 @@ class ApiGetHuntResultsExportCommandHandler(
                            args.hunt_id, output_fname)
 
     export_command_str = " ".join([
-        config_lib.CONFIG["AdminUI.export_command"], "--exec_code",
+        config.CONFIG["AdminUI.export_command"], "--exec_code",
         utils.ShellQuote(code_to_execute)
     ])
 
@@ -415,10 +472,16 @@ class ApiGetHuntResultsExportCommandHandler(
 
 class ApiListHuntOutputPluginsArgs(rdf_structs.RDFProtoStruct):
   protobuf = hunt_pb2.ApiListHuntOutputPluginsArgs
+  rdf_deps = [
+      ApiHuntId,
+  ]
 
 
 class ApiListHuntOutputPluginsResult(rdf_structs.RDFProtoStruct):
   protobuf = hunt_pb2.ApiListHuntOutputPluginsResult
+  rdf_deps = [
+      api_output_plugin.ApiOutputPlugin,
+  ]
 
 
 class ApiListHuntOutputPluginsHandler(api_call_handler_base.ApiCallHandler):
@@ -496,10 +559,16 @@ class ApiListHuntOutputPluginLogsHandlerBase(
 
 class ApiListHuntOutputPluginLogsArgs(rdf_structs.RDFProtoStruct):
   protobuf = hunt_pb2.ApiListHuntOutputPluginLogsArgs
+  rdf_deps = [
+      ApiHuntId,
+  ]
 
 
 class ApiListHuntOutputPluginLogsResult(rdf_structs.RDFProtoStruct):
   protobuf = hunt_pb2.ApiListHuntOutputPluginLogsResult
+  rdf_deps = [
+      output_plugin.OutputPluginBatchProcessingStatus,
+  ]
 
 
 class ApiListHuntOutputPluginLogsHandler(
@@ -516,10 +585,16 @@ class ApiListHuntOutputPluginLogsHandler(
 
 class ApiListHuntOutputPluginErrorsArgs(rdf_structs.RDFProtoStruct):
   protobuf = hunt_pb2.ApiListHuntOutputPluginErrorsArgs
+  rdf_deps = [
+      ApiHuntId,
+  ]
 
 
 class ApiListHuntOutputPluginErrorsResult(rdf_structs.RDFProtoStruct):
   protobuf = hunt_pb2.ApiListHuntOutputPluginErrorsResult
+  rdf_deps = [
+      output_plugin.OutputPluginBatchProcessingStatus,
+  ]
 
 
 class ApiListHuntOutputPluginErrorsHandler(
@@ -536,10 +611,16 @@ class ApiListHuntOutputPluginErrorsHandler(
 
 class ApiListHuntLogsArgs(rdf_structs.RDFProtoStruct):
   protobuf = hunt_pb2.ApiListHuntLogsArgs
+  rdf_deps = [
+      ApiHuntId,
+  ]
 
 
 class ApiListHuntLogsResult(rdf_structs.RDFProtoStruct):
   protobuf = hunt_pb2.ApiListHuntLogsResult
+  rdf_deps = [
+      rdf_flows.FlowLog,
+  ]
 
 
 class ApiListHuntLogsHandler(api_call_handler_base.ApiCallHandler):
@@ -561,10 +642,16 @@ class ApiListHuntLogsHandler(api_call_handler_base.ApiCallHandler):
 
 class ApiListHuntErrorsArgs(rdf_structs.RDFProtoStruct):
   protobuf = hunt_pb2.ApiListHuntErrorsArgs
+  rdf_deps = [
+      ApiHuntId,
+  ]
 
 
 class ApiListHuntErrorsResult(rdf_structs.RDFProtoStruct):
   protobuf = hunt_pb2.ApiListHuntErrorsResult
+  rdf_deps = [
+      rdf_hunts.HuntError,
+  ]
 
 
 class ApiListHuntErrorsHandler(api_call_handler_base.ApiCallHandler):
@@ -587,11 +674,17 @@ class ApiListHuntErrorsHandler(api_call_handler_base.ApiCallHandler):
 
 class ApiGetHuntClientCompletionStatsArgs(rdf_structs.RDFProtoStruct):
   protobuf = hunt_pb2.ApiGetHuntClientCompletionStatsArgs
+  rdf_deps = [
+      ApiHuntId,
+  ]
 
 
 class ApiGetHuntClientCompletionStatsResult(rdf_structs.RDFProtoStruct):
   """Result for getting the client completions of a hunt."""
   protobuf = hunt_pb2.ApiGetHuntClientCompletionStatsResult
+  rdf_deps = [
+      rdf_stats.SampleFloat,
+  ]
 
   def InitFromDataPoints(self, start_stats, complete_stats):
     """Check that this approval applies to the given token.
@@ -611,7 +704,7 @@ class ApiGetHuntClientCompletionStatsResult(rdf_structs.RDFProtoStruct):
   def _ConvertToResultList(self, stats):
     result = []
     for stat in stats:
-      data_point = stats_rdf.SampleFloat()
+      data_point = rdf_stats.SampleFloat()
       data_point.x_value = stat[0]
       data_point.y_value = stat[1]
       result.append(data_point)
@@ -728,6 +821,9 @@ class ApiGetHuntClientCompletionStatsHandler(
 
 class ApiGetHuntFilesArchiveArgs(rdf_structs.RDFProtoStruct):
   protobuf = hunt_pb2.ApiGetHuntFilesArchiveArgs
+  rdf_deps = [
+      ApiHuntId,
+  ]
 
 
 class ApiGetHuntFilesArchiveHandler(api_call_handler_base.ApiCallHandler):
@@ -760,7 +856,8 @@ class ApiGetHuntFilesArchiveHandler(api_call_handler_base.ApiCallHandler):
 
   def Handle(self, args, token=None):
     hunt_urn = args.hunt_id.ToURN()
-    hunt = aff4.FACTORY.Open(hunt_urn, aff4_type=hunts.GRRHunt, token=token)
+    hunt = aff4.FACTORY.Open(
+        hunt_urn, aff4_type=implementation.GRRHunt, token=token)
 
     hunt_api_object = ApiHunt().InitFromAff4Object(hunt)
     description = ("Files downloaded by hunt %s (%s, '%s') created by user %s "
@@ -796,6 +893,11 @@ class ApiGetHuntFilesArchiveHandler(api_call_handler_base.ApiCallHandler):
 
 class ApiGetHuntFileArgs(rdf_structs.RDFProtoStruct):
   protobuf = hunt_pb2.ApiGetHuntFileArgs
+  rdf_deps = [
+      api_client.ApiClientId,
+      ApiHuntId,
+      rdfvalue.RDFDatetime,
+  ]
 
 
 class ApiGetHuntFileHandler(api_call_handler_base.ApiCallHandler):
@@ -833,7 +935,7 @@ class ApiGetHuntFileHandler(api_call_handler_base.ApiCallHandler):
         args.hunt_id.ToURN(), token=token)
 
     expected_aff4_path = args.client_id.ToClientURN().Add(args.vfs_path)
-    # TODO(user): should after_tiestamp be strictly less than the desired
+    # TODO(user): should after_timestamp be strictly less than the desired
     # timestamp.
     timestamp = rdfvalue.RDFDatetime(int(args.timestamp) - 1)
 
@@ -876,10 +978,16 @@ class ApiGetHuntFileHandler(api_call_handler_base.ApiCallHandler):
 
 class ApiGetHuntStatsArgs(rdf_structs.RDFProtoStruct):
   protobuf = hunt_pb2.ApiGetHuntStatsArgs
+  rdf_deps = [
+      ApiHuntId,
+  ]
 
 
 class ApiGetHuntStatsResult(rdf_structs.RDFProtoStruct):
   protobuf = hunt_pb2.ApiGetHuntStatsResult
+  rdf_deps = [
+      rdf_stats.ClientResourcesStats,
+  ]
 
 
 class ApiGetHuntStatsHandler(api_call_handler_base.ApiCallHandler):
@@ -891,7 +999,7 @@ class ApiGetHuntStatsHandler(api_call_handler_base.ApiCallHandler):
   def Handle(self, args, token=None):
     """Retrieves the stats for a hunt."""
     hunt = aff4.FACTORY.Open(
-        args.hunt_id.ToURN(), aff4_type=hunts.GRRHunt, token=token)
+        args.hunt_id.ToURN(), aff4_type=implementation.GRRHunt, token=token)
 
     stats = hunt.GetRunner().context.usage_stats
 
@@ -900,18 +1008,16 @@ class ApiGetHuntStatsHandler(api_call_handler_base.ApiCallHandler):
 
 class ApiListHuntClientsArgs(rdf_structs.RDFProtoStruct):
   protobuf = hunt_pb2.ApiListHuntClientsArgs
+  rdf_deps = [
+      ApiHuntId,
+  ]
 
 
 class ApiListHuntClientsResult(rdf_structs.RDFProtoStruct):
   protobuf = hunt_pb2.ApiListHuntClientsResult
-
-
-class ApiHuntClientPendingRequest(rdf_structs.RDFProtoStruct):
-  protobuf = hunt_pb2.ApiHuntClientPendingRequest
-
-
-class ApiHuntClient(rdf_structs.RDFProtoStruct):
-  protobuf = hunt_pb2.ApiHuntClient
+  rdf_deps = [
+      ApiHuntClient,
+  ]
 
 
 class ApiListHuntClientsHandler(api_call_handler_base.ApiCallHandler):
@@ -924,7 +1030,7 @@ class ApiListHuntClientsHandler(api_call_handler_base.ApiCallHandler):
     all_clients_urns = [i.client_id.ToClientURN() for i in results]
     clients_to_results_map = {i.client_id: i for i in results}
 
-    all_flow_urns = hunts.GRRHunt.GetAllSubflowUrns(
+    all_flow_urns = implementation.GRRHunt.GetAllSubflowUrns(
         hunt_urn, all_clients_urns, token=token)
     flow_requests = flow.GRRFlow.GetFlowRequests(all_flow_urns, token)
     client_requests = aff4_grr.VFSGRRClient.GetClientRequests(
@@ -991,7 +1097,8 @@ class ApiListHuntClientsHandler(api_call_handler_base.ApiCallHandler):
   def Handle(self, args, token=None):
     """Retrieves the clients for a hunt."""
     hunt_urn = args.hunt_id.ToURN()
-    hunt = aff4.FACTORY.Open(hunt_urn, aff4_type=hunts.GRRHunt, token=token)
+    hunt = aff4.FACTORY.Open(
+        hunt_urn, aff4_type=implementation.GRRHunt, token=token)
 
     clients_by_status = hunt.GetClientsByStatus()
     hunt_clients = clients_by_status[args.client_status.name]
@@ -1002,7 +1109,7 @@ class ApiListHuntClientsHandler(api_call_handler_base.ApiCallHandler):
     else:
       hunt_clients = sorted(hunt_clients)[args.offset:]
 
-    top_level_flow_urns = hunts.GRRHunt.GetAllSubflowUrns(
+    top_level_flow_urns = implementation.GRRHunt.GetAllSubflowUrns(
         hunt_urn, hunt_clients, top_level_only=True, token=token)
     top_level_flows = list(
         aff4.FACTORY.MultiOpen(
@@ -1025,16 +1132,23 @@ class ApiListHuntClientsHandler(api_call_handler_base.ApiCallHandler):
 
 class ApiGetHuntContextArgs(rdf_structs.RDFProtoStruct):
   protobuf = hunt_pb2.ApiGetHuntContextArgs
+  rdf_deps = [
+      ApiHuntId,
+  ]
 
 
 class ApiGetHuntContextResult(rdf_structs.RDFProtoStruct):
   protobuf = hunt_pb2.ApiGetHuntContextResult
+  rdf_deps = [
+      api_call_handler_utils.ApiDataObject,
+      rdf_hunts.HuntContext,
+  ]
 
   def GetArgsClass(self):
     hunt_name = self.runner_args.hunt_name
 
     if hunt_name:
-      hunt_cls = hunts.GRRHunt.classes.get(hunt_name)
+      hunt_cls = implementation.GRRHunt.classes.get(hunt_name)
       if hunt_cls is None:
         raise ValueError(
             "Hunt %s not known by this implementation." % hunt_name)
@@ -1052,7 +1166,7 @@ class ApiGetHuntContextHandler(api_call_handler_base.ApiCallHandler):
   def Handle(self, args, token=None):
     """Retrieves the context for a hunt."""
     hunt = aff4.FACTORY.Open(
-        args.hunt_id.ToURN(), aff4_type=hunts.GRRHunt, token=token)
+        args.hunt_id.ToURN(), aff4_type=implementation.GRRHunt, token=token)
 
     if isinstance(hunt.context, rdf_hunts.HuntContext):  # New style hunt.
       # TODO(user): Hunt state will go away soon, we don't render it anymore.
@@ -1075,6 +1189,9 @@ class ApiGetHuntContextHandler(api_call_handler_base.ApiCallHandler):
 
 class ApiCreateHuntArgs(rdf_structs.RDFProtoStruct):
   protobuf = hunt_pb2.ApiCreateHuntArgs
+  rdf_deps = [
+      rdf_hunts.HuntRunnerArgs,
+  ]
 
   def GetFlowArgsClass(self):
     if self.flow_name:
@@ -1128,6 +1245,10 @@ class ApiCreateHuntHandler(api_call_handler_base.ApiCallHandler):
 
 class ApiModifyHuntArgs(rdf_structs.RDFProtoStruct):
   protobuf = hunt_pb2.ApiModifyHuntArgs
+  rdf_deps = [
+      ApiHuntId,
+      rdfvalue.RDFDatetime,
+  ]
 
 
 class ApiModifyHuntHandler(api_call_handler_base.ApiCallHandler):
@@ -1140,7 +1261,7 @@ class ApiModifyHuntHandler(api_call_handler_base.ApiCallHandler):
     hunt_urn = args.hunt_id.ToURN()
     try:
       hunt = aff4.FACTORY.Open(
-          hunt_urn, aff4_type=hunts.GRRHunt, mode="rw", token=token)
+          hunt_urn, aff4_type=implementation.GRRHunt, mode="rw", token=token)
     except aff4.InstantiationError:
       raise HuntNotFoundError(
           "Hunt with id %s could not be found" % args.hunt_id)
@@ -1202,12 +1323,15 @@ class ApiModifyHuntHandler(api_call_handler_base.ApiCallHandler):
     hunt.Close()
 
     hunt = aff4.FACTORY.Open(
-        hunt_urn, aff4_type=hunts.GRRHunt, mode="rw", token=token)
+        hunt_urn, aff4_type=implementation.GRRHunt, mode="rw", token=token)
     return ApiHunt().InitFromAff4Object(hunt, with_full_summary=True)
 
 
 class ApiDeleteHuntArgs(rdf_structs.RDFProtoStruct):
   protobuf = hunt_pb2.ApiDeleteHuntArgs
+  rdf_deps = [
+      ApiHuntId,
+  ]
 
 
 class ApiDeleteHuntHandler(api_call_handler_base.ApiCallHandler):
@@ -1231,7 +1355,7 @@ class ApiDeleteHuntHandler(api_call_handler_base.ApiCallHandler):
 
         # If some clients reported back to the hunt, it can only be deleted
         # if AdminUI.allow_hunt_results_delete is True.
-        if (not config_lib.CONFIG["AdminUI.allow_hunt_results_delete"] and
+        if (not config.CONFIG["AdminUI.allow_hunt_results_delete"] and
             hunt.client_count):
           raise HuntNotDeletableError(
               "Unable to delete a hunt with results while "
@@ -1251,6 +1375,9 @@ class ApiDeleteHuntHandler(api_call_handler_base.ApiCallHandler):
 
 class ApiGetExportedHuntResultsArgs(rdf_structs.RDFProtoStruct):
   protobuf = hunt_pb2.ApiGetExportedHuntResultsArgs
+  rdf_deps = [
+      ApiHuntId,
+  ]
 
 
 class ApiGetExportedHuntResultsHandler(api_call_handler_base.ApiCallHandler):
@@ -1265,7 +1392,7 @@ class ApiGetExportedHuntResultsHandler(api_call_handler_base.ApiCallHandler):
     hunt_urn = args.hunt_id.ToURN()
     try:
       aff4.FACTORY.Open(
-          hunt_urn, aff4_type=hunts.GRRHunt, mode="rw", token=token)
+          hunt_urn, aff4_type=implementation.GRRHunt, mode="rw", token=token)
     except aff4.InstantiationError:
       raise HuntNotFoundError(
           "Hunt with id %s could not be found" % args.hunt_id)

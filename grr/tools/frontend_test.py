@@ -12,13 +12,16 @@ import ipaddr
 import portpicker
 import requests
 
+from google.protobuf import json_format
+
 import logging
 
+from grr import config
 from grr.client import comms
 from grr.client.client_actions import standard
+from grr.client.components.rekall_support import rekall_types as rdf_rekall_types
 from grr.lib import action_mocks
 from grr.lib import aff4
-from grr.lib import config_lib
 from grr.lib import file_store
 from grr.lib import flags
 from grr.lib import flow
@@ -28,6 +31,7 @@ from grr.lib import test_lib
 from grr.lib import utils
 from grr.lib import worker_mocks
 from grr.lib.aff4_objects import filestore
+from grr.lib.flows.general import file_finder
 from grr.lib.rdfvalues import client as rdf_client
 from grr.lib.rdfvalues import file_finder as rdf_file_finder
 from grr.lib.rdfvalues import paths as rdf_paths
@@ -76,10 +80,10 @@ class GRRHTTPServerTest(test_lib.GRRBaseTest):
   def _UploadFile(self, args):
     with test_lib.ConfigOverrider({"Client.server_urls": [self.base_url]}):
       client = comms.GRRHTTPClient(
-          ca_cert=config_lib.CONFIG["CA.certificate"],
-          private_key=config_lib.CONFIG.Get("Client.private_key", default=None))
+          ca_cert=config.CONFIG["CA.certificate"],
+          private_key=config.CONFIG.Get("Client.private_key", default=None))
 
-      client.server_certificate = config_lib.CONFIG["Frontend.certificate"]
+      client.server_certificate = config.CONFIG["Frontend.certificate"]
 
       def MockSendReply(_, reply):
         self.reply = reply
@@ -152,7 +156,7 @@ class GRRHTTPServerTest(test_lib.GRRBaseTest):
         self._UploadFile(args)
 
       # Make sure the file is not written yet.
-      rootdir = config_lib.CONFIG["FileUploadFileStore.root_dir"]
+      rootdir = config.CONFIG["FileUploadFileStore.root_dir"]
       target_filename = os.path.join(
           rootdir, self.client_id.Add(test_file).Path().lstrip(os.path.sep))
 
@@ -184,13 +188,13 @@ class GRRHTTPServerTest(test_lib.GRRBaseTest):
     client_id = client_id or self.SetupClients(1)[0]
     with test_lib.ConfigOverrider({"Client.server_urls": [self.base_url]}):
       client = comms.GRRHTTPClient(
-          ca_cert=config_lib.CONFIG["CA.certificate"],
-          private_key=config_lib.CONFIG.Get("Client.private_key", default=None))
+          ca_cert=config.CONFIG["CA.certificate"],
+          private_key=config.CONFIG.Get("Client.private_key", default=None))
       client.client_worker = worker_mocks.FakeThreadedWorker(client=client)
-      client.server_certificate = config_lib.CONFIG["Frontend.certificate"]
+      client.server_certificate = config.CONFIG["Frontend.certificate"]
 
       for s in test_lib.TestFlowHelper(
-          "ClientFileFinder",
+          file_finder.ClientFileFinder.__name__,
           action_mocks.ClientFileFinderClientMock(
               client_worker=client.client_worker),
           client_id=client_id,
@@ -357,6 +361,32 @@ class GRRHTTPServerTest(test_lib.GRRBaseTest):
         self.assertIsInstance(filestore_fd, file_store.FileStoreAFF4Object)
         # No STAT object attached.
         self.assertFalse(filestore_fd.Get(filestore_fd.Schema.STAT))
+
+  def testRekallProfiles(self):
+    req = requests.get(self.base_url + "rekall_profiles")
+    self.assertEqual(req.status_code, 500)
+
+    req = requests.get(self.base_url + "rekall_profiles/v1.0")
+    self.assertEqual(req.status_code, 500)
+
+    known_profile = "F8E2A8B5C9B74BF4A6E4A48F180099942"
+    unknown_profile = "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF"
+
+    req = requests.get(self.base_url + "rekall_profiles/v1.0/nt/GUID/" +
+                       unknown_profile)
+    self.assertEqual(req.status_code, 404)
+
+    req = requests.get(self.base_url + "rekall_profiles/v1.0/nt/GUID/" +
+                       known_profile)
+    self.assertEqual(req.status_code, 200)
+
+    pb = rdf_rekall_types.RekallProfile.protobuf()
+    json_format.Parse(req.content.lstrip(")]}'\n"), pb)
+    profile = rdf_rekall_types.RekallProfile.FromSerializedString(
+        pb.SerializeToString())
+    self.assertEqual(profile.name, "nt/GUID/F8E2A8B5C9B74BF4A6E4A48F180099942")
+    self.assertEqual(profile.version, "v1.0")
+    self.assertEqual(profile.data[:2], "\x1f\x8b")
 
 
 def main(args):

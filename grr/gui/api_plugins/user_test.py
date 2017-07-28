@@ -11,7 +11,6 @@ from grr.lib import aff4
 from grr.lib import email_alerts
 from grr.lib import flags
 from grr.lib import flow
-from grr.lib import hunts
 from grr.lib import rdfvalue
 from grr.lib import test_lib
 from grr.lib import utils
@@ -22,6 +21,7 @@ from grr.lib.aff4_objects import users as aff4_users
 
 from grr.lib.flows.general import administrative
 
+from grr.lib.hunts import implementation
 from grr.lib.hunts import standard
 from grr.lib.hunts import standard_test
 
@@ -219,7 +219,7 @@ class ApiGetClientApprovalHandlerTest(api_test_lib.ApiCallHandlerTest):
   def testRendersRequestedClientApproval(self):
     flow_urn = flow.GRRFlow.StartFlow(
         client_id=self.client_id,
-        flow_name="RequestClientApprovalFlow",
+        flow_name=aff4_security.RequestClientApprovalFlow.__name__,
         reason="blah",
         subject_urn=self.client_id,
         approver="approver",
@@ -250,7 +250,7 @@ class ApiGetClientApprovalHandlerTest(api_test_lib.ApiCallHandlerTest):
   def testIncludesApproversInResultWhenApprovalIsGranted(self):
     flow_urn = flow.GRRFlow.StartFlow(
         client_id=self.client_id,
-        flow_name="RequestClientApprovalFlow",
+        flow_name=aff4_security.RequestClientApprovalFlow.__name__,
         reason="blah",
         subject_urn=self.client_id,
         approver="approver",
@@ -262,7 +262,7 @@ class ApiGetClientApprovalHandlerTest(api_test_lib.ApiCallHandlerTest):
     approver_token = access_control.ACLToken(username="approver")
     flow.GRRFlow.StartFlow(
         client_id=self.client_id,
-        flow_name="GrantClientApprovalFlow",
+        flow_name=aff4_security.GrantClientApprovalFlow.__name__,
         reason="blah",
         delegate=self.token.username,
         subject_urn=self.client_id,
@@ -475,12 +475,12 @@ class ApiListHuntApprovalsHandlerTest(api_test_lib.ApiCallHandlerTest):
     self.handler = user_plugin.ApiListHuntApprovalsHandler()
 
   def testRendersRequestedHuntAppoval(self):
-    with hunts.GRRHunt.StartHunt(
+    with implementation.GRRHunt.StartHunt(
         hunt_name=standard.SampleHunt.__name__, token=self.token) as hunt:
       pass
 
     flow.GRRFlow.StartFlow(
-        flow_name="RequestHuntApprovalFlow",
+        flow_name=aff4_security.RequestHuntApprovalFlow.__name__,
         reason=self.token.reason,
         subject_urn=hunt.urn,
         approver="approver",
@@ -533,7 +533,7 @@ class ApiListCronJobApprovalsHandlerTest(api_test_lib.ApiCallHandlerTest):
         cron_args=cron_args, token=self.token)
 
     flow.GRRFlow.StartFlow(
-        flow_name="RequestCronJobApprovalFlow",
+        flow_name=aff4_security.RequestCronJobApprovalFlow.__name__,
         reason=self.token.reason,
         subject_urn=cron_job_urn,
         approver="approver",

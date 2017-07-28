@@ -75,7 +75,10 @@ class DomainEmailAddress(EmailAddress):
   def ParseFromString(self, value):
     super(DomainEmailAddress, self).ParseFromString(value)
 
-    domain = config_lib.CONFIG["Logging.domain"]
+    # TODO(user): dependency loop with grr/config/client.py.
+    # pylint: disable=protected-access
+    domain = config_lib._CONFIG["Logging.domain"]
+    # pylint: enable=protected-access
     if domain and self._match.group(1) != domain:
       raise ValueError("Email address '%s' does not belong to the configured "
                        "domain '%s'" % (self._match.group(1), domain))
@@ -87,6 +90,10 @@ class AuthenticodeSignedData(rdf_structs.RDFProtoStruct):
 
 class PersistenceFile(rdf_structs.RDFProtoStruct):
   protobuf = jobs_pb2.PersistenceFile
+  rdf_deps = [
+      "PathSpec",  # TODO(user): dependency loop.
+      rdfvalue.RDFURN,
+  ]
 
 
 class URI(rdf_structs.RDFProtoStruct):

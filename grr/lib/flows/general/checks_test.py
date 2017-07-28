@@ -2,17 +2,15 @@
 """Test the collector flows."""
 import os
 
+from grr import config
 from grr.lib import action_mocks
 from grr.lib import aff4
-from grr.lib import config_lib
 from grr.lib import flags
 from grr.lib import flow
 from grr.lib import test_lib
 from grr.lib.checks import checks
 from grr.lib.checks import checks_test_lib
-# pylint: disable=unused-import
-from grr.lib.flows.general import checks as _
-# pylint: enable=unused-import
+from grr.lib.flows.general import checks as flow_checks
 from grr.lib.rdfvalues import client as rdf_client
 from grr.lib.rdfvalues import paths as rdf_paths
 
@@ -65,7 +63,7 @@ class TestCheckFlows(test_lib.FlowTestsBaseclass,
     session_id = None
     with test_lib.Instrument(flow.GRRFlow, "SendReply") as send_reply:
       for session_id in test_lib.TestFlowHelper(
-          "CheckRunner",
+          flow_checks.CheckRunner.__name__,
           client_mock=self.client_mock,
           client_id=self.client_id,
           token=self.token):
@@ -81,7 +79,7 @@ class TestCheckFlows(test_lib.FlowTestsBaseclass,
     """Load the checks, returning the names of the checks that were loaded."""
     checks.CheckRegistry.Clear()
     check_configs = ("sshd.yaml", "sw.yaml", "unix_login.yaml")
-    cfg_dir = os.path.join(config_lib.CONFIG["Test.data_dir"], "checks")
+    cfg_dir = os.path.join(config.CONFIG["Test.data_dir"], "checks")
     chk_files = [os.path.join(cfg_dir, f) for f in check_configs]
     checks.LoadChecksFromFiles(chk_files)
     return checks.CheckRegistry.checks.keys()

@@ -18,6 +18,7 @@ import pytsk3
 
 import logging
 
+from grr import config
 from grr.client import actions
 from grr.client.client_actions import tempfiles
 from grr.lib import config_lib
@@ -44,7 +45,7 @@ class GetHostname(actions.ActionPlugin):
   out_rdfvalues = [rdf_protodict.DataBlob]
 
   def Run(self, unused_args):
-    self.SendReply(string=socket.gethostname())
+    self.SendReply(rdf_protodict.DataBlob(string=socket.gethostname()))
 
 
 class GetPlatformInfo(actions.ActionPlugin):
@@ -133,12 +134,12 @@ class GetConfiguration(actions.ActionPlugin):
     """Retrieve the configuration except for the blocked parameters."""
 
     out = self.out_rdfvalues[0]()
-    for descriptor in config_lib.CONFIG.type_infos:
+    for descriptor in config.CONFIG.type_infos:
       if descriptor.name in self.BLOCKED_PARAMETERS:
         value = "[Redacted]"
       else:
         try:
-          value = config_lib.CONFIG.Get(descriptor.name, default=None)
+          value = config.CONFIG.Get(descriptor.name, default=None)
         except (config_lib.Error, KeyError, AttributeError, ValueError) as e:
           logging.info("Config reading error: %s", e)
           continue
@@ -197,22 +198,20 @@ class UpdateConfiguration(actions.ActionPlugin):
   """Updates configuration parameters on the client."""
   in_rdfvalue = rdf_protodict.Dict
 
-  UPDATABLE_FIELDS = {"Client.compression",
-                      "Client.foreman_check_frequency",
+  UPDATABLE_FIELDS = {"Client.foreman_check_frequency",
                       "Client.server_urls",
                       "Client.max_post_size",
                       "Client.max_out_queue",
                       "Client.poll_min",
                       "Client.poll_max",
-                      "Client.poll_slew",
                       "Client.rss_max"}  # pyformat: disable
 
-  def _UpdateConfig(self, filtered_arg, config):
+  def _UpdateConfig(self, filtered_arg, config_obj):
     for field, value in filtered_arg.items():
-      config.Set(field, value)
+      config_obj.Set(field, value)
 
     try:
-      config.Write()
+      config_obj.Write()
     except (IOError, OSError):
       pass
 
@@ -240,7 +239,7 @@ class UpdateConfiguration(actions.ActionPlugin):
       # implemented for our Windows clients though, whose configs are stored in
       # the registry, as opposed to in the filesystem.
 
-      canary_config = config_lib.CONFIG.CopyConfig()
+      canary_config = config.CONFIG.CopyConfig()
 
       # Prepare a temporary file we'll write changes to.
       with tempfiles.CreateGRRTempFile(mode="w+") as temp_fd:
@@ -262,16 +261,16 @@ class UpdateConfiguration(actions.ActionPlugin):
       os.unlink(temp_filename)
 
     # The changes seem to work, so push them to the real config.
-    self._UpdateConfig(filtered_arg, config_lib.CONFIG)
+    self._UpdateConfig(filtered_arg, config.CONFIG)
 
 
 def GetClientInformation():
   return rdf_client.ClientInformation(
-      client_name=config_lib.CONFIG["Client.name"],
-      client_description=config_lib.CONFIG["Client.description"],
-      client_version=int(config_lib.CONFIG["Source.version_numeric"]),
-      build_time=config_lib.CONFIG["Client.build_time"],
-      labels=config_lib.CONFIG.Get("Client.labels", default=None))
+      client_name=config.CONFIG["Client.name"],
+      client_description=config.CONFIG["Client.description"],
+      client_version=int(config.CONFIG["Source.version_numeric"]),
+      build_time=config.CONFIG["Client.build_time"],
+      labels=config.CONFIG.Get("Client.labels", default=None))
 
 
 class GetClientInfo(actions.ActionPlugin):

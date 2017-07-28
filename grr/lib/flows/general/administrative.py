@@ -10,8 +10,8 @@ import urllib
 
 import logging
 
+from grr import config
 from grr.lib import aff4
-from grr.lib import config_lib
 from grr.lib import email_alerts
 from grr.lib import events
 from grr.lib import flow
@@ -26,9 +26,13 @@ from grr.lib.aff4_objects import aff4_grr
 from grr.lib.aff4_objects import collects
 from grr.lib.aff4_objects import stats as aff4_stats
 from grr.lib.aff4_objects import users as aff4_users
+from grr.lib.flows.general import discovery
 from grr.lib.hunts import implementation
 from grr.lib.rdfvalues import client as rdf_client
 from grr.lib.rdfvalues import flows as rdf_flows
+from grr.lib.rdfvalues import paths
+from grr.lib.rdfvalues import protodict
+from grr.lib.rdfvalues import standard
 from grr.lib.rdfvalues import structs as rdf_structs
 from grr.proto import flows_pb2
 
@@ -80,9 +84,12 @@ class ClientCrashEventListener(flow.EventListener):
 
       hunt_session_id = self._ExtractHuntId(flow_session_id)
       if hunt_session_id and hunt_session_id != flow_session_id:
-        hunt_crashes = implementation.GRRHunt.CrashCollectionURNForHID(
-            hunt_session_id)
-        self._AppendCrashDetails(hunt_crashes, crash_details)
+        hunt_obj = aff4.FACTORY.Open(
+            hunt_session_id,
+            aff4_type=implementation.GRRHunt,
+            mode="rw",
+            token=self.token)
+        hunt_obj.RegisterCrash(crash_details)
 
 
 class GetClientStatsProcessResponseMixin(object):
@@ -136,6 +143,9 @@ class GetClientStatsAuto(flow.WellKnownFlow,
 
 class DeleteGRRTempFilesArgs(rdf_structs.RDFProtoStruct):
   protobuf = flows_pb2.DeleteGRRTempFilesArgs
+  rdf_deps = [
+      paths.PathSpec,
+  ]
 
 
 class DeleteGRRTempFiles(flow.GRRFlow):
@@ -224,6 +234,9 @@ class Kill(flow.GRRFlow):
 
 class UpdateConfigurationArgs(rdf_structs.RDFProtoStruct):
   protobuf = flows_pb2.UpdateConfigurationArgs
+  rdf_deps = [
+      protodict.Dict,
+  ]
 
 
 class UpdateConfiguration(flow.GRRFlow):
@@ -254,6 +267,9 @@ class UpdateConfiguration(flow.GRRFlow):
 
 class ExecutePythonHackArgs(rdf_structs.RDFProtoStruct):
   protobuf = flows_pb2.ExecutePythonHackArgs
+  rdf_deps = [
+      protodict.Dict,
+  ]
 
 
 class ExecutePythonHack(flow.GRRFlow):
@@ -264,7 +280,7 @@ class ExecutePythonHack(flow.GRRFlow):
 
   @flow.StateHandler()
   def Start(self):
-    python_hack_root_urn = config_lib.CONFIG.Get("Config.python_hack_root")
+    python_hack_root_urn = config.CONFIG.Get("Config.python_hack_root")
     fd = aff4.FACTORY.Open(
         python_hack_root_urn.Add(self.args.hack_name), token=self.token)
 
@@ -380,6 +396,9 @@ class Foreman(flow.WellKnownFlow):
 
 class OnlineNotificationArgs(rdf_structs.RDFProtoStruct):
   protobuf = flows_pb2.OnlineNotificationArgs
+  rdf_deps = [
+      standard.DomainEmailAddress,
+  ]
 
 
 class OnlineNotification(flow.GRRFlow):
@@ -405,9 +424,8 @@ class OnlineNotification(flow.GRRFlow):
 
   @classmethod
   def GetDefaultArgs(cls, token=None):
-    return cls.args_type(email="%s@%s" %
-                         (token.username,
-                          config_lib.CONFIG.Get("Logging.domain")))
+    return cls.args_type(email="%s@%s" % (token.username,
+                                          config.CONFIG.Get("Logging.domain")))
 
   @flow.StateHandler()
   def Start(self):
@@ -434,11 +452,11 @@ class OnlineNotification(flow.GRRFlow):
           subject,
           self.template % dict(
               client_id=self.client_id,
-              admin_ui=config_lib.CONFIG["AdminUI.url"],
+              admin_ui=config.CONFIG["AdminUI.url"],
               hostname=hostname,
               urn=url,
               creator=self.token.username,
-              signature=config_lib.CONFIG["Email.signature"]),
+              signature=config.CONFIG["Email.signature"]),
           is_html=True)
     else:
       flow.FlowError("Error while pinging client.")
@@ -446,6 +464,9 @@ class OnlineNotification(flow.GRRFlow):
 
 class UpdateClientArgs(rdf_structs.RDFProtoStruct):
   protobuf = flows_pb2.UpdateClientArgs
+  rdf_deps = [
+      rdfvalue.RDFURN,
+  ]
 
 
 class UpdateClient(flow.GRRFlow):
@@ -511,7 +532,7 @@ class UpdateClient(flow.GRRFlow):
           more_data=i < aff4_blobs.chunks - 1,
           offset=offset,
           write_path=write_path,
-          next_state="Interrogate",
+          next_state=discovery.Interrogate.__name__,
           use_client_env=False)
 
       offset += len(blob.data)
@@ -522,7 +543,7 @@ class UpdateClient(flow.GRRFlow):
       self.Log("Installer reported an error: %s" % responses.status)
     else:
       self.Log("Installer completed.")
-      self.CallFlow("Interrogate", next_state="Done")
+      self.CallFlow(discovery.Interrogate.__name__, next_state="Done")
 
   @flow.StateHandler()
   def Done(self):
@@ -579,20 +600,20 @@ Click <a href='%(admin_ui)s/#%(urn)s'> here </a> to access this machine.
     self.WriteAllCrashDetails(client_id, crash_details)
 
     # Also send email.
-    if config_lib.CONFIG["Monitoring.alert_email"]:
+    if config.CONFIG["Monitoring.alert_email"]:
       client = aff4.FACTORY.Open(client_id, token=self.token)
       hostname = client.Get(client.Schema.HOSTNAME)
       url = urllib.urlencode((("c", client_id), ("main", "HostInformation")))
 
       email_alerts.EMAIL_ALERTER.SendEmail(
-          config_lib.CONFIG["Monitoring.alert_email"],
+          config.CONFIG["Monitoring.alert_email"],
           "GRR server",
           self.subject % client_id,
           self.mail_template % dict(
               client_id=client_id,
-              admin_ui=config_lib.CONFIG["AdminUI.url"],
+              admin_ui=config.CONFIG["AdminUI.url"],
               hostname=hostname,
-              signature=config_lib.CONFIG["Email.signature"],
+              signature=config.CONFIG["Email.signature"],
               urn=url,
               message=message),
           is_html=True)
@@ -700,7 +721,7 @@ P.S. The state of the failing flow was:
     except aff4.InstantiationError:
       logging.error("Failed to open hunt %s.", hunt_session_id)
 
-    email = config_lib.CONFIG["Monitoring.alert_email"]
+    email = config.CONFIG["Monitoring.alert_email"]
     if email:
       to_send.append(email)
 
@@ -723,7 +744,7 @@ P.S. The state of the failing flow was:
           "Client %s reported a crash." % client_id,
           self.mail_template % dict(
               client_id=client_id,
-              admin_ui=config_lib.CONFIG["AdminUI.url"],
+              admin_ui=config.CONFIG["AdminUI.url"],
               hostname=hostname,
               context=context_html,
               state=state_html,
@@ -731,7 +752,7 @@ P.S. The state of the failing flow was:
               runner_args=runner_args_html,
               urn=url,
               nanny_msg=nanny_msg,
-              signature=config_lib.CONFIG["Email.signature"]),
+              signature=config.CONFIG["Email.signature"]),
           is_html=True)
 
     if nanny_msg:
@@ -790,6 +811,9 @@ class ClientStartupHandler(flow.EventListener):
 
 class KeepAliveArgs(rdf_structs.RDFProtoStruct):
   protobuf = flows_pb2.KeepAliveArgs
+  rdf_deps = [
+      rdfvalue.Duration,
+  ]
 
 
 class KeepAlive(flow.GRRFlow):
@@ -827,6 +851,9 @@ class KeepAlive(flow.GRRFlow):
 
 class LaunchBinaryArgs(rdf_structs.RDFProtoStruct):
   protobuf = flows_pb2.LaunchBinaryArgs
+  rdf_deps = [
+      rdfvalue.RDFURN,
+  ]
 
 
 class LaunchBinary(flow.GRRFlow):

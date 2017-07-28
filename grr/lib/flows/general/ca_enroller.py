@@ -19,6 +19,9 @@ from grr.proto import flows_pb2
 
 class CAEnrolerArgs(rdf_structs.RDFProtoStruct):
   protobuf = flows_pb2.CAEnrolerArgs
+  rdf_deps = [
+      rdf_crypto.Certificate,
+  ]
 
 
 class CAEnroler(flow.GRRFlow):
@@ -115,7 +118,7 @@ class Enroler(flow.WellKnownFlow):
       # Start the enrollment flow for this client.
       flow.GRRFlow.StartFlow(
           client_id=client_id,
-          flow_name="CAEnroler",
+          flow_name=CAEnroler.__name__,
           csr=cert,
           queue=queue,
           token=self.token)

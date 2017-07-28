@@ -51,7 +51,6 @@ import logging
 
 from grr.lib import access_control
 from grr.lib import aff4
-from grr.lib import config_lib
 from grr.lib import data_store
 from grr.lib import events
 from grr.lib import flow_runner
@@ -295,8 +294,8 @@ def StateHandler(auth_required=True):
         responses = Responses(
             request=request, responses=responses, auth_required=auth_required)
 
-        if responses.status:
-          runner.SaveResourceUsage(request, responses)
+      if responses.status:
+        runner.SaveResourceUsage(request, responses)
 
       stats.STATS.IncrementCounter("grr_worker_states_run")
 
@@ -522,14 +521,13 @@ class FlowBase(aff4.AFF4Volume):
     """
 
   @classmethod
-  def StartFlow(
-      cls,
-      args=None,
-      runner_args=None,  # pylint: disable=g-bad-name
-      parent_flow=None,
-      sync=True,
-      token=None,
-      **kwargs):
+  def StartFlow(cls,
+                args=None,
+                runner_args=None,
+                parent_flow=None,
+                sync=True,
+                token=None,
+                **kwargs):
     """The main factory function for Creating and executing a new flow.
 
     Args:
@@ -875,7 +873,7 @@ class GRRFlow(FlowBase):
 
   def HeartBeat(self):
     if self.locked:
-      lease_time = config_lib.CONFIG["Worker.flow_lease_time"]
+      lease_time = self.transaction.lease_time
       if self.CheckLease() < lease_time / 2:
         logging.debug("%s: Extending Lease", self.session_id)
         self.UpdateLease(lease_time)
@@ -1349,7 +1347,7 @@ class EventListener(WellKnownFlow):
 class FlowInit(registry.InitHook):
   """Sets up flow-related stats."""
 
-  pre = ["AFF4InitHook"]
+  pre = [aff4.AFF4InitHook]
 
   def RunOnce(self):
     # Counters defined here

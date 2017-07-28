@@ -42,9 +42,9 @@ import time
 
 import logging
 
+from grr import config
 from grr.lib import access_control
 from grr.lib import blob_store
-from grr.lib import config_lib
 from grr.lib import flags
 from grr.lib import rdfvalue
 from grr.lib import registry
@@ -229,7 +229,7 @@ class DataStore(object):
     self.monitor_thread = None
 
   def InitializeBlobstore(self):
-    blobstore_name = config_lib.CONFIG.Get("Blobstore.implementation")
+    blobstore_name = config.CONFIG.Get("Blobstore.implementation")
     try:
       cls = blob_store.Blobstore.GetPlugin(blobstore_name)
     except KeyError:
@@ -1007,6 +1007,8 @@ class DBSubjectLock(object):
       lease_time: The minimum length of time the lock will remain valid in
         seconds. Note this will be converted to usec for storage.
       token: An ACL token which applies to all methods in this lock.
+    Raises:
+      RuntimeError: No lease time was provided.
     """
     self.subject = utils.SmartStr(subject)
     self.store = data_store
@@ -1015,8 +1017,9 @@ class DBSubjectLock(object):
     self.expires = None
     self.locked = False
     if lease_time is None:
-      lease_time = config_lib.CONFIG["Datastore.transaction_timeout"]
+      raise RuntimeError("Trying to lock without a lease time.")
     self._Acquire(lease_time)
+    self.lease_time = lease_time
 
   def __enter__(self):
     return self
@@ -1102,10 +1105,10 @@ class DataStoreInit(registry.InitHook):
       sys.exit(0)
 
     try:
-      cls = DataStore.GetPlugin(config_lib.CONFIG["Datastore.implementation"])
+      cls = DataStore.GetPlugin(config.CONFIG["Datastore.implementation"])
     except KeyError:
       msg = ("No Storage System %s found." %
-             config_lib.CONFIG["Datastore.implementation"])
+             config.CONFIG["Datastore.implementation"])
       print msg
       print "Available options:"
       self._ListStorageOptions()
@@ -1114,7 +1117,7 @@ class DataStoreInit(registry.InitHook):
     DB = cls()  # pylint: disable=g-bad-name
     DB.Initialize()
     atexit.register(DB.Flush)
-    monitor_port = config_lib.CONFIG["Monitoring.http_port"]
+    monitor_port = config.CONFIG["Monitoring.http_port"]
     if monitor_port != 0:
       stats.STATS.RegisterGaugeMetric(
           "datastore_size",

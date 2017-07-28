@@ -15,8 +15,8 @@ from google.cloud import bigtable
 from google.cloud.bigtable import row_filters
 
 import logging
+from grr import config
 from grr.lib import aff4
-from grr.lib import config_lib
 from grr.lib import data_store
 from grr.lib import registry
 from grr.lib import stats
@@ -176,28 +176,27 @@ class CloudBigTableDataStore(data_store.DataStore):
     # https://cloud.google.com/bigtable/docs/performance
     self.btclient = bigtable.Client(project=project_id)
     self.instance = self.btclient.instance(instance_id)
-    self.table = self.instance.table(
-        config_lib.CONFIG["CloudBigtable.table_name"])
+    self.table = self.instance.table(config.CONFIG["CloudBigtable.table_name"])
 
   def Initialize(self, project_id=None, instance_id=None):
     super(CloudBigTableDataStore, self).Initialize()
-    project_id = project_id or config_lib.CONFIG["CloudBigtable.project_id"]
+    project_id = project_id or config.CONFIG["CloudBigtable.project_id"]
     if not project_id:
       raise AccessError(
           "No Google Cloud project ID specified, can't create instance.")
 
-    instance_id = instance_id or config_lib.CONFIG["CloudBigtable.instance_id"]
+    instance_id = instance_id or config.CONFIG["CloudBigtable.instance_id"]
 
     self.CreateInstanceAndTable(project_id=project_id, instance_id=instance_id)
     self.StartClient(project_id=project_id, instance_id=instance_id)
-    self.pool = ThreadPool(config_lib.CONFIG["CloudBigtable.threadpool_size"])
+    self.pool = ThreadPool(config.CONFIG["CloudBigtable.threadpool_size"])
 
   def CreateInstanceAndTable(self, project_id=None, instance_id=None):
     # The client must be created with admin=True because it will create a
     # table.
     btclient = bigtable.Client(project=project_id, admin=True)
-    tablename = config_lib.CONFIG["CloudBigtable.table_name"]
-    instance_name = config_lib.CONFIG["CloudBigtable.instance_name"]
+    tablename = config.CONFIG["CloudBigtable.table_name"]
+    instance_name = config.CONFIG["CloudBigtable.instance_name"]
 
     btinstance = self.GetInstance(btclient, instance_id)
     if not btinstance:
@@ -206,8 +205,8 @@ class CloudBigTableDataStore(data_store.DataStore):
       btinstance = btclient.instance(
           instance_id,
           display_name=instance_name,
-          serve_nodes=config_lib.CONFIG["CloudBigtable.serve_nodes"],
-          location=config_lib.CONFIG["CloudBigtable.instance_location"])
+          serve_nodes=config.CONFIG["CloudBigtable.serve_nodes"],
+          location=config.CONFIG["CloudBigtable.instance_location"])
       operation = btinstance.create()
       self.WaitOnOperation(operation)
 
@@ -363,7 +362,7 @@ class CloudBigTableDataStore(data_store.DataStore):
 
         # Value parameter here is bytes, so we need to encode unicode to a byte
         # string:
-        # https://googlecloudplatform.github.io/google-cloud-python/stable/bigtable-row.html#google.cloud.bigtable.row.DirectRow.set_cell
+        # https://googlecloudplatform.github.io/google-cloud-python/stable/bigtable/row.html#google.cloud.bigtable.row.DirectRow.set_cell
         value = self.Encode(attribute, value)
         row.set_cell(family, column, value, timestamp=datetime_ts)
 
@@ -486,8 +485,8 @@ class CloudBigTableDataStore(data_store.DataStore):
       raise ValueError("Mode must be 'read', 'write', 'delete'")
 
     retry_count = 0
-    sleep_interval = config_lib.CONFIG["CloudBigtable.retry_interval"]
-    while retry_count < config_lib.CONFIG["CloudBigtable.retry_max_attempts"]:
+    sleep_interval = config.CONFIG["CloudBigtable.retry_interval"]
+    while retry_count < config.CONFIG["CloudBigtable.retry_max_attempts"]:
 
       try:
         response = callback(*args, **kwargs)
@@ -501,7 +500,7 @@ class CloudBigTableDataStore(data_store.DataStore):
       logging.info("Retrying callback: %s", callback)
       retry_count += 1
       stats.STATS.IncrementCounter("grr_cloud_bigtable_%s_retries" % mode)
-      sleep_interval *= config_lib.CONFIG["CloudBigtable.retry_multiplier"]
+      sleep_interval *= config.CONFIG["CloudBigtable.retry_multiplier"]
 
     stats.STATS.IncrementCounter("grr_cloud_bigtable_%s_failures" % mode)
     logging.error("Gave up on %s %s after %s retries. %s", mode, callback,
@@ -641,7 +640,7 @@ class CloudBigTableDataStore(data_store.DataStore):
     """Wait for threadpool jobs to finish, then make a new pool."""
     self.pool.close()
     self.pool.join()
-    self.pool = ThreadPool(config_lib.CONFIG["CloudBigtable.threadpool_size"])
+    self.pool = ThreadPool(config.CONFIG["CloudBigtable.threadpool_size"])
 
   def Resolve(self, subject, attribute, token=None):
     """Retrieve the latest value set for a subject's attribute.

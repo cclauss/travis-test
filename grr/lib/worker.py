@@ -9,8 +9,8 @@ import traceback
 
 import logging
 
+from grr import config
 from grr.lib import aff4
-from grr.lib import config_lib
 from grr.lib import flags
 from grr.lib import flow
 from grr.lib import master
@@ -49,6 +49,11 @@ class GRRWorker(object):
   # A class global threadpool to be used for all workers.
   thread_pool = None
 
+  # Duration of a flow lease time in seconds.
+  flow_lease_time = 3600
+  # Duration of a well known flow lease time in seconds.
+  well_known_flow_lease_time = 600
+
   def __init__(self,
                queues=queues_config.WORKER_LIST,
                threadpool_prefix="grr_threadpool",
@@ -79,7 +84,7 @@ class GRRWorker(object):
     # Make the thread pool a global so it can be reused for all workers.
     if self.__class__.thread_pool is None:
       if threadpool_size is None:
-        threadpool_size = config_lib.CONFIG["Threadpool.size"]
+        threadpool_size = config.CONFIG["Threadpool.size"]
 
       self.__class__.thread_pool = threadpool.ThreadPool.Factory(
           threadpool_prefix, min_threads=2, max_threads=threadpool_size)
@@ -91,9 +96,6 @@ class GRRWorker(object):
 
     # Well known flows are just instantiated.
     self.well_known_flows = flow.WellKnownFlow.GetAllWellKnownFlows(token=token)
-    self.flow_lease_time = config_lib.CONFIG["Worker.flow_lease_time"]
-    self.well_known_flow_lease_time = config_lib.CONFIG[
-        "Worker.well_known_flow_lease_time"]
 
   def Run(self):
     """Event loop."""

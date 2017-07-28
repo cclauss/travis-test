@@ -28,9 +28,8 @@ import pkg_resources
 
 import logging
 import unittest
-# pylint: disable=unused-import
-from grr import config as _
-# pylint: enable=unused-import
+
+from grr import config
 
 from grr.client import actions
 from grr.client import client_utils_linux
@@ -49,15 +48,12 @@ from grr.lib import aff4
 from grr.lib import artifact
 from grr.lib import client_fixture
 from grr.lib import client_index
-from grr.lib import config_lib
 from grr.lib import data_store
 from grr.lib import email_alerts
 from grr.lib import events
+from grr.lib import export
 from grr.lib import flags
 from grr.lib import flow
-# pylint: disable=unused-import
-from grr.lib import local as _
-# pylint: enable=unused-import
 from grr.lib import maintenance_utils
 from grr.lib import queue_manager
 from grr.lib import queues as queue_config
@@ -96,6 +92,10 @@ from grr.lib.flows.general import filesystem as _
 # pylint: enable=unused-import
 
 from grr.lib.hunts import results as hunts_results
+
+# pylint: disable=unused-import
+from grr.lib.local import plugins as _
+# pylint: enable=unused-import
 
 from grr.lib.rdfvalues import client as rdf_client
 from grr.lib.rdfvalues import crypto as rdf_crypto
@@ -245,7 +245,7 @@ class DummyLogFlow(flow.GRRFlow):
   def Start(self, unused_response=None):
     """Log."""
     self.Log("First")
-    self.CallFlow("DummyLogFlowChild", next_state="Done")
+    self.CallFlow(DummyLogFlowChild.__name__, next_state="Done")
     self.Log("Second")
 
   @flow.StateHandler()
@@ -387,7 +387,7 @@ class GRRBaseTest(unittest.TestCase):
       methodName: The test method to run.
     """
     super(GRRBaseTest, self).__init__(methodName=methodName or "__init__")
-    self.base_path = config_lib.CONFIG["Test.data_dir"]
+    self.base_path = config.CONFIG["Test.data_dir"]
     test_user = "test"
     users.GRRUser.SYSTEM_USERS.add(test_user)
     self.token = access_control.ACLToken(
@@ -396,7 +396,7 @@ class GRRBaseTest(unittest.TestCase):
   def setUp(self):
     super(GRRBaseTest, self).setUp()
 
-    tmpdir = os.environ.get("TEST_TMPDIR") or config_lib.CONFIG["Test.tmpdir"]
+    tmpdir = os.environ.get("TEST_TMPDIR") or config.CONFIG["Test.tmpdir"]
 
     if platform.system() != "Windows":
       # Make a temporary directory for test files.
@@ -404,8 +404,7 @@ class GRRBaseTest(unittest.TestCase):
     else:
       self.temp_dir = tempfile.mkdtemp()
 
-    config_lib.CONFIG.SetWriteBack(
-        os.path.join(self.temp_dir, "writeback.yaml"))
+    config.CONFIG.SetWriteBack(os.path.join(self.temp_dir, "writeback.yaml"))
 
     logging.info("Starting test: %s.%s", self.__class__.__name__,
                  self._testMethodName)
@@ -616,7 +615,7 @@ class GRRBaseTest(unittest.TestCase):
     approver_token = access_control.ACLToken(username=approver)
     flow.GRRFlow.StartFlow(
         client_id=client_id,
-        flow_name="GrantClientApprovalFlow",
+        flow_name=security.GrantClientApprovalFlow.__name__,
         reason=reason,
         delegate=delegate,
         subject_urn=rdf_client.ClientURN(client_id),
@@ -638,7 +637,7 @@ class GRRBaseTest(unittest.TestCase):
 
     # Create the approval and approve it.
     flow.GRRFlow.StartFlow(
-        flow_name="RequestHuntApprovalFlow",
+        flow_name=security.RequestHuntApprovalFlow.__name__,
         subject_urn=rdfvalue.RDFURN(hunt_urn),
         reason=token.reason,
         approver="approver",
@@ -648,7 +647,7 @@ class GRRBaseTest(unittest.TestCase):
 
     approver_token = access_control.ACLToken(username="approver")
     flow.GRRFlow.StartFlow(
-        flow_name="GrantHuntApprovalFlow",
+        flow_name=security.GrantHuntApprovalFlow.__name__,
         subject_urn=rdfvalue.RDFURN(hunt_urn),
         reason=token.reason,
         delegate=token.username,
@@ -659,7 +658,7 @@ class GRRBaseTest(unittest.TestCase):
 
     # Create cron job approval and approve it.
     flow.GRRFlow.StartFlow(
-        flow_name="RequestCronJobApprovalFlow",
+        flow_name=security.RequestCronJobApprovalFlow.__name__,
         subject_urn=rdfvalue.RDFURN(cron_job_urn),
         reason=self.token.reason,
         approver="approver",
@@ -669,7 +668,7 @@ class GRRBaseTest(unittest.TestCase):
 
     approver_token = access_control.ACLToken(username="approver")
     flow.GRRFlow.StartFlow(
-        flow_name="GrantCronJobApprovalFlow",
+        flow_name=security.GrantCronJobApprovalFlow.__name__,
         subject_urn=rdfvalue.RDFURN(cron_job_urn),
         reason=token.reason,
         delegate=token.username,
@@ -686,8 +685,7 @@ class GRRBaseTest(unittest.TestCase):
     with aff4.FACTORY.Create(
         client_id_urn, aff4_grr.VFSGRRClient, mode="rw",
         token=self.token) as fd:
-      cert = self.ClientCertFromPrivateKey(
-          config_lib.CONFIG["Client.private_key"])
+      cert = self.ClientCertFromPrivateKey(config.CONFIG["Client.private_key"])
       fd.Set(fd.Schema.CERT, cert)
 
       info = fd.Schema.CLIENT_INFO()
@@ -805,20 +803,12 @@ class EmptyActionTest(GRRBaseTest):
 
   labels = ["client_action", "small"]
 
-  def RunAction(self,
-                action_cls,
-                arg=None,
-                grr_worker=None,
-                action_worker_cls=None):
+  def RunAction(self, action_cls, arg=None, grr_worker=None):
     if arg is None:
       arg = rdf_flows.GrrMessage()
 
     self.results = []
-    action = self._GetActionInstance(
-        action_cls,
-        arg=arg,
-        grr_worker=grr_worker,
-        action_worker_cls=action_worker_cls)
+    action = self._GetActionInstance(action_cls, grr_worker=grr_worker)
 
     action.status = rdf_flows.GrrStatus(
         status=rdf_flows.GrrStatus.ReturnedStatus.OK)
@@ -826,41 +816,26 @@ class EmptyActionTest(GRRBaseTest):
 
     return self.results
 
-  def ExecuteAction(self,
-                    action_cls,
-                    arg=None,
-                    grr_worker=None,
-                    action_worker_cls=None):
+  def ExecuteAction(self, action_cls, arg=None, grr_worker=None):
     message = rdf_flows.GrrMessage(
         name=action_cls.__name__, payload=arg, auth_state="AUTHENTICATED")
 
     self.results = []
-    action = self._GetActionInstance(
-        action_cls,
-        arg=arg,
-        grr_worker=grr_worker,
-        action_worker_cls=action_worker_cls)
+    action = self._GetActionInstance(action_cls, grr_worker=grr_worker)
 
     action.Execute(message)
 
     return self.results
 
-  def _GetActionInstance(self,
-                         action_cls,
-                         arg=None,
-                         grr_worker=None,
-                         action_worker_cls=None):
+  def _GetActionInstance(self, action_cls, grr_worker=None):
     """Run an action and generate responses.
 
     This basically emulates GRRClientWorker.HandleMessage().
 
     Args:
        action_cls: The action class to run.
-       arg: A protobuf to pass the action.
        grr_worker: The GRRClientWorker instance to use. If not provided we make
          a new one.
-       action_worker_cls: The action worker class to use for iterated actions.
-         If not provided we use the default.
     Returns:
       A list of response protobufs.
     """
@@ -874,17 +849,7 @@ class EmptyActionTest(GRRBaseTest):
     if grr_worker is None:
       grr_worker = worker_mocks.FakeClientWorker()
 
-    try:
-      suspended_action_id = arg.iterator.suspended_action
-      action = grr_worker.suspended_actions[suspended_action_id]
-
-    except (AttributeError, KeyError):
-      if issubclass(action_cls, actions.SuspendableAction):
-        action = action_cls(
-            grr_worker=grr_worker, action_worker_cls=action_worker_cls)
-      else:
-        action = action_cls(grr_worker=grr_worker)
-
+    action = action_cls(grr_worker=grr_worker)
     action.SendReply = types.MethodType(MockSendReply, action)
 
     return action
@@ -922,11 +887,11 @@ class ConfigOverrider(object):
 
   def Start(self):
     for k, v in self._overrides.iteritems():
-      self._saved_values[k] = config_lib.CONFIG.Get(k)
+      self._saved_values[k] = config.CONFIG.Get(k)
       try:
-        config_lib.CONFIG.Set.old_target(k, v)
+        config.CONFIG.Set.old_target(k, v)
       except AttributeError:
-        config_lib.CONFIG.Set(k, v)
+        config.CONFIG.Set(k, v)
 
   def __exit__(self, unused_type, unused_value, unused_traceback):
     self.Stop()
@@ -934,9 +899,9 @@ class ConfigOverrider(object):
   def Stop(self):
     for k, v in self._saved_values.iteritems():
       try:
-        config_lib.CONFIG.Set.old_target(k, v)
+        config.CONFIG.Set.old_target(k, v)
       except AttributeError:
-        config_lib.CONFIG.Set(k, v)
+        config.CONFIG.Set(k, v)
 
 
 class PreserveConfig(object):
@@ -945,18 +910,18 @@ class PreserveConfig(object):
     self.Start()
 
   def Start(self):
-    self.old_config = config_lib.CONFIG
-    config_lib.CONFIG = self.old_config.MakeNewConfig()
-    config_lib.CONFIG.initialized = self.old_config.initialized
-    config_lib.CONFIG.SetWriteBack(self.old_config.writeback.filename)
-    config_lib.CONFIG.raw_data = self.old_config.raw_data.copy()
-    config_lib.CONFIG.writeback_data = self.old_config.writeback_data.copy()
+    self.old_config = config.CONFIG
+    config.CONFIG = self.old_config.MakeNewConfig()
+    config.CONFIG.initialized = self.old_config.initialized
+    config.CONFIG.SetWriteBack(self.old_config.writeback.filename)
+    config.CONFIG.raw_data = self.old_config.raw_data.copy()
+    config.CONFIG.writeback_data = self.old_config.writeback_data.copy()
 
   def __exit__(self, unused_type, unused_value, unused_traceback):
     self.Stop()
 
   def Stop(self):
-    config_lib.CONFIG = self.old_config
+    config.CONFIG = self.old_config
 
 
 class VFSOverrider(object):
@@ -1272,6 +1237,28 @@ class MockClient(object):
 
     # Well known flows are run on the front end.
     self.well_known_flows = flow.WellKnownFlow.GetAllWellKnownFlows(token=token)
+    self.user_cpu_usage = []
+    self.system_cpu_usage = []
+    self.network_usage = []
+
+  def EnableResourceUsage(self,
+                          user_cpu_usage=None,
+                          system_cpu_usage=None,
+                          network_usage=None):
+    if user_cpu_usage:
+      self.user_cpu_usage = itertools.cycle(user_cpu_usage)
+    if system_cpu_usage:
+      self.system_cpu_usage = itertools.cycle(system_cpu_usage)
+    if network_usage:
+      self.network_usage = itertools.cycle(network_usage)
+
+  def AddResourceUsage(self, status):
+    if self.user_cpu_usage or self.system_cpu_usage:
+      status.cpu_time_used = rdf_client.CpuSeconds(
+          user_cpu_time=self.user_cpu_usage.next(),
+          system_cpu_time=self.system_cpu_usage.next())
+    if self.network_usage:
+      status.network_bytes_sent = self.network_usage.next()
 
   def PushToStateQueue(self, manager, message, **kw):
     # Assume the client is authorized
@@ -1347,6 +1334,7 @@ class MockClient(object):
         for response in responses:
           if isinstance(response, rdf_flows.GrrStatus):
             msg_type = rdf_flows.GrrMessage.Type.STATUS
+            self.AddResourceUsage(response)
             response = rdf_flows.GrrMessage(
                 session_id=message.session_id,
                 name=message.name,
@@ -1379,6 +1367,7 @@ class MockClient(object):
 
         # Status may only be None if the client reported itself as crashed.
         if status is not None:
+          self.AddResourceUsage(status)
           self.PushToStateQueue(
               manager,
               message,
@@ -2122,6 +2111,7 @@ class ClientVFSHandlerFixture(ClientVFSHandlerFixtureBase):
 
 class DataAgnosticConverterTestValue(rdf_structs.RDFProtoStruct):
   protobuf = tests_pb2.DataAgnosticConverterTestValue
+  rdf_deps = [export.ExportedMetadata, rdfvalue.RDFDatetime, rdfvalue.RDFURN]
 
 
 class DataAgnosticConverterTestValueWithMetadata(rdf_structs.RDFProtoStruct):
@@ -2169,7 +2159,7 @@ class FakeTestDataVFSHandler(ClientVFSHandlerFixtureBase):
     path = self.path
     if filename:
       path = os.path.join(path, filename)
-    return os.path.join(config_lib.CONFIG["Test.data_dir"], "VFSFixture",
+    return os.path.join(config.CONFIG["Test.data_dir"], "VFSFixture",
                         path.lstrip("/"))
 
   def Read(self, length):
@@ -2232,8 +2222,7 @@ class GrrTestProgram(unittest.TestProgram):
       raise NotImplementedError(
           "Usage of Set() is disabled, please use a configoverrider in tests.")
 
-    self.config_set_disable = utils.Stubber(config_lib.CONFIG, "Set",
-                                            DisabledSet)
+    self.config_set_disable = utils.Stubber(config.CONFIG, "Set", DisabledSet)
     self.config_set_disable.Start()
 
   def tearDown(self):
@@ -2275,14 +2264,14 @@ class RemotePDB(pdb.Pdb):
   def ListenForConnection(self):
     """Listens and accepts a single connection."""
     logging.warn("Remote debugger waiting for connection on %s",
-                 config_lib.CONFIG["Test.remote_pdb_port"])
+                 config.CONFIG["Test.remote_pdb_port"])
 
     RemotePDB.old_stdout = sys.stdout
     RemotePDB.old_stdin = sys.stdin
     RemotePDB.skt = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     RemotePDB.skt.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 
-    RemotePDB.skt.bind(("127.0.0.1", config_lib.CONFIG["Test.remote_pdb_port"]))
+    RemotePDB.skt.bind(("127.0.0.1", config.CONFIG["Test.remote_pdb_port"]))
     RemotePDB.skt.listen(1)
 
     (clientsocket, address) = RemotePDB.skt.accept()
@@ -2300,7 +2289,7 @@ class TestRekallRepositoryProfileServer(rekall_profile_server.ProfileServer):
   def GetProfileByName(self, profile_name, version="v1.0"):
     try:
       profile_data = open(
-          os.path.join(config_lib.CONFIG["Test.data_dir"], "profiles", version,
+          os.path.join(config.CONFIG["Test.data_dir"], "profiles", version,
                        profile_name + ".gz"), "rb").read()
 
       self.profiles_served += 1

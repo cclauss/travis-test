@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 """Unittest for grr frontend server."""
 
+from grr import config
 from grr.lib import communicator
-from grr.lib import config_lib
 from grr.lib import data_store
 from grr.lib import flags
 from grr.lib import flow
@@ -38,8 +38,8 @@ class GRRFEServerTestBase(test_lib.FlowTestsBaseclass):
   def InitTestServer(self):
     prefix = "pool-%s" % self._testMethodName
     self.server = front_end.FrontEndServer(
-        certificate=config_lib.CONFIG["Frontend.certificate"],
-        private_key=config_lib.CONFIG["PrivateKeys.server_key"],
+        certificate=config.CONFIG["Frontend.certificate"],
+        private_key=config.CONFIG["PrivateKeys.server_key"],
         message_expiry_time=self.message_expiry_time,
         threadpool_prefix=prefix)
 
@@ -70,7 +70,7 @@ class GRRFEServerTest(GRRFEServerTestBase):
 
   def testReceiveMessages(self):
     """Test Receiving messages with no status."""
-    flow_obj = self.FlowSetup("FlowOrderTest")
+    flow_obj = self.FlowSetup(test_lib.FlowOrderTest.__name__)
 
     session_id = flow_obj.session_id
     messages = [
@@ -100,7 +100,7 @@ class GRRFEServerTest(GRRFEServerTestBase):
 
   def testReceiveMessagesWithStatus(self):
     """Receiving a sequence of messages with a status."""
-    flow_obj = self.FlowSetup("FlowOrderTest")
+    flow_obj = self.FlowSetup(test_lib.FlowOrderTest.__name__)
 
     session_id = flow_obj.session_id
     messages = [
@@ -141,7 +141,7 @@ class GRRFEServerTest(GRRFEServerTestBase):
       self.assertRDFValuesEqual(stored_message, message)
 
   def testReceiveUnsolicitedClientMessage(self):
-    flow_obj = self.FlowSetup("FlowOrderTest")
+    flow_obj = self.FlowSetup(test_lib.FlowOrderTest.__name__)
 
     session_id = flow_obj.session_id
     status = rdf_flows.GrrStatus(status=rdf_flows.GrrStatus.ReturnedStatus.OK)
@@ -393,7 +393,7 @@ class GRRFEServerTest(GRRFEServerTestBase):
     # We can still schedule a flow for it
     flow.GRRFlow.StartFlow(
         client_id=client_id,
-        flow_name="SendingFlow",
+        flow_name=test_lib.SendingFlow.__name__,
         message_count=1,
         token=self.token)
     manager = queue_manager.QueueManager(token=self.token)
@@ -449,7 +449,7 @@ class GRRFEServerTest(GRRFEServerTestBase):
     with test_lib.FakeTime(base_time):
       flow.GRRFlow.StartFlow(
           client_id=client_id,
-          flow_name="SendingFlow",
+          flow_name=test_lib.SendingFlow.__name__,
           message_count=1,
           token=self.token)
 
@@ -474,7 +474,7 @@ class GRRFEServerTest(GRRFEServerTestBase):
     with test_lib.FakeTime(base_time):
       flow_id = flow.GRRFlow.StartFlow(
           client_id=client_id,
-          flow_name="SendingFlow",
+          flow_name=test_lib.SendingFlow.__name__,
           message_count=1,
           token=self.token)
 

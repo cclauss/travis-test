@@ -14,15 +14,17 @@ import threading
 
 import ipaddr
 
+from google.protobuf import json_format
+
 import logging
 
 # pylint: disable=unused-import,g-bad-import-order
 from grr.lib import server_plugins
 # pylint: enable=unused-import, g-bad-import-order
 
+from grr import config
 from grr.lib import aff4
 from grr.lib import communicator
-from grr.lib import config_lib
 from grr.lib import flags
 from grr.lib import front_end
 from grr.lib import log
@@ -51,31 +53,86 @@ class GRRHTTPServerHandler(BaseHTTPServer.BaseHTTPRequestHandler):
            data,
            status=200,
            ctype="application/octet-stream",
+           additional_headers=None,
            last_modified=0):
+    """Sends a response to the client."""
+    if additional_headers:
+      header_strings = [
+          "%s: %s\r\n" % (name, val)
+          for name, val in additional_headers.iteritems()
+      ]
+    else:
+      header_strings = []
     data = ("HTTP/1.0 %s\r\n"
             "Server: GRR Server\r\n"
             "Content-type: %s\r\n"
             "Content-Length: %d\r\n"
             "Last-Modified: %s\r\n"
+            "%s"
             "\r\n"
             "%s") % (self.statustext[status], ctype, len(data),
-                     self.date_time_string(last_modified), data)
+                     self.date_time_string(last_modified),
+                     "".join(header_strings), data)
     self.wfile.write(data)
+
+  rekall_profile_path = "/rekall_profiles"
+
+  static_content_path = "/static/"
 
   def do_GET(self):  # pylint: disable=g-bad-name
     """Serve the server pem with GET requests."""
-    url_prefix = config_lib.CONFIG["Frontend.static_url_path_prefix"]
     if self.path.startswith("/server.pem"):
       self.ServerPem()
-    elif self.path.startswith(url_prefix):
-      path = self.path[len(url_prefix):]
-      self.ServeStatic(path)
+    elif self.path.startswith(self.rekall_profile_path):
+      self.ServeRekallProfile(self.path)
+    elif self.path.startswith(self.static_content_path):
+      self.ServeStatic(self.path[len(self.static_content_path):])
+
+  def ServeRekallProfile(self, path):
+    """This servers rekall profiles from the frontend server.
+
+    Format is /rekall_profiles/<version>/<profile_name>
+
+    Args:
+      path: The path the client requested.
+    """
+    logging.debug("Rekall profile request from IP %s for %s",
+                  self.client_address[0], path)
+    remaining_path = path[len(self.rekall_profile_path):]
+    if not remaining_path.startswith("/"):
+      self.Send("Error serving profile.", status=500, ctype="text/plain")
+      return
+
+    components = remaining_path[1:].split("/", 1)
+
+    if len(components) != 2:
+      self.Send("Error serving profile.", status=500, ctype="text/plain")
+      return
+    version, name = components
+    profile = self.server.frontend.GetRekallProfile(name, version=version)
+    if not profile:
+      self.Send("Profile not found.", status=404, ctype="text/plain")
+      return
+
+    json_data = json_format.MessageToJson(profile.AsPrimitiveProto())
+
+    sanitized_data = ")]}'\n" + json_data.replace("<", r"\u003c").replace(
+        ">", r"\u003e")
+
+    additional_headers = {
+        "Content-Disposition": "attachment; filename=response.json",
+        "X-Content-Type-Options": "nosniff"
+    }
+    self.Send(
+        sanitized_data,
+        status=200,
+        ctype="application/json",
+        additional_headers=additional_headers)
 
   AFF4_READ_BLOCK_SIZE = 10 * 1024 * 1024
 
   def ServeStatic(self, path):
-    static_aff4_prefix = config_lib.CONFIG["Frontend.static_aff4_prefix"]
-    aff4_path = rdfvalue.RDFURN(static_aff4_prefix).Add(path)
+    aff4_path = aff4.FACTORY.GetStaticContentPath().Add(path)
     try:
       logging.info("Serving %s", aff4_path)
       fd = aff4.FACTORY.Open(aff4_path, token=aff4.FACTORY.root_token)
@@ -259,13 +316,13 @@ class GRRHTTPServer(SocketServer.ThreadingMixIn, BaseHTTPServer.HTTPServer):
       self.frontend = frontend
     else:
       self.frontend = front_end.FrontEndServer(
-          certificate=config_lib.CONFIG["Frontend.certificate"],
-          private_key=config_lib.CONFIG["PrivateKeys.server_key"],
-          max_queue_size=config_lib.CONFIG["Frontend.max_queue_size"],
-          message_expiry_time=config_lib.CONFIG["Frontend.message_expiry_time"],
-          max_retransmission_time=config_lib.CONFIG[
+          certificate=config.CONFIG["Frontend.certificate"],
+          private_key=config.CONFIG["PrivateKeys.server_key"],
+          max_queue_size=config.CONFIG["Frontend.max_queue_size"],
+          message_expiry_time=config.CONFIG["Frontend.message_expiry_time"],
+          max_retransmission_time=config.CONFIG[
               "Frontend.max_retransmission_time"])
-    self.server_cert = config_lib.CONFIG["Frontend.certificate"]
+    self.server_cert = config.CONFIG["Frontend.certificate"]
 
     (address, _) = server_address
     version = ipaddr.IPAddress(address).version
@@ -281,12 +338,12 @@ class GRRHTTPServer(SocketServer.ThreadingMixIn, BaseHTTPServer.HTTPServer):
 
 def CreateServer(frontend=None):
   """Start frontend http server."""
-  max_port = config_lib.CONFIG.Get("Frontend.port_max",
-                                   config_lib.CONFIG["Frontend.bind_port"])
+  max_port = config.CONFIG.Get("Frontend.port_max",
+                               config.CONFIG["Frontend.bind_port"])
 
-  for port in range(config_lib.CONFIG["Frontend.bind_port"], max_port + 1):
+  for port in range(config.CONFIG["Frontend.bind_port"], max_port + 1):
 
-    server_address = (config_lib.CONFIG["Frontend.bind_address"], port)
+    server_address = (config.CONFIG["Frontend.bind_address"], port)
     try:
       httpd = GRRHTTPServer(
           server_address, GRRHTTPServerHandler, frontend=frontend)
@@ -304,7 +361,7 @@ def CreateServer(frontend=None):
 
 def main(unused_argv):
   """Main."""
-  config_lib.CONFIG.AddContext("HTTPServer Context")
+  config.CONFIG.AddContext("HTTPServer Context")
 
   server_startup.Init()
 

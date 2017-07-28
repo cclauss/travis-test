@@ -8,12 +8,11 @@ import stat
 from grr.lib import aff4
 from grr.lib import artifact_utils
 from grr.lib import flow
+from grr.lib import rdfvalue
 from grr.lib import server_stubs
 from grr.lib.aff4_objects import aff4_grr
 from grr.lib.aff4_objects import standard
-# pylint: disable=unused-import
 from grr.lib.flows.general import transfer
-# pylint: enable=unused-import
 from grr.lib.rdfvalues import client as rdf_client
 from grr.lib.rdfvalues import paths as rdf_paths
 from grr.lib.rdfvalues import structs as rdf_structs
@@ -51,6 +50,9 @@ def CreateAFF4Object(stat_response, client_id, token, sync=False):
 
 class ListDirectoryArgs(rdf_structs.RDFProtoStruct):
   protobuf = flows_pb2.ListDirectoryArgs
+  rdf_deps = [
+      rdf_paths.PathSpec,
+  ]
 
 
 class ListDirectory(flow.GRRFlow):
@@ -196,6 +198,9 @@ class IteratedListDirectory(ListDirectory):
 
 class RecursiveListDirectoryArgs(rdf_structs.RDFProtoStruct):
   protobuf = flows_pb2.RecursiveListDirectoryArgs
+  rdf_deps = [
+      rdf_paths.PathSpec,
+  ]
 
 
 class RecursiveListDirectory(flow.GRRFlow):
@@ -288,6 +293,9 @@ class RecursiveListDirectory(flow.GRRFlow):
 
 class UpdateSparseImageChunksArgs(rdf_structs.RDFProtoStruct):
   protobuf = flows_pb2.UpdateSparseImageChunksArgs
+  rdf_deps = [
+      rdfvalue.RDFURN,
+  ]
 
 
 class UpdateSparseImageChunks(flow.GRRFlow):
@@ -361,6 +369,9 @@ class UpdateSparseImageChunks(flow.GRRFlow):
 
 class FetchBufferForSparseImageArgs(rdf_structs.RDFProtoStruct):
   protobuf = flows_pb2.FetchBufferForSparseImageArgs
+  rdf_deps = [
+      rdfvalue.RDFURN,
+  ]
 
 
 class FetchBufferForSparseImage(flow.GRRFlow):
@@ -485,6 +496,9 @@ class FetchBufferForSparseImage(flow.GRRFlow):
 
 class MakeNewAFF4SparseImageArgs(rdf_structs.RDFProtoStruct):
   protobuf = flows_pb2.MakeNewAFF4SparseImageArgs
+  rdf_deps = [
+      rdf_paths.PathSpec,
+  ]
 
 
 class MakeNewAFF4SparseImage(flow.GRRFlow):
@@ -542,7 +556,9 @@ class MakeNewAFF4SparseImage(flow.GRRFlow):
     else:
       # Otherwise, just get the whole file.
       self.CallFlow(
-          "MultiGetFile", pathspecs=[self.state.pathspec], next_state="End")
+          transfer.MultiGetFile.__name__,
+          pathspecs=[self.state.pathspec],
+          next_state="End")
 
   @flow.StateHandler()
   def End(self, responses):
@@ -553,6 +569,10 @@ class MakeNewAFF4SparseImage(flow.GRRFlow):
 
 class GlobArgs(rdf_structs.RDFProtoStruct):
   protobuf = flows_pb2.GlobArgs
+  rdf_deps = [
+      rdf_paths.GlobExpression,
+      rdf_paths.PathSpec,
+  ]
 
   def Validate(self):
     """Ensure that the glob paths are valid."""
@@ -999,6 +1019,9 @@ class DiskVolumeInfo(flow.GRRFlow):
           self.state.system_root_required = True
       if self.state.system_root_required:
         self.CallFlow(
+            # TODO(user): dependency loop between collectors.py and
+            # filesystem.py.
+            # collectors.ArtifactCollectorFlow.__name__,
             "ArtifactCollectorFlow",
             artifact_list=["WindowsEnvironmentVariableSystemRoot"],
             next_state="StoreSystemRoot")
@@ -1031,6 +1054,9 @@ class DiskVolumeInfo(flow.GRRFlow):
       # No dependencies for WMI
       deps = artifact_utils.ArtifactCollectorFlowArgs.Dependency.IGNORE_DEPS
       self.CallFlow(
+          # TODO(user): dependency loop between collectors.py and
+          # filesystem.py.
+          # collectors.ArtifactCollectorFlow.__name__,
           "ArtifactCollectorFlow",
           artifact_list=["WMILogicalDisks"],
           next_state="ProcessWindowsVolumes",

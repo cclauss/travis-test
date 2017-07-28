@@ -42,9 +42,9 @@ import time
 
 import logging
 
+from grr import config
 from grr.lib import access_control
 from grr.lib import aff4
-from grr.lib import config_lib
 from grr.lib import data_store
 from grr.lib import rdfvalue
 from grr.lib import registry
@@ -87,6 +87,10 @@ class StatsStoreFieldValue(structs.RDFProtoStruct):
 class StatsStoreValue(structs.RDFProtoStruct):
   """RDFValue definition for stats values to be stored in the data store."""
   protobuf = jobs_pb2.StatsStoreValue
+  rdf_deps = [
+      stats.Distribution,
+      StatsStoreFieldValue,
+  ]
 
   @property
   def value(self):
@@ -123,6 +127,9 @@ class StatsStoreMetricsMetadata(structs.RDFProtoStruct):
   """Container with metadata for all the metrics in a given process."""
 
   protobuf = jobs_pb2.StatsStoreMetricsMetadata
+  rdf_deps = [
+      stats.MetricMetadata,
+  ]
 
   def AsDict(self):
     result = {}
@@ -675,7 +682,7 @@ class StatsStoreWorker(object):
     self.stats_store = stats_store
     self.process_id = process_id
     self.thread_name = thread_name
-    self.sleep = sleep or config_lib.CONFIG["StatsStore.write_interval"]
+    self.sleep = sleep or config.CONFIG["StatsStore.write_interval"]
 
   def _RunLoop(self):
     while True:
@@ -688,11 +695,13 @@ class StatsStoreWorker(object):
                           e)
 
       logging.debug("Removing old stats from stats store." "")
+      # Maximum time we keep stats store data is three days.
+      stats_store_ttl = 60 * 60 * 24 * 3
       try:
         now = rdfvalue.RDFDatetime.Now().AsMicroSecondsFromEpoch()
         self.stats_store.DeleteStats(
             process_id=self.process_id,
-            timestamp=(0, now - config_lib.CONFIG["StatsStore.ttl"] * 1000000),
+            timestamp=(0, now - stats_store_ttl * 1000000),
             sync=False)
       except Exception as e:  # pylint: disable=broad-except
         logging.exception(
@@ -713,7 +722,7 @@ class StatsStoreWorker(object):
 
 class StatsStoreInit(registry.InitHook):
   """Hook that inits global STATS_STORE object and stats store worker."""
-  pre = ["AFF4InitHook"]
+  pre = [aff4.AFF4InitHook]
 
   def RunOnce(self):
     """Initializes StatsStore and StatsStoreWorker."""
@@ -730,7 +739,7 @@ class StatsStoreInit(registry.InitHook):
 
     # We don't need StatsStoreWorker if there's no StatsStore.process_id in
     # the config.
-    stats_process_id = config_lib.CONFIG["StatsStore.process_id"]
+    stats_process_id = config.CONFIG["StatsStore.process_id"]
     if not stats_process_id:
       return
 

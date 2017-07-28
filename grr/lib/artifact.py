@@ -3,10 +3,10 @@
 
 import logging
 
+from grr import config
 from grr.lib import aff4
 from grr.lib import artifact_registry
 from grr.lib import artifact_utils
-from grr.lib import config_lib
 from grr.lib import flow
 from grr.lib import parsers
 from grr.lib import rdfvalue
@@ -101,6 +101,9 @@ def SetCoreGRRKnowledgeBaseValues(kb, client_obj):
 
 class CollectArtifactDependenciesArgs(rdf_structs.RDFProtoStruct):
   protobuf = flows_pb2.CollectArtifactDependenciesArgs
+  rdf_deps = [
+      artifact_registry.ArtifactName,
+  ]
 
 
 class CollectArtifactDependencies(flow.GRRFlow):
@@ -148,6 +151,8 @@ class CollectArtifactDependencies(flow.GRRFlow):
     for artifact_name in first_flows:
       self.state.in_flight_artifacts.append(artifact_name)
       self.CallFlow(
+          # TODO(user): dependency loop with flows/general/collectors.py.
+          # collectors.ArtifactCollectorFlow.__name__,
           "ArtifactCollectorFlow",
           artifact_list=[artifact_name],
           knowledge_base=self.state.knowledge_base,
@@ -210,6 +215,8 @@ class CollectArtifactDependencies(flow.GRRFlow):
         self.state.in_flight_artifacts.append(artifact_name)
         self.state.awaiting_deps_artifacts.remove(artifact_name)
         self.CallFlow(
+            # TODO(user): dependency loop with flows/general/collectors.py.
+            # collectors.ArtifactCollectorFlow.__name__,
             "ArtifactCollectorFlow",
             artifact_list=[artifact_name],
             store_results_in_aff4=False,
@@ -399,11 +406,11 @@ class KnowledgeBaseInitializationFlow(CollectArtifactDependencies):
     Raises:
       RuntimeError: On bad artifact configuration parameters.
     """
-    kb_base_set = set(config_lib.CONFIG["Artifacts.knowledge_base"])
-    kb_add = set(config_lib.CONFIG["Artifacts.knowledge_base_additions"])
-    kb_skip = set(config_lib.CONFIG["Artifacts.knowledge_base_skip"])
+    kb_base_set = set(config.CONFIG["Artifacts.knowledge_base"])
+    kb_add = set(config.CONFIG["Artifacts.knowledge_base_additions"])
+    kb_skip = set(config.CONFIG["Artifacts.knowledge_base_skip"])
     if self.args.lightweight:
-      kb_skip.update(config_lib.CONFIG["Artifacts.knowledge_base_heavyweight"])
+      kb_skip.update(config.CONFIG["Artifacts.knowledge_base_heavyweight"])
     kb_set = kb_base_set.union(kb_add) - kb_skip
 
     for artifact_name in kb_set:
@@ -577,6 +584,9 @@ def UploadArtifactYamlFile(file_content,
 
 class ArtifactFallbackCollectorArgs(rdf_structs.RDFProtoStruct):
   protobuf = flows_pb2.ArtifactFallbackCollectorArgs
+  rdf_deps = [
+      artifact_registry.ArtifactName,
+  ]
 
 
 class ArtifactFallbackCollector(flow.GRRFlow):
@@ -628,10 +638,10 @@ class ArtifactLoader(registry.InitHook):
   Datastore gets loaded second so it can override Artifacts in the files.
   """
 
-  pre = ["AFF4InitHook"]
+  pre = [aff4.AFF4InitHook]
 
   def RunOnce(self):
-    for path in config_lib.CONFIG["Artifacts.artifact_dirs"]:
+    for path in config.CONFIG["Artifacts.artifact_dirs"]:
       artifact_registry.REGISTRY.AddDirSource(path)
 
     artifact_registry.REGISTRY.AddDatastoreSources(

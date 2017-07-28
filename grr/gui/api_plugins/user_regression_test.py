@@ -10,13 +10,15 @@ from grr.lib import access_control
 from grr.lib import aff4
 from grr.lib import flags
 from grr.lib import flow
-from grr.lib import hunts
 from grr.lib import rdfvalue
 from grr.lib import test_lib
-
 from grr.lib.aff4_objects import cronjobs as aff4_cronjobs
+
+from grr.lib.aff4_objects import security
 from grr.lib.aff4_objects import users as aff4_users
 
+from grr.lib.hunts import implementation
+from grr.lib.hunts import standard
 from grr.lib.hunts import standard_test
 
 
@@ -42,7 +44,7 @@ class ApiGetClientApprovalHandlerRegressionTest(
     with test_lib.FakeTime(44):
       flow_urn = flow.GRRFlow.StartFlow(
           client_id=clients[0],
-          flow_name="RequestClientApprovalFlow",
+          flow_name=security.RequestClientApprovalFlow.__name__,
           reason="foo",
           subject_urn=clients[0],
           approver="approver",
@@ -54,7 +56,7 @@ class ApiGetClientApprovalHandlerRegressionTest(
     with test_lib.FakeTime(45):
       flow_urn = flow.GRRFlow.StartFlow(
           client_id=clients[1],
-          flow_name="RequestClientApprovalFlow",
+          flow_name=security.RequestClientApprovalFlow.__name__,
           reason="bar",
           subject_urn=clients[1],
           approver="approver",
@@ -67,7 +69,7 @@ class ApiGetClientApprovalHandlerRegressionTest(
       approver_token = access_control.ACLToken(username="approver")
       flow.GRRFlow.StartFlow(
           client_id=clients[1],
-          flow_name="GrantClientApprovalFlow",
+          flow_name=security.GrantClientApprovalFlow.__name__,
           reason="bar",
           delegate=self.token.username,
           subject_urn=clients[1],
@@ -113,7 +115,7 @@ class ApiGrantClientApprovalHandlerRegressionTest(
       requestor_token = access_control.ACLToken(username="requestor")
       flow_urn = flow.GRRFlow.StartFlow(
           client_id=clients[0],
-          flow_name="RequestClientApprovalFlow",
+          flow_name=security.RequestClientApprovalFlow.__name__,
           reason="foo",
           subject_urn=clients[0],
           approver=self.token.username,
@@ -194,7 +196,7 @@ class ApiListClientApprovalsHandlerRegressionTest(
     with test_lib.FakeTime(44):
       flow_urn = flow.GRRFlow.StartFlow(
           client_id=clients[0],
-          flow_name="RequestClientApprovalFlow",
+          flow_name=security.RequestClientApprovalFlow.__name__,
           reason=self.token.reason,
           subject_urn=clients[0],
           approver="approver",
@@ -206,7 +208,7 @@ class ApiListClientApprovalsHandlerRegressionTest(
     with test_lib.FakeTime(45):
       flow_urn = flow.GRRFlow.StartFlow(
           client_id=clients[1],
-          flow_name="RequestClientApprovalFlow",
+          flow_name=security.RequestClientApprovalFlow.__name__,
           reason=self.token.reason,
           subject_urn=clients[1],
           approver="approver",
@@ -219,7 +221,7 @@ class ApiListClientApprovalsHandlerRegressionTest(
       approver_token = access_control.ACLToken(username="approver")
       flow.GRRFlow.StartFlow(
           client_id=clients[1],
-          flow_name="GrantClientApprovalFlow",
+          flow_name=security.GrantClientApprovalFlow.__name__,
           reason=self.token.reason,
           delegate=self.token.username,
           subject_urn=clients[1],
@@ -265,7 +267,7 @@ class ApiGetHuntApprovalHandlerRegressionTest(
 
     with test_lib.FakeTime(44):
       flow_urn = flow.GRRFlow.StartFlow(
-          flow_name="RequestHuntApprovalFlow",
+          flow_name=security.RequestHuntApprovalFlow.__name__,
           reason="foo",
           subject_urn=hunt1_urn,
           approver="approver",
@@ -276,7 +278,7 @@ class ApiGetHuntApprovalHandlerRegressionTest(
 
     with test_lib.FakeTime(45):
       flow_urn = flow.GRRFlow.StartFlow(
-          flow_name="RequestHuntApprovalFlow",
+          flow_name=security.RequestHuntApprovalFlow.__name__,
           reason="bar",
           subject_urn=hunt2_urn,
           approver="approver",
@@ -288,7 +290,7 @@ class ApiGetHuntApprovalHandlerRegressionTest(
     with test_lib.FakeTime(84):
       approver_token = access_control.ACLToken(username="approver")
       flow.GRRFlow.StartFlow(
-          flow_name="GrantHuntApprovalFlow",
+          flow_name=security.GrantHuntApprovalFlow.__name__,
           reason="bar",
           delegate=self.token.username,
           subject_urn=hunt2_urn,
@@ -332,7 +334,7 @@ class ApiGrantHuntApprovalHandlerRegressionTest(
     with test_lib.FakeTime(44):
       requestor_token = access_control.ACLToken(username="requestor")
       flow_urn = flow.GRRFlow.StartFlow(
-          flow_name="RequestHuntApprovalFlow",
+          flow_name=security.RequestHuntApprovalFlow.__name__,
           reason="foo",
           subject_urn=hunt_urn,
           approver=self.token.username,
@@ -397,11 +399,12 @@ class ApiListHuntApprovalsHandlerRegressionTest(
     with test_lib.FakeTime(42):
       self.CreateAdminUser("approver")
 
-      hunt = hunts.GRRHunt.StartHunt(hunt_name="GenericHunt", token=self.token)
+      hunt = implementation.GRRHunt.StartHunt(
+          hunt_name=standard.GenericHunt.__name__, token=self.token)
 
     with test_lib.FakeTime(43):
       flow_urn = flow.GRRFlow.StartFlow(
-          flow_name="RequestHuntApprovalFlow",
+          flow_name=security.RequestHuntApprovalFlow.__name__,
           reason=self.token.reason,
           subject_urn=hunt.urn,
           approver="approver",
@@ -440,7 +443,7 @@ class ApiGetCronJobApprovalHandlerRegressionTest(
 
     with test_lib.FakeTime(44):
       flow_urn = flow.GRRFlow.StartFlow(
-          flow_name="RequestCronJobApprovalFlow",
+          flow_name=security.RequestCronJobApprovalFlow.__name__,
           reason="foo",
           subject_urn=cron1_urn,
           approver="approver",
@@ -451,7 +454,7 @@ class ApiGetCronJobApprovalHandlerRegressionTest(
 
     with test_lib.FakeTime(45):
       flow_urn = flow.GRRFlow.StartFlow(
-          flow_name="RequestCronJobApprovalFlow",
+          flow_name=security.RequestCronJobApprovalFlow.__name__,
           reason="bar",
           subject_urn=cron2_urn,
           approver="approver",
@@ -463,7 +466,7 @@ class ApiGetCronJobApprovalHandlerRegressionTest(
     with test_lib.FakeTime(84):
       approver_token = access_control.ACLToken(username="approver")
       flow.GRRFlow.StartFlow(
-          flow_name="GrantCronJobApprovalFlow",
+          flow_name=security.GrantCronJobApprovalFlow.__name__,
           reason="bar",
           delegate=self.token.username,
           subject_urn=cron2_urn,
@@ -512,7 +515,7 @@ class ApiGrantCronJobApprovalHandlerRegressionTest(
     with test_lib.FakeTime(44):
       requestor_token = access_control.ACLToken(username="requestor")
       flow_urn = flow.GRRFlow.StartFlow(
-          flow_name="RequestCronJobApprovalFlow",
+          flow_name=security.RequestCronJobApprovalFlow.__name__,
           reason="foo",
           subject_urn=cron_urn,
           approver=self.token.username,

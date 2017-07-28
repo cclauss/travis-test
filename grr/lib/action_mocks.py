@@ -3,6 +3,7 @@
 
 import socket
 
+from grr import config
 from grr.client.client_actions import admin
 from grr.client.client_actions import components
 from grr.client.client_actions import file_finder
@@ -10,7 +11,6 @@ from grr.client.client_actions import file_fingerprint
 from grr.client.client_actions import searching
 from grr.client.client_actions import standard
 from grr.lib import client_fixture
-from grr.lib import config_lib
 from grr.lib import worker_mocks
 from grr.lib.rdfvalues import client as rdf_client
 from grr.lib.rdfvalues import cloud
@@ -59,15 +59,8 @@ class ActionMock(object):
       return getattr(self, message.name)(message.payload)
 
     self.RecordCall(message.name, message.payload)
-    # Try to retrieve a suspended action from the client worker.
-    try:
-      suspended_action_id = message.payload.iterator.suspended_action
-      action = self.client_worker.suspended_actions[suspended_action_id]
-
-    except (AttributeError, KeyError):
-      # Otherwise make a new action instance.
-      action_cls = self.action_classes[message.name]
-      action = action_cls(grr_worker=self.client_worker)
+    action_cls = self.action_classes[message.name]
+    action = action_cls(grr_worker=self.client_worker)
 
     action.Execute(message)
     self.action_counts[message.name] += 1
@@ -210,9 +203,9 @@ class InterrogatedClient(ActionMock):
     self.response_count += 1
     return [
         rdf_client.ClientInformation(
-            client_name=config_lib.CONFIG["Client.name"],
-            client_version=int(config_lib.CONFIG["Source.version_numeric"]),
-            build_time=config_lib.CONFIG["Client.build_time"],
+            client_name=config.CONFIG["Client.name"],
+            client_version=int(config.CONFIG["Source.version_numeric"]),
+            build_time=config.CONFIG["Client.build_time"],
             labels=["GRRLabel1", "Label2"],)
     ]
 

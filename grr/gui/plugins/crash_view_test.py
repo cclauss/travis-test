@@ -7,8 +7,9 @@ from grr.gui import runtests_test
 
 from grr.lib import aff4
 from grr.lib import flags
-from grr.lib import hunts
 from grr.lib import test_lib
+from grr.lib.hunts import implementation
+from grr.lib.hunts import standard
 from grr.lib.rdfvalues import client as rdf_client
 from grr.server import foreman as rdf_foreman
 
@@ -21,7 +22,7 @@ class TestCrashView(gui_test_lib.GRRSeleniumTest):
   def SetUpCrashedFlow(self):
     client = test_lib.CrashClientMock(self.client_id, self.token)
     for _ in test_lib.TestFlowHelper(
-        "FlowWithOneClientRequest",
+        test_lib.FlowWithOneClientRequest.__name__,
         client,
         client_id=self.client_id,
         token=self.token,
@@ -55,7 +56,8 @@ class TestCrashView(gui_test_lib.GRRSeleniumTest):
     self.WaitUntil(self.IsTextPresent, "C.0000000000000001")
 
     self.Click("css=a[grrtarget='client.flows']")
-    self.WaitUntil(self.IsTextPresent, "FlowWithOneClientRequest")
+    self.WaitUntil(self.IsTextPresent,
+                   test_lib.FlowWithOneClientRequest.__name__)
 
     # Check that skull icon is in place.
     self.WaitUntil(self.IsElementPresent, "css=img[src$='skull-icon.png']")
@@ -81,8 +83,8 @@ class TestCrashView(gui_test_lib.GRRSeleniumTest):
                 attribute_name="GRR client", attribute_regex=""))
     ])
 
-    with hunts.GRRHunt.StartHunt(
-        hunt_name="SampleHunt",
+    with implementation.GRRHunt.StartHunt(
+        hunt_name=standard.SampleHunt.__name__,
         client_rule_set=client_rule_set,
         client_rate=0,
         token=self.token) as hunt:

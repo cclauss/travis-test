@@ -3,10 +3,11 @@
 
 import os
 
+from grr import config
 from grr.client.components.rekall_support import rekall_types as rdf_rekall_types
 from grr.endtoend_tests import base
 from grr.lib import aff4
-from grr.lib import config_lib
+from grr.lib.flows.general import memory
 
 
 class AbstractTestAnalyzeClientMemory(base.ClientTestBase):
@@ -17,7 +18,7 @@ class AbstractTestAnalyzeClientMemory(base.ClientTestBase):
   cache with lib.rekall_profile_server.GRRRekallProfileServer.GetMissingProfiles
   on the console to make these tests pass.
   """
-  flow = "AnalyzeClientMemory"
+  flow = memory.AnalyzeClientMemory.__name__
   args = {"request": rdf_rekall_types.RekallRequest()}
 
   def setUpRequest(self):
@@ -26,18 +27,18 @@ class AbstractTestAnalyzeClientMemory(base.ClientTestBase):
   def setUp(self):
     self.setUpRequest()
 
-    self.old_config = config_lib.CONFIG.Get("Rekall.profile_server")
-    if "Test Context" in config_lib.CONFIG.context:
+    self.old_config = config.CONFIG.Get("Rekall.profile_server")
+    if "Test Context" in config.CONFIG.context:
       # We're running in a test context, where the rekall repository server is
       # set to TestRekallRepositoryProfileServer, which won't actually work for
       # an end to end test. We change it temporarily to allow the test to pass.
-      config_lib.CONFIG.Set("Rekall.profile_server", "GRRRekallProfileServer")
+      config.CONFIG.Set("Rekall.profile_server", "GRRRekallProfileServer")
 
     super(AbstractTestAnalyzeClientMemory, self).setUp()
 
   def tearDown(self):
-    if "Test Context" in config_lib.CONFIG.context:
-      config_lib.CONFIG.Set("Rekall.profile_server", self.old_config)
+    if "Test Context" in config.CONFIG.context:
+      config.CONFIG.Set("Rekall.profile_server", self.old_config)
     super(AbstractTestAnalyzeClientMemory, self).tearDown()
 
   def CheckFlow(self):
@@ -105,7 +106,7 @@ class TestAnalyzeClientMemoryMac(AbstractTestAnalyzeClientMemory,
 
   def CheckFlow(self):
     super(TestAnalyzeClientMemoryMac, self).CheckFlow()
-    binary_name = config_lib.CONFIG.Get(
+    binary_name = config.CONFIG.Get(
         "Client.binary_name", context=["Client Context", "Platform:Darwin"])
     self.assertTrue(
         any([
@@ -213,7 +214,7 @@ class TestSigScan(AbstractTestAnalyzeClientMemoryWindows):
   def setUpRequest(self):
     # This is a signature for the tcpip.sys driver on Windows 7. If you are
     # running a different version, a hit is not guaranteed.
-    sig_path = os.path.join(config_lib.CONFIG["Test.end_to_end_data_dir"],
+    sig_path = os.path.join(config.CONFIG["Test.end_to_end_data_dir"],
                             "tcpip.sig")
 
     signature = open(sig_path, "rb").read().strip()

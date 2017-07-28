@@ -8,6 +8,7 @@ import gzip
 import os
 import subprocess
 
+from grr import config
 from grr.client import client_utils_linux
 from grr.client import client_utils_osx
 from grr.client.client_actions import file_fingerprint
@@ -18,7 +19,6 @@ from grr.lib import action_mocks
 from grr.lib import aff4
 from grr.lib import artifact
 from grr.lib import artifact_registry
-from grr.lib import config_lib
 from grr.lib import flags
 from grr.lib import flow
 from grr.lib import parsers
@@ -27,9 +27,8 @@ from grr.lib import server_stubs
 from grr.lib import test_lib
 from grr.lib import utils
 from grr.lib.aff4_objects import aff4_grr
-# For ArtifactCollectorFlow pylint: disable=unused-import
 from grr.lib.flows.general import collectors
-# pylint: enable=unused-import
+from grr.lib.flows.general import filesystem
 from grr.lib.flows.general import memory
 from grr.lib.rdfvalues import anomaly as rdf_anomaly
 from grr.lib.rdfvalues import client as rdf_client
@@ -127,7 +126,7 @@ class RekallMock(action_mocks.MemoryClientMock):
     # Generate this file with:
     # rekal --output data -f win7_trial_64bit.raw \
     # pslist | gzip - > rekall_pslist_result.dat.gz
-    ps_list_file = os.path.join(config_lib.CONFIG["Test.data_dir"],
+    ps_list_file = os.path.join(config.CONFIG["Test.data_dir"],
                                 self.result_filename)
     result = rdf_rekall_types.RekallResponse(
         json_messages=gzip.open(ps_list_file).read(10000000),
@@ -158,7 +157,7 @@ class ArtifactTest(test_lib.FlowTestsBaseclass):
   def LoadTestArtifacts(self):
     """Add the test artifacts in on top of whatever is in the registry."""
     artifact_registry.REGISTRY.AddFileSource(
-        os.path.join(config_lib.CONFIG["Test.data_dir"], "artifacts",
+        os.path.join(config.CONFIG["Test.data_dir"], "artifacts",
                      "test_artifacts.json"))
 
   class MockClient(action_mocks.MemoryClientMock):
@@ -191,7 +190,7 @@ class ArtifactTest(test_lib.FlowTestsBaseclass):
       client_mock = self.MockClient(client_id=self.client_id)
 
     for s in test_lib.TestFlowHelper(
-        "ArtifactCollectorFlow",
+        collectors.ArtifactCollectorFlow.__name__,
         client_mock=client_mock,
         client_id=self.client_id,
         artifact_list=artifact_list,
@@ -234,7 +233,7 @@ class GRRArtifactTest(ArtifactTest):
 
     try:
 
-      test_artifacts_file = os.path.join(config_lib.CONFIG["Test.data_dir"],
+      test_artifacts_file = os.path.join(config.CONFIG["Test.data_dir"],
                                          "artifacts", "test_artifacts.json")
       filecontent = open(test_artifacts_file, "rb").read()
       artifact.UploadArtifactYamlFile(filecontent, token=self.token)
@@ -398,7 +397,7 @@ class ArtifactFlowLinuxTest(ArtifactTest):
         standard.ExecuteCommand, client_id=self.client_id)
     with utils.Stubber(subprocess, "Popen", test_lib.Popen):
       for _ in test_lib.TestFlowHelper(
-          "ArtifactCollectorFlow",
+          collectors.ArtifactCollectorFlow.__name__,
           client_mock,
           client_id=self.client_id,
           store_results_in_aff4=True,
@@ -493,9 +492,10 @@ class ArtifactFlowWindowsTest(ArtifactTest):
         token=self.token,
         version=memory.AnalyzeClientMemoryArgs().component_version)
 
-    fd = self.RunCollectorAndGetCollection(
-        ["RekallPsList"],
-        RekallMock(self.client_id, "rekall_pslist_result.dat.gz"))
+    with test_lib.ConfigOverrider({"Rekall.enabled": True}):
+      fd = self.RunCollectorAndGetCollection(
+          ["RekallPsList"],
+          RekallMock(self.client_id, "rekall_pslist_result.dat.gz"))
 
     self.assertEqual(len(fd), 35)
     self.assertEqual(fd[0].exe, "System")
@@ -512,9 +512,10 @@ class ArtifactFlowWindowsTest(ArtifactTest):
     with aff4.FACTORY.Open(self.client_id, mode="rw", token=self.token) as fd:
       fd.Set(fd.Schema.KNOWLEDGE_BASE(os="Windows", environ_systemdrive=r"c:"))
 
-    fd = self.RunCollectorAndGetCollection(
-        ["FullVADBinaryList"],
-        RekallMock(self.client_id, "rekall_vad_result.dat.gz"))
+    with test_lib.ConfigOverrider({"Rekall.enabled": True}):
+      fd = self.RunCollectorAndGetCollection(
+          ["FullVADBinaryList"],
+          RekallMock(self.client_id, "rekall_vad_result.dat.gz"))
 
     self.assertEqual(len(fd), 1705)
     self.assertEqual(fd[0].path, u"c:\\Windows\\System32\\ntdll.dll")
@@ -561,7 +562,7 @@ class GrrKbWindowsTest(GrrKbTest):
     """Check we can retrieve a knowledge base from a client."""
     self.ClearKB()
     for _ in test_lib.TestFlowHelper(
-        "KnowledgeBaseInitializationFlow",
+        artifact.KnowledgeBaseInitializationFlow.__name__,
         self.client_mock,
         client_id=self.client_id,
         token=self.token):
@@ -594,7 +595,7 @@ class GrrKbWindowsTest(GrrKbTest):
         "Artifacts.knowledge_base": ["DepsProvidesMultiple"]
     }):
       for _ in test_lib.TestFlowHelper(
-          "KnowledgeBaseInitializationFlow",
+          artifact.KnowledgeBaseInitializationFlow.__name__,
           self.client_mock,
           client_id=self.client_id,
           token=self.token):
@@ -616,7 +617,7 @@ class GrrKbWindowsTest(GrrKbTest):
     ]
 
     for _ in test_lib.TestFlowHelper(
-        "Glob",
+        filesystem.Glob.__name__,
         self.client_mock,
         paths=paths,
         pathtype=rdf_paths.PathSpec.PathType.REGISTRY,
@@ -636,7 +637,7 @@ class GrrKbWindowsTest(GrrKbTest):
     """Test that dependencies are calculated correctly."""
     artifact_registry.REGISTRY.ClearSources()
     try:
-      test_artifacts_file = os.path.join(config_lib.CONFIG["Test.data_dir"],
+      test_artifacts_file = os.path.join(config.CONFIG["Test.data_dir"],
                                          "artifacts", "test_artifacts.json")
       artifact_registry.REGISTRY.AddFileSource(test_artifacts_file)
 
@@ -675,7 +676,7 @@ class GrrKbWindowsTest(GrrKbTest):
     """Test that KB dependencies are calculated correctly."""
     artifact_registry.REGISTRY.ClearSources()
     try:
-      test_artifacts_file = os.path.join(config_lib.CONFIG["Test.data_dir"],
+      test_artifacts_file = os.path.join(config.CONFIG["Test.data_dir"],
                                          "artifacts", "test_artifacts.json")
       artifact_registry.REGISTRY.AddFileSource(test_artifacts_file)
 
@@ -730,7 +731,7 @@ class GrrKbLinuxTest(GrrKbTest):
                                  test_lib.FakeTestDataVFSHandler):
 
         for _ in test_lib.TestFlowHelper(
-            "KnowledgeBaseInitializationFlow",
+            artifact.KnowledgeBaseInitializationFlow.__name__,
             self.client_mock,
             client_id=self.client_id,
             token=self.token):
@@ -760,7 +761,7 @@ class GrrKbLinuxTest(GrrKbTest):
       }):
 
         for _ in test_lib.TestFlowHelper(
-            "KnowledgeBaseInitializationFlow",
+            artifact.KnowledgeBaseInitializationFlow.__name__,
             self.client_mock,
             client_id=self.client_id,
             token=self.token):
@@ -798,7 +799,7 @@ class GrrKbLinuxTest(GrrKbTest):
                                  test_lib.FakeTestDataVFSHandler):
 
         for _ in test_lib.TestFlowHelper(
-            "KnowledgeBaseInitializationFlow",
+            artifact.KnowledgeBaseInitializationFlow.__name__,
             self.client_mock,
             require_complete=False,
             client_id=self.client_id,
@@ -825,7 +826,7 @@ class GrrKbDarwinTest(GrrKbTest):
                                  test_lib.ClientVFSHandlerFixture):
 
         for _ in test_lib.TestFlowHelper(
-            "KnowledgeBaseInitializationFlow",
+            artifact.KnowledgeBaseInitializationFlow.__name__,
             self.client_mock,
             client_id=self.client_id,
             token=self.token):

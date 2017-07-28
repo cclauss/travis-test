@@ -12,19 +12,21 @@ import json
 from rekall import constants
 
 import logging
+from grr import config
 from grr.client.components.rekall_support import grr_rekall_stubs
 from grr.client.components.rekall_support import rekall_pb2
 from grr.client.components.rekall_support import rekall_types
 from grr.lib import aff4
-from grr.lib import config_lib
 from grr.lib import flow
 from grr.lib import rekall_profile_server
 from grr.lib import server_stubs
+from grr.lib.flows.general import file_finder
 
 from grr.lib.flows.general import transfer
 from grr.lib.rdfvalues import client as rdf_client
 from grr.lib.rdfvalues import file_finder as rdf_file_finder
 from grr.lib.rdfvalues import paths as rdf_paths
+from grr.lib.rdfvalues import standard
 from grr.lib.rdfvalues import structs as rdf_structs
 from grr.proto import flows_pb2
 
@@ -42,11 +44,16 @@ class MemoryCollector(flow.GRRFlow):
   """
   friendly_name = "Memory Collector"
   category = "/Memory/"
-  behaviours = flow.GRRFlow.behaviours + "BASIC"
+  behaviours = flow.FlowBehaviour("Client Flow", "DEBUG")
   args_type = MemoryCollectorArgs
 
   @flow.StateHandler()
   def Start(self):
+    if not config.CONFIG["Rekall.enabled"]:
+      raise RuntimeError("Rekall flows are disabled. "
+                         "Add 'Rekall.enabled: True' to the config to enable "
+                         "them.")
+
     self.state.output_urn = None
 
     # Use Rekall to grab memory. We no longer manually check for kcore's
@@ -85,7 +92,7 @@ class MemoryCollector(flow.GRRFlow):
 
     # Note that this will actually also retrieve the memory image.
     self.CallFlow(
-        "AnalyzeClientMemory",
+        AnalyzeClientMemory.__name__,
         request=request,
         max_file_size_download=self.args.max_file_size,
         next_state="CheckAnalyzeClientMemory")
@@ -107,6 +114,9 @@ class MemoryCollector(flow.GRRFlow):
 
 class AnalyzeClientMemoryArgs(rdf_structs.RDFProtoStruct):
   protobuf = rekall_pb2.AnalyzeClientMemoryArgs
+  rdf_deps = [
+      rekall_types.RekallRequest,
+  ]
 
 
 class AnalyzeClientMemory(transfer.LoadComponentMixin, flow.GRRFlow):
@@ -118,11 +128,16 @@ class AnalyzeClientMemory(transfer.LoadComponentMixin, flow.GRRFlow):
   """
 
   category = "/Memory/"
+  behaviours = flow.FlowBehaviour("Client Flow", "DEBUG")
   args_type = AnalyzeClientMemoryArgs
-  behaviours = flow.GRRFlow.behaviours + "BASIC"
 
   @flow.StateHandler()
   def Start(self):
+    if not config.CONFIG["Rekall.enabled"]:
+      raise RuntimeError("Rekall flows are disabled. "
+                         "Add 'Rekall.enabled: True' to the config to enable "
+                         "them.")
+
     # Load all the components we will be needing on the client.
     self.LoadComponentOnClient(
         name="grr-rekall",
@@ -235,7 +250,7 @@ class AnalyzeClientMemory(transfer.LoadComponentMixin, flow.GRRFlow):
       if self.state.output_files:
         self.Log("Getting %i files.", len(self.state.output_files))
         self.CallFlow(
-            "MultiGetFile",
+            transfer.MultiGetFile.__name__,
             pathspecs=self.state.output_files,
             file_size=self.args.max_file_size_download,
             next_state="DeleteFiles")
@@ -277,7 +292,7 @@ class AnalyzeClientMemory(transfer.LoadComponentMixin, flow.GRRFlow):
 
   def GetProfileByName(self, name, version):
     """Load the requested profile from the repository."""
-    server_type = config_lib.CONFIG["Rekall.profile_server"]
+    server_type = config.CONFIG["Rekall.profile_server"]
     logging.info("Getting missing Rekall profile '%s' from %s", name,
                  server_type)
 
@@ -288,6 +303,9 @@ class AnalyzeClientMemory(transfer.LoadComponentMixin, flow.GRRFlow):
 
 class ListVADBinariesArgs(rdf_structs.RDFProtoStruct):
   protobuf = flows_pb2.ListVADBinariesArgs
+  rdf_deps = [
+      standard.RegularExpression,
+  ]
 
 
 class ListVADBinaries(flow.GRRFlow):
@@ -327,12 +345,20 @@ class ListVADBinaries(flow.GRRFlow):
       some debug userland-process-dump API?) and then reading the memory.
   """
   category = "/Memory/"
+  behaviours = flow.FlowBehaviour("Client Flow", "DEBUG")
   args_type = ListVADBinariesArgs
 
   @flow.StateHandler()
   def Start(self):
     """Request VAD data."""
+    if not config.CONFIG["Rekall.enabled"]:
+      raise RuntimeError("Rekall flows are disabled. "
+                         "Add 'Rekall.enabled: True' to the config to enable "
+                         "them.")
+
     self.CallFlow(
+        # TODO(user): dependency loop between collectors.py and memory.py.
+        # collectors.ArtifactCollectorFlow.__name__,
         "ArtifactCollectorFlow",
         artifact_list=["FullVADBinaryList"],
         store_results_in_aff4=False,
@@ -360,7 +386,7 @@ class ListVADBinaries(flow.GRRFlow):
 
     if self.args.fetch_binaries:
       self.CallFlow(
-          "FileFinder",
+          file_finder.FileFinder.__name__,
           next_state="HandleDownloadedFiles",
           paths=[rdf_paths.GlobExpression(b.CollapsePath()) for b in binaries],
           pathtype=rdf_paths.PathSpec.PathType.OS,

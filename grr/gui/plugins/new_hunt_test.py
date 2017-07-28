@@ -9,13 +9,14 @@ from grr.lib import access_control
 from grr.lib import aff4
 from grr.lib import data_store
 from grr.lib import flags
-from grr.lib import hunts
 from grr.lib import output_plugin
 from grr.lib import test_lib
 from grr.lib.aff4_objects import aff4_grr
 from grr.lib.flows.general import file_finder
 from grr.lib.flows.general import processes
 from grr.lib.flows.general import transfer
+from grr.lib.hunts import implementation
+from grr.lib.hunts import standard
 from grr.lib.rdfvalues import client as rdf_client
 from grr.lib.rdfvalues import file_finder as rdf_file_finder
 from grr.lib.rdfvalues import flows as rdf_flows
@@ -497,10 +498,11 @@ class TestNewHuntWizard(gui_test_lib.GRRSeleniumTest):
 
   @staticmethod
   def CreateSampleHunt(description, token=None):
-    hunts.GRRHunt.StartHunt(
-        hunt_name="GenericHunt",
+    implementation.GRRHunt.StartHunt(
+        hunt_name=standard.GenericHunt.__name__,
         description=description,
-        flow_runner_args=rdf_flows.FlowRunnerArgs(flow_name="GetFile"),
+        flow_runner_args=rdf_flows.FlowRunnerArgs(
+            flow_name=transfer.GetFile.__name__),
         flow_args=transfer.GetFileArgs(pathspec=rdf_paths.PathSpec(
             path="/tmp/evil.txt",
             pathtype=rdf_paths.PathSpec.PathType.TSK,)),
@@ -584,7 +586,7 @@ class TestNewHuntWizard(gui_test_lib.GRRSeleniumTest):
     # Check that review page contains expected values.
     self.WaitUntil(self.IsTextPresent, "TSK")
     self.WaitUntil(self.IsTextPresent, "/tmp/evil.txt")
-    self.WaitUntil(self.IsTextPresent, "GetFile")
+    self.WaitUntil(self.IsTextPresent, transfer.GetFile.__name__)
     self.WaitUntil(self.IsTextPresent, "DummyOutputPlugin")
     self.WaitUntil(self.IsTextPresent, "blah!")
     self.WaitUntil(self.IsTextPresent, "model hunt (copy)")
@@ -693,7 +695,7 @@ class TestNewHuntWizard(gui_test_lib.GRRSeleniumTest):
     # Check that expected values are shown in the review.
     self.WaitUntil(self.IsTextPresent, "OS")
     self.WaitUntil(self.IsTextPresent, "/tmp/very-evil.txt")
-    self.WaitUntil(self.IsTextPresent, "GetFile")
+    self.WaitUntil(self.IsTextPresent, transfer.GetFile.__name__)
     self.WaitUntil(self.IsTextPresent, "DummyOutputPlugin")
     self.WaitUntil(self.IsTextPresent, "foobar!")
     self.WaitUntil(self.IsTextPresent, "blah!")
@@ -714,7 +716,8 @@ class TestNewHuntWizard(gui_test_lib.GRRSeleniumTest):
     self.assertEqual(last_hunt.args.flow_args.pathspec.path,
                      "/tmp/very-evil.txt")
     self.assertEqual(last_hunt.args.flow_args.pathspec.pathtype, "OS")
-    self.assertEqual(last_hunt.args.flow_runner_args.flow_name, "GetFile")
+    self.assertEqual(last_hunt.args.flow_runner_args.flow_name,
+                     transfer.GetFile.__name__)
 
     self.assertEqual(len(last_hunt.runner_args.output_plugins), 2)
     self.assertEqual(last_hunt.runner_args.output_plugins[0].plugin_name,
@@ -749,8 +752,8 @@ class TestNewHuntWizard(gui_test_lib.GRRSeleniumTest):
     literal_match = rdf_file_finder.FileFinderContentsLiteralMatchCondition(
         literal="foo\x0d\xc8bar")
 
-    hunts.GRRHunt.StartHunt(
-        hunt_name="GenericHunt",
+    implementation.GRRHunt.StartHunt(
+        hunt_name=standard.GenericHunt.__name__,
         description="model hunt",
         flow_runner_args=rdf_flows.FlowRunnerArgs(
             flow_name=file_finder.FileFinder.__name__),
@@ -808,10 +811,11 @@ class TestNewHuntWizard(gui_test_lib.GRRSeleniumTest):
                      .contents_literal_match.literal, "foo\x0d\xc8bar")
 
   def testCopyHuntPreservesRuleType(self):
-    hunts.GRRHunt.StartHunt(
-        hunt_name="GenericHunt",
+    implementation.GRRHunt.StartHunt(
+        hunt_name=standard.GenericHunt.__name__,
         description="model hunt",
-        flow_runner_args=rdf_flows.FlowRunnerArgs(flow_name="GetFile"),
+        flow_runner_args=rdf_flows.FlowRunnerArgs(
+            flow_name=transfer.GetFile.__name__),
         flow_args=transfer.GetFileArgs(pathspec=rdf_paths.PathSpec(
             path="/tmp/evil.txt",
             pathtype=rdf_paths.PathSpec.PathType.TSK,)),

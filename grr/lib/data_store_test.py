@@ -23,7 +23,6 @@ import time
 import mock
 
 from grr.lib import aff4
-from grr.lib import config_lib
 from grr.lib import data_store
 from grr.lib import flow
 from grr.lib import queue_manager
@@ -33,8 +32,8 @@ from grr.lib import test_lib
 from grr.lib import threadpool
 from grr.lib import worker
 from grr.lib.aff4_objects import aff4_grr
-from grr.lib.aff4_objects import collects
 from grr.lib.aff4_objects import standard
+from grr.lib.flows.general import filesystem
 from grr.lib.rdfvalues import client as rdf_client
 from grr.lib.rdfvalues import flows as rdf_flows
 from grr.lib.rdfvalues import paths as rdf_paths
@@ -1039,28 +1038,30 @@ class _DataStoreTest(test_lib.GRRBaseTest):
     subject = u"aff4:/metadata:rowÎñţér"
 
     # t1 is holding a lock on this row.
-    with data_store.DB.DBSubjectLock(subject, token=self.token):
+    with data_store.DB.DBSubjectLock(subject, lease_time=100, token=self.token):
       # This means that modification of this row will fail using a different
       # lock.
       self.assertRaises(
           data_store.DBSubjectLockError,
           data_store.DB.DBSubjectLock,
           subject,
+          lease_time=100,
           token=self.token)
       data_store.DB.Set(subject, predicate, "1", token=self.token)
 
     self.assertEqual(
         data_store.DB.Resolve(subject, predicate, token=self.token)[0], "1")
 
-    t2 = data_store.DB.DBSubjectLock(subject, token=self.token)
+    t2 = data_store.DB.DBSubjectLock(subject, lease_time=100, token=self.token)
     self.assertRaises(
         data_store.DBSubjectLockError,
         data_store.DB.DBSubjectLock,
         subject,
+        lease_time=100,
         token=self.token)
     t2.Release()
 
-    t3 = data_store.DB.DBSubjectLock(subject, token=self.token)
+    t3 = data_store.DB.DBSubjectLock(subject, lease_time=100, token=self.token)
     self.assertTrue(t3.CheckLease())
     t3.Release()
 
@@ -1070,17 +1071,18 @@ class _DataStoreTest(test_lib.GRRBaseTest):
     subject = u"aff4:/metadata:rowÎñţér"
     subject2 = u"aff4:/metadata:rowÎñţér2"
 
-    t1 = data_store.DB.DBSubjectLock(subject, token=self.token)
+    t1 = data_store.DB.DBSubjectLock(subject, lease_time=100, token=self.token)
 
     # Check it's locked.
     self.assertRaises(
         data_store.DBSubjectLockError,
         data_store.DB.DBSubjectLock,
         subject,
+        lease_time=100,
         token=self.token)
 
     # t2 is holding a lock on this row.
-    t2 = data_store.DB.DBSubjectLock(subject2, token=self.token)
+    t2 = data_store.DB.DBSubjectLock(subject2, lease_time=100, token=self.token)
 
     # This means that modification of this row will fail using a different
     # lock.
@@ -1088,6 +1090,7 @@ class _DataStoreTest(test_lib.GRRBaseTest):
         data_store.DBSubjectLockError,
         data_store.DB.DBSubjectLock,
         subject2,
+        lease_time=100,
         token=self.token)
     t2.Release()
 
@@ -1096,86 +1099,87 @@ class _DataStoreTest(test_lib.GRRBaseTest):
         data_store.DBSubjectLockError,
         data_store.DB.DBSubjectLock,
         subject,
+        lease_time=100,
         token=self.token)
 
     t1.Release()
 
   @DBSubjectLockTest
   def testDBSubjectLockLease(self):
-    default_lease = config_lib.CONFIG["Datastore.transaction_timeout"]
     # This needs to be current time or cloud bigtable server will reply with
     # deadline exceeded because the RPC is too old.
     now = int(time.time())
     with test_lib.FakeTime(now):
       with data_store.DB.DBSubjectLock(
-          self.lease_row, token=self.token) as lock:
-        self.assertEqual(lock.CheckLease(), default_lease)
+          self.lease_row, lease_time=100, token=self.token) as lock:
+        self.assertEqual(lock.CheckLease(), 100)
         self.assertTrue(lock.locked)
 
-        # Set our expiry time to now + 2*default_lease
-        lock.UpdateLease(2 * default_lease)
-        self.assertEqual(lock.CheckLease(), 2 * default_lease)
+        # Set our expiry time to now + 2 * 100
+        lock.UpdateLease(2 * 100)
+        self.assertEqual(lock.CheckLease(), 2 * 100)
 
         # Deliberately call release twice, __exit__ will also call
         lock.Release()
-
-    # Check setting a custom lease time
-    with test_lib.FakeTime(now):
-      with data_store.DB.DBSubjectLock(
-          self.lease_row, token=self.token, lease_time=5000) as lock:
-        self.assertEqual(lock.CheckLease(), 5000)
 
   @DBSubjectLockTest
   def testDBSubjectLockLeaseExpiryWithExtension(self):
     now = int(time.time())
     # Cloud Bigtable RPC library doesn't like long, convert to int
-    default_lease = int(config_lib.CONFIG["Datastore.transaction_timeout"])
+    lease_time = 100
     with test_lib.FakeTime(now):
-      lock = data_store.DB.DBSubjectLock(self.lease_row, token=self.token)
-      self.assertEqual(lock.expires, int(now + default_lease) * 1e6)
-      lock.UpdateLease(2 * default_lease)
-      self.assertEqual(lock.expires, int(now + (2 * default_lease)) * 1e6)
+      lock = data_store.DB.DBSubjectLock(
+          self.lease_row, lease_time=lease_time, token=self.token)
+      self.assertEqual(lock.expires, int(now + lease_time) * 1e6)
+      lock.UpdateLease(2 * lease_time)
+      self.assertEqual(lock.expires, int(now + (2 * lease_time)) * 1e6)
 
     # Lock should still be active
-    with test_lib.FakeTime(now + default_lease + 1):
+    with test_lib.FakeTime(now + lease_time + 1):
       self.assertRaises(
           data_store.DBSubjectLockError,
           data_store.DB.DBSubjectLock,
           self.lease_row,
+          lease_time=lease_time,
           token=self.token)
 
     # Now it is expired
-    with test_lib.FakeTime(now + (2 * default_lease) + 1):
-      data_store.DB.DBSubjectLock(self.lease_row, token=self.token)
+    with test_lib.FakeTime(now + (2 * lease_time) + 1):
+      data_store.DB.DBSubjectLock(
+          self.lease_row, lease_time=lease_time, token=self.token)
 
   @DBSubjectLockTest
   def testDBSubjectLockLeaseExpiry(self):
     now = int(time.time())
-    default_lease = int(config_lib.CONFIG["Datastore.transaction_timeout"])
+    lease_time = 100
     with test_lib.FakeTime(now):
-      lock = data_store.DB.DBSubjectLock(self.lease_row, token=self.token)
-      self.assertEqual(lock.CheckLease(), default_lease)
+      lock = data_store.DB.DBSubjectLock(
+          self.lease_row, lease_time=lease_time, token=self.token)
+      self.assertEqual(lock.CheckLease(), lease_time)
 
       self.assertRaises(
           data_store.DBSubjectLockError,
           data_store.DB.DBSubjectLock,
           self.lease_row,
+          lease_time=lease_time,
           token=self.token)
 
     # Almost expired
-    with test_lib.FakeTime(now + default_lease - 1):
+    with test_lib.FakeTime(now + lease_time - 1):
       self.assertRaises(
           data_store.DBSubjectLockError,
           data_store.DB.DBSubjectLock,
           self.lease_row,
+          lease_time=lease_time,
           token=self.token)
 
     # Expired
-    after_expiry = now + default_lease + 1
+    after_expiry = now + lease_time + 1
     with test_lib.FakeTime(after_expiry):
-      lock = data_store.DB.DBSubjectLock(self.lease_row, token=self.token)
-      self.assertEqual(lock.CheckLease(), default_lease)
-      self.assertEqual(lock.expires, int((after_expiry + default_lease) * 1e6))
+      lock = data_store.DB.DBSubjectLock(
+          self.lease_row, lease_time=lease_time, token=self.token)
+      self.assertEqual(lock.CheckLease(), lease_time)
+      self.assertEqual(lock.expires, int((after_expiry + lease_time) * 1e6))
 
   @DBSubjectLockTest
   def testLockRetryWrapperTemporaryFailure(self):
@@ -1200,11 +1204,12 @@ class _DataStoreTest(test_lib.GRRBaseTest):
   @DBSubjectLockTest
   def testLockRetryWrapperNoBlock(self):
     subject = "aff4:/noblocklock"
-    lock = data_store.DB.DBSubjectLock(subject, token=self.token)
+    lock = data_store.DB.DBSubjectLock(
+        subject, lease_time=100, token=self.token)
     with mock.patch.object(time, "sleep", return_value=None) as mock_time:
       with self.assertRaises(data_store.DBSubjectLockError):
         data_store.DB.LockRetryWrapper(
-            subject, token=self.token, blocking=False)
+            subject, lease_time=100, token=self.token, blocking=False)
         self.assertEqual(mock_time.call_count, 0)
     lock.Release()
 
@@ -1214,12 +1219,14 @@ class _DataStoreTest(test_lib.GRRBaseTest):
     # We need to sync this delete or it happens after we take the lock and
     # messes up the test.
     data_store.DB.DeleteSubject(subject, token=self.token, sync=True)
-    lock = data_store.DB.DBSubjectLock(subject, token=self.token)
+    lock = data_store.DB.DBSubjectLock(
+        subject, lease_time=100, token=self.token)
 
     # By mocking out sleep we can ensure all retries are exhausted.
     with mock.patch.object(time, "sleep", return_value=None):
       with self.assertRaises(data_store.DBSubjectLockError):
-        data_store.DB.LockRetryWrapper(subject, token=self.token)
+        data_store.DB.LockRetryWrapper(
+            subject, lease_time=100, token=self.token)
 
     lock.Release()
 
@@ -2390,7 +2397,7 @@ class DataStoreBenchmarks(test_lib.MicroBenchmarks):
   def StartFlow(self, client_id):
     flow_id = flow.GRRFlow.StartFlow(
         client_id=client_id,
-        flow_name="ListDirectory",
+        flow_name=filesystem.ListDirectory.__name__,
         queue=self.queue,
         pathspec=rdf_paths.PathSpec(
             path="/",
@@ -2440,67 +2447,6 @@ class DataStoreBenchmarks(test_lib.MicroBenchmarks):
   def testCollections(self):
 
     self.rand = random.Random(42)
-
-    #
-    # Populate and exercise a packed versioned collection.
-    #
-    packed_collection_urn = rdfvalue.RDFURN("aff4:/test_packed_collection")
-    packed_collection = aff4.FACTORY.Create(
-        packed_collection_urn,
-        collects.PackedVersionedCollection,
-        mode="w",
-        token=self.token)
-    packed_collection.Close()
-
-    start_time = time.time()
-    for _ in range(self.RECORDS):
-      collects.PackedVersionedCollection.AddToCollection(
-          packed_collection_urn,
-          rdfvalue.RDFString(self._GenerateRandomString(self.RECORD_SIZE)),
-          token=self.token)
-    elapsed_time = time.time() - start_time
-    self.AddResult("Packed Coll. Add (size %d)" % self.RECORD_SIZE,
-                   elapsed_time, self.RECORDS)
-
-    with aff4.FACTORY.OpenWithLock(
-        packed_collection_urn, lease_time=3600,
-        token=self.token) as packed_collection:
-      start_time = time.time()
-      packed_collection.Compact()
-      elapsed_time = time.time() - start_time
-    self.AddResult("Packed Coll. Compact", elapsed_time, 1)
-
-    packed_collection = aff4.FACTORY.Create(
-        packed_collection_urn,
-        collects.PackedVersionedCollection,
-        mode="r",
-        token=self.token)
-    start_time = time.time()
-    for _ in range(self.READ_COUNT):
-      for _ in packed_collection.GenerateItems(offset=self.rand.randint(
-          0, self.RECORDS - 1)):
-        break
-    elapsed_time = time.time() - start_time
-    self.AddResult("Packed Coll. random 1 record reads", elapsed_time,
-                   self.READ_COUNT)
-
-    start_time = time.time()
-    for _ in range(self.READ_COUNT):
-      count = 0
-      for _ in packed_collection.GenerateItems(offset=self.rand.randint(
-          0, self.RECORDS - self.BIG_READ_SIZE)):
-        count += 1
-        if count >= self.BIG_READ_SIZE:
-          break
-    elapsed_time = time.time() - start_time
-    self.AddResult("Packed Coll. random %d record reads" % self.BIG_READ_SIZE,
-                   elapsed_time, self.READ_COUNT)
-
-    start_time = time.time()
-    for _ in packed_collection.GenerateItems():
-      pass
-    elapsed_time = time.time() - start_time
-    self.AddResult("Packed Coll. full sequential read", elapsed_time, 1)
 
     #
     # Populate and exercise an indexed sequential collection.

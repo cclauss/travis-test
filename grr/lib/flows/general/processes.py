@@ -4,13 +4,18 @@
 
 from grr.lib import flow
 from grr.lib import server_stubs
+from grr.lib.flows.general import file_finder
 from grr.lib.rdfvalues import file_finder as rdf_file_finder
+from grr.lib.rdfvalues import standard
 from grr.lib.rdfvalues import structs as rdf_structs
 from grr.proto import flows_pb2
 
 
 class ListProcessesArgs(rdf_structs.RDFProtoStruct):
   protobuf = flows_pb2.ListProcessesArgs
+  rdf_deps = [
+      standard.RegularExpression,
+  ]
 
 
 class ListProcesses(flow.GRRFlow):
@@ -61,7 +66,7 @@ class ListProcesses(flow.GRRFlow):
                len(responses), len(paths_to_fetch))
 
       self.CallFlow(
-          "FileFinder",
+          file_finder.FileFinder.__name__,
           paths=paths_to_fetch,
           action=rdf_file_finder.FileFinderAction(
               action_type=rdf_file_finder.FileFinderAction.Action.DOWNLOAD),

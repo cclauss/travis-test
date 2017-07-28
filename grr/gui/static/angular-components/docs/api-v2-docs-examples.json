@@ -189,6 +189,7 @@
         "subject": {
           "clientLimit": "100",
           "clientRate": 0.0,
+          "crashLimit": "100",
           "created": "42000000",
           "creator": "api_test_user",
           "description": "foo",
@@ -680,7 +681,6 @@
           "currentState": "Start",
           "nextOutboundId": "2",
           "outstandingRequests": "1",
-          "remainingCpuQuota": "7200",
           "sessionId": "aff4:/cron/GRRVersionBreakDown/F:ABCDEF11",
           "state": "RUNNING",
           "userNotified": false
@@ -774,7 +774,6 @@
           "currentState": "Start",
           "nextOutboundId": "9",
           "outstandingRequests": "8",
-          "remainingCpuQuota": "7200",
           "sessionId": "aff4:/C.1000000000000000/flows/F:ABCDEF12",
           "state": "RUNNING",
           "userNotified": false
@@ -880,6 +879,7 @@
         "subject": {
           "clientLimit": "100",
           "clientRate": 0.0,
+          "crashLimit": "100",
           "created": "42000000",
           "creator": "api_test_user",
           "description": "hunt1",
@@ -912,6 +912,7 @@
         "subject": {
           "clientLimit": "100",
           "clientRate": 0.0,
+          "crashLimit": "100",
           "created": "42000000",
           "creator": "api_test_user",
           "description": "hunt2",
@@ -1202,6 +1203,7 @@
           ]
         },
         "completedClientsCount": "0",
+        "crashLimit": "100",
         "created": "42000000",
         "creator": "api_test_user",
         "description": "the hunt",
@@ -1227,6 +1229,7 @@
               }
             ]
           },
+          "crashLimit": "100",
           "description": "the hunt",
           "huntName": "GenericHunt"
         },
@@ -3957,6 +3960,7 @@
         "subject": {
           "clientLimit": "100",
           "clientRate": 0.0,
+          "crashLimit": "100",
           "created": "42000000",
           "creator": "api_test_user",
           "description": "a hunt",
@@ -4805,6 +4809,7 @@
             "subject": {
               "clientLimit": "100",
               "clientRate": 20.5,
+              "crashLimit": "100",
               "created": "42000000",
               "creator": "api_test_user",
               "description": "",
@@ -5300,6 +5305,7 @@
           {
             "clientLimit": "100",
             "clientRate": 0.0,
+            "crashLimit": "100",
             "created": "2000000000",
             "creator": "api_test_user",
             "description": "hunt_1",
@@ -5314,6 +5320,7 @@
           {
             "clientLimit": "100",
             "clientRate": 0.0,
+            "crashLimit": "100",
             "created": "1000000000",
             "creator": "api_test_user",
             "description": "hunt_0",
@@ -5339,6 +5346,7 @@
           {
             "clientLimit": "100",
             "clientRate": 0.0,
+            "crashLimit": "100",
             "created": "2000000000",
             "creator": "api_test_user",
             "description": "hunt_1",
@@ -5364,6 +5372,7 @@
           {
             "clientLimit": "100",
             "clientRate": 0.0,
+            "crashLimit": "100",
             "created": "1000000000",
             "creator": "api_test_user",
             "description": "hunt_0",
@@ -5737,6 +5746,7 @@
           ]
         },
         "completedClientsCount": "0",
+        "crashLimit": "100",
         "created": "42000000",
         "creator": "api_test_user",
         "description": "the hunt",
@@ -5763,6 +5773,7 @@
               }
             ]
           },
+          "crashLimit": "100",
           "description": "the hunt",
           "huntName": "GenericHunt"
         },
@@ -5799,6 +5810,7 @@
           ]
         },
         "completedClientsCount": "0",
+        "crashLimit": "100",
         "created": "42000000",
         "creator": "api_test_user",
         "description": "the hunt",
@@ -5825,6 +5837,7 @@
               }
             ]
           },
+          "crashLimit": "100",
           "description": "the hunt",
           "huntName": "GenericHunt"
         },
