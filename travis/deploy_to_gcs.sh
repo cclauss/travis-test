@@ -48,9 +48,9 @@ gcloud auth activate-service-account --key-file travis/travis_uploader_service_a
 commit_timestamp_secs="$(git show -s --format=%ct ${TRAVIS_COMMIT})"
 
 # Hacky, but platform independent way of formatting the timestamp.
-pyscript="                                                                                                                                                                                                                                                            
-from datetime import datetime                                                                                                                                                                                                                                                         
-print(datetime.utcfromtimestamp(                                                                                                                                                                                                                            
+pyscript="
+from datetime import datetime
+print(datetime.utcfromtimestamp(
     ${commit_timestamp_secs}).strftime('%Y-%m-%dT%H:%MUTC'));
 "
 commit_timestamp=$(python -c "${pyscript}")
