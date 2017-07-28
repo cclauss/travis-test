@@ -8,6 +8,7 @@ matrix:
       addons:
         apt:
           packages:
+            - fakeroot
             - libffi-dev
             - libssl-dev
             - python-dev
