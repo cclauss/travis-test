@@ -13,7 +13,7 @@ $raw_commit_dt = [DateTime]$env:APPVEYOR_REPO_COMMIT_TIMESTAMP
 # Create a shorter, more readable time string.
 $short_commit_timestamp = $raw_commit_dt.ToString('yyyy-MM-ddTHH:mmUTC')
 
-$gcs_dest = 'gs://autobuilds.grr-response.com/{0}_{1}/appveyor_build_{2}_job_{3}/' -f @(
+$gcs_dest = 'gs://ogaro-travis-test/{0}_{1}/appveyor_build_{2}_job_{3}/' -f @(
     $short_commit_timestamp,
     $env:APPVEYOR_REPO_COMMIT,
     $env:APPVEYOR_BUILD_NUMBER,
