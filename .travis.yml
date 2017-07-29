@@ -200,8 +200,8 @@ matrix:
       script:
         - >-
           sudo docker exec --user "${DOCKER_USER}" "${DOCKER_CONTAINER}"
-          linux32 travis/build_templates.sh
-        - /bin/bash /mnt/travis/deploy_to_gcs.sh
+          linux32 /mnt/travis/build_templates.sh
+        - /bin/bash travis/deploy_to_gcs.sh
 
 cache:
   directories:
