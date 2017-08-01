@@ -203,6 +203,34 @@ matrix:
           linux32 /mnt/travis/build_templates.sh
         - /bin/bash travis/deploy_to_gcs.sh
 
+    # End-to-end tests                                                                                                                                     
+    - os: linux
+      language: python
+      python: 2.7
+      sudo: required
+      addons:
+        apt:
+          packages:
+            - fakeroot
+            - debhelper
+            - libffi-dev
+            - libssl-dev
+            - python-dev
+      env:
+        - GCS_TAG=end_to_end_tests
+        - PROTOC="${HOME}/protobuf/bin/protoc"
+        - PATH=$PATH:${HOME}/google-cloud-sdk/bin
+        - CLOUDSDK_CORE_DISABLE_PROMPTS=1
+      before_install:
+        - /bin/bash travis/install_protobuf.sh "${TRAVIS_OS_NAME}"
+        - pip install --upgrade virtualenv
+        - virtualenv "${HOME}/INSTALL"
+      install:
+        - /bin/bash travis/install.sh
+      script:
+        - source "${HOME}/INSTALL/bin/activate"
+        - /bin/bash travis/build_server_deb.sh
+
 cache:
   directories:
     - $HOME/.cache/pip

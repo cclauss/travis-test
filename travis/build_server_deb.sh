@@ -15,7 +15,7 @@ function build_sdists() {
   python api_client/python/setup.py sdist --formats=zip --dist-dir=$PWD/sdists
   python grr/config/grr-response-test/setup.py sdist --formats=zip --dist-dir=$PWD/sdists
   python grr/config/grr-response-client/setup.py sdist --formats=zip --dist-dir=$PWD/sdists
-  python grr/config/grr-response-templates/setup.py sdist --formats=zip --dist-dir=$PWD/sdists
+  #python grr/config/grr-response-templates/setup.py sdist --formats=zip --dist-dir=$PWD/sdists
   python grr/config/grr-response-server/setup.py sdist --formats=zip --dist-dir=$PWD/sdists
 }
 
@@ -29,7 +29,7 @@ function download_packages() {
   pip download --dest=local_pypi sdists/grr-api-client-*.zip
   pip download --dest=local_pypi sdists/grr-response-test-*.zip
   pip download --dest=local_pypi sdists/grr-response-client-*.zip
-  pip download --dest=local_pypi sdists/grr-response-templates-*.zip
+  #pip download --dest=local_pypi sdists/grr-response-templates-*.zip
   pip download --dest=local_pypi sdists/grr-response-server-*.zip
 }
 
@@ -66,7 +66,7 @@ function export_build_vars() {
   export API_SDIST="$(ls sdists | grep -e 'grr-api-client-.*\.zip')"
   export TEST_SDIST="$(ls sdists | grep -e 'grr-response-test-.*\.zip')"
   export CLIENT_SDIST="$(ls sdists | grep -e 'grr-response-client-.*\.zip')"
-  export TEMPLATES_SDIST="$(ls sdists | grep -e 'grr-response-templates-.*\.zip')"
+  #export TEMPLATES_SDIST="$(ls sdists | grep -e 'grr-response-templates-.*\.zip')"
   export SERVER_SDIST="$(ls sdists | grep -e 'grr-response-server-.*\.zip')"
 }
 
