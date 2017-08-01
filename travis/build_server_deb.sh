@@ -75,3 +75,6 @@ download_packages
 create_changelog
 export_build_vars
 dpkg-buildpackage -us -uc
+
+# TODO(ogaro): Rename the upload directory.
+mkdir built_templates && cp $PWD/../grr-server* built_templates
