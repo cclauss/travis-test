@@ -45,3 +45,4 @@ matrix:
         - >-
           sudo docker exec --user "${DOCKER_USER}" "${DOCKER_CONTAINER}"
           travis/build_server_deb.sh
+        - travis/deploy_to_gcs.sh
