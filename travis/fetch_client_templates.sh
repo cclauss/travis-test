@@ -2,7 +2,7 @@
 
 set -e
 
-# TODO(ogaro): Add a timeout for waiting for client templates.
+TIMEOUT_SECS=300
 GCS_POLL_INTERVAL_SECS=30
 LOCAL_TEMPLATE_DIR='grr/config/grr-response-templates/templates'
 
@@ -29,6 +29,7 @@ if [[ ! -d "${LOCAL_TEMPLATE_DIR}" ]]; then
   mkdir "${LOCAL_TEMPLATE_DIR}"
 fi
 
+poll_start=$(date +%s)
 while true; do
   for template in "${!remote_templates[@]}"; do
     template_path="${remote_templates[$template]}"
@@ -42,11 +43,15 @@ while true; do
     fi
   done
   num_templates_remaining=${#remote_templates[@]}
-  if [[ num_templates_remaining -eq 0 ]]; then
+  secs_elapsed=$(expr $(date +%s) - $poll_start)  
+  if [[ $num_templates_remaining -eq 0 ]]; then
     echo 'All templates downloaded'
     break
+  elif [[ $secs_elapsed -gt $TIMEOUT_SECS ]]; then
+    echo "Timeout of ${TIMEOUT_SECS} has been exceeded"
+    exit 1
   else
-    echo "${num_templates_remaining} templates left. Sleeping for ${GCS_POLL_INTERVAL_SECS} seconds"
+    echo "${num_templates_remaining} templates left. Sleeping for ${GCS_POLL_INTERVAL_SECS} seconds.."
     sleep $GCS_POLL_INTERVAL_SECS
   fi
 done
