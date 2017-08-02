@@ -2,10 +2,6 @@
 
 set -e
 
-function download_client_templates() {
-
-}
-
 function build_sdists() {
   if [[ -d sdists ]]; then
     echo "Removing existing sdists directory."
