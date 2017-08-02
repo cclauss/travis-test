@@ -70,7 +70,7 @@ function export_build_vars() {
   export SERVER_SDIST="$(ls sdists | grep -e 'grr-response-server-.*\.zip')"
 }
 
-source "${HOME}/INSTALL/bin/activate"
+source "/home/${TEST_USER}/INSTALL/bin/activate"
 build_sdists
 download_packages
 create_changelog
