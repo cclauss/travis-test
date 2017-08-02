@@ -70,11 +70,15 @@ function export_build_vars() {
   export SERVER_SDIST="$(ls sdists | grep -e 'grr-response-server-.*\.zip')"
 }
 
-build_sdists
-download_packages
-create_changelog
-export_build_vars
-dpkg-buildpackage -us -uc
+#build_sdists
+#download_packages
+#create_changelog
+#export_build_vars
+#dpkg-buildpackage -us -uc
 
 # TODO(ogaro): Rename the upload directory.
-mkdir built_templates && cp $PWD/../grr-server* built_templates
+#mkdir built_templates && cp $PWD/../grr-server* built_templates
+
+source "${HOME}/INSTALL/bin/activate"
+python setup.py sdist --formats=zip --dist-dir=$PWD/sdists --no-make-docs --no-sync-artifacts
+echo "Built core sdist."

@@ -26,6 +26,5 @@ matrix:
       install:
         - /bin/bash travis/install.sh
       script:
-        - source "${HOME}/INSTALL/bin/activate"
         - /bin/bash travis/build_server_deb.sh
         - /bin/bash travis/deploy_to_gcs.sh
