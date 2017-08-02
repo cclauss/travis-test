@@ -5,7 +5,7 @@ matrix:
       env:
         - GCS_TAG=server_deb
         - DOCKER_USER=grrbot
-        - DOCKER_CONTAINER=centos_64bit_container
+        - DOCKER_CONTAINER=xenial_64bit_container
         - DOCKER_IMG=ubuntu:xenial
         - PATH=$PATH:${HOME}/google-cloud-sdk/bin
         - CLOUDSDK_CORE_DISABLE_PROMPTS=1
@@ -42,7 +42,5 @@ matrix:
           sudo docker exec --user "${DOCKER_USER}" "${DOCKER_CONTAINER}"
           travis/install.sh
       script:
-        - >-
-          sudo docker exec --user "${DOCKER_USER}" "${DOCKER_CONTAINER}"
-          travis/build_server_deb.sh
+        - sudo docker exec "${DOCKER_CONTAINER}" travis/build_server_deb.sh
         - travis/deploy_to_gcs.sh
