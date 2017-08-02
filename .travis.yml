@@ -22,8 +22,9 @@ matrix:
           --name "${DOCKER_CONTAINER}"
           "${DOCKER_IMG}"
         - >-
+          sudo docker exec "${DOCKER_CONTAINER}" apt-get update
+        - >-
           sudo docker exec "${DOCKER_CONTAINER}"
-          apt-get update &&
           apt-get install -y fakeroot debhelper libffi-dev libssl-dev python-dev
           python-pip wget openjdk-8-jdk
         - >-
