@@ -257,14 +257,13 @@ matrix:
           sudo docker exec --user "${DOCKER_USER}" "${DOCKER_CONTAINER}"
           travis/install.sh
       script:
-        # This script will keep polling GCS until all templates are have been
-        # uploaded.
-        # Until we implement a way of detecting job failures, this script
-        # will keep polling in a loop until a timeout is exceeded.
-        - travis/fetch_client_templates.sh
+        - >-
+          travis/fetch_client_templates.sh &&
 
-        - sudo docker exec --user "${DOCKER_USER}" "${DOCKER_CONTAINER}"
-          travis/build_local_pyindex.sh
-        - sudo docker exec "${DOCKER_CONTAINER}"
-          travis/build_server_deb.sh # Needs to be run as root.
-        - travis/deploy_to_gcs.sh
+          sudo docker exec --user "${DOCKER_USER}" "${DOCKER_CONTAINER}"
+          travis/build_local_pyindex.sh &&
+
+          sudo docker exec "${DOCKER_CONTAINER}"
+          travis/build_server_deb.sh && # Needs to be run as root.
+
+          travis/deploy_to_gcs.sh

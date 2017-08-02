@@ -2,7 +2,7 @@
 
 set -e
 
-TIMEOUT_SECS=300
+TIMEOUT_SECS=3600
 GCS_POLL_INTERVAL_SECS=30
 LOCAL_TEMPLATE_DIR='grr/config/grr-response-templates/templates'
 
@@ -35,7 +35,6 @@ while true; do
     template_path="${remote_templates[$template]}"
     template_ready="$((gsutil --quiet stat "${COMMIT_DIR}/${template_path}" && echo true) || echo false)"
     if [[ "${template_ready}" == 'true' ]]; then
-      echo "Copying ${template} from GCS to local templates dir"
       gsutil cp "${COMMIT_DIR}/${template_path}" "${LOCAL_TEMPLATE_DIR}"
       unset remote_templates["${template}"]
     else
@@ -48,7 +47,7 @@ while true; do
     echo 'All templates downloaded'
     break
   elif [[ $secs_elapsed -gt $TIMEOUT_SECS ]]; then
-    echo "Timeout of ${TIMEOUT_SECS} has been exceeded"
+    echo "Timeout of ${TIMEOUT_SECS} seconds has been exceeded"
     exit 1
   else
     echo "${num_templates_remaining} templates left. Sleeping for ${GCS_POLL_INTERVAL_SECS} seconds.."
