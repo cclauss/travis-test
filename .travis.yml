@@ -13,7 +13,7 @@ matrix:
       before_install:
         - pip install google-compute-engine
         - >-
-          sudo docker create -dit
+          sudo docker run -dit
           --volume "${PWD}:/mnt"
           --workdir /mnt
           --env DOCKER_USER="${DOCKER_USER}"
