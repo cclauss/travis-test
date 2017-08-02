@@ -13,8 +13,8 @@ matrix:
         - pip install google-compute-engine
         - >-
           sudo docker run -dit
-          --volume "${PWD}:/mnt"
-          --workdir /mnt
+          --volume "${PWD}:/mnt/grr"
+          --workdir /mnt/grr
           --env DOCKER_USER="${DOCKER_USER}"
           --env TRAVIS_OS_NAME="${TRAVIS_OS_NAME}"
           --env PROTOC="/home/${DOCKER_USER}/protobuf/bin/protoc"

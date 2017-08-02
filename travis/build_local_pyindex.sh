@@ -9,12 +9,20 @@ function build_sdists() {
   fi
 
   # TODO(ogaro): Make docs?
-  python setup.py sdist --formats=zip --dist-dir=$PWD/sdists --no-make-docs --no-sync-artifacts
-  python api_client/python/setup.py sdist --formats=zip --dist-dir=$PWD/sdists
-  python grr/config/grr-response-test/setup.py sdist --formats=zip --dist-dir=$PWD/sdists
-  python grr/config/grr-response-client/setup.py sdist --formats=zip --dist-dir=$PWD/sdists
+  python setup.py --quiet sdist \
+      --formats=zip \
+      --dist-dir=$PWD/sdists \
+      --no-make-docs \
+      --no-sync-artifacts
+  python api_client/python/setup.py --quiet sdist \
+      --formats=zip --dist-dir=$PWD/sdists
+  python grr/config/grr-response-test/setup.py  --quiet sdist \
+      --formats=zip --dist-dir=$PWD/sdists
+  python grr/config/grr-response-client/setup.py --quiet sdist \
+      --formats=zip --dist-dir=$PWD/sdists
   #python grr/config/grr-response-templates/setup.py sdist --formats=zip --dist-dir=$PWD/sdists
-  python grr/config/grr-response-server/setup.py sdist --formats=zip --dist-dir=$PWD/sdists
+  python grr/config/grr-response-server/setup.py --quiet sdist \
+      --formats=zip --dist-dir=$PWD/sdists
 }
 
 function download_packages() {

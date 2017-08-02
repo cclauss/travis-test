@@ -51,11 +51,11 @@ cd "$SRC_DIR"
 SRC_DIR=$PWD
 cd -
 
-#SRC_DIR_BASE=$(basename "$SRC_DIR")
-#if [[ "$SRC_DIR_BASE" != "grr" ]]; then
-#  echo "Please run from the grr source directory or provide a valid path to the source directory with -r"
-#  exit 2
-#fi
+SRC_DIR_BASE=$(basename "$SRC_DIR")
+if [[ "$SRC_DIR_BASE" != "grr" ]]; then
+  echo "Please run from the grr source directory or provide a valid path to the source directory with -r"
+  exit 2
+fi
 
 header "Install Configuration Files"
 # Set up default configuration
