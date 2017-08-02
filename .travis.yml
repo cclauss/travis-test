@@ -28,7 +28,7 @@ matrix:
         - travis/install.sh
       script:
         - source "${HOME}/INSTALL/bin/activate"
-        - grr_run_tests --processes=2
+        # TODO(ogaro): Uncomment - grr_run_tests --processes=2
         - travis/build_templates.sh
         - travis/deploy_to_gcs.sh
 
@@ -58,7 +58,7 @@ matrix:
         - travis/install.sh
       script:
         - source "${HOME}/INSTALL/bin/activate"
-        - grr_run_tests --processes=2 --labels=client_action
+        # TODO(ogaro): Uncomment - grr_run_tests --processes=2 --labels=client_action
         - travis/build_templates.sh
         - travis/deploy_to_gcs.sh
 
@@ -93,7 +93,7 @@ matrix:
         - >-
           sudo docker exec "${DOCKER_CONTAINER}"
           travis/install_centos_prereqs.sh
-        - sudo docker exec "${DOCKER_CONTAINER}" /mnt/travis/set_up_test_user.sh
+        - sudo docker exec "${DOCKER_CONTAINER}" travis/set_up_test_user.sh
         - >-
           sudo docker exec --user "${DOCKER_USER}" "${DOCKER_CONTAINER}"
           travis/install_protobuf.sh "${TRAVIS_OS_NAME}"
@@ -109,8 +109,7 @@ matrix:
           sudo docker exec --user "${DOCKER_USER}" "${DOCKER_CONTAINER}"
           travis/build_templates.sh
         # Test installing the built rpm (as root)
-        - >-
-          sudo docker exec "${DOCKER_CONTAINER}" rpm -vih built_templates/*.rpm
+        - sudo docker exec "${DOCKER_CONTAINER}" rpm -vih built_templates/*.rpm
         - travis/deploy_to_gcs.sh
 
     # 32-bit Ubuntu docker container inside a 64-bit host, for 32-bit deb builds
