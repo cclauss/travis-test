@@ -26,7 +26,7 @@ print('%s.%s.%s-%s' % (
       --urgency low \
       --controlmaint \
       --distribution unstable \
-      "Autobuilt by Travis CI at ${TRAVIS_COMMIT}"
+      "Built by Travis CI at ${TRAVIS_COMMIT}"
 }
 
 # Sets environment variables to be used by debhelper.

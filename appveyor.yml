@@ -34,5 +34,6 @@ artifacts:
     type: zip
 
 environment:
+  GCS_BUCKET: ogaro-travis-test
   GCS_ENCRYPTION_KEY:
     secure: V50YB9ZMPxsSwcmEPaD5qw==
