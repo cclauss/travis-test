@@ -1,10 +1,9 @@
 matrix:
   include:
-    # End-to-end tests
     - os: linux
       sudo: required
       env:
-        - GCS_TAG=end_to_end_tests
+        - GCS_TAG=server_deb
         - DOCKER_USER=grrbot
         - DOCKER_CONTAINER=centos_64bit_container
         - DOCKER_IMG=ubuntu:xenial
@@ -27,7 +26,7 @@ matrix:
           sudo docker exec "${DOCKER_CONTAINER}"
           apt-get install -y fakeroot debhelper libffi-dev libssl-dev python-dev
           python-pip wget openjdk-8-jdk zip git devscripts dh-systemd
-          dh-virtualenv libc6-i386
+          dh-virtualenv libc6-i386 lib32z1
         - >-
           sudo docker exec "${DOCKER_CONTAINER}"
           pip install --upgrade pip virtualenv
