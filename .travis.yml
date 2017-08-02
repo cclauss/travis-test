@@ -42,5 +42,8 @@ matrix:
           sudo docker exec --user "${DOCKER_USER}" "${DOCKER_CONTAINER}"
           travis/install.sh
       script:
-        - sudo docker exec "${DOCKER_CONTAINER}" travis/build_server_deb.sh
+        - sudo docker exec --user "${DOCKER_USER}" "${DOCKER_CONTAINER}"
+          travis/build_local_pyindex.sh
+        - sudo docker exec "${DOCKER_CONTAINER}"
+          travis/build_server_deb.sh # Needs to be run as root.
         - travis/deploy_to_gcs.sh
