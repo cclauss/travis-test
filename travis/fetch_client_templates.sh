@@ -2,7 +2,9 @@
 #
 # This script polls GCS at regular intervals, downloading client templates
 # when they get uploaded. It will keep polling until all templates have been
-# uploaded, or the given timeout has been exceeded.
+# uploaded, or the given timeout has been exceeded. We do not currently have a
+# way of detecting job failures (if any of the jobs that build templates fail,
+# this script will time out).
 
 set -e
 
@@ -46,7 +48,7 @@ while true; do
     fi
   done
   num_templates_remaining=${#remote_templates[@]}
-  secs_elapsed=$(expr $(date +%s) - $poll_start)  
+  secs_elapsed=$(( $(date +%s) - $poll_start ))
   if [[ $num_templates_remaining -eq 0 ]]; then
     echo 'All templates downloaded'
     break
