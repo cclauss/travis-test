@@ -273,3 +273,8 @@ matrix:
           travis/build_server_deb.sh && # Needs to be run as root.
 
           travis/deploy_to_gcs.sh
+
+cache:
+  directories:
+    - $HOME/.cache/pip
+    - $HOME/protobuf
