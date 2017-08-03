@@ -2,6 +2,7 @@
 """This tool builds or repacks the client binaries."""
 
 import getpass
+import glob
 import logging
 import multiprocessing
 import os
@@ -217,7 +218,7 @@ class TemplateBuilder(object):
 
 
 def SpawnProcess(popen_args, signing=None, passwd=None):
-  if signing:
+  if signing and passwd is not None:
     # We send the password via pipe to avoid creating a process with the
     # password as an argument that will get logged on some systems.
     p = subprocess.Popen(popen_args, stdin=subprocess.PIPE)
@@ -256,6 +257,22 @@ class MultiTemplateRepacker(object):
     return os.path.join(base_dir,
                         os.path.basename(config_filename.replace(".yaml", "")))
 
+  def GetWindowsPassphrase(self):
+    try:
+      return self._windows_passphrase
+    except AttributeError:
+      print "Enter passphrase for Windows code signing"
+      self._windows_passphrase = getpass.getpass()
+      return self._windows_passphrase
+
+  def GetRPMPassPhrase(self):
+    try:
+      return self._rpm_passphrase
+    except AttributeError:
+      print "Enter passphrase for RPM code signing"
+      self._rpm_passphrase = getpass.getpass()
+      return self._rpm_passphrase
+
   def RepackTemplates(self,
                       repack_configs,
                       templates,
@@ -264,13 +281,6 @@ class MultiTemplateRepacker(object):
                       sign=False,
                       signed_template=False):
     """Call repacker in a subprocess."""
-    if sign:
-      # Doing this here avoids multiple prompting when doing lots of repacking.
-      print "Enter passphrase for Windows code signing"
-      windows_passwd = getpass.getpass()
-
-      print "Enter passphrase for RPM code signing"
-      rpm_passwd = getpass.getpass()
     pool = multiprocessing.Pool(processes=10)
     results = []
     for repack_config in repack_configs:
@@ -291,13 +301,15 @@ class MultiTemplateRepacker(object):
         passwd = None
         if sign:
           if template.endswith(".exe.zip"):
-            passwd = windows_passwd
+            # This is for osslsigncode only.
+            if platform.system() != "Windows":
+              passwd = self.GetWindowsPassphrase()
             signing = True
             repack_args.append("--sign")
             if signed_template:
               repack_args.append("--signed_template")
           elif template.endswith(".rpm.zip"):
-            passwd = rpm_passwd
+            passwd = self.GetRPMPassPhrase()
             signing = True
             repack_args.append("--sign")
 
@@ -382,9 +394,19 @@ def main(_):
     if not result_path:
       raise ErrorDuringRepacking(" ".join(sys.argv[:]))
   elif args.subparser_name == "repack_multiple":
+
+    # Resolve globs manually on Windows.
+    templates = args.templates
+    if templates and "*" in templates[0]:
+      templates = glob.glob(templates[0])
+
+    repack_configs = args.repack_configs
+    if repack_configs and "*" in repack_configs[0]:
+      repack_configs = glob.glob(repack_configs[0])
+
     MultiTemplateRepacker().RepackTemplates(
-        args.repack_configs,
-        args.templates,
+        repack_configs,
+        templates,
         args.output_dir,
         config=args.config,
         sign=args.sign,

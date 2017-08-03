@@ -11,8 +11,8 @@ else
 fi
 
 # See https://docs.travis-ci.com/user/encrypting-files/
-openssl aes-256-cbc -K "${encrypted_b85fe3a43822_key}" \
-  -iv "${encrypted_b85fe3a43822_iv}" \
+openssl aes-256-cbc -K "$encrypted_db009a5a71c6_key" \
+  -iv "$encrypted_db009a5a71c6_iv" \
   -in travis/travis_uploader_service_account.json.enc \
   -out travis/travis_uploader_service_account.json -d
 

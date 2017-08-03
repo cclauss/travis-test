@@ -10,15 +10,15 @@ import mock
 import pexpect
 
 from grr.lib import flags
-from grr.lib import test_lib
 from grr.lib.builders import signing
+from grr.test_lib import test_lib
 
 
-class WindowsCodeSignerTest(test_lib.GRRBaseTest):
+class WindowsOsslsigncodeCodeSignerTest(test_lib.GRRBaseTest):
 
   def setUp(self):
-    super(WindowsCodeSignerTest, self).setUp()
-    self.winsign = signing.WindowsCodeSigner("", "", "", "")
+    super(WindowsOsslsigncodeCodeSignerTest, self).setUp()
+    self.winsign = signing.WindowsOsslsigncodeCodeSigner("", "", "", "")
 
   @unittest.skipUnless(platform.system() == "Linux",
                        "We only have pexpect for signing on Linux")

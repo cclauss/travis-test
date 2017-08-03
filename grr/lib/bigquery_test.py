@@ -8,14 +8,14 @@ import tempfile
 import time
 
 
-from apiclient.errors import HttpError
+from googleapiclient import errors
 import mock
 
 from grr import config
 from grr.lib import bigquery
 from grr.lib import flags
 from grr.lib import rdfvalue
-from grr.lib import test_lib
+from grr.test_lib import test_lib
 
 
 class BigQueryClientTest(test_lib.GRRBaseTest):
@@ -24,7 +24,7 @@ class BigQueryClientTest(test_lib.GRRBaseTest):
   SERVICE_ACCOUNT_JSON = """{"type": "service_account"}"""
 
   @mock.patch.object(bigquery, "ServiceAccountCredentials")
-  @mock.patch.object(bigquery, "build")
+  @mock.patch.object(bigquery.discovery, "build")
   @mock.patch.object(bigquery.httplib2, "Http")
   def testInsertData(self, mock_http, mock_build, mock_creds):
     bq_client = bigquery.GetBigQueryClient(
@@ -56,8 +56,9 @@ class BigQueryClientTest(test_lib.GRRBaseTest):
     error = mock.Mock()
     error.resp = resp
     job = mock.Mock()
-    # Always raise HttpError on job.execute()
-    job.configure_mock(**{"execute.side_effect": HttpError(resp, "nocontent")})
+    # Always raise errors.HttpError on job.execute()
+    job.configure_mock(
+        **{"execute.side_effect": errors.HttpError(resp, "nocontent")})
     job_id = "hunts_HFFE1D044_Results_1446056474"
 
     with tempfile.NamedTemporaryFile() as fd:

@@ -30,8 +30,45 @@ class CodeSigner(object):
   pass
 
 
-class WindowsCodeSigner(CodeSigner):
-  """Class to handle windows code signing."""
+class WindowsSigntoolCodeSigner(CodeSigner):
+  """Class to handle windows code signing on Windows hosts using signtool."""
+
+  def __init__(self, signing_cmdline, verification_cmdline):
+    if not signing_cmdline:
+      raise ValueError("Need a signing cmd line to use the signtool signer.")
+
+    self._signing_cmdline = signing_cmdline
+    self._verification_cmdline = verification_cmdline
+
+  def SignBuffer(self, in_buffer):
+    fd, path = tempfile.mkstemp()
+    try:
+      with os.fdopen(fd, "wb") as temp_in:
+        temp_in.write(in_buffer)
+      self.SignFile(path)
+      with open(path, "rb") as temp_out:
+        res = temp_out.read()
+      return res
+    finally:
+      os.unlink(path)
+
+  def SignFile(self, in_filename, out_filename=None):
+    """Signs a file."""
+    if out_filename:
+      raise NotImplementedError(
+          "WindowsSigntoolCodeSigner does not support out_filename.")
+    return self.SignFiles([in_filename])
+
+  def SignFiles(self, filenames):
+    """Signs multiple files at once."""
+    file_list = " ".join(filenames)
+    subprocess.check_call("%s %s" % (self._signing_cmdline, file_list))
+    if self._verification_cmdline:
+      subprocess.check_call("%s %s" % (self._verification_cmdline, file_list))
+
+
+class WindowsOsslsigncodeCodeSigner(CodeSigner):
+  """Class to handle windows code signing on Linux hosts using osslsigncode."""
 
   def __init__(self, cert, key, password, application):
     self.cert = cert

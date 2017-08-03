@@ -15,7 +15,7 @@ matrix:
             - python-dev
       env:
         - GCS_TAG=ubuntu_64bit
-        - GCS_BUCKET=ogaro-travis-test
+        - GCS_BUCKET=autobuilds.grr-response.com
         - PROTOC="${HOME}/protobuf/bin/protoc"
         - PATH=$PATH:${HOME}/google-cloud-sdk/bin
         - CLOUDSDK_CORE_DISABLE_PROMPTS=1
@@ -28,7 +28,7 @@ matrix:
         - travis/install.sh
       script:
         - source "${HOME}/INSTALL/bin/activate"
-        # TODO(ogaro): Uncomment - grr_run_tests --processes=2
+        - grr_run_tests --processes=2
         - travis/build_templates.sh
         - travis/deploy_to_gcs.sh
 
@@ -41,7 +41,7 @@ matrix:
       sudo: required
       env:
         - GCS_TAG=osx
-        - GCS_BUCKET=ogaro-travis-test
+        - GCS_BUCKET=autobuilds.grr-response.com
         - PROTOC="${HOME}/protobuf/bin/protoc"
         - PATH=$PATH:${HOME}/google-cloud-sdk/bin
         - CLOUDSDK_CORE_DISABLE_PROMPTS=1
@@ -58,7 +58,7 @@ matrix:
         - travis/install.sh
       script:
         - source "${HOME}/INSTALL/bin/activate"
-        # TODO(ogaro): Uncomment - grr_run_tests --processes=2 --labels=client_action
+        - grr_run_tests --processes=2 --labels=client_action
         - travis/build_templates.sh
         - travis/deploy_to_gcs.sh
 
@@ -70,7 +70,7 @@ matrix:
         - docker
       env:
         - GCS_TAG=centos_64bit
-        - GCS_BUCKET=ogaro-travis-test
+        - GCS_BUCKET=autobuilds.grr-response.com
         - DOCKER_IMG=centos:7
         - DOCKER_CONTAINER=centos_64bit_container
         - DOCKER_USER=grrbot
@@ -96,9 +96,7 @@ matrix:
           libffi-devel openssl-devel zip git gcc gcc-c++ redhat-rpm-config
           rpm-build rpm-sign
         - sudo docker exec "${DOCKER_CONTAINER}" yum install -y python-pip
-        - >-
-          sudo docker exec "${DOCKER_CONTAINER}"
-          pip install --upgrade pip virtualenv
+        - sudo docker exec "${DOCKER_CONTAINER}" pip install --upgrade pip virtualenv
         - sudo docker exec "${DOCKER_CONTAINER}" travis/set_up_test_user.sh
         - >-
           sudo docker exec --user "${DOCKER_USER}" "${DOCKER_CONTAINER}"
@@ -127,7 +125,7 @@ matrix:
         - docker
       env:
         - GCS_TAG=ubuntu_32bit
-        - GCS_BUCKET=ogaro-travis-test
+        - GCS_BUCKET=autobuilds.grr-response.com
         - DOCKER_IMG=grrdocker/ubuntu_i386:xenial
         - DOCKER_CONTAINER=ubuntu_32bit_container
         - DOCKER_USER=grrbot
@@ -174,7 +172,7 @@ matrix:
         - docker
       env:
         - GCS_TAG=centos_32bit
-        - GCS_BUCKET=ogaro-travis-test
+        - GCS_BUCKET=autobuilds.grr-response.com
         - DOCKER_IMG=grrdocker/centos_i686:7
         - DOCKER_CONTAINER=centos_32bit_container
         - DOCKER_USER=grrbot
@@ -220,10 +218,11 @@ matrix:
     # unavailable' after a bunch of file-copy operations. That doesn't happen
     # inside the container.
     - os: linux
+      dist: trusty
       sudo: required
       env:
         - GCS_TAG=server_deb
-        - GCS_BUCKET=ogaro-travis-test
+        - GCS_BUCKET=autobuilds.grr-response.com
         - DOCKER_IMG=ubuntu:xenial
         - DOCKER_CONTAINER=xenial_64bit_container
         - DOCKER_USER=grrbot

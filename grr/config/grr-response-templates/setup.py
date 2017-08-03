@@ -108,8 +108,8 @@ setup_args = dict(
                       "installfrompip.adoc for installation instructions."),
     license="Apache License, Version 2.0",
     url="https://github.com/google/grr",
-    data_files=(find_data_files(
-            "templates", prefix="grr-response-templates") + ["version.ini"]),
+    data_files=(find_data_files("templates", prefix="grr-response-templates") +
+                ["version.ini"]),
     cmdclass={
         "sdist": Sdist,
     })

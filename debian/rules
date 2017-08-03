@@ -9,8 +9,6 @@
 export DH_OPTIONS
 export DH_VIRTUALENV_INSTALL_ROOT=/usr/share/
 
-#export CORE_SDIST=$PWD/sdists/grr-response-core-3.1.2.post7.zip
-
 %:
 	dh $@  --with python-virtualenv,systemd
 
