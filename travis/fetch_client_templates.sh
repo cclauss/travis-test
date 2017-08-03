@@ -1,4 +1,8 @@
 #!/bin/bash
+#
+# This script polls GCS at regular intervals, downloading client templates
+# when they get uploaded. It will keep polling until all templates have been
+# uploaded, or the given timeout has been exceeded.
 
 set -e
 
