@@ -37,7 +37,7 @@ function export_build_vars() {
   export API_SDIST="$(ls sdists | grep -e 'grr-api-client-.*\.zip')"
   export TEST_SDIST="$(ls sdists | grep -e 'grr-response-test-.*\.zip')"
   export CLIENT_SDIST="$(ls sdists | grep -e 'grr-response-client-.*\.zip')"
-  #export TEMPLATES_SDIST="$(ls sdists | grep -e 'grr-response-templates-.*\.zip')"
+  export TEMPLATES_SDIST="$(ls sdists | grep -e 'grr-response-templates-.*\.zip')"
   export SERVER_SDIST="$(ls sdists | grep -e 'grr-response-server-.*\.zip')"
 }
 
