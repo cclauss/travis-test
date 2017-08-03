@@ -8,12 +8,8 @@ function build_sdists() {
     rm -rf sdists
   fi
 
-  # TODO(ogaro): Make docs?
   python setup.py --quiet sdist \
-      --formats=zip \
-      --dist-dir=$PWD/sdists \
-      --no-make-docs \
-      --no-sync-artifacts
+      --formats=zip --dist-dir=$PWD/sdists --no-sync-artifacts
   python api_client/python/setup.py --quiet sdist \
       --formats=zip --dist-dir=$PWD/sdists
   python grr/config/grr-response-test/setup.py --quiet sdist \
