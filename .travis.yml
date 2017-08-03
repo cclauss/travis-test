@@ -115,7 +115,7 @@ matrix:
           sudo docker exec --user "${DOCKER_USER}" "${DOCKER_CONTAINER}"
           travis/build_templates.sh
         # Test installing the built rpm (as root)
-        - sudo docker exec "${DOCKER_CONTAINER}" rpm -vih built_templates/*.rpm
+        - sudo docker exec "${DOCKER_CONTAINER}" rpm -vih gcs_upload_dir/*.rpm
         - travis/deploy_to_gcs.sh
 
     # 32-bit Ubuntu docker container inside a 64-bit host, for 32-bit deb builds

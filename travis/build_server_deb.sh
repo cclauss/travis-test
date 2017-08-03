@@ -2,8 +2,6 @@
 
 set -e
 
-TRAVIS_COMMIT=${TRAVIS_COMMIT:-$(git show -s --format='%H' HEAD)}
-
 function create_changelog() {
   if [[ -f debian/changelog ]]; then
     echo "Replacing debian/changelog with new changelog."
@@ -44,6 +42,4 @@ function export_build_vars() {
 create_changelog
 export_build_vars
 dpkg-buildpackage -us -uc
-
-# TODO(ogaro): Rename the upload directory.
-mkdir built_templates && cp $PWD/../grr-server* built_templates
+mkdir gcs_upload_dir && cp $PWD/../grr-server* gcs_upload_dir
