@@ -22,6 +22,7 @@ parser.add_argument(
     default=os.path.dirname(os.path.abspath(__file__)),
     help="Where to put compiled protos. Default: next to source files.")
 
+
 args = parser.parse_args()
 
 
