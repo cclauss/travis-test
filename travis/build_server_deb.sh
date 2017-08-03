@@ -31,7 +31,6 @@ print('%s.%s.%s-%s' % (
 function export_build_vars() {
   # Note that versions for the packages listed here can differ.
   export LOCAL_DEB_PYINDEX="${PWD}/local_pypi"
-  export CORE_SDIST="$(ls sdists | grep -e 'grr-response-core-.*\.zip')"
   export API_SDIST="$(ls sdists | grep -e 'grr-api-client-.*\.zip')"
   export TEST_SDIST="$(ls sdists | grep -e 'grr-response-test-.*\.zip')"
   export CLIENT_SDIST="$(ls sdists | grep -e 'grr-response-client-.*\.zip')"
