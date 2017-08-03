@@ -20,7 +20,7 @@ function build_sdists() {
       --formats=zip --dist-dir=$PWD/sdists
   python grr/config/grr-response-client/setup.py --quiet sdist \
       --formats=zip --dist-dir=$PWD/sdists
-  #python grr/config/grr-response-templates/setup.py sdist --formats=zip --dist-dir=$PWD/sdists
+  python grr/config/grr-response-templates/setup.py sdist --formats=zip --dist-dir=$PWD/sdists
   python grr/config/grr-response-server/setup.py --quiet sdist \
       --formats=zip --dist-dir=$PWD/sdists
 }
@@ -35,7 +35,7 @@ function download_packages() {
   pip download --dest=local_pypi sdists/grr-api-client-*.zip
   pip download --dest=local_pypi sdists/grr-response-test-*.zip
   pip download --dest=local_pypi sdists/grr-response-client-*.zip
-  #pip download --dest=local_pypi sdists/grr-response-templates-*.zip
+  pip download --dest=local_pypi sdists/grr-response-templates-*.zip
   pip download --dest=local_pypi sdists/grr-response-server-*.zip
 }
 

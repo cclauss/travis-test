@@ -224,9 +224,9 @@ matrix:
       env:
         - GCS_TAG=server_deb
         - GCS_BUCKET=ogaro-travis-test
-        - DOCKER_USER=grrbot
-        - DOCKER_CONTAINER=xenial_64bit_container
         - DOCKER_IMG=ubuntu:xenial
+        - DOCKER_CONTAINER=xenial_64bit_container
+        - DOCKER_USER=grrbot
         - PATH=$PATH:${HOME}/google-cloud-sdk/bin
         - CLOUDSDK_CORE_DISABLE_PROMPTS=1
       before_install:
