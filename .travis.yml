@@ -239,6 +239,7 @@ matrix:
           --env DOCKER_USER="${DOCKER_USER}"
           --env TRAVIS_OS_NAME="${TRAVIS_OS_NAME}"
           --env PROTOC="/home/${DOCKER_USER}/protobuf/bin/protoc"
+          --env TRAVIS_COMMIT="${TRAVIS_COMMIT}"
           --name "${DOCKER_CONTAINER}"
           "${DOCKER_IMG}"
         - >-

@@ -30,8 +30,7 @@ print('%s.%s.%s-%s' % (
 # Sets environment variables to be used by debhelper.
 function export_build_vars() {
   # Note that versions for the packages listed here can differ.
-  export LOCAL_DEB_PYINDEX="$PWD/local_pypi"
-  export CORE_SDIST="$(ls sdists | grep -e 'grr-response-core-.*\.zip')"
+  export LOCAL_DEB_PYINDEX="${PWD}/local_pypi"
   export API_SDIST="$(ls sdists | grep -e 'grr-api-client-.*\.zip')"
   export TEST_SDIST="$(ls sdists | grep -e 'grr-response-test-.*\.zip')"
   export CLIENT_SDIST="$(ls sdists | grep -e 'grr-response-client-.*\.zip')"
@@ -42,4 +41,4 @@ function export_build_vars() {
 create_changelog
 export_build_vars
 dpkg-buildpackage -us -uc
-mkdir gcs_upload_dir && cp $PWD/../grr-server* gcs_upload_dir
+mkdir gcs_upload_dir && cp "${PWD}"/../grr-server* gcs_upload_dir
