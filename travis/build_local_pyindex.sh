@@ -29,11 +29,11 @@ function download_packages() {
   fi
 
   pip download --dest=local_pypi sdists/grr-response-core-*.zip
-  pip download --dest=local_pypi sdists/grr-response-client-*.zip
-  pip download --dest=local_pypi sdists/grr-api-client-*.zip
-  pip download --dest=local_pypi sdists/grr-response-server-*.zip
-  pip download --dest=local_pypi sdists/grr-response-test-*.zip
-  pip download --dest=local_pypi sdists/grr-response-templates-*.zip
+  pip download --find-links=sdists --dest=local_pypi sdists/grr-response-client-*.zip
+  pip download --find-links=sdists --dest=local_pypi sdists/grr-api-client-*.zip
+  pip download --find-links=sdists --dest=local_pypi sdists/grr-response-server-*.zip
+  pip download --find-links=sdists --dest=local_pypi sdists/grr-response-test-*.zip
+  pip download --find-links=sdists --dest=local_pypi sdists/grr-response-templates-*.zip
 }
 
 source "${HOME}/INSTALL/bin/activate"
