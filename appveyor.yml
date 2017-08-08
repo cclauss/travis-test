@@ -1,3 +1,7 @@
+branches:
+  only:
+    - master
+
 platform:
   - x64
 
@@ -7,8 +11,8 @@ cache:
   - '%LOCALAPPDATA%\pip\Cache -> **\install_for_build.bat'
 
 install:
-  - ps: if ($env:VAGRANT -eq 'false') { cmd.exe /c 'C:\grr_src\vagrant\windows\install_for_build.bat' }
-  - ps: if ($env:VAGRANT -eq 'false') { nuget install secure-file -ExcludeVersion }
+  - C:\grr_src\vagrant\windows\install_for_build.bat
+  - nuget install secure-file -ExcludeVersion
   # See https://www.appveyor.com/docs/how-to/secure-files/
   - >-
     secure-file\tools\secure-file
@@ -24,11 +28,13 @@ build_script:
     --test_repack_install
   - powershell C:\grr_src\vagrant\windows\deploy_to_gcs.ps1
 
+artifacts:
+  - path: output
+    name: templates
+    type: zip
+
 # TODO(ogaro): Create a shared appveyor account, and use its encryption key.
 environment:
   GCS_BUCKET: ogaro-travis-test
   GCS_ENCRYPTION_KEY:
     secure: V50YB9ZMPxsSwcmEPaD5qw==
-  matrix:
-    - VAGRANT: false
-    - VAGRANT: true
