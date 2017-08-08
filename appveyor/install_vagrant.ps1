@@ -41,4 +41,6 @@ Start-Process -FilePath "msiexec.exe" -ArgumentList "/a $vagrant_download_path /
 
 ls $vagrant_install_dir
 $env:Path += ";$vagrant_install_dir\HashiCorp\Vagrant\bin"
-vagrant -v
+$vagrant_version = vagrant -v
+Write-Output $vagrant_version
+ls $vbox_install_dir
