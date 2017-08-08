@@ -11,7 +11,7 @@ cache:
   - '%LOCALAPPDATA%\pip\Cache -> **\install_for_build.bat'
 
 install:
-  - C:\grr_src\vagrant\windows\install_for_build.bat
+  - if %JOB%=='template_builder' C:\grr_src\vagrant\windows\install_for_build.bat
   - nuget install secure-file -ExcludeVersion
   # See https://www.appveyor.com/docs/how-to/secure-files/
   - >-
@@ -38,3 +38,6 @@ environment:
   GCS_BUCKET: ogaro-travis-test
   GCS_ENCRYPTION_KEY:
     secure: V50YB9ZMPxsSwcmEPaD5qw==
+  matrix:
+    JOB: template_builder
+    JOB: e2e_test
