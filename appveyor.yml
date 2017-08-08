@@ -7,7 +7,7 @@ cache:
   - '%LOCALAPPDATA%\pip\Cache -> **\install_for_build.bat'
 
 install:
-  - ps: if ($env:VAGRANT -eq 'false') { & C:\grr_src\vagrant\windows\install_for_build.bat }
+  - C:\grr_src\vagrant\windows\install_for_build.bat
   - ps: if ($env:VAGRANT -eq 'false') { nuget install secure-file -ExcludeVersion }
   # See https://www.appveyor.com/docs/how-to/secure-files/
   - >-
