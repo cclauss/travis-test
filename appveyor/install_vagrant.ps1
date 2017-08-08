@@ -40,5 +40,5 @@ Start-Process -FilePath "msiexec.exe" -ArgumentList "/a $vagrant_download_path /
 
 $env:Path += ";$vbox_install_dir;$vagrant_install_dir\HashiCorp\Vagrant\bin"
 
-vagrant up
-vagrant ssh -c "uname -a"
+vagrant.exe up
+vagrant.exe ssh -c "uname -a"
