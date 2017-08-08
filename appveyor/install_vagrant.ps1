@@ -39,4 +39,6 @@ Start-Process -FilePath "msiexec.exe" -ArgumentList "/a $vagrant_download_path /
     $env:Path + ";$vagrant_install_dir\HashiCorp\Vagrant\bin",
     [EnvironmentVariableTarget]::Machine)
 
+ls $vagrant_install_dir
+$env:Path += ";$vagrant_install_dir\HashiCorp\Vagrant\bin"
 vagrant -v
