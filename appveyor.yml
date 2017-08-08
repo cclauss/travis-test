@@ -10,8 +10,7 @@ install:
   - ps: $env:VAGRANT == 'true' || C:\grr_src\vagrant\windows\install_for_build.bat
   - ps: $env:VAGRANT == 'true' || nuget install secure-file -ExcludeVersion
   # See https://www.appveyor.com/docs/how-to/secure-files/
-  - ps: >-
-    $env:VAGRANT == 'true' ||
+  - >-
     secure-file\tools\secure-file
     -decrypt C:\grr_src\vagrant\windows\appveyor_uploader_service_account.json.enc
     -secret %GCS_ENCRYPTION_KEY%
