@@ -42,5 +42,5 @@ environment:
   GCS_ENCRYPTION_KEY:
     secure: V50YB9ZMPxsSwcmEPaD5qw==
   matrix:
-    - JOB: template_builder
+    # - JOB: template_builder
     - JOB: e2e_test
