@@ -8,7 +8,8 @@ platform:
 clone_folder: C:\grr_src
 
 cache:
-  - '%LOCALAPPDATA%\pip\Cache -> **\install_for_build.bat'
+  #- '%LOCALAPPDATA%\pip\Cache -> **\install_for_build.bat'
+  - C:\grr_deps\vagrant_1.9.7_x86_64.msi
 
 install:
   - if %JOB%==template_builder C:\grr_src\vagrant\windows\install_for_build.bat
@@ -30,6 +31,8 @@ build_script:
     --output_dir=C:\grr_src\output
     --test_repack_install
   - if %JOB%==template_builder powershell C:\grr_src\vagrant\windows\deploy_to_gcs.ps1
+  - if %JOB%==e2e_test set PATH=C:\Vagrant-1.9.7\HashiCorp\Vagrant\bin;C:\VirtualBox-5.1.26;%PATH%
+  - if %JOB%==e2e_test vagrant up
 
 artifacts:
   - path: output
