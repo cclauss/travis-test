@@ -33,14 +33,12 @@ Start-Process -FilePath $vbox_download_path -ArgumentList "-silent -logging -msi
 #Start-Process -Wait -FilePath "msiexec.exe" -ArgumentList "/a $deps_dir\$vbox_installer /quiet"
 Start-Process -FilePath "msiexec.exe" -ArgumentList "/a $vagrant_download_path /qb TARGETDIR=$vagrant_install_dir" -Wait
 
-# Add vagrant bin dir to PATH
 [Environment]::SetEnvironmentVariable(
     "Path",
-    $env:Path + ";$vagrant_install_dir\HashiCorp\Vagrant\bin",
+    $env:Path + ";$vbox_install_dir;$vagrant_install_dir\HashiCorp\Vagrant\bin;",
     [EnvironmentVariableTarget]::Machine)
 
-ls $vagrant_install_dir
-$env:Path += ";$vagrant_install_dir\HashiCorp\Vagrant\bin"
-$vagrant_version = vagrant -v
-Write-Output $vagrant_version
-ls $vbox_install_dir
+$env:Path += ";$vbox_install_dir;$vagrant_install_dir\HashiCorp\Vagrant\bin"
+
+vagrant up
+vagrant ssh -c "uname -a"
