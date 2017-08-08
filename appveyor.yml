@@ -12,21 +12,24 @@ cache:
 
 install:
   - if %JOB%==template_builder C:\grr_src\vagrant\windows\install_for_build.bat
-  - nuget install secure-file -ExcludeVersion
+  - if %JOB%==template_builder nuget install secure-file -ExcludeVersion
   # See https://www.appveyor.com/docs/how-to/secure-files/
   - >-
+    if %JOB%==template_builder
     secure-file\tools\secure-file
     -decrypt C:\grr_src\vagrant\windows\appveyor_uploader_service_account.json.enc
     -secret %GCS_ENCRYPTION_KEY%
+  - if %JOB%==e2e_test powershell appveyor/install_vagrant.ps1
 
 build_script:
   - >-
+    if %JOB%==template_builder
     C:\Python27-x64\python.exe
     C:\grr_src\vagrant\windows\build_windows_templates.py
     --grr_src=C:\grr_src
     --output_dir=C:\grr_src\output
     --test_repack_install
-  - powershell C:\grr_src\vagrant\windows\deploy_to_gcs.ps1
+  - if %JOB%==template_builder powershell C:\grr_src\vagrant\windows\deploy_to_gcs.ps1
 
 artifacts:
   - path: output
