@@ -1,10 +1,10 @@
 $deps_dir = 'C:\grr_deps'
 $vbox_url = 'http://download.virtualbox.org/virtualbox/5.1.26/VirtualBox-5.1.26-117224-Win.exe'
-$vagrant_url = 'https://releases.hashicorp.com/vagrant/1.9.7/vagrant_1.9.7_x86_64.msi'
+$vagrant_url = 'https://releases.hashicorp.com/vagrant/1.9.6/vagrant_1.9.6_x86_64.msi'
 $vbox_download_path = '{0}\VirtualBox-5.1.26-117224-Win.exe' -f $deps_dir
-$vagrant_download_path = '{0}\vagrant_1.9.7_x86_64.msi' -f $deps_dir
+$vagrant_download_path = '{0}\vagrant_1.9.6_x86_64.msi' -f $deps_dir
 $vbox_install_dir = 'C:\VirtualBox-5.1.26'
-$vagrant_install_dir = 'C:\Vagrant-1.9.7'
+$vagrant_install_dir = 'C:\Vagrant-1.9.6'
 
 if (![System.IO.Directory]::Exists($deps_dir)) {
   mkdir $deps_dir | Out-Null
@@ -40,5 +40,5 @@ Start-Process -FilePath "msiexec.exe" -ArgumentList "/a $vagrant_download_path /
 
 $env:Path += ";$vbox_install_dir;$vagrant_install_dir\HashiCorp\Vagrant\bin"
 
-vagrant.exe up
-vagrant.exe ssh -c "uname -a"
+vagrant up
+vagrant ssh -c "uname -a"
