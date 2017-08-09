@@ -40,5 +40,12 @@ Start-Process -FilePath "msiexec.exe" -ArgumentList "/a $vagrant_download_path /
 
 $env:Path += ";$vbox_install_dir;$vagrant_install_dir\HashiCorp\Vagrant\bin"
 
-vagrant up
+mkdir C:\Users\appveyor\.vagrant.d | Out-Null
+echo @'
+Vagrant::configure('2') do |config|
+  config.vm.boot_timeout = 1020
+end
+'@ | Out-File -encoding UTF8 C:\Users\appveyor\.vagrant.d\Vagrantfile
+
+vagrant up || ssh vagrant@127.0.0.1 -p 2222 -i .vagrant\machines\default\virtualbox\private_key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -vvv -C "pwd"
 vagrant ssh -c "uname -a"
