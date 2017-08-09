@@ -47,5 +47,6 @@ Vagrant::configure('2') do |config|
 end
 '@ | Out-File -encoding UTF8 C:\Users\appveyor\.vagrant.d\Vagrantfile
 
+vagrant up
 ssh vagrant@127.0.0.1 -p 2222 -i .vagrant\machines\default\virtualbox\private_key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -vvv -C "pwd"
 vagrant ssh -c "uname -a"
