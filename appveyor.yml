@@ -1,49 +1,37 @@
-branches:
-  only:
-    - master
-
+version: '{build}-{branch}'
+os: Windows Server 2012
 platform:
   - x64
-
-clone_folder: C:\grr_src
-
-cache:
-  #- '%LOCALAPPDATA%\pip\Cache -> **\install_for_build.bat'
-  - C:\grr_deps\vagrant_1.9.6_x86_64.msi
-
+init:
+- ps: |
+    mkdir C:\Users\appveyor\.vagrant.d | Out-Null
+    echo @'
+    Vagrant::configure('2') do |config|
+      config.vm.boot_timeout = 1020
+    end
+    '@ | Out-File -encoding UTF8 C:\Users\appveyor\.vagrant.d\Vagrantfile
+- ps: |
+    mkdir C:\downloads | Out-Null
+    cd C:\downloads
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+    Start-FileDownload "https://releases.hashicorp.com/vagrant/1.9.6/vagrant_1.9.6_x86_64.msi"
+    Start-Process -FilePath "msiexec.exe" -ArgumentList "/a vagrant_1.9.6_x86_64.msi /qb TARGETDIR=C:\Vagrant-1.9.6" -Wait
+    Start-FileDownload "http://download.virtualbox.org/virtualbox/4.3.12/VirtualBox-4.3.12-93733-Win.exe"
+    Start-Process -FilePath "VirtualBox-4.3.12-93733-Win.exe" -ArgumentList "-silent -logging -msiparams INSTALLDIR=C:\VBox-4.3.12" -Wait
+    cd $env:APPVEYOR_BUILD_FOLDER
+- ps: |
+    While ((Test-NetConnection google.com -Port 80 -InformationLevel Quiet) -ne "True") {
+        echo "waiting for network..."
+        Start-Sleep 1
+    }
 install:
-  - if %JOB%==template_builder C:\grr_src\vagrant\windows\install_for_build.bat
-  - if %JOB%==template_builder nuget install secure-file -ExcludeVersion
-  # See https://www.appveyor.com/docs/how-to/secure-files/
-  - >-
-    if %JOB%==template_builder
-    secure-file\tools\secure-file
-    -decrypt C:\grr_src\vagrant\windows\appveyor_uploader_service_account.json.enc
-    -secret %GCS_ENCRYPTION_KEY%
-  - if %JOB%==e2e_test powershell appveyor/install_vagrant.ps1
-
+- set PATH=C:\Vagrant-1.9.6\HashiCorp\Vagrant\bin;C:\VBox-4.3.12;%PATH%
+- vagrant -v
+- VBoxManage -v
+- ssh -V
+- ipconfig /all
 build_script:
-  - >-
-    if %JOB%==template_builder
-    C:\Python27-x64\python.exe
-    C:\grr_src\vagrant\windows\build_windows_templates.py
-    --grr_src=C:\grr_src
-    --output_dir=C:\grr_src\output
-    --test_repack_install
-  - if %JOB%==template_builder powershell C:\grr_src\vagrant\windows\deploy_to_gcs.ps1
-  - if %JOB%==e2e_test set PATH=C:\Vagrant-1.9.7\HashiCorp\Vagrant\bin;C:\VirtualBox-5.1.26;%PATH%
-  - if %JOB%==e2e_test vagrant up
-
-artifacts:
-  - path: output
-    name: templates
-    type: zip
-
-# TODO(ogaro): Create a shared appveyor account, and use its encryption key.
-environment:
-  GCS_BUCKET: ogaro-travis-test
-  GCS_ENCRYPTION_KEY:
-    secure: V50YB9ZMPxsSwcmEPaD5qw==
-  matrix:
-    # - JOB: template_builder
-    - JOB: e2e_test
+- ps: Test-NetConnection google.com -Port 80
+- vagrant up || ssh vagrant@127.0.0.1 -p 2222 -i .vagrant\machines\default\virtualbox\private_key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -vvv -C "pwd"
+- vagrant ssh -c "uname -a"
+test: off
