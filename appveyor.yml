@@ -16,8 +16,8 @@ init:
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
     Start-FileDownload "https://releases.hashicorp.com/vagrant/1.9.6/vagrant_1.9.6_x86_64.msi"
     Start-Process -FilePath "msiexec.exe" -ArgumentList "/a vagrant_1.9.6_x86_64.msi /qb TARGETDIR=C:\Vagrant-1.9.6" -Wait
-    Start-FileDownload "http://download.virtualbox.org/virtualbox/4.3.12/VirtualBox-4.3.12-93733-Win.exe"
-    Start-Process -FilePath "VirtualBox-4.3.12-93733-Win.exe" -ArgumentList "-silent -logging -msiparams INSTALLDIR=C:\VBox-4.3.12" -Wait
+    Start-FileDownload "http://download.virtualbox.org/virtualbox/5.1.26/VirtualBox-5.1.26-117224-Win.exe"
+    Start-Process -FilePath "VirtualBox-5.1.26-117224-Win.exe" -ArgumentList "-silent -logging -msiparams INSTALLDIR=C:\VBox-5.1.26" -Wait
     cd $env:APPVEYOR_BUILD_FOLDER
 - ps: |
     While ((Test-NetConnection google.com -Port 80 -InformationLevel Quiet) -ne "True") {
@@ -25,7 +25,7 @@ init:
         Start-Sleep 1
     }
 install:
-- set PATH=C:\Vagrant-1.9.6\HashiCorp\Vagrant\bin;C:\VBox-4.3.12;%PATH%
+- set PATH=C:\Vagrant-1.9.6\HashiCorp\Vagrant\bin;C:\VBox-5.1.26;%PATH%
 - vagrant -v
 - VBoxManage -v
 - ssh -V
