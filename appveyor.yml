@@ -1,37 +1,36 @@
-version: '{build}-{branch}'
-os: Windows Server 2012
 platform:
   - x64
-init:
-- ps: |
-    mkdir C:\Users\appveyor\.vagrant.d | Out-Null
-    echo @'
-    Vagrant::configure('2') do |config|
-      config.vm.boot_timeout = 1020
-    end
-    '@ | Out-File -encoding UTF8 C:\Users\appveyor\.vagrant.d\Vagrantfile
-- ps: |
-    mkdir C:\downloads | Out-Null
-    cd C:\downloads
-    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-    Start-FileDownload "https://releases.hashicorp.com/vagrant/1.9.6/vagrant_1.9.6_x86_64.msi"
-    Start-Process -FilePath "msiexec.exe" -ArgumentList "/a vagrant_1.9.6_x86_64.msi /qb TARGETDIR=C:\Vagrant-1.9.6" -Wait
-    Start-FileDownload "http://download.virtualbox.org/virtualbox/5.1.26/VirtualBox-5.1.26-117224-Win.exe"
-    Start-Process -FilePath "VirtualBox-5.1.26-117224-Win.exe" -ArgumentList "-silent -logging -msiparams INSTALLDIR=C:\VBox-5.1.26" -Wait
-    cd $env:APPVEYOR_BUILD_FOLDER
-- ps: |
-    While ((Test-NetConnection google.com -Port 80 -InformationLevel Quiet) -ne "True") {
-        echo "waiting for network..."
-        Start-Sleep 1
-    }
+
+clone_folder: C:\grr_src
+
+cache:
+  - '%LOCALAPPDATA%\pip\Cache -> **\install_for_build.bat'
+
 install:
-- set PATH=C:\Vagrant-1.9.6\HashiCorp\Vagrant\bin;C:\VBox-5.1.26;%PATH%
-- vagrant -v
-- VBoxManage -v
-- ssh -V
-- ipconfig /all
+  - C:\grr_src\vagrant\windows\install_for_build.bat
+  - nuget install secure-file -ExcludeVersion
+  # See https://www.appveyor.com/docs/how-to/secure-files/
+  - >-
+    secure-file\tools\secure-file
+    -decrypt C:\grr_src\vagrant\windows\appveyor_uploader_service_account.json.enc
+    -secret %GCS_ENCRYPTION_KEY%
+
 build_script:
-- ps: Test-NetConnection google.com -Port 80
-- vagrant up || ssh vagrant@127.0.0.1 -p 2222 -i .vagrant\machines\default\virtualbox\private_key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -vvv -C "pwd"
-- vagrant ssh -c "uname -a"
-test: off
+  - >-
+    C:\Python27-x64\python.exe
+    C:\grr_src\vagrant\windows\build_windows_templates.py
+    --grr_src=C:\grr_src
+    --output_dir=C:\grr_src\output
+    --test_repack_install
+  - powershell C:\grr_src\vagrant\windows\deploy_to_gcs.ps1
+
+artifacts:
+  - path: output
+    name: templates
+    type: zip
+
+# TODO(ogaro): Create a shared appveyor account, and use its encryption key.
+environment:
+  GCS_BUCKET: ogaro-travis-test
+  GCS_ENCRYPTION_KEY:
+    secure: V50YB9ZMPxsSwcmEPaD5qw==
