@@ -7,22 +7,20 @@
 from grr.gui import api_regression_test_lib
 from grr.gui.api_plugins import flow as flow_plugin
 
-from grr.lib import aff4
 from grr.lib import flags
-from grr.lib import flow
-from grr.lib import output_plugin
-from grr.lib import queue_manager
-from grr.lib import rdfvalue
 from grr.lib import utils
-from grr.lib.flows.general import discovery
-from grr.lib.flows.general import file_finder
-from grr.lib.flows.general import processes
-from grr.lib.flows.general import transfer
-from grr.lib.hunts import standard_test
-from grr.lib.output_plugins import email_plugin
-from grr.lib.rdfvalues import client as rdf_client
 from grr.lib.rdfvalues import flows as rdf_flows
 from grr.lib.rdfvalues import paths as rdf_paths
+from grr.server import aff4
+from grr.server import flow
+from grr.server import output_plugin
+from grr.server import queue_manager
+from grr.server.flows.general import discovery
+from grr.server.flows.general import file_finder
+from grr.server.flows.general import processes
+from grr.server.flows.general import transfer
+from grr.server.hunts import standard_test
+from grr.server.output_plugins import email_plugin
 from grr.test_lib import acl_test_lib
 from grr.test_lib import flow_test_lib
 from grr.test_lib import hunt_test_lib
@@ -437,77 +435,7 @@ class ApiListFlowDescriptorsHandlerRegressionTest(
       # RunReport flow is only shown for admins.
       self.CreateAdminUser("test")
 
-      self.Check(
-          "ListFlowDescriptors", args=flow_plugin.ApiListFlowDescriptorsArgs())
-      self.Check(
-          "ListFlowDescriptors",
-          args=flow_plugin.ApiListFlowDescriptorsArgs(flow_type="CLIENT"))
-      self.Check(
-          "ListFlowDescriptors",
-          args=flow_plugin.ApiListFlowDescriptorsArgs(flow_type="GLOBAL"))
-
-
-class ApiStartRobotGetFilesOperationHandlerRegressionTest(
-    api_regression_test_lib.ApiRegressionTest):
-
-  api_method = "StartRobotGetFilesOperation"
-  handler = flow_plugin.ApiStartRobotGetFilesOperationHandler
-
-  def setUp(self):
-    super(ApiStartRobotGetFilesOperationHandlerRegressionTest, self).setUp()
-    self.client_id = self.SetupClients(1)[0]
-
-  def Run(self):
-
-    def ReplaceFlowId():
-      flows_dir_fd = aff4.FACTORY.Open(
-          self.client_id.Add("flows"), token=self.token)
-      flow_urn = list(flows_dir_fd.ListChildren())[0]
-      return {flow_urn.Basename(): "W:ABCDEF"}
-
-    with test_lib.FakeTime(42):
-      self.Check(
-          "StartRobotGetFilesOperation",
-          args=flow_plugin.ApiStartRobotGetFilesOperationArgs(
-              hostname=self.client_id.Basename(), paths=["/tmp/test"]),
-          replace=ReplaceFlowId)
-
-
-class ApiGetRobotGetFilesOperationStateHandlerRegressionTest(
-    api_regression_test_lib.ApiRegressionTest):
-  """Test flow status handler.
-
-  This handler is disabled by default in the ACLs so we need to do some
-  patching to get the proper output and not just "access denied".
-  """
-
-  api_method = "GetRobotGetFilesOperationState"
-  handler = flow_plugin.ApiGetRobotGetFilesOperationStateHandler
-
-  def Run(self):
-    # Fix the time to avoid regressions.
-    with test_lib.FakeTime(42):
-      self.SetupClients(1)
-
-      start_handler = flow_plugin.ApiStartRobotGetFilesOperationHandler()
-      start_args = flow_plugin.ApiStartRobotGetFilesOperationArgs(
-          hostname="Host", paths=["/test"])
-      start_result = start_handler.Handle(start_args, token=self.token)
-
-      # Exploit the fact that 'get files' operation id is effectively a flow
-      # URN.
-      flow_urn = rdfvalue.RDFURN(start_result.operation_id)
-
-      # Put something in the output collection
-      collection = flow.GRRFlow.ResultCollectionForFID(
-          flow_urn, token=self.token)
-      collection.Add(rdf_client.ClientSummary())
-
-      self.Check(
-          "GetRobotGetFilesOperationState",
-          args=flow_plugin.ApiGetRobotGetFilesOperationStateArgs(
-              operation_id=start_result.operation_id),
-          replace={flow_urn.Basename(): "F:ABCDEF12"})
+      self.Check("ListFlowDescriptors")
 
 
 def main(argv):

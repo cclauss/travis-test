@@ -11,25 +11,25 @@ from grr.gui.api_plugins import cron as api_cron
 from grr.gui.api_plugins import flow as api_flow
 from grr.gui.api_plugins import hunt as api_hunt
 
-from grr.lib import access_control
-from grr.lib import aff4
-from grr.lib import flow
 from grr.lib import rdfvalue
 from grr.lib import utils
-from grr.lib.aff4_objects import aff4_grr
-from grr.lib.aff4_objects import cronjobs as aff4_cronjobs
-from grr.lib.aff4_objects import security as aff4_security
-from grr.lib.aff4_objects import users as aff4_users
-
-from grr.lib.flows.general import administrative
-
-from grr.lib.hunts import implementation
-
 from grr.lib.rdfvalues import client as rdf_client
 from grr.lib.rdfvalues import paths as rdf_paths
 from grr.lib.rdfvalues import structs as rdf_structs
-
 from grr.proto.api import user_pb2
+from grr.server import access_control
+from grr.server import aff4
+from grr.server import flow
+
+from grr.server.aff4_objects import aff4_grr
+
+from grr.server.aff4_objects import cronjobs as aff4_cronjobs
+
+from grr.server.aff4_objects import security as aff4_security
+from grr.server.aff4_objects import users as aff4_users
+from grr.server.flows.general import administrative
+
+from grr.server.hunts import implementation
 
 
 class GlobalNotificationNotFoundError(
@@ -334,24 +334,21 @@ class ApiCreateApprovalHandlerBase(api_call_handler_base.ApiCallHandler):
   # AFF4 type of the approval object to be checked. Should be set by a subclass.
   approval_aff4_type = None
 
-  # Flow to be used to grant the approval. Flow class is expected. Should be set
-  # by a subclass.
-  approval_create_flow = None
+  # Requestor to be used to request the approval. Class is expected. Should be
+  # set by a subclass.
+  approval_requestor = None
 
   def Handle(self, args, token=None):
     if not args.approval.reason:
       raise ValueError("Approval reason can't be empty.")
 
-    flow_urn = flow.GRRFlow.StartFlow(
-        flow_name=self.__class__.approval_create_flow.__name__,
+    requestor = self.__class__.approval_requestor(  # pylint: disable=not-callable
         reason=args.approval.reason,
         approver=",".join(args.approval.notified_users),
         email_cc_address=",".join(args.approval.email_cc_addresses),
         subject_urn=args.BuildSubjectUrn(),
         token=token)
-
-    flow_fd = aff4.FACTORY.Open(flow_urn, aff4_type=flow.GRRFlow, token=token)
-    approval_urn = flow_fd.state.approval_urn
+    approval_urn = requestor.Request()
 
     approval_obj = aff4.FACTORY.Open(
         approval_urn,
@@ -469,9 +466,8 @@ class ApiGrantApprovalHandlerBase(api_call_handler_base.ApiCallHandler):
   # AFF4 type of the approval object to be checked. Should be set by a subclass.
   approval_aff4_type = None
 
-  # Flow to be used to grant the approval. Flow class is expected. Should be set
-  # by a subclass.
-  approval_grant_flow = None
+  # Class to be used to grant the approval. Should be set by a subclass.
+  approval_grantor = None
 
   def Handle(self, args, token=None):
     subject_urn = args.BuildSubjectUrn()
@@ -481,12 +477,12 @@ class ApiGrantApprovalHandlerBase(api_call_handler_base.ApiCallHandler):
         approval_urn, aff4_type=self.__class__.approval_aff4_type, token=token)
     reason = approval_request.Get(approval_request.Schema.REASON)
 
-    flow.GRRFlow.StartFlow(
-        flow_name=self.__class__.approval_grant_flow.__name__,
+    grantor = self.__class__.approval_grantor(  # pylint: disable=not-callable
         reason=reason,
         delegate=args.username,
         subject_urn=subject_urn,
         token=token)
+    grantor.Grant()
 
     approval_request = aff4.FACTORY.Open(
         approval_urn,
@@ -523,7 +519,7 @@ class ApiCreateClientApprovalHandler(ApiCreateApprovalHandlerBase):
   result_type = ApiClientApproval
 
   approval_obj_type = aff4_security.ClientApproval
-  approval_create_flow = aff4_security.RequestClientApprovalFlow
+  approval_requestor = aff4_security.ClientApprovalRequestor
 
   def Handle(self, args, token=None):
     result = super(ApiCreateClientApprovalHandler, self).Handle(
@@ -568,7 +564,7 @@ class ApiGrantClientApprovalHandler(ApiGrantApprovalHandlerBase):
   result_type = ApiClientApproval
 
   approval_aff4_type = aff4_security.ClientApproval
-  approval_grant_flow = aff4_security.GrantClientApprovalFlow
+  approval_grantor = aff4_security.ClientApprovalGrantor
 
 
 class ApiListClientApprovalsArgs(ApiClientApprovalArgsBase):
@@ -670,7 +666,7 @@ class ApiCreateHuntApprovalHandler(ApiCreateApprovalHandlerBase):
   result_type = ApiHuntApproval
 
   approval_obj_type = aff4_security.HuntApproval
-  approval_create_flow = aff4_security.RequestHuntApprovalFlow
+  approval_requestor = aff4_security.HuntApprovalRequestor
 
 
 class ApiGetHuntApprovalArgs(ApiHuntApprovalArgsBase):
@@ -702,7 +698,7 @@ class ApiGrantHuntApprovalHandler(ApiGrantApprovalHandlerBase):
   result_type = ApiHuntApproval
 
   approval_aff4_type = aff4_security.HuntApproval
-  approval_grant_flow = aff4_security.GrantHuntApprovalFlow
+  approval_grantor = aff4_security.HuntApprovalGrantor
 
 
 class ApiListHuntApprovalsArgs(ApiHuntApprovalArgsBase):
@@ -759,7 +755,7 @@ class ApiCreateCronJobApprovalHandler(ApiCreateApprovalHandlerBase):
   result_type = ApiCronJobApproval
 
   approval_aff4_type = aff4_security.CronJobApproval
-  approval_create_flow = aff4_security.RequestCronJobApprovalFlow
+  approval_requestor = aff4_security.CronJobApprovalRequestor
 
 
 class ApiGetCronJobApprovalArgs(ApiCronJobApprovalArgsBase):
@@ -785,7 +781,7 @@ class ApiGrantCronJobApprovalHandler(ApiGrantApprovalHandlerBase):
   result_type = ApiCronJobApproval
 
   approval_aff4_type = aff4_security.CronJobApproval
-  approval_grant_flow = aff4_security.GrantCronJobApprovalFlow
+  approval_grantor = aff4_security.CronJobApprovalGrantor
 
 
 class ApiListCronJobApprovalsArgs(ApiCronJobApprovalArgsBase):

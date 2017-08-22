@@ -206,7 +206,7 @@ message User {
 };
 
 
-// Next ID: 33
+// Next ID: 34
 message KnowledgeBase {
   repeated User users = 32;
 
@@ -277,6 +277,11 @@ message KnowledgeBase {
         "the system, e.g. C:",
     }];
 
+  optional string environ_profilesdirectory = 33 [(sem_type) = {
+      description: "Folder that typically contains users' profile directories; "
+        "e.g '%SystemDrive%\\Users'",
+    }];
+
   optional string environ_allusersprofile = 26 [(sem_type) = {
       description: "The value of the %AllUsersProfile% parameter. As returned "
         "by the system, e.g. c:\\Documents and Settings\\All Users",
@@ -290,7 +295,7 @@ message KnowledgeBase {
 
   optional string current_control_set = 28 [(sem_type) = {
       description: "The current value of the system CurrentControlSet "
-        "e.g. HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet",
+        "e.g. HKEY_LOCAL_MACHINE\\SYSTEM\\ControlSet001",
     }];
 
   optional string code_page = 30 [(sem_type) = {

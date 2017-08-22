@@ -9,16 +9,17 @@ import pdb
 from grr.gui import api_regression_test_lib
 
 from grr.gui.api_plugins import hunt as hunt_plugin
-from grr.lib import aff4
 from grr.lib import flags
-from grr.lib import output_plugin
 from grr.lib import rdfvalue
-from grr.lib.hunts import implementation
-from grr.lib.hunts import process_results
-from grr.lib.hunts import standard_test
-from grr.lib.output_plugins import test_plugins
 from grr.lib.rdfvalues import client as rdf_client
 from grr.lib.rdfvalues import flows as rdf_flows
+from grr.server import aff4
+from grr.server import data_store
+from grr.server import output_plugin
+from grr.server.hunts import implementation
+from grr.server.hunts import process_results
+from grr.server.hunts import standard_test
+from grr.server.output_plugins import test_plugins
 from grr.test_lib import flow_test_lib
 from grr.test_lib import hunt_test_lib
 from grr.test_lib import test_lib
@@ -63,15 +64,22 @@ class ApiListHuntResultsRegressionTest(
     hunt_urn = rdfvalue.RDFURN("aff4:/hunts/H:123456")
     results = implementation.GRRHunt.ResultCollectionForHID(
         hunt_urn, token=self.token)
-    result = rdf_flows.GrrMessage(
-        payload=rdfvalue.RDFString("blah1"),
-        age=rdfvalue.RDFDatetime().FromSecondsFromEpoch(1))
-    results.Add(result, timestamp=result.age + rdfvalue.Duration("1s"))
+    with data_store.DB.GetMutationPool(token=self.token) as pool:
+      result = rdf_flows.GrrMessage(
+          payload=rdfvalue.RDFString("blah1"),
+          age=rdfvalue.RDFDatetime().FromSecondsFromEpoch(1))
+      results.Add(
+          result,
+          timestamp=result.age + rdfvalue.Duration("1s"),
+          mutation_pool=pool)
 
-    result = rdf_flows.GrrMessage(
-        payload=rdfvalue.RDFString("blah2-foo"),
-        age=rdfvalue.RDFDatetime().FromSecondsFromEpoch(42))
-    results.Add(result, timestamp=result.age + rdfvalue.Duration("1s"))
+      result = rdf_flows.GrrMessage(
+          payload=rdfvalue.RDFString("blah2-foo"),
+          age=rdfvalue.RDFDatetime().FromSecondsFromEpoch(42))
+      results.Add(
+          result,
+          timestamp=result.age + rdfvalue.Duration("1s"),
+          mutation_pool=pool)
 
     self.Check(
         "ListHuntResults",

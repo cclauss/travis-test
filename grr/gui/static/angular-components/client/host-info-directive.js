@@ -17,10 +17,13 @@ var OPERATION_POLL_INTERVAL = 1000;
  * @param {!angular.$interval} $interval
  * @param {!grrUi.core.apiService.ApiService} grrApiService
  * @param {!grrUi.routing.routingService.RoutingService} grrRoutingService
+ * @param {!grrUi.acl.aclDialogService.AclDialogService} grrAclDialogService
+ * @param {!grrUi.core.dialogService.DialogService} grrDialogService
  * @ngInject
  */
 grrUi.client.hostInfoDirective.HostInfoController = function(
-    $scope, $interval, grrApiService, grrRoutingService) {
+    $scope, $interval, grrApiService, grrRoutingService, grrAclDialogService,
+    grrDialogService) {
 
   /** @private {!angular.Scope} */
   this.scope_ = $scope;
@@ -33,6 +36,12 @@ grrUi.client.hostInfoDirective.HostInfoController = function(
 
   /** @private {!grrUi.routing.routingService.RoutingService} */
   this.grrRoutingService_ = grrRoutingService;
+
+  /** @private {!grrUi.acl.aclDialogService.AclDialogService} */
+  this.grrAclDialogService_ = grrAclDialogService;
+
+  /** @private {!grrUi.core.dialogService.DialogService} */
+  this.grrDialogService_ = grrDialogService;
 
   /** @type {string} */
   this.clientVersionUrl;
@@ -127,7 +136,7 @@ HostInfoController.prototype.fetchClientDetails_ = function() {
  * @export
  */
 HostInfoController.prototype.requestApproval = function() {
-  grr.publish('unauthorized', 'aff4:/' + this.clientId);
+  this.grrAclDialogService_.openRequestClientApprovalDialog(this.clientId);
 };
 
 /**
@@ -191,6 +200,24 @@ HostInfoController.prototype.stopMonitorInterrogateOperation_ = function() {
   this.interval_.cancel(this.interrogateOperationInterval_);
 };
 
+/**
+ * Handles clicks on full details history buttons.
+ *
+ * @param {string} fieldPath Path to a value field of interest.
+ * @export
+ */
+HostInfoController.prototype.showHistoryDialog = function(
+    fieldPath) {
+  this.grrDialogService_.openDirectiveDialog(
+      'grrHostHistoryDialog',
+      {
+        clientId: this.clientId,
+        fieldPath: fieldPath
+      },
+      {
+        windowClass: 'high-modal'
+      });
+};
 
 /**
  * HostInfoDirective definition.

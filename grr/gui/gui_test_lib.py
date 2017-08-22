@@ -1,11 +1,15 @@
 #!/usr/bin/env python
 """Helper functionality for gui testing."""
 
+import atexit
 import functools
 import os
+import threading
 import time
 import urlparse
 
+import portpicker
+from selenium import webdriver
 from selenium.common import exceptions
 from selenium.webdriver.common import action_chains
 from selenium.webdriver.common import keys
@@ -16,30 +20,34 @@ import logging
 from grr.gui import api_auth_manager
 from grr.gui import api_call_router_with_approval_checks
 from grr.gui import webauth
+from grr.gui import wsgiapp_testlib
 
-from grr.lib import access_control
-from grr.lib import action_mocks
-from grr.lib import aff4
-from grr.lib import artifact_registry
-from grr.lib import client_index
-from grr.lib import flow
 from grr.lib import rdfvalue
 from grr.lib import utils
-from grr.lib.aff4_objects import aff4_grr
-from grr.lib.aff4_objects import standard as aff4_standard
-from grr.lib.aff4_objects import users
-from grr.lib.flows.general import transfer
-from grr.lib.hunts import implementation
-from grr.lib.hunts import standard
-from grr.lib.hunts import standard_test
 from grr.lib.rdfvalues import client as rdf_client
 from grr.lib.rdfvalues import crypto as rdf_crypto
 from grr.lib.rdfvalues import flows as rdf_flows
 from grr.lib.rdfvalues import paths as rdf_paths
 from grr.lib.rdfvalues import structs as rdf_structs
 from grr.proto import tests_pb2
+from grr.server import access_control
+from grr.server import aff4
+from grr.server import artifact_registry
+from grr.server import client_index
+from grr.server import data_store
+from grr.server import flow
 from grr.server import foreman as rdf_foreman
+from grr.server import output_plugin
+from grr.server.aff4_objects import aff4_grr
+from grr.server.aff4_objects import standard as aff4_standard
+from grr.server.aff4_objects import users
+from grr.server.flows.general import processes
+from grr.server.flows.general import transfer
+from grr.server.hunts import implementation
+from grr.server.hunts import standard
+from grr.server.hunts import standard_test
 from grr.test_lib import acl_test_lib
+from grr.test_lib import action_mocks
 from grr.test_lib import hunt_test_lib
 from grr.test_lib import test_lib
 
@@ -128,17 +136,58 @@ class GRRSeleniumTest(test_lib.GRRBaseTest, acl_test_lib.AclTestMixin):
   # Base url of the Admin UI
   base_url = None
 
+  @staticmethod
+  def _TearDownSelenium():
+    """Tear down Selenium session."""
+    try:
+      if GRRSeleniumTest.driver:
+        GRRSeleniumTest.driver.quit()
+    except Exception as e:  # pylint: disable=broad-except
+      logging.exception(e)
+
+  @staticmethod
+  def _SetUpSelenium(port):
+    """Set up Selenium session."""
+    atexit.register(GRRSeleniumTest._TearDownSelenium)
+    GRRSeleniumTest.base_url = ("http://localhost:%s" % port)
+
+
+    # pylint: disable=unreachable
+    os.environ.pop("http_proxy", None)
+    options = webdriver.ChromeOptions()
+    GRRSeleniumTest.driver = webdriver.Chrome(chrome_options=options)
+    # pylint: enable=unreachable
+
+  _selenium_set_up_lock = threading.RLock()
+  _selenium_set_up_done = False
+
+  @classmethod
+  def setUpClass(cls):
+    super(GRRSeleniumTest, cls).setUpClass()
+    with GRRSeleniumTest._selenium_set_up_lock:
+      if not GRRSeleniumTest._selenium_set_up_done:
+
+        port = portpicker.PickUnusedPort()
+        logging.info("Picked free AdminUI port %d.", port)
+
+        # Start up a server in another thread
+        GRRSeleniumTest._server_trd = wsgiapp_testlib.ServerThread(port)
+        GRRSeleniumTest._server_trd.StartAndWaitUntilServing()
+        GRRSeleniumTest._SetUpSelenium(port)
+
+        GRRSeleniumTest._selenium_set_up_done = True
+
   def InstallACLChecks(self):
     """Installs AccessControlManager and stubs out SendEmail."""
     acrwac = api_call_router_with_approval_checks
 
     # Clear the cache of the approvals-based router.
-    acrwac.ApiCallRouterWithApprovalChecksWithRobotAccess.ClearCache()
+    acrwac.ApiCallRouterWithApprovalChecks.ClearCache()
 
     if self.config_override:
       return
 
-    name = acrwac.ApiCallRouterWithApprovalChecksWithRobotAccess.__name__
+    name = acrwac.ApiCallRouterWithApprovalChecks.__name__
     self.config_override = test_lib.ConfigOverrider({"API.DefaultRouter": name})
     self.config_override.Start()
     # Make sure ApiAuthManager is initialized with this configuration setting.
@@ -579,9 +628,11 @@ class GRRSeleniumHuntTest(GRRSeleniumTest, standard_test.StandardHuntTestMixin):
       runner.Start()
 
       collection = hunt.ResultCollection()
-      for value in values:
-        collection.Add(
-            rdf_flows.GrrMessage(payload=value, source=self.client_ids[0]))
+      with data_store.DB.GetMutationPool(token=self.token) as pool:
+        for value in values:
+          collection.Add(
+              rdf_flows.GrrMessage(payload=value, source=self.client_ids[0]),
+              mutation_pool=pool)
 
       return hunt.urn
 
@@ -684,3 +735,14 @@ class FlowWithOneHashEntryResult(flow.GRRFlow):
         sha1="6dd6bee591dfcb6d75eb705405302c3eab65e21a".decode("hex"),
         md5="8b0a15eefe63fd41f8dc9dee01c5cf9a".decode("hex"))
     self.SendReply(hash_result)
+
+
+class DummyOutputPlugin(output_plugin.OutputPlugin):
+  """Output plugin that does nothing."""
+
+  name = "dummy"
+  description = "Dummy do do."
+  args_type = processes.ListProcessesArgs
+
+  def ProcessResponses(self, responses):
+    pass

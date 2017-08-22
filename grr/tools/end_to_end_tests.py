@@ -12,11 +12,11 @@ from grr.lib import server_plugins
 from grr import config
 from grr.config import contexts
 from grr.endtoend_tests import base
-from grr.lib import access_control
-from grr.lib import aff4
 from grr.lib import flags
-from grr.lib import server_startup
-from grr.lib.aff4_objects import users as aff4_users
+from grr.server import access_control
+from grr.server import aff4
+from grr.server import server_startup
+from grr.server.aff4_objects import users as aff4_users
 
 flags.DEFINE_bool("local_client", True,
                   "The target client(s) are running locally.")
@@ -51,7 +51,7 @@ def RunEndToEndTests():
   with aff4.FACTORY.Create(
       "aff4:/users/GRREndToEndTest", aff4_users.GRRUser, mode="rw",
       token=token) as test_user:
-    test_user.AddLabels("admin")
+    test_user.AddLabel("admin")
 
   client_id_set = base.GetClientTestTargets(
       client_ids=flags.FLAGS.client_ids,
@@ -124,7 +124,8 @@ def RunEndToEndTests():
         print "%45s: %s" % (testcase, res)
 
 
-def main(unused_argv):
+def main(argv):
+  del argv  # Unused.
   RunEndToEndTests()
 
 

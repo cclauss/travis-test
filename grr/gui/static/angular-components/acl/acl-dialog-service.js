@@ -6,6 +6,7 @@
 
 goog.provide('grrUi.acl.aclDialogService.AclDialogService');
 goog.require('grrUi.acl.requestApprovalDialogDirective.RequestApprovalDialogDirective');
+goog.require('grrUi.core.utils.stripAff4Prefix');
 
 goog.scope(function() {
 
@@ -13,12 +14,18 @@ goog.scope(function() {
 /**
  * Service for acl dialogs.
  *
+ * @param {angular.Scope} $rootScope The Angular root scope.
  * @param {grrUi.core.dialogService.DialogService} grrDialogService
  * @constructor
  * @ngInject
  * @export
  */
-grrUi.acl.aclDialogService.AclDialogService = function(grrDialogService) {
+grrUi.acl.aclDialogService.AclDialogService = function(
+    $rootScope, grrDialogService) {
+
+  /** @private {angular.Scope} */
+  this.rootScope_ = $rootScope;
+
   /** @private {grrUi.core.dialogService.DialogService} */
   this.grrDialogService_ = grrDialogService;
 };
@@ -141,6 +148,35 @@ AclDialogService.prototype.openRequestCronJobApprovalDialog = function(
         }
       },
       opt_accessErrorDescription);
+};
+
+/**
+ * Shows an "unauthorized approval dialog for a given subject with a given
+ * message.
+ *
+ * @param {string} subject URN of a subject that was denied access to.
+ * @param {string} message Message with details about access denial.
+ *
+ * @export
+ */
+AclDialogService.prototype.openApprovalDialogForSubject = function(
+    subject, message) {
+  // TODO(user): get rid of this code as soon as we stop passing
+  // information about objects by passing URNs and guessing the
+  // object type.
+  var components = grrUi.core.utils.stripAff4Prefix(subject).split('/');
+  if (/^C\.[0-9a-fA-F]{16}$/.test(components[0])) {
+    this.openRequestClientApprovalDialog(
+        components[0], message);
+  } else if (components[0] == 'hunts') {
+    this.openRequestHuntApprovalDialog(
+        components[1], message);
+  } else if (components[0] == 'cron') {
+    this.openRequestCronJobApprovalDialog(
+        components[1], message);
+  } else {
+    throw new Error('Can\'t determine type of resources.');
+  }
 };
 
 });

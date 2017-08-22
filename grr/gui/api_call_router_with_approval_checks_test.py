@@ -16,19 +16,18 @@ from grr.gui.api_plugins import hunt as api_hunt
 from grr.gui.api_plugins import user as api_user
 from grr.gui.api_plugins import vfs as api_vfs
 
-from grr.lib import access_control
 from grr.lib import flags
-from grr.lib.flows.general import processes
-from grr.lib.hunts import standard_test
-
 from grr.lib.rdfvalues import client as rdf_client
+from grr.server import access_control
+
+from grr.server.hunts import standard_test
 
 from grr.test_lib import test_lib
 
 
-class ApiCallRouterWithApprovalChecksWithoutRobotAccessTest(
-    test_lib.GRRBaseTest, standard_test.StandardHuntTestMixin):
-  """Tests for an ApiCallRouterWithApprovalChecksWithoutRobotAccess."""
+class ApiCallRouterWithApprovalChecksTest(test_lib.GRRBaseTest,
+                                          standard_test.StandardHuntTestMixin):
+  """Tests for an ApiCallRouterWithApprovalChecks."""
 
   # ACCESS_CHECKED_METHODS is used to identify the methods that are tested
   # for being checked for necessary access rights. This list is used
@@ -36,14 +35,14 @@ class ApiCallRouterWithApprovalChecksWithoutRobotAccessTest(
   ACCESS_CHECKED_METHODS = []
 
   def setUp(self):
-    super(ApiCallRouterWithApprovalChecksWithoutRobotAccessTest, self).setUp()
+    super(ApiCallRouterWithApprovalChecksTest, self).setUp()
 
     self.client_id = rdf_client.ClientURN("C.0000111122223333")
 
     self.delegate_mock = mock.MagicMock()
     self.legacy_manager_mock = mock.MagicMock()
 
-    self.router = api_router.ApiCallRouterWithApprovalChecksWithoutRobotAccess(
+    self.router = api_router.ApiCallRouterWithApprovalChecks(
         delegate=self.delegate_mock, legacy_manager=self.legacy_manager_mock)
 
   def CheckMethodIsAccessChecked(self,
@@ -247,15 +246,6 @@ class ApiCallRouterWithApprovalChecksWithoutRobotAccessTest(
         self.router.ListFlowLogs, "CheckClientAccess", args=args)
 
   ACCESS_CHECKED_METHODS.extend([
-      "CreateGlobalFlow"])  # pyformat: disable
-
-  def testAllGlobalFlowsMethodsAreAccessChecked(self):
-    args = api_flow.ApiCreateFlowArgs(flow=api_flow.ApiFlow(
-        name=processes.ListProcesses.__name__))
-    self.CheckMethodIsAccessChecked(
-        self.router.CreateGlobalFlow, "CheckIfCanStartFlow", args=args)
-
-  ACCESS_CHECKED_METHODS.extend([
       "ForceRunCronJob",
       "ModifyCronJob",
       "DeleteCronJob"])  # pyformat: disable
@@ -360,17 +350,6 @@ class ApiCallRouterWithApprovalChecksWithoutRobotAccessTest(
     self.assertNotEqual(handler.interface_traits,
                         api_user.ApiGrrUserInterfaceTraits().EnableAll())
 
-  ACCESS_CHECKED_METHODS.extend([
-      "StartRobotGetFilesOperation",
-      "GetRobotGetFilesOperationState"])  # pyformat: disable
-
-  def testRobotMethodsAreRejected(self):
-    with self.assertRaises(access_control.UnauthorizedAccess):
-      self.router.StartRobotGetFilesOperation(None, token=self.token)
-
-    with self.assertRaises(access_control.UnauthorizedAccess):
-      self.router.GetRobotGetFilesOperationState(None, token=self.token)
-
   def testAllOtherMethodsAreNotAccessChecked(self):
     unchecked_methods = (set(self.router.__class__.GetAnnotatedMethods().keys())
                          - set(self.ACCESS_CHECKED_METHODS))
@@ -378,26 +357,6 @@ class ApiCallRouterWithApprovalChecksWithoutRobotAccessTest(
 
     for method_name in unchecked_methods:
       self.CheckMethodIsNotAccessChecked(getattr(self.router, method_name))
-
-
-class ApiCallRouterWithApprovalChecksWithRobotAccessTest(test_lib.GRRBaseTest):
-  """Tests for ApiCallRouterWithApprovalChecksWithRobotAccess."""
-
-  def setUp(self):
-    super(ApiCallRouterWithApprovalChecksWithRobotAccessTest, self).setUp()
-
-    self.delegate_mock = mock.MagicMock()
-    self.router = api_router.ApiCallRouterWithApprovalChecksWithRobotAccess(
-        delegate=self.delegate_mock)
-
-  def testRobotMethodsAreNotChecked(self):
-    self.router.StartRobotGetFilesOperation(None, token=self.token)
-    self.delegate_mock.StartRobotGetFilesOperation.assert_called_with(
-        None, token=self.token)
-
-    self.router.GetRobotGetFilesOperationState(None, token=self.token)
-    self.delegate_mock.GetRobotGetFilesOperationState.assert_called_with(
-        None, token=self.token)
 
 
 def main(argv):

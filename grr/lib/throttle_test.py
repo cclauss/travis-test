@@ -1,13 +1,13 @@
 #!/usr/bin/env python
 """Tests for grr.lib.throttle."""
 
-from grr.lib import access_control
 from grr.lib import flags
-from grr.lib import flow
 from grr.lib import rdfvalue
 from grr.lib import throttle
-from grr.lib.flows.general import file_finder
 from grr.lib.rdfvalues import file_finder as rdf_file_finder
+from grr.server import access_control
+from grr.server import flow
+from grr.server.flows.general import file_finder
 from grr.test_lib import flow_test_lib
 from grr.test_lib import test_lib
 
@@ -172,7 +172,7 @@ class ThrottleTest(test_lib.GRRBaseTest):
 
 def main(argv):
   # Run the full test suite
-  test_lib.GrrTestProgram(argv=argv)
+  test_lib.main(argv)
 
 
 if __name__ == "__main__":

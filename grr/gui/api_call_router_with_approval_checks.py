@@ -10,28 +10,27 @@ from grr.gui import api_call_router_without_checks
 from grr.gui.api_plugins import flow as api_flow
 from grr.gui.api_plugins import user as api_user
 
-from grr.lib import access_control
-from grr.lib import aff4
+from grr.server import access_control
+from grr.server import aff4
 
-from grr.lib.aff4_objects import cronjobs
-from grr.lib.aff4_objects import user_managers
+from grr.server.aff4_objects import cronjobs
+from grr.server.aff4_objects import user_managers
 
-from grr.lib.hunts import implementation
+from grr.server.hunts import implementation
 
 
-class ApiCallRouterWithApprovalChecksWithoutRobotAccess(
-    api_call_router.ApiCallRouter):
+class ApiCallRouterWithApprovalChecks(api_call_router.ApiCallRouter):
   """Router that uses approvals-based ACL checks."""
 
   full_access_control_manager = None
 
   @staticmethod
   def ClearCache():
-    cls = ApiCallRouterWithApprovalChecksWithoutRobotAccess
+    cls = ApiCallRouterWithApprovalChecks
     cls.full_access_control_manager = None
 
   def _GetFullAccessControlManager(self):
-    cls = ApiCallRouterWithApprovalChecksWithoutRobotAccess
+    cls = ApiCallRouterWithApprovalChecks
     if cls.full_access_control_manager is None:
       cls.full_access_control_manager = user_managers.FullAccessControlManager()
     return cls.full_access_control_manager
@@ -48,19 +47,13 @@ class ApiCallRouterWithApprovalChecksWithoutRobotAccess(
     self.legacy_manager.CheckCronJobAccess(token.RealUID(), cron_job_urn)
 
   def CheckIfCanStartClientFlow(self, flow_name, token=None):
-    self.legacy_manager.CheckIfCanStartFlow(
-        token.RealUID(), flow_name, with_client_id=True)
-
-  def CheckIfCanStartGlobalFlow(self, flow_name, token=None):
-    self.legacy_manager.CheckIfCanStartFlow(
-        token.RealUID(), flow_name, with_client_id=False)
+    self.legacy_manager.CheckIfCanStartFlow(token.RealUID(), flow_name)
 
   def CheckIfUserIsAdmin(self, token=None):
     user_managers.CheckUserForLabels(token.username, ["admin"], token=token)
 
   def __init__(self, params=None, legacy_manager=None, delegate=None):
-    super(ApiCallRouterWithApprovalChecksWithoutRobotAccess, self).__init__(
-        params=params)
+    super(ApiCallRouterWithApprovalChecks, self).__init__(params=params)
 
     if not legacy_manager:
       legacy_manager = self._GetFullAccessControlManager()
@@ -301,15 +294,6 @@ class ApiCallRouterWithApprovalChecksWithoutRobotAccess(
     self.CheckClientAccess(args.client_id, token=token)
 
     return self.delegate.ListFlowLogs(args, token=token)
-
-  # Global flows methods.
-  # ====================
-  #
-  def CreateGlobalFlow(self, args, token=None):
-    self.CheckIfCanStartGlobalFlow(
-        args.flow.name or args.flow.runner_args.flow_name, token=token)
-
-    return self.delegate.CreateGlobalFlow(args, token=token)
 
   # Cron jobs methods.
   # =================
@@ -700,32 +684,16 @@ class ApiCallRouterWithApprovalChecksWithoutRobotAccess(
 
     return self.delegate.ListApiMethods(args, token=token)
 
-  # Robot methods (methods that provide limited access to the system and
-  # are supposed to be triggered by the scripts).
-  # ====================================================================
-  #
-  def StartRobotGetFilesOperation(self, args, token=None):
-    # Robot methods are not accessible for normal users.
 
-    raise access_control.UnauthorizedAccess("Robot methods can't be used "
-                                            "by normal users.")
-
-  def GetRobotGetFilesOperationState(self, args, token=None):
-    # Robot methods are not accessible for normal users.
-
-    raise access_control.UnauthorizedAccess("Robot methods can't be used "
-                                            "by normal users.")
+# This class is kept here for backwards compatibility only.
+# TODO(user): Remove EOQ42017
+class ApiCallRouterWithApprovalChecksWithoutRobotAccess(
+    ApiCallRouterWithApprovalChecks):
+  pass
 
 
+# This class is kept here for backwards compatibility only.
+# TODO(user): Remove EOQ42017
 class ApiCallRouterWithApprovalChecksWithRobotAccess(
-    ApiCallRouterWithApprovalChecksWithoutRobotAccess):
-
-  # Robot methods (methods that provide limited access to the system and
-  # are supposed to be triggered by the scripts).
-  # ====================================================================
-  #
-  def StartRobotGetFilesOperation(self, args, token=None):
-    return self.delegate.StartRobotGetFilesOperation(args, token=token)
-
-  def GetRobotGetFilesOperationState(self, args, token=None):
-    return self.delegate.GetRobotGetFilesOperationState(args, token=token)
+    ApiCallRouterWithApprovalChecks):
+  pass

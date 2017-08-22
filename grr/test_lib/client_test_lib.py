@@ -8,12 +8,12 @@ from grr.client import actions
 from grr.client.client_actions import standard
 
 from grr.lib import registry
-from grr.lib import server_stubs
 from grr.lib import utils
-from grr.lib import worker_mocks
 from grr.lib.rdfvalues import flows as rdf_flows
-
 from grr.lib.rdfvalues import protodict as rdf_protodict
+from grr.server import server_stubs
+
+from grr.server import worker_mocks
 from grr.test_lib import test_lib
 
 
@@ -174,6 +174,70 @@ class MockWindowsProcess(object):
 
 
 # pylint: enable=g-bad-name
+
+
+# pylint: disable=invalid-name
+class WMIWin32NetworkAdapterConfigurationMock(object):
+  """Mock netadapter."""
+
+  class UnSerializable(object):
+    pass
+
+  Caption = "[000005] Intel Gigabit Network Connection"
+  DatabasePath = "%SystemRoot%\\System32\\drivers\\etc"
+  DefaultIPGateway = ["192.168.1.254", "fe80::211:5eaa:fe00:222"]
+  Description = "Intel Gigabit Network Connection"
+  DHCPEnabled = True
+  DHCPLeaseExpires = "20140825162259.123456-420"
+  DHCPLeaseObtained = "20140825122259.123456-420"
+  DHCPServer = "192.168.1.1"
+  DNSDomain = "internal.example.com"
+  DNSDomainSuffixSearchOrder = [
+      "blah.example.com", "ad.example.com", "internal.example.com",
+      "example.com"
+  ]
+  DNSEnabledForWINSResolution = False
+  DNSHostName = "MYHOST-WIN"
+  DNSServerSearchOrder = ["192.168.1.1", "192.168.255.81", "192.168.128.88"]
+  DomainDNSRegistrationEnabled = False
+  FullDNSRegistrationEnabled = True
+  GatewayCostMetric = [0, 256]
+  Index = 7
+  InterfaceIndex = 11
+  IPAddress = [
+      "192.168.1.20", "ffff::ffff:aaaa:1111:aaaa",
+      "dddd:0:8888:6666:bbbb:aaaa:eeee:bbbb",
+      "dddd:0:8888:6666:bbbb:aaaa:ffff:bbbb"
+  ]
+  IPConnectionMetric = 10
+  IPEnabled = True
+  IPFilterSecurityEnabled = False
+  IPSecPermitIPProtocols = []
+  IPSecPermitTCPPorts = []
+  IPSecPermitUDPPorts = []
+  IPSubnet = ["255.255.254.0", "192", "168", "1"]
+  MACAddress = "BB:AA:EE:CC:DD:CC"
+  ServiceName = "e1e"
+  SettingID = "{AAAAAAAA-EEEE-DDDD-AAAA-CCCCCCCCCCCC}"
+  TcpipNetbiosOptions = 0
+  WINSEnableLMHostsLookup = True
+  WINSScopeID = ""
+  NestingTest = {
+      "one": {
+          "two": [3, 4],
+          "broken": UnSerializable(),
+          "three": {}
+      },
+      "four": [],
+      "five": "astring",
+      "six": [None, None, ""],
+      "seven": None,
+      "rdfvalue": rdf_protodict.Dict(a="asdf")
+  }
+  OpaqueObject = UnSerializable()
+
+
+# pylint: enable=invalid-name
 
 
 class Popen(object):

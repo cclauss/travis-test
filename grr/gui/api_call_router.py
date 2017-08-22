@@ -508,8 +508,6 @@ class ApiCallRouter(object):
 
     raise NotImplementedError()
 
-  # Note: handles both client and globals flows. It's cleaner to have
-  # a separate API for global flows.
   @Category("Flows")
   @ArgsType(api_flow.ApiCreateFlowArgs)
   @ResultType(api_flow.ApiFlow)
@@ -610,18 +608,6 @@ class ApiCallRouter(object):
   @Http("GET", "/api/clients/<client_id>/flows/<path:flow_id>/log")
   def ListFlowLogs(self, args, token=None):
     """List logs of the flow."""
-
-    raise NotImplementedError()
-
-  # Global flows methods.
-  # ====================
-  #
-  @Category("Flows")
-  @ArgsType(api_flow.ApiCreateFlowArgs)
-  @ResultType(api_flow.ApiFlow)
-  @Http("POST", "/api/flows")
-  def CreateGlobalFlow(self, args, token=None):
-    """Start a global flow."""
 
     raise NotImplementedError()
 
@@ -1205,7 +1191,6 @@ class ApiCallRouter(object):
     raise NotImplementedError()
 
   @Category("Reflection")
-  @ArgsType(api_flow.ApiListFlowDescriptorsArgs)
   @ResultType(api_flow.ApiListFlowDescriptorsResult)
   @Http("GET", "/api/flows/descriptors")
   @NoAuditLogRequired()
@@ -1267,30 +1252,6 @@ class ApiCallRouter(object):
   @NoAuditLogRequired()
   def ListApiMethods(self, args, token=None):
     """List all available API methods."""
-
-    raise NotImplementedError()
-
-  # Robot methods (methods that provide limited access to the system and
-  # are supposed to be triggered by the scripts).
-  # ====================================================================
-  #
-  @Category("Flows")
-  @ArgsType(api_flow.ApiStartRobotGetFilesOperationArgs)
-  @ResultType(api_flow.ApiStartRobotGetFilesOperationResult)
-  @Http("POST", "/api/robot-actions/get-files")
-  @NoAuditLogRequired()
-  def StartRobotGetFilesOperation(self, args, token=None):
-    """Start designed-for-robots GetFiles operation."""
-
-    raise NotImplementedError()
-
-  @Category("Flows")
-  @ArgsType(api_flow.ApiGetRobotGetFilesOperationStateArgs)
-  @ResultType(api_flow.ApiGetRobotGetFilesOperationStateResult)
-  @Http("GET", "/api/robot-actions/get-files/<path:operation_id>")
-  @NoAuditLogRequired()
-  def GetRobotGetFilesOperationState(self, args, token=None):
-    """Get a state of a previously started GetFiles operation."""
 
     raise NotImplementedError()
 

@@ -14,6 +14,7 @@ import shutil
 import socket
 import sys
 import tempfile
+import threading
 import time
 import unittest
 
@@ -32,28 +33,28 @@ from grr.client import comms
 # pylint: disable=unused-import
 from grr.client import local as _
 # pylint: enable=unused-import
-from grr.lib import access_control
-from grr.lib import aff4
-from grr.lib import artifact
-from grr.lib import client_index
-from grr.lib import data_store
-from grr.lib import email_alerts
 from grr.lib import flags
-from grr.lib import flow
 from grr.lib import rdfvalue
 from grr.lib import registry
 from grr.lib import testing_startup
 from grr.lib import utils
 
-from grr.lib.aff4_objects import aff4_grr
-from grr.lib.aff4_objects import filestore
-from grr.lib.aff4_objects import users
-
-from grr.lib.flows.general import discovery
-from grr.lib.hunts import results as hunts_results
-
 from grr.lib.rdfvalues import client as rdf_client
 from grr.lib.rdfvalues import crypto as rdf_crypto
+
+from grr.server import access_control
+from grr.server import aff4
+from grr.server import artifact
+from grr.server import client_index
+from grr.server import data_store
+from grr.server import email_alerts
+from grr.server import flow
+from grr.server.aff4_objects import aff4_grr
+from grr.server.aff4_objects import filestore
+from grr.server.aff4_objects import users
+
+from grr.server.flows.general import discovery
+from grr.server.hunts import results as hunts_results
 
 flags.DEFINE_list(
     "tests",
@@ -102,6 +103,17 @@ class GRRBaseTest(unittest.TestCase):
     self.token = access_control.ACLToken(
         username=test_user, reason="Running tests")
 
+  _set_up_lock = threading.RLock()
+  _set_up_done = False
+
+  @classmethod
+  def setUpClass(cls):
+    super(GRRBaseTest, cls).setUpClass()
+    with GRRBaseTest._set_up_lock:
+      if not GRRBaseTest._set_up_done:
+        testing_startup.TestInit()
+        GRRBaseTest._set_up_done = True
+
   def setUp(self):
     super(GRRBaseTest, self).setUp()
 
@@ -119,11 +131,7 @@ class GRRBaseTest(unittest.TestCase):
                  self._testMethodName)
     self.last_start_time = time.time()
 
-    try:
-      # Clear() is much faster than init but only supported for FakeDataStore.
-      data_store.DB.Clear()
-    except AttributeError:
-      self.InitDatastore()
+    data_store.DB.ClearTestDB()
 
     aff4.FACTORY.Flush()
 
@@ -150,7 +158,22 @@ class GRRBaseTest(unittest.TestCase):
         lambda unresponsive_kill_period=None, nanny_logfile=None: True)
     self.nanny_stubber.Start()
 
+    # We don't want to send actual email in our tests
+    self.smtp_patcher = mock.patch("smtplib.SMTP")
+    self.mock_smtp = self.smtp_patcher.start()
+
+    def DisabledSet(*unused_args, **unused_kw):
+      raise NotImplementedError(
+          "Usage of Set() is disabled, please use a configoverrider in tests.")
+
+    self.config_set_disable = utils.Stubber(config.CONFIG, "Set", DisabledSet)
+    self.config_set_disable.Start()
+
   def tearDown(self):
+    super(GRRBaseTest, self).setUp()
+
+    self.config_set_disable.Stop()
+    self.smtp_patcher.stop()
     self.nanny_stubber.Stop()
     self.mail_stubber.Stop()
 
@@ -413,11 +436,11 @@ class ConfigOverrider(object):
 
   def Start(self):
     for k, v in self._overrides.iteritems():
-      self._saved_values[k] = config.CONFIG.Get(k)
+      self._saved_values[k] = config.CONFIG.GetRaw(k)
       try:
-        config.CONFIG.Set.old_target(k, v)
+        config.CONFIG.SetRaw.old_target(k, v)
       except AttributeError:
-        config.CONFIG.Set(k, v)
+        config.CONFIG.SetRaw(k, v)
 
   def __exit__(self, unused_type, unused_value, unused_traceback):
     self.Stop()
@@ -425,9 +448,9 @@ class ConfigOverrider(object):
   def Stop(self):
     for k, v in self._saved_values.iteritems():
       try:
-        config.CONFIG.Set.old_target(k, v)
+        config.CONFIG.SetRaw.old_target(k, v)
       except AttributeError:
-        config.CONFIG.Set(k, v)
+        config.CONFIG.SetRaw(k, v)
 
 
 class PreserveConfig(object):
@@ -656,35 +679,7 @@ class GrrTestProgram(unittest.TestProgram):
 
   def __init__(self, labels=None, **kw):
     self.labels = labels
-
-    testing_startup.TestInit()
-
-    self.setUp()
-    try:
-      super(GrrTestProgram, self).__init__(**kw)
-    finally:
-      try:
-        self.tearDown()
-      except Exception as e:  # pylint: disable=broad-except
-        logging.exception(e)
-
-  def setUp(self):
-    """Any global initialization goes here."""
-    # We don't want to send actual email in our tests
-    self.smtp_patcher = mock.patch("smtplib.SMTP")
-    self.mock_smtp = self.smtp_patcher.start()
-
-    def DisabledSet(*unused_args, **unused_kw):
-      raise NotImplementedError(
-          "Usage of Set() is disabled, please use a configoverrider in tests.")
-
-    self.config_set_disable = utils.Stubber(config.CONFIG, "Set", DisabledSet)
-    self.config_set_disable.Start()
-
-  def tearDown(self):
-    """Global teardown code goes here."""
-    self.config_set_disable.Stop()
-    self.smtp_patcher.stop()
+    super(GrrTestProgram, self).__init__(**kw)
 
   def parseArgs(self, argv):
     """Delegate arg parsing to the conf subsystem."""
@@ -736,8 +731,5 @@ class RemotePDB(pdb.Pdb):
 
 
 def main(argv=None):
-  if argv is None:
-    argv = sys.argv
-
-  print "Running test %s" % argv[0]
-  GrrTestProgram(argv=argv)
+  del argv  # Unused.
+  unittest.main()

@@ -859,7 +859,7 @@ class GrrConfigManager(object):
         except Exception as e:  # pylint: disable=broad-except
           logging.error("Unable to rename broken writeback: %s", e)
       raise we
-    logging.info("Configuration writeback is set to %s", filename)
+    logging.debug("Configuration writeback is set to %s", filename)
 
   def Validate(self, sections=None, parameters=None):
     """Validate sections or individual parameters.
@@ -1068,6 +1068,7 @@ class GrrConfigManager(object):
   }
 
   def MergeData(self, merge_data, raw_data=None):
+    """Merges data read from a config file into the current config."""
     self.FlushCache()
     if raw_data is None:
       raw_data = self.raw_data
@@ -1088,8 +1089,6 @@ class GrrConfigManager(object):
                  "deprecated or renamed. Check the release notes." % k)
           if flags.FLAGS.disallow_missing_config_definitions:
             raise MissingConfigDefinitionError(msg)
-          else:
-            logging.warning(msg)
 
         if isinstance(v, basestring):
           v = v.strip()
@@ -1148,7 +1147,7 @@ class GrrConfigManager(object):
 
       parser_cls = self.GetParserFromFilename(filename)
       parser = parser_cls(filename=filename)
-      logging.info("Loading configuration from %s", filename)
+      logging.debug("Loading configuration from %s", filename)
 
     clone = self.MakeNewConfig()
     clone.MergeData(parser.RawData())

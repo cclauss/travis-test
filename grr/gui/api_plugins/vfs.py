@@ -13,21 +13,21 @@ from grr import config
 from grr.gui import api_call_handler_base
 
 from grr.gui.api_plugins import client
-from grr.lib import aff4
-from grr.lib import data_store
-from grr.lib import flow
 from grr.lib import rdfvalue
 from grr.lib import utils
-from grr.lib.aff4_objects import aff4_grr
-from grr.lib.aff4_objects import standard as aff4_standard
-from grr.lib.flows.general import filesystem
-from grr.lib.flows.general import transfer
 from grr.lib.rdfvalues import client as rdf_client
 from grr.lib.rdfvalues import crypto
 from grr.lib.rdfvalues import flows as rdf_flows
 from grr.lib.rdfvalues import structs as rdf_structs
-
 from grr.proto.api import vfs_pb2
+from grr.server import aff4
+from grr.server import data_store
+from grr.server import flow
+from grr.server.aff4_objects import aff4_grr
+from grr.server.aff4_objects import standard as aff4_standard
+from grr.server.flows.general import filesystem
+
+from grr.server.flows.general import transfer
 
 # Files can only be accessed if their first path component is from this list.
 ROOT_FILES_WHITELIST = ["fs", "registry", "temp"]
@@ -726,7 +726,10 @@ class ApiGetVfsTimelineHandler(api_call_handler_base.ApiCallHandler):
 
     items = []
     for subject, values in data_store.DB.MultiResolvePrefix(
-        child_urns, attribute.predicate, token=token):
+        child_urns,
+        attribute.predicate,
+        timestamp=data_store.DB.ALL_TIMESTAMPS,
+        token=token):
       for _, serialized, _ in values:
         stat = rdf_client.StatEntry.FromSerializedString(serialized)
 

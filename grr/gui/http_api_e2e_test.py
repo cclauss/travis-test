@@ -11,12 +11,14 @@ import hashlib
 import json
 import os
 import StringIO
+import threading
 import zipfile
 
 import portpicker
 import requests
 
 import logging
+import unittest
 
 from grr import config
 from grr_api_client import api as grr_api
@@ -26,28 +28,28 @@ from grr.gui import api_call_router_with_approval_checks
 from grr.gui import webauth
 from grr.gui import wsgiapp
 from grr.gui import wsgiapp_testlib
-from grr.lib import action_mocks
-from grr.lib import aff4
 from grr.lib import flags
-from grr.lib import flow
 from grr.lib import rdfvalue
 from grr.lib import utils
-from grr.lib.aff4_objects import aff4_grr
-from grr.lib.aff4_objects import security
-from grr.lib.aff4_objects import user_managers_test
-from grr.lib.authorization import client_approval_auth
-from grr.lib.flows.general import file_finder
-from grr.lib.flows.general import processes
-from grr.lib.flows.general import processes_test
-from grr.lib.hunts import implementation
-from grr.lib.hunts import standard
-from grr.lib.hunts import standard_test
-from grr.lib.output_plugins import csv_plugin
 from grr.lib.rdfvalues import client as rdf_client
 from grr.lib.rdfvalues import file_finder as rdf_file_finder
 from grr.proto import jobs_pb2
 from grr.proto.api import vfs_pb2
+from grr.server import aff4
+from grr.server import flow
+from grr.server.aff4_objects import aff4_grr
+from grr.server.aff4_objects import security
+from grr.server.aff4_objects import user_managers_test
+from grr.server.authorization import client_approval_auth
+from grr.server.flows.general import file_finder
+from grr.server.flows.general import processes
+from grr.server.flows.general import processes_test
+from grr.server.hunts import implementation
+from grr.server.hunts import standard
+from grr.server.hunts import standard_test
+from grr.server.output_plugins import csv_plugin
 from grr.test_lib import acl_test_lib
+from grr.test_lib import action_mocks
 from grr.test_lib import fixture_test_lib
 from grr.test_lib import flow_test_lib
 from grr.test_lib import hunt_test_lib
@@ -64,30 +66,28 @@ class ApiE2ETest(test_lib.GRRBaseTest, acl_test_lib.AclTestMixin):
     self.token.username = "api_test_robot_user"
     webauth.WEBAUTH_MANAGER.SetUserName(self.token.username)
 
-    self.port = HTTPApiEndToEndTestProgram.server_port
+    self.port = ApiE2ETest.server_port
     self.endpoint = "http://localhost:%s" % self.port
     self.api = grr_api.InitHttp(api_endpoint=self.endpoint)
 
+  _api_set_up_lock = threading.RLock()
+  _api_set_up_done = False
 
-class ApiE2ETestLoader(test_lib.GRRTestLoader):
-  """Load only API E2E test cases."""
-  base_class = ApiE2ETest
+  @classmethod
+  def setUpClass(cls):
+    super(ApiE2ETest, cls).setUpClass()
+    with ApiE2ETest._api_set_up_lock:
+      if not ApiE2ETest._api_set_up_done:
 
+        # Set up HTTP server
+        port = portpicker.PickUnusedPort()
+        ApiE2ETest.server_port = port
+        logging.info("Picked free AdminUI port for HTTP %d.", port)
 
-class HTTPApiEndToEndTestProgram(test_lib.GrrTestProgram):
+        ApiE2ETest.trd = wsgiapp_testlib.ServerThread(port)
+        ApiE2ETest.trd.StartAndWaitUntilServing()
 
-  server_port = None
-
-  def setUp(self):
-    super(HTTPApiEndToEndTestProgram, self).setUp()
-
-    # Set up HTTP server
-    port = portpicker.PickUnusedPort()
-    HTTPApiEndToEndTestProgram.server_port = port
-    logging.info("Picked free AdminUI port for HTTP %d.", port)
-
-    self.trd = wsgiapp_testlib.ServerThread(port)
-    self.trd.StartAndWaitUntilServing()
+        ApiE2ETest._api_set_up_done = True
 
 
 class ApiClientLibFlowTest(ApiE2ETest):
@@ -505,7 +505,7 @@ class ApiClientLibLabelsTest(ApiE2ETest):
           aff4_type=aff4_grr.VFSGRRClient,
           mode="rw",
           token=self.token) as client_obj:
-        client_obj.AddLabels("bar", "foo")
+        client_obj.AddLabels(["bar", "foo"])
 
     client_ref = self.api.Client(client_id=self.client_urn.Basename())
     self.assertEqual(
@@ -516,7 +516,7 @@ class ApiClientLibLabelsTest(ApiE2ETest):
                 name="foo", owner=self.token.username, timestamp=42000000)
         ])
 
-    client_ref.RemoveLabels(["foo"])
+    client_ref.RemoveLabel("foo")
     self.assertEqual(
         sorted(client_ref.Get().data.labels, key=lambda l: l.name), [
             jobs_pb2.AFF4ObjectLabel(
@@ -1015,8 +1015,7 @@ class ApiCallRouterWithApprovalChecksE2ETest(ApiE2ETest):
   def setUp(self):
     super(ApiCallRouterWithApprovalChecksE2ETest, self).setUp()
 
-    cls = (api_call_router_with_approval_checks.
-           ApiCallRouterWithApprovalChecksWithoutRobotAccess)
+    cls = (api_call_router_with_approval_checks.ApiCallRouterWithApprovalChecks)
     self.config_overrider = test_lib.ConfigOverrider({
         "API.DefaultRouter": cls.__name__
     })
@@ -1031,8 +1030,7 @@ class ApiCallRouterWithApprovalChecksE2ETest(ApiE2ETest):
     self.config_overrider.Stop()
 
   def ClearCache(self):
-    cls = (api_call_router_with_approval_checks.
-           ApiCallRouterWithApprovalChecksWithoutRobotAccess)
+    cls = (api_call_router_with_approval_checks.ApiCallRouterWithApprovalChecks)
     cls.ClearCache()
     api_auth_manager.APIACLInit.InitApiAuthManager()
 
@@ -1237,17 +1235,16 @@ class ApprovalByLabelE2ETest(ApiE2ETest):
         aff4_type=aff4_grr.VFSGRRClient,
         mode="rw",
         token=self.token) as client_obj:
-      client_obj.AddLabels("legal_approval")
+      client_obj.AddLabel("legal_approval")
 
     with aff4.FACTORY.Open(
         self.client_prod,
         aff4_type=aff4_grr.VFSGRRClient,
         mode="rw",
         token=self.token) as client_obj:
-      client_obj.AddLabels("legal_approval", "prod_admin_approval")
+      client_obj.AddLabels(["legal_approval", "prod_admin_approval"])
 
-    cls = (api_call_router_with_approval_checks.
-           ApiCallRouterWithApprovalChecksWithoutRobotAccess)
+    cls = (api_call_router_with_approval_checks.ApiCallRouterWithApprovalChecks)
     cls.ClearCache()
     self.approver = test_lib.ConfigOverrider({
         "API.DefaultRouter":
@@ -1401,7 +1398,8 @@ class ApprovalByLabelE2ETest(ApiE2ETest):
 
 
 def main(argv):
-  HTTPApiEndToEndTestProgram(argv=argv, testLoader=ApiE2ETestLoader())
+  del argv  # Unused.
+  unittest.main()
 
 
 def DistEntry():

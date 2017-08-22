@@ -4,7 +4,6 @@
 
 import argparse
 import getpass
-import json
 import os
 
 import re
@@ -16,6 +15,7 @@ import sys
 import urlparse
 
 import pkg_resources
+import yaml
 
 # pylint: disable=unused-import,g-bad-import-order
 from grr.lib import server_plugins
@@ -23,20 +23,21 @@ from grr.lib import server_plugins
 
 from grr import config as grr_config
 from grr.config import contexts
-from grr.lib import access_control
-from grr.lib import aff4
-from grr.lib import artifact
-from grr.lib import artifact_registry
 from grr.lib import config_lib
 from grr.lib import flags
 from grr.lib import key_utils
-from grr.lib import maintenance_utils
 from grr.lib import rdfvalue
-from grr.lib import rekall_profile_server
 from grr.lib import repacking
-from grr.lib import server_startup
 from grr.lib import utils
 from grr.lib.rdfvalues import crypto as rdf_crypto
+from grr.server import access_control
+from grr.server import aff4
+from grr.server import artifact
+from grr.server import artifact_registry
+from grr.server import maintenance_utils
+from grr.server import rekall_profile_server
+from grr.server import server_startup
+from grr.server.aff4_objects import users as aff4_users
 
 parser = flags.PARSER
 parser.description = ("Set configuration parameters for the GRR Server."
@@ -122,10 +123,23 @@ parser_initialize.add_argument(
     help="Set to avoid prompting during initialize.")
 
 parser_initialize.add_argument(
-    "--no_templates_download",
+    "--redownload_templates",
     default=False,
     action="store_true",
-    help="Set to avoid downloading the templates during initialize.")
+    help="Re-download templates during noninteractive config initialization "
+    "(server debs already include templates).")
+
+parser_initialize.add_argument(
+    "--norepack_templates",
+    default=False,
+    action="store_true",
+    help="Skip template repacking during noninteractive config initialization.")
+
+parser_initialize.add_argument(
+    "--enable_rekall",
+    default=False,
+    action="store_true",
+    help="Enable Rekall during noninteractive config initialization.")
 
 parser_set_var.add_argument("var", help="Variable to set.")
 parser_set_var.add_argument("val", help="Value to set.")
@@ -271,6 +285,39 @@ parser_list_components = subparsers.add_parser(
     parents=[],
     help="Lists all available client components.")
 
+set_global_notification = subparsers.add_parser(
+    "set_global_notification",
+    parents=[],
+    help="Sets a global notification for all GRR users to see.")
+
+set_global_notification.add_argument(
+    "--type",
+    choices=aff4_users.GlobalNotification.Type.enum_dict.keys(),
+    default="INFO",
+    help="Global notification type.")
+
+set_global_notification.add_argument(
+    "--header", default="", required=True, help="Global notification header.")
+
+set_global_notification.add_argument(
+    "--content", default="", help="Global notification content.")
+
+set_global_notification.add_argument(
+    "--link", default="", help="Global notification link.")
+
+set_global_notification.add_argument(
+    "--show_from",
+    default="",
+    help="When to start showing the notification (in a "
+    "human-readable format, i.e. 2011-11-01 10:23:00). Timestamp is "
+    "assumed to be in UTC timezone.")
+
+set_global_notification.add_argument(
+    "--duration",
+    default=None,
+    help="How much time the notification is valid (duration in "
+    "human-readable form, i.e. 1h, 1d, etc).")
+
 
 def ImportConfig(filename, config):
   """Reads an old config file and imports keys and user accounts."""
@@ -361,6 +408,16 @@ def RetryQuestion(question_text, output_re="", default_val=None):
     else:
       print "Invalid input, must match %s" % output_re
   return output
+
+
+def RetryBoolQuestion(question_text, default_bool):
+  if not isinstance(default_bool, bool):
+    raise ValueError(
+        "default_bool should be a boolean, not %s" % type(default_bool))
+  default_val = "Y" if default_bool else "N"
+  prompt_suff = "[Yn]" if default_bool else "[yN]"
+  return RetryQuestion("%s %s: " % (question_text, prompt_suff), "[yY]|[nN]",
+                       default_val)[0].upper() == "Y"
 
 
 def ConfigureHostnames(config):
@@ -577,7 +634,13 @@ server and the admin user interface.\n"""
     if raw_input("Do you want to keep this configuration?"
                  " [Yn]: ").upper() == "N":
       ConfigureEmails(config)
-
+  rekall_enabled = grr_config.CONFIG.Get("Rekall.enabled", False)
+  if rekall_enabled:
+    rekall_enabled = RetryBoolQuestion("Keep Rekall enabled?", True)
+  else:
+    rekall_enabled = RetryBoolQuestion(
+        "Rekall is no longer actively supported. Enable anyway?", False)
+  config.Set("Rekall.enabled", rekall_enabled)
   config.Set("Server.initialized", True)
   config.Write()
   print("Configuration parameters set. You can edit these in %s" %
@@ -629,29 +692,23 @@ def InstallTemplatePackage():
 
 def ManageBinaries(config=None, token=None):
   """Repack templates into installers."""
-  print("\nStep 4: Installing template package and repackaging clients with"
-        " new configuration.")
-  pack_templates = False
-  download_templates = False
+  print "\nStep 4: Repackaging clients with new configuration."
+  redownload_templates = False
+  repack_templates = False
 
   if flags.FLAGS.noprompt:
-    if not flags.FLAGS.no_templates_download:
-      download_templates = pack_templates = True
-
+    redownload_templates = flags.FLAGS.redownload_templates
+    repack_templates = not flags.FLAGS.norepack_templates
   else:
-    if ((raw_input("Download client templates? You can skip "
-                   "this if templates are already installed."
-                   "[Yn]: ").upper() or "Y") == "Y"):
-      download_templates = True
+    redownload_templates = RetryBoolQuestion(
+        "Server debs include client templates. Re-download templates?", False)
+    repack_templates = RetryBoolQuestion("Repack client templates?", True)
 
-    if (raw_input("Repack client templates?" "[Yn]: ").upper() or "Y") == "Y":
-      pack_templates = True
-
-  if download_templates:
+  if redownload_templates:
     InstallTemplatePackage()
 
   # Build debug binaries, then build release binaries.
-  if pack_templates:
+  if repack_templates:
     repacking.TemplateRepacker().RepackAllTemplates(upload=True, token=token)
 
     print "\nStep 5: Signing and uploading client components."
@@ -736,7 +793,7 @@ def InitializeNoPrompt(config=None, token=None):
   config_dict["Monitoring.alert_email"] = "grr-monitoring@%s" % hostname
   config_dict["Monitoring.emergency_access_email"] = (
       "grr-emergency@%s" % hostname)
-
+  config_dict["Rekall.enabled"] = flags.FLAGS.enable_rekall
   print "Setting configuration as:\n\n%s" % config_dict
   for key, value in config_dict.iteritems():
     config.Set(key, value)
@@ -765,8 +822,9 @@ def GetToken():
   return access_control.ACLToken(username="GRRConsole").SetUID()
 
 
-def main(unused_argv):
+def main(argv):
   """Main."""
+  del argv  # Unused.
   token = GetToken()
   grr_config.CONFIG.AddContext(contexts.COMMAND_LINE_CONTEXT)
   grr_config.CONFIG.AddContext(contexts.CONFIG_UPDATER_CONTEXT)
@@ -833,10 +891,12 @@ def main(unused_argv):
   elif flags.FLAGS.subparser_name == "upload_python":
     content = open(flags.FLAGS.file, "rb").read(1024 * 1024 * 30)
     aff4_path = flags.FLAGS.dest_path
+    platform = flags.FLAGS.platform
     if not aff4_path:
       python_hack_root_urn = grr_config.CONFIG.Get("Config.python_hack_root")
-      aff4_path = python_hack_root_urn.Add(os.path.basename(flags.FLAGS.file))
-    context = ["Platform:%s" % flags.FLAGS.platform.title(), "Client Context"]
+      aff4_path = python_hack_root_urn.Add(platform.lower()).Add(
+          os.path.basename(flags.FLAGS.file))
+    context = ["Platform:%s" % platform.title(), "Client Context"]
     maintenance_utils.UploadSignedConfigBlob(
         content, aff4_path=aff4_path, client_context=context, token=token)
 
@@ -889,13 +949,13 @@ def main(unused_argv):
     print "Uploaded to %s" % uploaded
 
   elif flags.FLAGS.subparser_name == "upload_artifact":
-    json.load(open(flags.FLAGS.file, "rb"))  # Check it will parse.
+    yaml.load(open(flags.FLAGS.file, "rb"))  # Check it will parse.
     base_urn = aff4.ROOT_URN.Add("artifact_store")
     try:
       artifact.UploadArtifactYamlFile(
           open(flags.FLAGS.file, "rb").read(1000000),
           base_urn=base_urn,
-          token=None,
+          token=token,
           overwrite=flags.FLAGS.overwrite_artifact)
     except artifact_registry.ArtifactDefinitionError as e:
       print "Error %s. You may need to set --overwrite_artifact." % e
@@ -911,6 +971,29 @@ def main(unused_argv):
     print "Downloading missing Rekall profiles."
     s = rekall_profile_server.GRRRekallProfileServer()
     s.GetMissingProfiles()
+
+  elif flags.FLAGS.subparser_name == "set_global_notification":
+    notification = aff4_users.GlobalNotification(
+        type=flags.FLAGS.type,
+        header=flags.FLAGS.header,
+        content=flags.FLAGS.content,
+        link=flags.FLAGS.link)
+    if flags.FLAGS.show_from:
+      notification.show_from = rdfvalue.RDFDatetime().ParseFromHumanReadable(
+          flags.FLAGS.show_from)
+    if flags.FLAGS.duration:
+      notification.duration = rdfvalue.Duration().ParseFromHumanReadable(
+          flags.FLAGS.duration)
+
+    print "Setting global notification."
+    print notification
+
+    with aff4.FACTORY.Create(
+        aff4_users.GlobalNotificationStorage.DEFAULT_PATH,
+        aff4_type=aff4_users.GlobalNotificationStorage,
+        mode="rw",
+        token=token) as storage:
+      storage.AddNotification(notification)
 
 
 if __name__ == "__main__":

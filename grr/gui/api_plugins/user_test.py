@@ -6,23 +6,22 @@
 from grr.gui import api_test_lib
 from grr.gui.api_plugins import user as user_plugin
 
-from grr.lib import access_control
-from grr.lib import aff4
-from grr.lib import email_alerts
 from grr.lib import flags
-from grr.lib import flow
 from grr.lib import rdfvalue
 from grr.lib import utils
-from grr.lib.aff4_objects import cronjobs as aff4_cronjobs
-from grr.lib.aff4_objects import security as aff4_security
+from grr.server import access_control
+from grr.server import aff4
+from grr.server import email_alerts
+from grr.server.aff4_objects import cronjobs as aff4_cronjobs
+from grr.server.aff4_objects import security as aff4_security
 
-from grr.lib.aff4_objects import users as aff4_users
-from grr.lib.flows.general import administrative
-from grr.lib.hunts import implementation
+from grr.server.aff4_objects import users as aff4_users
+from grr.server.flows.general import administrative
+from grr.server.hunts import implementation
 
-from grr.lib.hunts import standard
+from grr.server.hunts import standard
 
-from grr.lib.hunts import standard_test
+from grr.server.hunts import standard_test
 from grr.test_lib import acl_test_lib
 from grr.test_lib import test_lib
 
@@ -218,17 +217,13 @@ class ApiGetClientApprovalHandlerTest(api_test_lib.ApiCallHandlerTest):
     self.handler = user_plugin.ApiGetClientApprovalHandler()
 
   def testRendersRequestedClientApproval(self):
-    flow_urn = flow.GRRFlow.StartFlow(
-        client_id=self.client_id,
-        flow_name=aff4_security.RequestClientApprovalFlow.__name__,
+    approval_urn = aff4_security.ClientApprovalRequestor(
         reason="blah",
         subject_urn=self.client_id,
         approver="approver",
         email_cc_address="test@example.com",
-        token=self.token)
-    flow_fd = aff4.FACTORY.Open(
-        flow_urn, aff4_type=flow.GRRFlow, token=self.token)
-    approval_id = flow_fd.state.approval_id
+        token=self.token).Request()
+    approval_id = approval_urn.Basename()
 
     args = user_plugin.ApiGetClientApprovalArgs(
         client_id=self.client_id,
@@ -249,25 +244,19 @@ class ApiGetClientApprovalHandlerTest(api_test_lib.ApiCallHandlerTest):
     self.assertEqual(result.approvers, [self.token.username])
 
   def testIncludesApproversInResultWhenApprovalIsGranted(self):
-    flow_urn = flow.GRRFlow.StartFlow(
-        client_id=self.client_id,
-        flow_name=aff4_security.RequestClientApprovalFlow.__name__,
+    approval_urn = aff4_security.ClientApprovalRequestor(
         reason="blah",
         subject_urn=self.client_id,
         approver="approver",
-        token=self.token)
-    flow_fd = aff4.FACTORY.Open(
-        flow_urn, aff4_type=flow.GRRFlow, token=self.token)
-    approval_id = flow_fd.state.approval_id
+        token=self.token).Request()
+    approval_id = approval_urn.Basename()
 
     approver_token = access_control.ACLToken(username="approver")
-    flow.GRRFlow.StartFlow(
-        client_id=self.client_id,
-        flow_name=aff4_security.GrantClientApprovalFlow.__name__,
+    aff4_security.ClientApprovalGrantor(
         reason="blah",
         delegate=self.token.username,
         subject_urn=self.client_id,
-        token=approver_token)
+        token=approver_token).Grant()
 
     args = user_plugin.ApiGetClientApprovalArgs(
         client_id=self.client_id,
@@ -481,12 +470,11 @@ class ApiListHuntApprovalsHandlerTest(api_test_lib.ApiCallHandlerTest):
         hunt_name=standard.SampleHunt.__name__, token=self.token) as hunt:
       pass
 
-    flow.GRRFlow.StartFlow(
-        flow_name=aff4_security.RequestHuntApprovalFlow.__name__,
+    aff4_security.HuntApprovalRequestor(
         reason=self.token.reason,
         subject_urn=hunt.urn,
         approver="approver",
-        token=self.token)
+        token=self.token).Request()
 
     args = user_plugin.ApiListHuntApprovalsArgs()
     result = self.handler.Handle(args, token=self.token)
@@ -534,12 +522,11 @@ class ApiListCronJobApprovalsHandlerTest(api_test_lib.ApiCallHandlerTest):
     cron_job_urn = cron_manager.ScheduleFlow(
         cron_args=cron_args, token=self.token)
 
-    flow.GRRFlow.StartFlow(
-        flow_name=aff4_security.RequestCronJobApprovalFlow.__name__,
+    aff4_security.CronJobApprovalRequestor(
         reason=self.token.reason,
         subject_urn=cron_job_urn,
         approver="approver",
-        token=self.token)
+        token=self.token).Request()
 
     args = user_plugin.ApiListCronJobApprovalsArgs()
     result = self.handler.Handle(args, token=self.token)

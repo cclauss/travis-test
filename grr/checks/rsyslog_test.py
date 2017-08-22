@@ -4,8 +4,8 @@
 
 
 from grr.lib import flags
-from grr.lib.checks import checks_test_lib
 from grr.parsers import config_file
+from grr.server.checks import checks_test_lib
 from grr.test_lib import test_lib
 
 
@@ -14,6 +14,8 @@ class RsyslogCheckTests(checks_test_lib.HostCheckTest):
 
   @classmethod
   def setUpClass(cls):
+    super(RsyslogCheckTests, cls).setUpClass()
+
     cls.LoadCheck("rsyslog.yaml")
     cls.parser = config_file.RsyslogParser()
 
@@ -50,7 +52,7 @@ class RsyslogCheckTests(checks_test_lib.HostCheckTest):
 
 
 def main(argv):
-  test_lib.GrrTestProgram(argv=argv)
+  test_lib.main(argv)
 
 
 if __name__ == "__main__":

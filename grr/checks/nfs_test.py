@@ -3,8 +3,8 @@
 """Tests for nfs export checks."""
 
 from grr.lib import flags
-from grr.lib.checks import checks_test_lib
 from grr.parsers import config_file
+from grr.server.checks import checks_test_lib
 from grr.test_lib import test_lib
 
 
@@ -14,6 +14,8 @@ class NfsExportsTests(checks_test_lib.HostCheckTest):
 
   @classmethod
   def setUpClass(cls):
+    super(NfsExportsTests, cls).setUpClass()
+
     cls.LoadCheck("nfs.yaml")
 
   def setUp(self, *args, **kwargs):
@@ -58,7 +60,7 @@ class NfsExportsTests(checks_test_lib.HostCheckTest):
 
 
 def main(argv):
-  test_lib.GrrTestProgram(argv=argv)
+  test_lib.main(argv)
 
 
 if __name__ == "__main__":

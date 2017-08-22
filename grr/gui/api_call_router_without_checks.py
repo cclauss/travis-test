@@ -162,13 +162,6 @@ class ApiCallRouterWithoutChecks(api_call_router.ApiCallRouter):
   def ListFlowLogs(self, args, token=None):
     return api_flow.ApiListFlowLogsHandler()
 
-  # Global flows methods.
-  # ====================
-  #
-  def CreateGlobalFlow(self, args, token=None):
-    # TODO(user): split global- and client- flows creation handlers.
-    return api_flow.ApiCreateFlowHandler()
-
   # Cron jobs methods.
   # =================
   #
@@ -383,13 +376,3 @@ class ApiCallRouterWithoutChecks(api_call_router.ApiCallRouter):
 
   def ListApiMethods(self, args, token=None):
     return api_reflection.ApiListApiMethodsHandler(self)
-
-  # Robot methods (methods that provide limited access to the system and
-  # are supposed to be triggered by the scripts).
-  # ====================================================================
-  #
-  def StartRobotGetFilesOperation(self, args, token=None):
-    return api_flow.ApiStartRobotGetFilesOperationHandler()
-
-  def GetRobotGetFilesOperationState(self, args, token=None):
-    return api_flow.ApiGetRobotGetFilesOperationStateHandler()

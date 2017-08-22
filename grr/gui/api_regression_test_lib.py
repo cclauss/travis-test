@@ -25,7 +25,6 @@ from grr.gui import api_regression_http
 from grr.gui import webauth
 from grr.lib import flags
 from grr.lib import registry
-from grr.lib import testing_startup
 from grr.lib import utils
 from grr.test_lib import test_lib
 
@@ -237,7 +236,6 @@ class ApiRegressionGoldenOutputGenerator(object):
     """Prints generated 'golden' output to the stdout."""
 
     sample_data = {}
-    testing_startup.TestInit()
 
     tests = self._GroupRegressionTestsByHandler()
     for handler, test_classes in tests.items():
@@ -271,4 +269,4 @@ def main(argv=None):
   if flags.FLAGS.generate:
     ApiRegressionGoldenOutputGenerator(flags.FLAGS.generate).Generate()
   else:
-    test_lib.GrrTestProgram(argv=argv)
+    test_lib.main(argv)

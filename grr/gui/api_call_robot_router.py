@@ -11,20 +11,20 @@ from grr.gui.api_plugins import client as api_client
 from grr.gui.api_plugins import flow as api_flow
 from grr.gui.api_plugins import reflection as api_reflection
 
-from grr.lib import access_control
-from grr.lib import aff4
-from grr.lib import flow
 from grr.lib import rdfvalue
 from grr.lib import throttle
 from grr.lib import utils
-
-from grr.lib.flows.general import collectors
-from grr.lib.flows.general import file_finder
-
 from grr.lib.rdfvalues import paths
 from grr.lib.rdfvalues import structs as rdf_structs
-
 from grr.proto import api_call_router_pb2
+
+from grr.server import access_control
+from grr.server import aff4
+
+from grr.server import flow
+from grr.server.flows.general import collectors
+
+from grr.server.flows.general import file_finder
 
 
 class RobotRouterSearchClientsParams(rdf_structs.RDFProtoStruct):
@@ -112,7 +112,7 @@ class ApiRobotCreateFlowHandler(api_call_handler_base.ApiCallHandler):
 
     with aff4.FACTORY.Open(
         flow_id, aff4_type=flow.GRRFlow, mode="rw", token=token) as fd:
-      fd.AddLabels(LABEL_NAME_PREFIX + self.robot_id)
+      fd.AddLabel(LABEL_NAME_PREFIX + self.robot_id)
       return api_flow.ApiFlow().InitFromAff4Object(
           fd, flow_id=flow_id.Basename())
 
@@ -257,10 +257,6 @@ class ApiCallRobotRouter(api_call_router.ApiCallRouter):
     return new_args
 
   def CreateFlow(self, args, token=None):
-    # CreateFlow is used for starting both client flows and global flows.
-    # By not allowing client_id to be empty we explicitly forbid starting
-    # global flows through robot router.
-    # TODO(user): introduce separate API call for starting global flows.
     if not args.client_id:
       raise ValueError("client_id must be provided")
 
@@ -333,13 +329,3 @@ class ApiCallRobotRouter(api_call_router.ApiCallRouter):
   # API libraries.
   def ListApiMethods(self, args, token=None):
     return api_reflection.ApiListApiMethodsHandler(self)
-
-  # Robot methods (methods that provide limited access to the system and
-  # are supposed to be triggered by the scripts).
-  # ====================================================================
-  #
-  def StartRobotGetFilesOperation(self, args, token=None):
-    return self.delegate.StartRobotGetFilesOperation(args, token=token)
-
-  def GetRobotGetFilesOperationState(self, args, token=None):
-    return self.delegate.GetRobotGetFilesOperationState(args, token=token)

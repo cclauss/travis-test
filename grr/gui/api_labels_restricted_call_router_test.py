@@ -9,10 +9,10 @@ from grr.gui import api_labels_restricted_call_router as api_router
 from grr.gui.api_plugins import client as api_client
 from grr.gui.api_plugins import flow as api_flow
 
-from grr.lib import access_control
-from grr.lib import aff4
 from grr.lib import flags
-from grr.lib.flows.general import processes
+from grr.server import access_control
+from grr.server import aff4
+from grr.server.flows.general import processes
 from grr.test_lib import acl_test_lib
 
 from grr.test_lib import test_lib
@@ -81,7 +81,7 @@ class ApiLabelsRestrictedCallRouterTest(test_lib.GRRBaseTest,
     client_urns = self.SetupClients(1)
     self.client_urn = client_urns[0]
     with aff4.FACTORY.Open(self.client_urn, mode="rw", token=self.token) as fd:
-      fd.AddLabels("foo", owner="GRR")
+      fd.AddLabel("foo", owner="GRR")
     self.client_id = self.client_urn.Basename()
 
     self.hunt_id = "H:123456"
@@ -136,9 +136,6 @@ class ApiLabelsRestrictedCallRouterTest(test_lib.GRRBaseTest,
     self.CheckMethod(c.ListFlowOutputPluginLogs, client_id=self.client_id)
     self.CheckMethod(c.ListFlowOutputPluginErrors, client_id=self.client_id)
     self.CheckMethod(c.ListFlowLogs, client_id=self.client_id)
-
-    # Global flows methods.
-    self.CheckMethod(c.CreateGlobalFlow)
 
     # Cron jobs methods.
     self.CheckMethod(c.ListCronJobs)
@@ -198,10 +195,6 @@ class ApiLabelsRestrictedCallRouterTest(test_lib.GRRBaseTest,
     self.CheckMethod(c.ListOutputPluginDescriptors)
     self.CheckMethod(c.ListKnownEncodings)
     self.CheckMethod(c.ListApiMethods)
-
-    # Robot methods.
-    self.CheckMethod(c.StartRobotGetFilesOperation)
-    self.CheckMethod(c.GetRobotGetFilesOperationState)
 
     non_checked_methods = (
         set(self.checks.keys()) - set(c.GetAnnotatedMethods().keys()))
