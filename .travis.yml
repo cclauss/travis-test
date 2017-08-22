@@ -28,9 +28,7 @@ matrix:
         - travis/install.sh
       script:
         - source "${HOME}/INSTALL/bin/activate"
-        - grr_run_tests --processes=2
-        - travis/build_templates.sh
-        - travis/deploy_to_gcs.sh
+        - grr_run_tests --tests SqliteDataStoreTest
 
 cache:
   directories:
