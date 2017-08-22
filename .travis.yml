@@ -4,7 +4,7 @@ matrix:
     - os: linux
       language: python
       python: 2.7
-      sudo: false
+      sudo: required
       addons:
         apt:
           packages:
@@ -20,6 +20,7 @@ matrix:
         - PATH=$PATH:${HOME}/google-cloud-sdk/bin
         - CLOUDSDK_CORE_DISABLE_PROMPTS=1
       before_install:
+        - pip install google-compute-engine
         - travis/set_up_gcs_auth.sh
         - travis/install_protobuf.sh "${TRAVIS_OS_NAME}"
         - pip install --upgrade virtualenv
@@ -28,7 +29,7 @@ matrix:
         - travis/install.sh
       script:
         - source "${HOME}/INSTALL/bin/activate"
-        - grr_run_tests --processes=2
+        - grr_run_tests --processes=1
 
     - os: linux
       dist: trusty
