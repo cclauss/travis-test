@@ -28,7 +28,7 @@ matrix:
         - travis/install.sh
       script:
         - source "${HOME}/INSTALL/bin/activate"
-        - grr_run_tests
+        - grr_run_tests --processes=2
 
     - os: linux
       dist: trusty
@@ -77,7 +77,7 @@ matrix:
       script:
         - >-
           sudo docker exec --user "${DOCKER_USER}" "${DOCKER_CONTAINER}"
-          /bin/bash -c "source ${HOME}/INSTALL/bin/activate && grr_run_tests --processes=2"
+          /bin/bash -c "source /home/${DOCKER_USER}/INSTALL/bin/activate && grr_run_tests --processes=2"
 
 cache:
   directories:
