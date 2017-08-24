@@ -8,6 +8,8 @@ if [[ $# != 1 ]]; then
   exit 1
 fi
 
+echo "Source commit is ${SOURCE_COMMIT}. Commit message is ${COMMIT_MSG}"
+
 top_commit="$(git show -s --format=%H)"
 commit_timestamp_secs="$(git show -s --format=%ct)"
 pyscript="
