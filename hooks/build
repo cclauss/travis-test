@@ -1,3 +1,6 @@
 #!/bin/bash
 
-docker build --build-arg SOURCE_COMMIT=$SOURCE_COMMIT -t grr .
+docker build \
+    --build-arg COMMIT_SHA="$(git show -s --format=%H)" \
+    --build-arg COMMIT_TIMESTAMP_SECS="$(git show -s --format=%ct)" \
+    -t grr .
