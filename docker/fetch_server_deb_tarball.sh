@@ -8,10 +8,12 @@ if [[ $# != 1 ]]; then
   exit 1
 fi
 
-echo "Source commit is ${COMMIT_SHA}. Commit message is ${COMMIT_TIMESTAMP_SECS}"
+echo "Source commit is ${COMMIT_SHA}. Commit timestamp is ${COMMIT_TIMESTAMP_SECS}"
 
-top_commit="$(git show -s --format=%H)"
-commit_timestamp_secs="$(git show -s --format=%ct)"
+# TODO(ogaro): Delete.
+top_commit=1a631a36b5bff2dd561f91ecc03624900ebb7297
+commit_timestamp_secs=1503482353
+
 pyscript="
 from datetime import datetime
 print(datetime.utcfromtimestamp(
@@ -24,7 +26,7 @@ if [[ "$(which gcloud)" ]]; then
   gcloud version
 else
   echo "Google Cloud SDK not found. Downloading.."
-  wget https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-sdk-167.0.0-linux-x86_64.tar.gz
+  wget --quiet https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-sdk-167.0.0-linux-x86_64.tar.gz
   tar zxf google-cloud-sdk-167.0.0-linux-x86_64.tar.gz -C /opt
 fi
 
@@ -36,4 +38,4 @@ if [[ "${tarball_exists}" != 'true' ]]; then
   exit 2
 fi
 
-gsutil cp "${travis_tarball}" $1
+gsutil cp "${travis_tarball}" "$1"
