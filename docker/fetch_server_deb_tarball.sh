@@ -28,6 +28,7 @@ else
   echo "Google Cloud SDK not found. Downloading.."
   wget --quiet https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-sdk-167.0.0-linux-x86_64.tar.gz
   tar zxf google-cloud-sdk-167.0.0-linux-x86_64.tar.gz -C /opt
+  rm google-cloud-sdk-167.0.0-linux-x86_64.tar.gz
 fi
 
 travis_tarball="gs://autobuilds.grr-response.com/${commit_timestamp}_${top_commit}/travis_job_*_server_deb/grr-server_*.tar.gz"

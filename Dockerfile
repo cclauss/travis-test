@@ -59,7 +59,9 @@ RUN $GRR_VENV/bin/nodeenv -p --prebuilt --node=7.10.0
 # Copy the GRR code over.
 ADD . /usr/src/grr
 
-RUN cd /usr/src/grr && mkdir /tmp/server-deb-files && docker/fetch_server_deb_tarball.sh /tmp/server-deb-files
+RUN cd /usr/src/grr && \
+    mkdir /tmp/server-deb-files && \
+    docker/fetch_server_deb_tarball.sh /tmp/server-deb-files
 
 WORKDIR /tmp/server-deb-files
 
@@ -74,9 +76,11 @@ RUN $GRR_VENV/bin/pip install --no-index \
     grr/local_pypi/grr-response-test-*.zip \
     grr/local_pypi/grr-response-templates-*.zip
 
-# TODO(ogaro): Delete gcloud sdk and deb-files. Maybe pip cache too?
-
 WORKDIR /
+
+# Clean up (these directories are huge).
+RUN rm -rf /tmp/server-deb-files && \
+    rm -rf /opt/google-cloud-sdk
 
 ENTRYPOINT ["/usr/src/grr/scripts/docker-entrypoint.sh"]
 
