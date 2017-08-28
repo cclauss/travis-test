@@ -1,1 +1,3 @@
+#!/bin/bash
+
 echo "Push: Doing nothing."
