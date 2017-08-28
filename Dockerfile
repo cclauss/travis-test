@@ -32,18 +32,19 @@ RUN apt-get update && \
   wget \
   zip
 
-RUN pip install --upgrade pip virtualenv && virtualenv $GRR_VENV
+RUN pip install --upgrade --no-cache-dir pip virtualenv && virtualenv $GRR_VENV
 
 # Install proto compiler
 RUN mkdir -p /usr/share/protobuf && \
 cd /usr/share/protobuf && \
 wget --quiet "https://github.com/google/protobuf/releases/download/v3.3.0/protoc-3.3.0-linux-x86_64.zip" && \
-unzip protoc-3.3.0-linux-x86_64.zip
+unzip protoc-3.3.0-linux-x86_64.zip && \
+rm protoc-3.3.0-linux-x86_64.zip
 
 # TODO(ogaro) Stop hard-coding the node version to install
 # when a Linux node-sass binary compatible with node v8.0.0 is
 # available: https://github.com/sass/node-sass/pull/1969
-RUN $GRR_VENV/bin/pip install --upgrade wheel six setuptools nodeenv && \
+RUN $GRR_VENV/bin/pip install --upgrade --no-cache-dir wheel six setuptools nodeenv && \
     $GRR_VENV/bin/nodeenv -p --prebuilt --node=7.10.0 && \
     echo '{ "allow_root": true }' > /root/.bowerrc
 
