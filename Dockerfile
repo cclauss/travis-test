@@ -36,7 +36,7 @@ RUN apt-get update && \
   wget \
   zip
 
-RUN pip install --upgrade pip virtualenv
+RUN pip install --upgrade pip virtualenv && virtualenv $GRR_VENV
 
 # Install proto compiler
 RUN mkdir -p /usr/share/protobuf && \
@@ -44,43 +44,17 @@ cd /usr/share/protobuf && \
 wget --quiet "https://github.com/google/protobuf/releases/download/v3.3.0/protoc-3.3.0-linux-x86_64.zip" && \
 unzip protoc-3.3.0-linux-x86_64.zip
 
-# Make sure Bower will be able to run as root.
-RUN echo '{ "allow_root": true }' > /root/.bowerrc
-
-RUN virtualenv $GRR_VENV
-
-RUN $GRR_VENV/bin/pip install --upgrade wheel six setuptools nodeenv
-
 # TODO(ogaro) Stop hard-coding the node version to install
 # when a Linux node-sass binary compatible with node v8.0.0 is
 # available: https://github.com/sass/node-sass/pull/1969
-RUN $GRR_VENV/bin/nodeenv -p --prebuilt --node=7.10.0
+RUN $GRR_VENV/bin/pip install --upgrade wheel six setuptools nodeenv && \
+    $GRR_VENV/bin/nodeenv -p --prebuilt --node=7.10.0 && \
+    echo '{ "allow_root": true }' > /root/.bowerrc
 
 # Copy the GRR code over.
 ADD . /usr/src/grr
 
-RUN cd /usr/src/grr && \
-    mkdir /tmp/server-deb-files && \
-    docker/fetch_server_deb_tarball.sh /tmp/server-deb-files
-
-WORKDIR /tmp/server-deb-files
-
-RUN tar xzf *.tar.gz
-
-RUN $GRR_VENV/bin/pip install --no-index \
-    --find-links=grr/local_pypi \
-    grr/local_pypi/grr-response-core-*.zip \
-    grr/local_pypi/grr-response-client-*.zip \
-    grr/local_pypi/grr-api-client-*.zip \
-    grr/local_pypi/grr-response-server-*.zip \
-    grr/local_pypi/grr-response-test-*.zip \
-    grr/local_pypi/grr-response-templates-*.zip
-
-WORKDIR /
-
-# Clean up (these directories are huge).
-RUN rm -rf /tmp/server-deb-files && \
-    rm -rf /opt/google-cloud-sdk
+RUN /usr/src/grr/docker/install_grr_from_gcs.sh
 
 ENTRYPOINT ["/usr/src/grr/scripts/docker-entrypoint.sh"]
 

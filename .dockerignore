@@ -14,8 +14,8 @@
 *_pb2.*
 */*_pb2.*
 */*/*_pb2.*
-.git
-.gitignore
+#.git
+#.gitignore
 ACKNOWLEDGEMENTS
 AUTHORS
 build
@@ -33,3 +33,4 @@ README
 README.md
 travis
 vagrant
+/tmp
