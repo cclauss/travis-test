@@ -7,7 +7,11 @@ WORK_DIR=/tmp/docker_work_dir
 GCLOUD_SDK_TARBALL='google-cloud-sdk-167.0.0-linux-x86_64.tar.gz'
 GCLOUD_SDK_URL="https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/${GCLOUD_SDK_TARBALL}"
 
+COMMIT_SHA="$(git show -s --format=%H)"
+COMMIT_TIMESTAMP_SECS="$(git show -s --format=%ct)"
+
 # TODO(ogaro): Delete.
+echo "Sha: ${COMMIT_SHA}. Timestamp: ${COMMIT_TIMESTAMP_SECS}"
 COMMIT_SHA=1a631a36b5bff2dd561f91ecc03624900ebb7297
 COMMIT_TIMESTAMP_SECS=1503482353
 

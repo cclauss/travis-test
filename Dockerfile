@@ -13,12 +13,8 @@ FROM ubuntu:xenial
 
 LABEL maintainer="grr-dev@googlegroups.com"
 
-ARG COMMIT_SHA
-ARG COMMIT_TIMESTAMP_SECS
-
 ENV GRR_VENV /usr/share/grr-server
 ENV PROTOC /usr/share/protobuf/bin/protoc
-ENV PATH /opt/google-cloud-sdk/bin:${PATH}
 
 SHELL ["/bin/bash", "-c"]
 
@@ -54,7 +50,7 @@ RUN $GRR_VENV/bin/pip install --upgrade wheel six setuptools nodeenv && \
 # Copy the GRR code over.
 ADD . /usr/src/grr
 
-RUN /usr/src/grr/docker/install_grr_from_gcs.sh
+RUN cd /usr/src/grr && /usr/src/grr/docker/install_grr_from_gcs.sh
 
 ENTRYPOINT ["/usr/src/grr/scripts/docker-entrypoint.sh"]
 
