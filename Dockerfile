@@ -1,4 +1,14 @@
 # A Docker container capable of running all GRR components.
+#
+# Run the container with:
+#
+# docker run \
+#    -e EXTERNAL_HOSTNAME="localhost" \
+#    -e ADMIN_PASSWORD="demo" \
+#    -p 0.0.0.0:8000:8000 \
+#    -p 0.0.0.0:8080:8080 \
+#    grrdocker/grr
+
 FROM ubuntu:xenial
 
 LABEL maintainer="grr-dev@googlegroups.com"

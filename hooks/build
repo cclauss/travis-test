@@ -3,4 +3,4 @@
 docker build \
     --build-arg COMMIT_SHA="$(git show -s --format=%H)" \
     --build-arg COMMIT_TIMESTAMP_SECS="$(git show -s --format=%ct)" \
-    -t grr .
+    -t demonchild2112/grr .
