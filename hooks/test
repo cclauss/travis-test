@@ -1,3 +1,34 @@
 #!/bin/bash
 
-echo "Test: Doing nothing."
+apt update && apt install -y \
+    debhelper \
+    default-jre \
+    dpkg-dev \
+    libffi-dev \
+    libssl-dev \
+    python-dev \
+    python-pip \
+    rpm \
+    wget \
+    zip
+
+# Run demo container in background and send its logs to the systemd journal.
+docker run -d \
+    -e EXTERNAL_HOSTNAME="localhost" \
+    -e ADMIN_PASSWORD="demo" \
+    -p 0.0.0.0:8000:8000 \
+    -p 0.0.0.0:8080:8080 \
+    --log-driver=journald \
+    --name grr_container \
+    demonchild2112/grr
+
+echo "Waiting for container to start.."
+sleep 60
+
+docker cp grr_container:/usr/share/grr-server/executables/installers/grr_3.2.0.0_amd64.deb .
+
+dpkg -i grr_3.2.0.0_amd64.deb
+
+service grr status
+
+docker logs grr_docker
