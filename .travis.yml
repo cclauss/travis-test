@@ -31,3 +31,70 @@ matrix:
         - grr_run_tests --processes=2
         - travis/build_templates.sh
         - travis/deploy_to_gcs.sh
+
+    # 64-bit xenial Docker container, for building server debs.
+    #
+    # Building a server deb in the trusty host did not work out so well -
+    # The build would fail with 'error: [Errno 11] Resource temporarily
+    # unavailable' after a bunch of file-copy operations. That doesn't happen
+    # inside the container.
+    - os: linux
+      dist: trusty
+      sudo: required
+      env:
+        - GCS_TAG=server_deb
+        - GCS_BUCKET=autobuilds.grr-response.com
+        - DOCKER_IMG=ubuntu:xenial
+        - DOCKER_CONTAINER=xenial_64bit_container
+        - DOCKER_USER=grrbot
+        - PATH=$PATH:${HOME}/google-cloud-sdk/bin
+        - CLOUDSDK_CORE_DISABLE_PROMPTS=1
+      before_install:
+        - pip install google-compute-engine
+        - travis/set_up_gcs_auth.sh
+        - >-
+          sudo docker run -dit
+          --volume "${PWD}:/mnt/grr"
+          --workdir /mnt/grr
+          --env DOCKER_USER="${DOCKER_USER}"
+          --env TRAVIS_OS_NAME="${TRAVIS_OS_NAME}"
+          --env PROTOC="/home/${DOCKER_USER}/protobuf/bin/protoc"
+          --env TRAVIS_COMMIT="${TRAVIS_COMMIT}"
+          --name "${DOCKER_CONTAINER}"
+          "${DOCKER_IMG}"
+        - >-
+          sudo docker exec "${DOCKER_CONTAINER}" apt-get update
+        - >-
+          sudo docker exec "${DOCKER_CONTAINER}"
+          apt-get install -y fakeroot debhelper libffi-dev libssl-dev python-dev
+          python-pip wget openjdk-8-jdk zip git devscripts dh-systemd
+          dh-virtualenv libc6-i386 lib32z1 asciidoc
+        - >-
+          sudo docker exec "${DOCKER_CONTAINER}"
+          pip install --upgrade pip virtualenv
+        - sudo docker exec "${DOCKER_CONTAINER}" travis/set_up_test_user.sh
+        - >-
+          sudo docker exec --user "${DOCKER_USER}" "${DOCKER_CONTAINER}"
+          travis/install_protobuf.sh "${TRAVIS_OS_NAME}"
+        - >-
+          sudo docker exec --user "${DOCKER_USER}" "${DOCKER_CONTAINER}"
+          virtualenv "/home/${DOCKER_USER}/INSTALL"
+      install:
+        - >-
+          sudo docker exec --user "${DOCKER_USER}" "${DOCKER_CONTAINER}"
+          travis/install.sh
+      script:
+        - >-
+          travis/fetch_client_templates.sh &&
+
+          sudo docker exec --user "${DOCKER_USER}" "${DOCKER_CONTAINER}"
+          travis/build_local_pyindex.sh &&
+
+          sudo docker exec "${DOCKER_CONTAINER}"
+          travis/build_server_deb.sh && `# Needs to be run as root.`
+
+          travis/deploy_to_gcs.sh &&
+
+          `# Trigger build of a new GRR Docker image (grrdocker/grr)`
+          `# See https://hub.docker.com/r/grrdocker/grr/~/settings/automated-builds/`
+          curl -H "Content-Type: application/json" --data '{"docker_tag": "latest"}' -X POST https://registry.hub.docker.com/u/grrdocker/grr/trigger/4499c4d4-4a8b-48da-bc95-5dbab39be545/
