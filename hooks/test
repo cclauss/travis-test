@@ -2,6 +2,28 @@
 
 set -e
 
+CONTAINER=grr_container
+MAX_START_WAIT_SECS=300
+
+function wait_for_container_to_start() {
+  poll_start=$(date +%s)
+  while true; do
+    ready_msg="$(docker logs ${CONTAINER} 2>&1 | grep 'Admin UI gui is at http://localhost:8000')"
+    if [[ ! -z "${ready_msg}" ]]; then
+      break
+    fi
+    secs_elapsed=$(( $(date +%s) - $poll_start ))
+    if [[ $secs_elapsed -gt $MAX_START_WAIT_SECS ]]; then
+      echo "Error: Container has not started after ${MAX_START_WAIT_SECS} seconds."
+      exit 1
+    fi
+    echo 'Container is not ready. Sleeping for 5 seconds..'
+    sleep 5
+  done
+  secs_elapsed=$(( $(date +%s) - $poll_start ))
+  echo "Container started after ~ ${secs_elapsed} seconds."
+}
+
 apt update && apt install -y \
     debhelper \
     default-jre \
@@ -21,16 +43,17 @@ docker run -d \
     -p 0.0.0.0:8000:8000 \
     -p 0.0.0.0:8080:8080 \
     --log-driver=journald \
-    --name grr_container \
+    --name "${CONTAINER}" \
     demonchild2112/grr
 
-echo "Waiting for container to start.."
-sleep 60
+wait_for_container_to_start
 
 docker cp grr_container:/usr/share/grr-server/executables/installers/grr_3.2.0.0_amd64.deb .
 
 dpkg -i grr_3.2.0.0_amd64.deb
 
 service grr status
+
+sleep 5
 
 docker logs grr_docker
