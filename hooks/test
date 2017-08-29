@@ -1,7 +1,6 @@
 #!/bin/bash
 
 set -e
-set -x
 
 CONTAINER=grr_container
 MAX_START_WAIT_SECS=300
@@ -58,14 +57,12 @@ function start_container() {
 
 start_container
 
+install_deps
+
 wait_for_container_to_start
 
-#docker cp grr_container:/usr/share/grr-server/executables/installers/grr_3.2.0.0_amd64.deb .
+docker cp grr_container:/usr/share/grr-server/executables/installers/grr_3.2.0.0_amd64.deb .
 
-#dpkg -i grr_3.2.0.0_amd64.deb
+dpkg -i grr_3.2.0.0_amd64.deb
 
-#service grr status
-
-#sleep 5
-
-#docker logs grr_docker
+service grr status
