@@ -22,7 +22,7 @@ function wait_for_container_to_start() {
     echo 'Container is not ready. Sleeping for 5 seconds..'
     sleep 5
   done
-  echo "Container is up and running."
+  echo "Container is ready."
 }
 
 function install_deps() {
@@ -35,7 +35,6 @@ function install_deps() {
       libssl-dev \
       python-dev \
       python-pip \
-      rpm \
       wget \
       zip
 }
@@ -78,4 +77,4 @@ service grr status
 
 sleep 20
 
-docker exec "${GRR_CONTAINER}" /usr/share/grr-server/bin/grr_console --code_to_execute "print(client_index.CreateClientIndex().LookupClients([]))"
+docker exec "${CONTAINER}" /usr/share/grr-server/bin/grr_console --code_to_execute "print(client_index.CreateClientIndex().LookupClients([]))"
