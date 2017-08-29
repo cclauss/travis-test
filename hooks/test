@@ -24,6 +24,8 @@ function wait_for_container_to_start() {
   echo "Container started after ~ ${secs_elapsed} seconds."
 }
 
+echo "Installing dependencies.."
+
 apt update && apt install -y \
     debhelper \
     default-jre \
@@ -36,15 +38,19 @@ apt update && apt install -y \
     wget \
     zip
 
+echo "Starting container.."
+
 # Run demo container in background and send its logs to the systemd journal.
 docker run -d \
-    -e EXTERNAL_HOSTNAME="localhost" \
-    -e ADMIN_PASSWORD="demo" \
-    -p 0.0.0.0:8000:8000 \
-    -p 0.0.0.0:8080:8080 \
+    --env EXTERNAL_HOSTNAME="localhost" \
+    --env ADMIN_PASSWORD="demo" \
+    --publish 0.0.0.0:8000:8000 \
+    --publish 0.0.0.0:8080:8080 \
     --log-driver=journald \
     --name "${CONTAINER}" \
     demonchild2112/grr
+
+echo "Waiting for container to start.."
 
 wait_for_container_to_start
 
