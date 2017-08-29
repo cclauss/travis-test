@@ -57,25 +57,29 @@ function start_container() {
 
 start_container
 
+which grep
+
+grep --version
+
 sleep 5
 
 echo "Printing logs.."
 
-docker logs "${CONTAINER}" 2>&1
+#docker logs "${CONTAINER}" 2>&1
 
-sleep 5
+#sleep 5
 
 docker logs "${CONTAINER}" 1> logs.txt
 
-cat logs.txt
+#cat logs.txt | sed ''
 
-cat logs.txt | sed ''
+#cat logs.txt | grep 'Admin UI gui is at http://localhost:8000'
 
-cat logs.txt | grep 'Admin UI gui is at http://localhost:8000'
+#ready_msg="$(docker logs ${CONTAINER} 2>&1 | grep 'Admin UI gui is at http://localhost:8000')"
 
-sleep 5
+grep -e 'Admin UI gui' logs.txt
 
-ready_msg="$(docker logs ${CONTAINER} 2>&1 | grep 'Admin UI gui is at http://localhost:8000')"
+ready_msg="$(grep -e 'Admin UI gui' logs.txt)"
 
 echo $ready_msg
 
