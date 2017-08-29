@@ -77,9 +77,9 @@ docker logs "${CONTAINER}" 1> logs.txt
 
 #ready_msg="$(docker logs ${CONTAINER} 2>&1 | grep 'Admin UI gui is at http://localhost:8000')"
 
-grep -e 'Admin UI gui' logs.txt
+perl -wln -e 'print if /\bAdmin UI gui is at\b/' logs.txt
 
-ready_msg="$(grep -e 'Admin UI gui' logs.txt)"
+ready_msg="$(perl -wln -e 'print if /\bAdmin UI gui is at\b/' logs.txt)"
 
 echo $ready_msg
 
