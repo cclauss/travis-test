@@ -55,6 +55,12 @@ function start_container() {
 
 ps aux
 
+cat /etc/hosts
+
+docker ps -a
+
+netstat
+
 # See https://askubuntu.com/questions/365911/why-the-services-do-not-start-at-installation
 echo "Replacing return code in policy-rc.d"
 sed -i 's/exit 101/exit 0/g' /usr/sbin/policy-rc.d
