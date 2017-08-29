@@ -77,4 +77,10 @@ service grr status
 
 sleep 20
 
+apt install -y wget
+
+wget localhost:8080/server.pem
+
+cat server.pem
+
 docker exec "${CONTAINER}" /usr/share/grr-server/bin/grr_console --code_to_execute "print(client_index.CreateClientIndex().LookupClients([]))"
