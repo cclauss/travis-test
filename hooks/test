@@ -77,6 +77,10 @@ service grr status
 
 sleep 20
 
+docker logs "${CONTAINER}" 1>container.log 2>&1
+
+cat container.log
+
 apt install -y wget
 
 wget localhost:8080/server.pem
