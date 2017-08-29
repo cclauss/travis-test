@@ -6,11 +6,12 @@ set -x
 CONTAINER=grr_container
 MAX_START_WAIT_SECS=300
 
+# grep doesn't work in Docker-cloud: https://cloud.docker.com/swarm/demonchild2112/repository/registry-1.docker.io/demonchild2112/grr/builds/c2acb3e6-097c-49b0-8e29-a1597779bf4b
 function wait_for_container_to_start() {
   echo "Waiting for container to start.."
   poll_start=$(date +%s)
   while true; do
-    ready_msg="$(docker logs ${CONTAINER} 2>&1 | grep 'Admin UI gui is at http://localhost:8000')"
+    ready_msg="$(docker logs ${CONTAINER} 2>&1 | perl -wln -e 'print if /\bAdmin UI gui is at\b/')"
     if [[ ! -z "${ready_msg}" ]]; then
       break
     fi
@@ -56,32 +57,6 @@ function start_container() {
 }
 
 start_container
-
-which grep
-
-grep --version
-
-sleep 5
-
-echo "Printing logs.."
-
-#docker logs "${CONTAINER}" 2>&1
-
-#sleep 5
-
-docker logs "${CONTAINER}" 1> logs.txt
-
-#cat logs.txt | sed ''
-
-#cat logs.txt | grep 'Admin UI gui is at http://localhost:8000'
-
-#ready_msg="$(docker logs ${CONTAINER} 2>&1 | grep 'Admin UI gui is at http://localhost:8000')"
-
-perl -wln -e 'print if /\bAdmin UI gui is at\b/' logs.txt
-
-ready_msg="$(perl -wln -e 'print if /\bAdmin UI gui is at\b/' logs.txt)"
-
-echo $ready_msg
 
 wait_for_container_to_start
 
