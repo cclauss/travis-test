@@ -65,7 +65,13 @@ docker logs "${CONTAINER}" 2>&1
 
 sleep 5
 
-docker logs "${CONTAINER}" 2>&1 | grep 'Admin UI gui is at http://localhost:8000'
+docker logs "${CONTAINER}" 1> logs.txt
+
+cat logs.txt
+
+cat logs.txt | sed ''
+
+cat logs.txt | grep 'Admin UI gui is at http://localhost:8000'
 
 sleep 5
 
