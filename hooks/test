@@ -65,7 +65,7 @@ cat /usr/sbin/policy-rc.d
 
 start_container
 
-install_deps
+# install_deps
 
 wait_for_container_to_start
 
