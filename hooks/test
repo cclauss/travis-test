@@ -22,8 +22,7 @@ function wait_for_container_to_start() {
     echo 'Container is not ready. Sleeping for 5 seconds..'
     sleep 5
   done
-  secs_elapsed=$(( $(date +%s) - $poll_start ))
-  echo "Container started after ~ ${secs_elapsed} seconds."
+  echo "Container is up and running."
 }
 
 function install_deps() {
@@ -55,6 +54,16 @@ function start_container() {
       demonchild2112/grr
 }
 
+ps aux
+
+cat /usr/sbin/policy-rc.d
+
+# See https://askubuntu.com/questions/365911/why-the-services-do-not-start-at-installation
+echo "Replacing return code in policy-rc.d"
+sed -i 's/exit 101/exit 0/g' /usr/sbin/policy-rc.d
+
+cat /usr/sbin/policy-rc.d
+
 start_container
 
 install_deps
@@ -66,3 +75,5 @@ docker cp grr_container:/usr/share/grr-server/executables/installers/grr_3.2.0.0
 dpkg -i grr_3.2.0.0_amd64.deb
 
 service grr status
+
+docker exec grr_container /usr/share/grr-server/bin/grr_console --code_to_execute "print(client_index.CreateClientIndex().LookupClients([]))"
