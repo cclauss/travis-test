@@ -46,8 +46,8 @@ function start_container() {
   docker run -d \
       --env EXTERNAL_HOSTNAME="localhost" \
       --env ADMIN_PASSWORD="demo" \
-      --publish 0.0.0.0:8000:8000 \
-      --publish 0.0.0.0:8080:8080 \
+      --publish 127.0.0.1:8000:8000 \
+      --publish 127.0.0.1:8080:8080 \
       --log-driver=journald \
       --name "${CONTAINER}" \
       demonchild2112/grr
@@ -55,13 +55,9 @@ function start_container() {
 
 ps aux
 
-cat /usr/sbin/policy-rc.d
-
 # See https://askubuntu.com/questions/365911/why-the-services-do-not-start-at-installation
 echo "Replacing return code in policy-rc.d"
 sed -i 's/exit 101/exit 0/g' /usr/sbin/policy-rc.d
-
-cat /usr/sbin/policy-rc.d
 
 start_container
 
