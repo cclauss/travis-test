@@ -1,6 +1,7 @@
 #!/bin/bash
 
 set -e
+set -x
 
 CONTAINER=grr_container
 MAX_START_WAIT_SECS=300
@@ -62,7 +63,7 @@ echo "Printing logs.."
 
 docker logs "${CONTAINER}"
 
-#wait_for_container_to_start
+wait_for_container_to_start
 
 #docker cp grr_container:/usr/share/grr-server/executables/installers/grr_3.2.0.0_amd64.deb .
 
