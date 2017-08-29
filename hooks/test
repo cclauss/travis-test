@@ -61,7 +61,17 @@ sleep 5
 
 echo "Printing logs.."
 
-docker logs "${CONTAINER}"
+docker logs "${CONTAINER}" 2>&1
+
+sleep 5
+
+docker logs "${CONTAINER}" 2>&1 | grep 'Admin UI gui is at http://localhost:8000'
+
+sleep 5
+
+ready_msg="$(docker logs ${CONTAINER} 2>&1 | grep 'Admin UI gui is at http://localhost:8000')"
+
+echo $ready_msg
 
 wait_for_container_to_start
 
