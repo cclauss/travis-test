@@ -76,4 +76,6 @@ dpkg -i grr_3.2.0.0_amd64.deb
 
 service grr status
 
-docker exec grr_container /usr/share/grr-server/bin/grr_console --code_to_execute "print(client_index.CreateClientIndex().LookupClients([]))"
+sleep 20
+
+docker exec "${GRR_CONTAINER}" /usr/share/grr-server/bin/grr_console --code_to_execute "print(client_index.CreateClientIndex().LookupClients([]))"
