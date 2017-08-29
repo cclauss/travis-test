@@ -4,6 +4,9 @@ set -e
 
 CONTAINER=grr_container
 MAX_START_WAIT_SECS=300
+DOCKER_IP_NAME_PAIR=( $(tail /etc/hosts -n 1 | sed 's/\t/ /g') )
+DOCKER_IP="${DOCKER_IP_NAME_PAIR[0]}"
+DOCKER_HOSTNAME="${DOCKER_IP_NAME_PAIR[1]}"
 
 # grep doesn't work in Docker-cloud: https://cloud.docker.com/swarm/demonchild2112/repository/registry-1.docker.io/demonchild2112/grr/builds/c2acb3e6-097c-49b0-8e29-a1597779bf4b
 function wait_for_container_to_start() {
@@ -41,13 +44,13 @@ function install_deps() {
 
 function start_container() {
   echo "Starting container.."
-
+  echo "Docker ip-hostname: ${DOCKER_IP}-${DOCKER_HOSTNAME}"
   # Run demo container in background and send its logs to the systemd journal.
   docker run -d \
-      --env EXTERNAL_HOSTNAME="localhost" \
+      --env EXTERNAL_HOSTNAME="${DOCKER_HOSTNAME}" \
       --env ADMIN_PASSWORD="demo" \
-      --publish 127.0.0.1:8000:8000 \
-      --publish 127.0.0.1:8080:8080 \
+      --publish ${DOCKER_IP}:8000:8000 \
+      --publish ${DOCKER_IP}:8080:8080 \
       --log-driver=journald \
       --name "${CONTAINER}" \
       demonchild2112/grr
@@ -85,7 +88,7 @@ apt install -y wget
 
 docker ps -a
 
-wget localhost:8080/server.pem
+wget ${DOCKER_IP}:8080/server.pem
 
 cat server.pem
 
