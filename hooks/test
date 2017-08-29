@@ -6,6 +6,7 @@ CONTAINER=grr_container
 MAX_START_WAIT_SECS=300
 
 function wait_for_container_to_start() {
+  echo "Waiting for container to start.."
   poll_start=$(date +%s)
   while true; do
     ready_msg="$(docker logs ${CONTAINER} 2>&1 | grep 'Admin UI gui is at http://localhost:8000')"
@@ -24,42 +25,51 @@ function wait_for_container_to_start() {
   echo "Container started after ~ ${secs_elapsed} seconds."
 }
 
-echo "Installing dependencies.."
+function install_deps() {
+  echo "Installing dependencies.."
+  apt update && apt install -y \
+      debhelper \
+      default-jre \
+      dpkg-dev \
+      libffi-dev \
+      libssl-dev \
+      python-dev \
+      python-pip \
+      rpm \
+      wget \
+      zip
+}
 
-apt update && apt install -y \
-    debhelper \
-    default-jre \
-    dpkg-dev \
-    libffi-dev \
-    libssl-dev \
-    python-dev \
-    python-pip \
-    rpm \
-    wget \
-    zip
+function start_container() {
+  echo "Starting container.."
 
-echo "Starting container.."
+  # Run demo container in background and send its logs to the systemd journal.
+  docker run -d \
+      --env EXTERNAL_HOSTNAME="localhost" \
+      --env ADMIN_PASSWORD="demo" \
+      --publish 0.0.0.0:8000:8000 \
+      --publish 0.0.0.0:8080:8080 \
+      --log-driver=journald \
+      --name "${CONTAINER}" \
+      demonchild2112/grr
+}
 
-# Run demo container in background and send its logs to the systemd journal.
-docker run -d \
-    --env EXTERNAL_HOSTNAME="localhost" \
-    --env ADMIN_PASSWORD="demo" \
-    --publish 0.0.0.0:8000:8000 \
-    --publish 0.0.0.0:8080:8080 \
-    --log-driver=journald \
-    --name "${CONTAINER}" \
-    demonchild2112/grr
-
-echo "Waiting for container to start.."
-
-wait_for_container_to_start
-
-docker cp grr_container:/usr/share/grr-server/executables/installers/grr_3.2.0.0_amd64.deb .
-
-dpkg -i grr_3.2.0.0_amd64.deb
-
-service grr status
+start_container
 
 sleep 5
 
-docker logs grr_docker
+echo "Printing logs.."
+
+docker logs "${CONTAINER}"
+
+#wait_for_container_to_start
+
+#docker cp grr_container:/usr/share/grr-server/executables/installers/grr_3.2.0.0_amd64.deb .
+
+#dpkg -i grr_3.2.0.0_amd64.deb
+
+#service grr status
+
+#sleep 5
+
+#docker logs grr_docker
