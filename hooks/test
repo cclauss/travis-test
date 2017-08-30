@@ -56,40 +56,44 @@ function start_container() {
       demonchild2112/grr
 }
 
-ps aux
-
-cat /etc/hosts
-
-netstat
-
 # See https://askubuntu.com/questions/365911/why-the-services-do-not-start-at-installation
 echo "Replacing return code in policy-rc.d"
 sed -i 's/exit 101/exit 0/g' /usr/sbin/policy-rc.d
 
-start_container
+apt install -y php5 curl
+
+echo "Hello, world" >> index.html
+
+php -S localhost:8080 -t $PWD &
+
+echo "Server is up!"
+
+curl localhost:8080
+
+#start_container
 
 # install_deps
 
-wait_for_container_to_start
+#wait_for_container_to_start
 
-docker cp grr_container:/usr/share/grr-server/executables/installers/grr_3.2.0.0_amd64.deb .
+#docker cp grr_container:/usr/share/grr-server/executables/installers/grr_3.2.0.0_amd64.deb .
 
-dpkg -i grr_3.2.0.0_amd64.deb
+#dpkg -i grr_3.2.0.0_amd64.deb
 
-service grr status
+#service grr status
 
-sleep 20
+#sleep 20
 
-docker logs "${CONTAINER}" 1>container.log 2>&1
+#docker logs "${CONTAINER}" 1>container.log 2>&1
 
-cat container.log
+#cat container.log
 
-apt install -y wget
+#apt install -y wget
 
-docker ps -a
+#docker ps -a
 
-wget ${DOCKER_IP}:8080/server.pem
+#wget ${DOCKER_IP}:8080/server.pem
 
-cat server.pem
+#cat server.pem
 
-docker exec "${CONTAINER}" /usr/share/grr-server/bin/grr_console --code_to_execute "print(client_index.CreateClientIndex().LookupClients([]))"
+#docker exec "${CONTAINER}" /usr/share/grr-server/bin/grr_console --code_to_execute "print(client_index.CreateClientIndex().LookupClients([]))"
