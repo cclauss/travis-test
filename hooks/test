@@ -45,7 +45,9 @@ wait_for_container_to_start
 
 docker cp docker/fake-systemctl.sh $CONTAINER:/bin/systemctl
 
-docker exec $CONTAINER dpkg -i "$(ls /usr/share/grr-server/executables/installers/grr_*_amd64.deb)"
+xenial_installer="$(docker exec $CONTAINER ls /usr/share/grr-server/executables/installers | grep -e grr_.*_amd64.deb)"
+
+docker exec $CONTAINER dpkg -i /usr/share/grr-server/executables/installers/$xenial_installer
 
 echo "Waiting for server to connect to client."
 
