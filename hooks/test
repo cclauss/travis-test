@@ -56,6 +56,8 @@ echo "Fetching client id."
 
 client_id="$(docker exec ${CONTAINER} /usr/share/grr-server/bin/grr_console --code_to_execute 'print(str(client_index.CreateClientIndex().LookupClients([])[0]))')"
 
+docker exec $CONTAINER useradd -m grrbot
+
 docker exec $CONTAINER /usr/share/grr-server/bin/grr_end_to_end_tests --client_ids $client_id 2>&1 | tee xenial_end_to_end.log
 
 #docker exec $CONTAINER sed -i 's/exit 101/exit 0/g' /usr/sbin/policy-rc.d
