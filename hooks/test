@@ -4,9 +4,6 @@ set -e
 
 CONTAINER=grr_container
 MAX_START_WAIT_SECS=300
-DOCKER_IP_NAME_PAIR=( $(tail /etc/hosts -n 1 | sed 's/\t/ /g') )
-DOCKER_IP="${DOCKER_IP_NAME_PAIR[0]}"
-DOCKER_HOSTNAME="${DOCKER_IP_NAME_PAIR[1]}"
 
 # grep doesn't work in Docker-cloud: https://cloud.docker.com/swarm/demonchild2112/repository/registry-1.docker.io/demonchild2112/grr/builds/c2acb3e6-097c-49b0-8e29-a1597779bf4b
 function wait_for_container_to_start() {
@@ -28,53 +25,33 @@ function wait_for_container_to_start() {
   echo "Container is ready."
 }
 
-function install_deps() {
-  echo "Installing dependencies.."
-  apt update && apt install -y \
-      debhelper \
-      default-jre \
-      dpkg-dev \
-      libffi-dev \
-      libssl-dev \
-      python-dev \
-      python-pip \
-      wget \
-      zip
-}
-
 function start_container() {
   echo "Starting container.."
-  echo "Docker ip-hostname: ${DOCKER_IP}-${DOCKER_HOSTNAME}"
+
   # Run demo container in background and send its logs to the systemd journal.
   docker run -d \
-      --env EXTERNAL_HOSTNAME="${DOCKER_HOSTNAME}" \
-      --env ADMIN_PASSWORD="demo" \
-      --publish ${DOCKER_IP}:8000:8000 \
-      --publish ${DOCKER_IP}:8080:8080 \
+      --env EXTERNAL_HOSTNAME=localhost \
+      --env ADMIN_PASSWORD=demo \
+      --publish 0.0.0.0:8000:8000 \
+      --publish 0.0.0.0:8080:8080 \
       --log-driver=journald \
       --name "${CONTAINER}" \
       demonchild2112/grr
 }
 
-# See https://askubuntu.com/questions/365911/why-the-services-do-not-start-at-installation
-echo "Replacing return code in policy-rc.d"
-sed -i 's/exit 101/exit 0/g' /usr/sbin/policy-rc.d
+echo "Current directory is ${PWD}"
 
-apt install -y php5 curl
+echo "Contents:"
 
-echo "Hello, world" >> index.html
-
-php -S localhost:8080 -t $PWD &
-
-echo "Server is up!"
-
-curl localhost:8080
+ls
 
 #start_container
 
-# install_deps
-
 #wait_for_container_to_start
+
+#docker exec $CONTAINER sed -i 's/exit 101/exit 0/g' /usr/sbin/policy-rc.d
+
+# install_deps
 
 #docker cp grr_container:/usr/share/grr-server/executables/installers/grr_3.2.0.0_amd64.deb .
 
