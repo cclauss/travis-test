@@ -1,3 +1,9 @@
 #!/bin/bash
 
-echo "Push: Doing nothing."
+echo "Tarball url is ${GRR_TARBALL_URL}"
+
+ls google-cloud-sdk/bin/gsutil
+
+grr_tarball_exists="$((google-cloud-sdk/bin/gsutil --quiet stat ${GRR_TARBALL_URL} && echo true) || echo false)"
+
+echo "Exists: $grr_tarball_exists"

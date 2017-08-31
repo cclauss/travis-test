@@ -17,7 +17,7 @@ print(datetime.utcfromtimestamp(
 
 COMMIT_TIMESTAMP=$(python -c "${format_git_timestamp}")
 
-GRR_TARBALL_URL="gs://autobuilds.grr-response.com/${COMMIT_TIMESTAMP}_${COMMIT_SHA}/travis_job_*_server_deb/grr-server_*.tar.gz"
+export GRR_TARBALL_URL="gs://autobuilds.grr-response.com/${COMMIT_TIMESTAMP}_${COMMIT_SHA}/travis_job_*_server_deb/grr-server_*.tar.gz"
 
 if [[ -d "${WORK_DIR}" ]]; then
   echo "Deleting existing directory: ${WORK_DIR}"
@@ -31,5 +31,5 @@ tar xzf "${GCLOUD_SDK_TARBALL}"
 grr_tarball_exists="$((google-cloud-sdk/bin/gsutil --quiet stat ${GRR_TARBALL_URL} && echo true) || echo false)"
 if [[ "${grr_tarball_exists}" != 'true' ]]; then
   echo "GRR tarball not found: ${GRR_TARBALL_URL}"
-  exit 1
+  # exit 1
 fi
