@@ -7,11 +7,10 @@ import BaseHTTPServer
 
 import collections
 import json
+import logging
 import socket
 import threading
 
-
-import logging
 
 from grr import config
 from grr.lib import registry
@@ -127,11 +126,12 @@ class StatsServerInit(registry.InitHook):
       logging.info("Starting monitoring server on port %d.", port)
       try:
         # pylint: disable=g-import-not-at-top
-        from grr.lib.local import stats_server
+        from grr.server.local import stats_server
         # pylint: enable=g-import-not-at-top
         server_obj = stats_server.StatsServer(port)
         logging.debug("Using local StatsServer")
       except ImportError:
+        logging.debug("Using default StatsServer")
         server_obj = StatsServer(port)
 
       server_obj.Start()

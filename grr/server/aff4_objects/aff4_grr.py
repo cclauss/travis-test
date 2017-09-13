@@ -2,11 +2,11 @@
 """GRR specific AFF4 objects."""
 
 
+import logging
 import re
 import time
 
 
-import logging
 from grr.client.components.rekall_support import rekall_types as rdf_rekall_types
 from grr.lib import rdfvalue
 from grr.lib import registry
@@ -662,9 +662,9 @@ class VFSFileSymlink(aff4.AFF4Stream):
     return self.delegate.Tell()
 
   def Close(self, sync):
-    super(VFSFileSymlink, self).Close(sync=sync)
+    super(VFSFileSymlink, self).Close()
     if self.delegate:
-      return self.delegate.Close(sync)
+      return self.delegate.Close()
 
   def Write(self):
     raise IOError("VFSFileSymlink not writeable.")

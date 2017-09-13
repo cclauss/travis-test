@@ -179,13 +179,7 @@ class SequentialCollection(object):
   def Delete(self):
     pool = data_store.DB.GetMutationPool(self.token)
     with pool:
-      for subject, _, _ in data_store.DB.ScanAttribute(
-          self.collection_id.Add("Results"),
-          data_store.DataStore.COLLECTION_ATTRIBUTE,
-          token=self.token):
-        pool.DeleteSubject(subject)
-        if pool.Size() > 50000:
-          pool.Flush()
+      pool.CollectionDelete(self.collection_id)
 
 
 class BackgroundIndexUpdater(object):
@@ -286,9 +280,9 @@ class IndexedSequentialCollection(SequentialCollection):
       return
     self._index = {0: (0, 0)}
     self._max_indexed = 0
-    for (index, value, ts) in data_store.DB.CollectionReadIndex(
+    for (index, ts, suffix) in data_store.DB.CollectionReadIndex(
         self.collection_id, token=self.token):
-      self._index[index] = (ts, value)
+      self._index[index] = (ts, suffix)
       self._max_indexed = max(index, self._max_indexed)
 
   def _MaybeWriteIndex(self, i, ts, mutation_pool):

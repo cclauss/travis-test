@@ -1,4 +1,9 @@
-# A Docker container capable of running all GRR components.
+# A Docker image capable of running all GRR components.
+#
+# See https://hub.docker.com/r/grrdocker/grr/
+#
+# We have configured Travis to trigger an image build every time a new server
+# deb is been uploaded to GCS.
 #
 # Run the container with:
 #

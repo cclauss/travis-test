@@ -15,6 +15,7 @@ import calendar
 import collections
 import datetime
 import functools
+import logging
 import posixpath
 import re
 import time
@@ -22,8 +23,6 @@ import zlib
 
 import dateutil
 from dateutil import parser
-
-import logging
 
 from grr.lib import registry
 from grr.lib import utils
@@ -721,8 +720,14 @@ class ByteSize(RDFInteger):
   """
   data_store_type = "unsigned_integer"
 
-  DIVIDERS = dict((("", 1), ("k", 1000), ("m", 1000**2), ("g", 1000**3),
-                   ("ki", 1024), ("mi", 1024**2), ("gi", 1024**3),))
+  DIVIDERS = dict((
+      ("", 1),
+      ("k", 1000),
+      ("m", 1000**2),
+      ("g", 1000**3),
+      ("ki", 1024),
+      ("mi", 1024**2),
+      ("gi", 1024**3),))
 
   REGEX = re.compile("^([0-9.]+)([kmgi]*)b?$")
 
@@ -1034,7 +1039,7 @@ class SessionID(RDFURN):
     # flows session ids like H:123456:hunt.
     allowed_re = re.compile(r"^[-0-9a-zA-Z]+:[0-9a-zA-Z]+(:[0-9a-zA-Z]+)?$")
     if not allowed_re.match(id_str):
-      raise ValueError("Invalid SessionID")
+      raise ValueError("Invalid SessionID: %s" % id_str)
 
 
 class FlowSessionID(SessionID):

@@ -12,6 +12,7 @@ from grr.lib.rdfvalues import client as rdf_client
 from grr.lib.rdfvalues import file_finder as rdf_file_finder
 from grr.lib.rdfvalues import flows as rdf_flows
 from grr.lib.rdfvalues import paths as rdf_paths
+from grr.server import data_store
 from grr.server import file_store
 from grr.server import flow
 from grr.server import server_stubs
@@ -39,11 +40,6 @@ class FileFinder(transfer.MultiGetFileMixin, fingerprint.FingerprintFileMixin,
 
   # Will be used by FingerprintFileMixin.
   fingerprint_file_mixin_client_action = server_stubs.HashFile
-
-  @classmethod
-  def GetDefaultArgs(cls, token=None):
-    _ = token
-    return cls.args_type(paths=[r"c:\windows\system32\notepad.*"])
 
   def Initialize(self):
     super(FileFinder, self).Initialize()
@@ -400,25 +396,26 @@ class ClientFileFinder(flow.GRRFlow):
       raise flow.FlowError(responses.status)
 
     self.state.files_found = len(responses)
-    for response in responses:
-      if response.uploaded_file:
-        self._CreateAFF4ObjectForUploadedFile(response.uploaded_file)
-        # TODO(user): Make the export support UploadedFile directly.
-        # This fixes the export which expects the stat_entry in
-        # response.stat_entry only.
-        response.stat_entry = response.uploaded_file.stat_entry
-      elif response.stat_entry:
-        filesystem.CreateAFF4Object(response.stat_entry, self.client_id,
-                                    self.token)
-      self.SendReply(response)
+    with data_store.DB.GetMutationPool(token=self.token) as pool:
+      for response in responses:
+        if response.uploaded_file:
+          self._CreateAFF4ObjectForUploadedFile(response.uploaded_file)
+          # TODO(user): Make the export support UploadedFile directly.
+          # This fixes the export which expects the stat_entry in
+          # response.stat_entry only.
+          response.stat_entry = response.uploaded_file.stat_entry
+        elif response.stat_entry:
+          filesystem.CreateAFF4Object(
+              response.stat_entry, self.client_id, pool, token=self.token)
+        self.SendReply(response)
 
-      # Publish the new file event to cause the file to be added to the
-      # filestore. This is not time critical so do it when we have spare
-      # capacity.
-      self.Publish(
-          "FileStore.AddFileToStore",
-          response.stat_entry.pathspec.AFF4Path(self.client_id),
-          priority=rdf_flows.GrrMessage.Priority.LOW_PRIORITY)
+        # Publish the new file event to cause the file to be added to the
+        # filestore. This is not time critical so do it when we have spare
+        # capacity.
+        self.Publish(
+            "FileStore.AddFileToStore",
+            response.stat_entry.pathspec.AFF4Path(self.client_id),
+            priority=rdf_flows.GrrMessage.Priority.LOW_PRIORITY)
 
   @flow.StateHandler()
   def End(self, responses):

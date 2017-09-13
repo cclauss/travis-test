@@ -7,13 +7,12 @@ This contains an AFF4 data model implementation.
 import __builtin__
 import abc
 import itertools
+import logging
 import StringIO
 import threading
 import time
 import zlib
 
-
-import logging
 
 from grr import config
 from grr.lib import lexer
@@ -600,8 +599,7 @@ class Factory(object):
            age=NEWEST_TIME,
            token=None,
            limit=None,
-           update_timestamps=False,
-           sync=False):
+           update_timestamps=False):
     """Make a copy of one AFF4 object to a different URN."""
     if token is None:
       token = data_store.default_token
@@ -625,10 +623,8 @@ class Factory(object):
         values.setdefault(predicate, []).append((value, ts))
 
     if values:
-      data_store.DB.MultiSet(
-          new_urn, values, token=token, replace=False, sync=sync)
-
       with data_store.DB.GetMutationPool(token=token) as pool:
+        pool.MultiSet(new_urn, values, replace=False)
         self._UpdateChildIndex(new_urn, pool)
 
   def Open(self,
@@ -1203,7 +1199,6 @@ class Factory(object):
         break
 
   def Flush(self):
-    data_store.DB.Flush()
     self.intermediate_cache.Flush()
 
   # Well known AFF4 paths.
@@ -1842,7 +1837,7 @@ class AFF4Object(object):
 
     self.transaction.UpdateLease(duration)
 
-  def Flush(self, sync=True):
+  def Flush(self):
     """Syncs this object with the data store, maintaining object validity."""
     if self.locked and self.CheckLease() == 0:
       raise LockError("Can not update lease that has already expired.")
@@ -1851,25 +1846,19 @@ class AFF4Object(object):
     self._SyncAttributes()
 
     if self.parent:
-      self.parent.Flush(sync=sync)
+      self.parent.Flush()
 
-  def Close(self, sync=True):
+  def Close(self):
     """Close and destroy the object.
 
     This is similar to Flush, but does not maintain object validity. Hence the
     object should not be interacted with after Close().
 
-    Args:
-       sync: Write the attributes synchronously to the data store.
     Raises:
        LockError: The lease for this object has expired.
     """
     if self.locked and self.CheckLease() == 0:
       raise LockError("Can not update lease that has already expired.")
-
-    # Always sync when in a lock.
-    if self.locked:
-      sync = True
 
     self._WriteAttributes()
 
@@ -1878,7 +1867,7 @@ class AFF4Object(object):
       self.transaction.Release()
 
     if self.parent:
-      self.parent.Close(sync=sync)
+      self.parent.Close()
 
     # Interacting with a closed object is a bug. We need to catch this ASAP so
     # we remove all mode permissions from this object.
@@ -2421,10 +2410,13 @@ class AFF4Volume(AFF4Object):
       Instances for each direct child.
     """
     if children is None:
-      subjects = list(self.ListChildren(limit=limit, age=age))
+      # No age passed here to avoid ignoring indexes that were updated
+      # to a timestamp greater than the object's age.
+      subjects = list(self.ListChildren())
     else:
       subjects = list(children)
     subjects.sort()
+    result_count = 0
     # Read at most limit children at a time.
     while subjects:
       to_read = subjects[:chunk_limit]
@@ -2432,6 +2424,9 @@ class AFF4Volume(AFF4Object):
       for child in FACTORY.MultiOpen(
           to_read, mode=mode, token=self.token, age=age):
         yield child
+        result_count += 1
+        if result_count >= limit:
+          return
 
   @property
   def real_pathspec(self):
@@ -2676,23 +2671,23 @@ class AFF4MemoryStreamBase(AFF4Stream):
   def Seek(self, offset, whence=0):
     self.fd.seek(offset, whence)
 
-  def Flush(self, sync=True):
+  def Flush(self):
     if self._dirty:
       compressed_content = zlib.compress(self.fd.getvalue())
       self.Set(self.Schema.CONTENT(compressed_content))
       self.Set(self.Schema.SIZE(self.size))
 
-    super(AFF4MemoryStreamBase, self).Flush(sync=sync)
+    super(AFF4MemoryStreamBase, self).Flush()
 
-  def Close(self, sync=True):
+  def Close(self):
     if self._dirty:
       compressed_content = zlib.compress(self.fd.getvalue())
       self.Set(self.Schema.CONTENT(compressed_content))
       self.Set(self.Schema.SIZE(self.size))
 
-    super(AFF4MemoryStreamBase, self).Close(sync=sync)
+    super(AFF4MemoryStreamBase, self).Close()
 
-  def OverwriteAndClose(self, compressed_data, size, sync=True):
+  def OverwriteAndClose(self, compressed_data, size):
     """Directly overwrite the current contents.
 
     Replaces the data currently in the stream with compressed_data,
@@ -2701,11 +2696,10 @@ class AFF4MemoryStreamBase(AFF4Stream):
     Args:
       compressed_data: The data to write, must be zlib compressed.
       size: The uncompressed size of the data.
-      sync: Whether the close should be synchronous.
     """
     self.Set(self.Schema.CONTENT(compressed_data))
     self.Set(self.Schema.SIZE(size))
-    super(AFF4MemoryStreamBase, self).Close(sync=sync)
+    super(AFF4MemoryStreamBase, self).Close()
 
   def GetContentAge(self):
     return self.Get(self.Schema.CONTENT).age
@@ -3035,7 +3029,7 @@ class AFF4ImageBase(AFF4Stream):
     self.size = max(self.size, self.offset)
     self.content_last = rdfvalue.RDFDatetime.Now()
 
-  def Flush(self, sync=True):
+  def Flush(self):
     """Sync the chunk cache to storage."""
     if self._dirty:
       self.Set(self.Schema.SIZE(self.size))
@@ -3044,15 +3038,11 @@ class AFF4ImageBase(AFF4Stream):
 
     # Flushing the cache will write all chunks to the blob store.
     self.chunk_cache.Flush()
-    super(AFF4ImageBase, self).Flush(sync=sync)
+    super(AFF4ImageBase, self).Flush()
 
-  def Close(self, sync=True):
-    """This method is called to sync our data into storage.
-
-    Args:
-      sync: Should flushing be synchronous.
-    """
-    self.Flush(sync=sync)
+  def Close(self):
+    """This method is called to sync our data into storage."""
+    self.Flush()
 
   def GetContentAge(self):
     # TODO(user): make CONTENT_LAST reliable. For some reason, sometimes

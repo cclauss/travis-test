@@ -7,10 +7,9 @@ approval or token handling.
 
 import csv
 import getpass
+import logging
 import os
 import time
-
-import logging
 
 from grr.lib import rdfvalue
 from grr.lib import type_info
@@ -250,7 +249,7 @@ def ApprovalCreateRaw(aff4_path,
       approval_request.Schema.APPROVER("%s1-raw" % token.username))
   approval_request.AddAttribute(
       approval_request.Schema.APPROVER("%s-raw2" % token.username))
-  approval_request.Close(sync=True)
+  approval_request.Close()
 
 
 def ApprovalRevokeRaw(aff4_path, token):

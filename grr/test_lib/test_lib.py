@@ -7,6 +7,7 @@ import cProfile
 import datetime
 import email
 import functools
+import logging
 import os
 import pdb
 import platform
@@ -22,17 +23,12 @@ import unittest
 import mock
 import pkg_resources
 
-import logging
 import unittest
 
 from grr import config
 
 from grr.client import client_utils_linux
 from grr.client import comms
-# TODO(user): removed unused import.
-# pylint: disable=unused-import
-from grr.client import local as _
-# pylint: enable=unused-import
 from grr.lib import flags
 from grr.lib import rdfvalue
 from grr.lib import registry

@@ -154,8 +154,6 @@ parser_signer.add_argument(
     required=True,
     help="Where to write the new template with signed libs.")
 
-args = parser.parse_args()
-
 
 class TemplateBuilder(object):
   """Build client templates."""
@@ -218,6 +216,7 @@ class TemplateBuilder(object):
 
 
 def SpawnProcess(popen_args, passwd=None):
+  """Spawns a process."""
   if passwd is not None:
     # We send the password via pipe to avoid creating a process with the
     # password as an argument that will get logged on some systems.
@@ -372,14 +371,15 @@ def GetClientConfig(filename):
 
 def main(_):
   """Launch the appropriate builder."""
-  if flags.FLAGS.subparser_name == "generate_client_config":
+  args = flags.FLAGS
+  if args.subparser_name == "generate_client_config":
     # We don't need a full init to just build a config.
-    GetClientConfig(flags.FLAGS.client_config_output)
+    GetClientConfig(args.client_config_output)
     return
 
-  # We deliberately use flags.FLAGS.context because client_startup.py pollutes
+  # We deliberately use args.context because client_startup.py pollutes
   # grr_config.CONFIG.context with the running system context.
-  context = flags.FLAGS.context
+  context = args.context
   context.append("ClientBuilder Context")
   client_startup.ClientInit()
 
@@ -390,7 +390,7 @@ def main(_):
   logger.handlers = [handler]
 
   if args.subparser_name == "build":
-    TemplateBuilder().BuildTemplate(context=context, output=flags.FLAGS.output)
+    TemplateBuilder().BuildTemplate(context=context, output=args.output)
   elif args.subparser_name == "repack":
     if args.debug_build:
       context.append("DebugClientBuild Context")
@@ -406,13 +406,23 @@ def main(_):
   elif args.subparser_name == "repack_multiple":
 
     # Resolve globs manually on Windows.
-    templates = args.templates
-    if templates and "*" in templates[0]:
-      templates = glob.glob(templates[0])
+    templates = []
+    for template in args.templates:
+      if "*" in template:
+        templates.extend(glob.glob(template))
+      else:
+        # This could go through glob but then we'd swallow errors for
+        # non existing files.
+        templates.append(template)
 
-    repack_configs = args.repack_configs
-    if repack_configs and "*" in repack_configs[0]:
-      repack_configs = glob.glob(repack_configs[0])
+    repack_configs = []
+    for repack_config in args.repack_configs:
+      if "*" in repack_config:
+        repack_configs.extend(glob.glob(repack_config))
+      else:
+        # This could go through glob but then we'd swallow errors for
+        # non existing files.
+        repack_configs.append(repack_config)
 
     MultiTemplateRepacker().RepackTemplates(
         repack_configs,

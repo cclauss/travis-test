@@ -70,8 +70,8 @@ Examples:
 
 
 import base64
+import logging
 import os
-
 import pdb
 import posixpath
 import Queue
@@ -86,8 +86,6 @@ import psutil
 import requests
 
 from google.protobuf import json_format
-
-import logging
 
 from grr import config
 from grr.client import actions
@@ -1102,7 +1100,7 @@ class GRRThreadedWorker(GRRClientWorker, threading.Thread):
                     message,
                     priority=rdf_flows.GrrMessage.Priority.MEDIUM_PRIORITY,
                     blocking=True):
-    """Push the Serialized Message on the output queue."""
+    """Pushes the Serialized Message on the output queue."""
     self._out_queue.Put(message, priority=priority, block=blocking)
 
   def QueueMessages(self, messages):

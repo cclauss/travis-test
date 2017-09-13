@@ -5,10 +5,10 @@
 
 import base64
 import inspect
+import logging
 import numbers
 
 
-import logging
 from grr.client.components.rekall_support import rekall_types as rdf_rekall_types
 
 from grr.gui.api_plugins import output_plugin as api_output_plugin
@@ -473,7 +473,9 @@ class ApiRDFProtoStructRenderer(ApiValueRenderer):
         field.type = field_type.__name__
 
         if field_type.context_help_url:
-          field.context_help_url = field_type.context_help_url
+          # Class attribute context_help_url masks similarly named protobuf
+          # attribute. Using the Set method to set the right attribute.
+          field.Set("context_help_url", field_type.context_help_url)
 
       if field_type == rdf_structs.EnumNamedValue:
         for enum_label in sorted(field_desc.enum, key=field_desc.enum.get):

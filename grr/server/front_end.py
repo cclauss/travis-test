@@ -1,10 +1,9 @@
 #!/usr/bin/env python
 """The GRR frontend server."""
 
+import logging
 import operator
 import time
-
-import logging
 
 from grr import config
 from grr.lib import communicator
@@ -12,7 +11,6 @@ from grr.lib import queues
 from grr.lib import rdfvalue
 from grr.lib import registry
 from grr.lib import stats
-from grr.lib import threadpool
 from grr.lib import uploads
 from grr.lib import utils
 from grr.lib.rdfvalues import client as rdf_client
@@ -26,6 +24,7 @@ from grr.server import file_store
 from grr.server import flow
 from grr.server import queue_manager
 from grr.server import rekall_profile_server
+from grr.server import threadpool
 from grr.server.aff4_objects import aff4_grr
 
 
@@ -73,7 +72,7 @@ class ServerCommunicator(communicator.Communicator):
     self.pub_key_cache.Put(common_name, pub_key)
     return pub_key
 
-  def VerifyMessageSignature(self, response_comms, signed_message_list, cipher,
+  def VerifyMessageSignature(self, response_comms, packed_message_list, cipher,
                              cipher_verified, api_version, remote_public_key):
     """Verifies the message list signature.
 
@@ -83,7 +82,7 @@ class ServerCommunicator(communicator.Communicator):
 
     Args:
       response_comms: The raw response_comms rdfvalue.
-      signed_message_list: The SignedMessageList rdfvalue from the server.
+      packed_message_list: The PackedMessageList rdfvalue from the server.
       cipher: The cipher object that should be used to verify the message.
       cipher_verified: If True, the cipher's signature is not verified again.
       api_version: The api version we should use.
@@ -115,7 +114,7 @@ class ServerCommunicator(communicator.Communicator):
 
       # The very first packet we see from the client we do not have its clock
       remote_time = client.Get(client.Schema.CLOCK) or 0
-      client_time = signed_message_list.timestamp or 0
+      client_time = packed_message_list.timestamp or 0
 
       # This used to be a strict check here so absolutely no out of
       # order messages would be accepted ever. Turns out that some
@@ -147,7 +146,7 @@ class ServerCommunicator(communicator.Communicator):
         logging.warning("Out of order message for %s: %s >= %s", client_id,
                         long(remote_time), int(client_time))
 
-      client.Flush(sync=False)
+      client.Flush()
 
     except communicator.UnknownClientCert:
       pass

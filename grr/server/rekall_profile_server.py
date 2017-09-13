@@ -2,20 +2,20 @@
 """A server that retrieves Rekall profiles by name."""
 
 import json
+import logging
 import urllib2
 import zlib
 
 
 from rekall import constants
 
-import logging
 from grr import config
 from grr.client.components.rekall_support import rekall_types as rdf_rekall_types
 from grr.lib import rdfvalue
 from grr.lib import registry
-from grr.lib import threadpool
 from grr.server import access_control
 from grr.server import aff4
+from grr.server import threadpool
 from grr.server.aff4_objects import aff4_grr
 
 

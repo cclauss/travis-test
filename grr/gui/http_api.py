@@ -5,6 +5,7 @@
 
 import itertools
 import json
+import logging
 import time
 import traceback
 import urllib2
@@ -15,8 +16,6 @@ from werkzeug import routing
 from werkzeug import wrappers as werkzeug_wrappers
 
 from google.protobuf import json_format
-
-import logging
 
 from grr import config
 from grr.gui import api_auth_manager
@@ -366,7 +365,7 @@ class HttpRequestHandler(object):
         content_type="binary/octet-stream",
         direct_passthrough=True)
     response.headers["Content-Disposition"] = (
-        "attachment; filename=%s" % binary_stream.filename)
+        "attachment; filename=%s" % utils.SmartStr(binary_stream.filename))
     if method_name:
       response.headers["X-API-Method"] = method_name
 
