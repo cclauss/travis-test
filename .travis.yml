@@ -271,7 +271,7 @@ matrix:
           sudo docker exec "${DOCKER_CONTAINER}"
           travis/build_server_deb.sh && `# Needs to be run as root.`
 
-          gsutil rm -r gs://${GCS_BUCKET}/_latest_server_deb/ &&
+          (gsutil rm -r gs://${GCS_BUCKET}/_latest_server_deb/ || true) &&
 
           gsutil -m cp gcs_upload_dir/* gs://${GCS_BUCKET}/_latest_server_deb/ &&
 
