@@ -4341,6 +4341,7 @@
                 "sessionId": "aff4:/C.1000000000000000/flows/F:123456",
                 "taskId": "43",
                 "taskTtl": 6,
+                "timestamp": "42000000",
                 "type": "STATUS"
               }
             ],
@@ -4644,6 +4645,7 @@
       "response": {
         "items": [
           {
+            "age": "42000000",
             "isDirectory": false,
             "lastCollected": "42000000",
             "lastCollectedSize": "11",
@@ -4652,6 +4654,7 @@
             "type": "VFSMemoryFile"
           },
           {
+            "age": "42000000",
             "isDirectory": false,
             "lastCollected": "42000000",
             "lastCollectedSize": "11",
@@ -4670,6 +4673,7 @@
       "response": {
         "items": [
           {
+            "age": "42000000",
             "isDirectory": false,
             "lastCollected": "42000000",
             "lastCollectedSize": "11",
@@ -4678,6 +4682,7 @@
             "type": "VFSMemoryFile"
           },
           {
+            "age": "42000000",
             "isDirectory": false,
             "lastCollected": "42000000",
             "lastCollectedSize": "11",

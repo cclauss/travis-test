@@ -37,6 +37,7 @@ able to filter it directly).
 
 import abc
 import atexit
+import collections
 import logging
 import os
 import random
@@ -101,6 +102,19 @@ def GetDefaultToken(token):
         "instance of grr.lib.access_control.ACLToken()")
 
   return token
+
+
+# This represents a record stored in a queue/collection. The attributes are:
+# queue_id:  Id of the queue this record is stored in.
+# timestamp: Timestamp this record was stored at.
+# suffix:    A random number that is used to differentiate between records that
+#            have the same timestamp.
+# subpath:   Queues store records in different subpaths, this attribute
+#            specifies which one was used to store the record.
+# value:     The actual data that the record contains.
+
+Record = collections.namedtuple(
+    "Record", ["queue_id", "timestamp", "suffix", "subpath", "value"])
 
 
 class MutationPool(object):
@@ -289,7 +303,13 @@ class MutationPool(object):
         if max_filtered and filtered_count >= max_filtered:
           break
         continue
-      results.append((subject, rdf_value))
+      results.append(
+          Record(
+              queue_id=queue_id,
+              timestamp=values[DataStore.COLLECTION_ATTRIBUTE][0],
+              suffix=int(subject[-6:], 16),
+              subpath="Records",
+              value=rdf_value))
       self.Set(subject, DataStore.QUEUE_LOCK_ATTRIBUTE, expiration)
 
       filtered_count = 0
@@ -298,19 +318,27 @@ class MutationPool(object):
 
     return results
 
-  def QueueRefreshClaims(self, ids, timeout="30m"):
+  def QueueRefreshClaims(self, records, timeout="30m"):
     expiration = rdfvalue.RDFDatetime.Now() + rdfvalue.Duration(timeout)
-    for subject in ids:
+    for record in records:
+      subject, _, _ = DataStore.CollectionMakeURN(
+          record.queue_id, record.timestamp, record.suffix, record.subpath)
       self.Set(subject, DataStore.QUEUE_LOCK_ATTRIBUTE, expiration)
 
-  def QueueDeleteRecords(self, ids):
-    for i in ids:
-      self.DeleteAttributes(
-          i, [DataStore.QUEUE_LOCK_ATTRIBUTE, DataStore.COLLECTION_ATTRIBUTE])
+  def QueueDeleteRecords(self, records):
+    for record in records:
+      subject, _, _ = DataStore.CollectionMakeURN(
+          record.queue_id, record.timestamp, record.suffix, record.subpath)
 
-  def QueueReleaseRecords(self, ids):
-    for i in ids:
-      self.DeleteAttributes(i, [DataStore.QUEUE_LOCK_ATTRIBUTE])
+      self.DeleteAttributes(subject, [
+          DataStore.QUEUE_LOCK_ATTRIBUTE, DataStore.COLLECTION_ATTRIBUTE
+      ])
+
+  def QueueReleaseRecords(self, records):
+    for record in records:
+      subject, _, _ = DataStore.CollectionMakeURN(
+          record.queue_id, record.timestamp, record.suffix, record.subpath)
+      self.DeleteAttributes(subject, [DataStore.QUEUE_LOCK_ATTRIBUTE])
 
   def QueueDeleteTasks(self, queue, tasks):
     """Removes the given tasks from the queue."""
@@ -325,9 +353,8 @@ class MutationPool(object):
                                              lambda x: x.queue).iteritems():
       to_schedule = {}
       for task in queued_tasks:
-        to_schedule[DataStore.QueueTaskIdToColumn(task.task_id)] = [
-            task.SerializeToString()
-        ]
+        to_schedule[DataStore.QueueTaskIdToColumn(
+            task.task_id)] = [task.SerializeToString()]
       self.MultiSet(queue, to_schedule, timestamp=timestamp)
 
   def QueueQueryAndOwn(self, queue, lease_seconds, limit, timestamp):
@@ -395,8 +422,8 @@ class MutationPool(object):
         if task.task_ttl != rdf_flows.GrrMessage.max_ttl - 1:
           stats.STATS.IncrementCounter("grr_task_retransmission_count")
 
-        serialized_tasks_dict.setdefault(predicate,
-                                         []).append(task.SerializeToString())
+        serialized_tasks_dict.setdefault(predicate, []).append(
+            task.SerializeToString())
         tasks.append(task)
         if len(tasks) >= limit:
           break
@@ -465,13 +492,31 @@ class MutationPool(object):
     new_attributes = {}
     for label in new_labels:
       new_attributes[DataStore.LABEL_ATTRIBUTE_TEMPLATE % label] = (
-          DataStore.LABEL_PLACEHOLDER_VALUE)
+          DataStore.EMPTY_DATA_PLACEHOLDER)
     delete_attributes = [
         DataStore.LABEL_ATTRIBUTE_TEMPLATE % label for label in to_delete
     ]
     if new_attributes or delete_attributes:
       self.MultiSet(
           subject, new_attributes, to_delete=delete_attributes, timestamp=0)
+
+  def FileHashIndexAddItem(self, subject, file_path):
+    predicate = (DataStore.FILE_HASH_TEMPLATE % file_path).lower()
+    self.MultiSet(subject, {predicate: file_path})
+
+  def AFF4AddChild(self, subject, child, extra_attributes=None):
+    attributes = {
+        DataStore.AFF4_INDEX_DIR_TEMPLATE % utils.SmartStr(child): [
+            DataStore.EMPTY_DATA_PLACEHOLDER
+        ]
+    }
+    if extra_attributes:
+      attributes.update(extra_attributes)
+    self.MultiSet(subject, attributes)
+
+  def AFF4DeleteChild(self, subject, child):
+    self.DeleteAttributes(
+        subject, [DataStore.AFF4_INDEX_DIR_TEMPLATE % utils.SmartStr(child)])
 
 
 class DataStore(object):
@@ -499,7 +544,14 @@ class DataStore(object):
 
   LABEL_ATTRIBUTE_PREFIX = "index:label_"
   LABEL_ATTRIBUTE_TEMPLATE = "index:label_%s"
-  LABEL_PLACEHOLDER_VALUE = "X"
+
+  EMPTY_DATA_PLACEHOLDER = "X"
+
+  FILE_HASH_PREFIX = "index:target:"
+  FILE_HASH_TEMPLATE = "index:target:%s"
+
+  AFF4_INDEX_DIR_PREFIX = "index:dir/"
+  AFF4_INDEX_DIR_TEMPLATE = "index:dir/%s"
 
   mutation_pool_cls = MutationPool
 
@@ -1124,8 +1176,10 @@ class DataStore(object):
 
     for response_urn, request in sorted(response_subjects.items()):
       responses = []
-      for _, serialized, _ in response_data.get(response_urn, []):
-        responses.append(rdf_flows.GrrMessage.FromSerializedString(serialized))
+      for _, serialized, timestamp in response_data.get(response_urn, []):
+        msg = rdf_flows.GrrMessage.FromSerializedString(serialized)
+        msg.timestamp = timestamp
+        responses.append(msg)
 
       yield (request, sorted(responses, key=lambda msg: msg.response_id))
 
@@ -1432,7 +1486,45 @@ class DataStore(object):
       if attribute.startswith(self.COLLECTION_VALUE_TYPE_PREFIX):
         yield attribute[len(self.COLLECTION_VALUE_TYPE_PREFIX):]
 
-  def QueueQueryTasks(self, queue, limit=1, task_id=None, token=None):
+  def CollectionReadItems(self, records, token=None):
+    for _, v in self.MultiResolvePrefix(
+        [
+            DataStore.CollectionMakeURN(record.queue_id, record.timestamp,
+                                        record.suffix, record.subpath)[0]
+            for record in records
+        ],
+        DataStore.COLLECTION_ATTRIBUTE,
+        token=token):
+      _, value, timestamp = v[0]
+      yield (value, timestamp)
+
+  def QueueMultiQuery(self, queues, token=None):
+    """Retrieves tasks from multiple queues without leasing them.
+
+    Args:
+      queues: The task queues to query.
+      token: Database access token.
+    Returns:
+      A dict mapping queue to list of Task() objects.
+    """
+    tasks = {}
+    prefix = DataStore.QUEUE_TASK_PREDICATE_PREFIX
+
+    for queue, raw_tasks in self.MultiResolvePrefix(
+        queues, prefix, timestamp=DataStore.ALL_TIMESTAMPS, token=token):
+
+      for _, serialized, ts in raw_tasks:
+        task = rdf_flows.GrrMessage.FromSerializedString(serialized)
+        task.eta = ts
+        tasks.setdefault(queue, []).append(task)
+
+    # Sort the tasks in order of priority.
+    for task_list in tasks.values():
+      task_list.sort(key=lambda task: task.priority, reverse=True)
+
+    return tasks
+
+  def QueueQueryTasks(self, queue, limit=1, token=None):
     """Retrieves tasks from a queue without leasing them.
 
     This is good for a read only snapshot of the tasks.
@@ -1441,16 +1533,11 @@ class DataStore(object):
       queue: The task queue that this task belongs to, usually client.Queue()
             where client is the ClientURN object you want to schedule msgs on.
       limit: Number of values to fetch.
-      task_id: If an id is provided we only query for this id.
       token: Database access token.
     Returns:
       A list of Task() objects.
     """
-    if task_id is None:
-      prefix = DataStore.QUEUE_TASK_PREDICATE_PREFIX
-    else:
-      prefix = utils.SmartStr(task_id)
-
+    prefix = DataStore.QUEUE_TASK_PREDICATE_PREFIX
     all_tasks = []
 
     for _, serialized, ts in self.ResolvePrefix(
@@ -1525,6 +1612,71 @@ class DataStore(object):
         subject, self.LABEL_ATTRIBUTE_PREFIX, token=token):
       result.append(attribute[len(self.LABEL_ATTRIBUTE_PREFIX):])
     return sorted(result)
+
+  def FileHashIndexQuery(self, subject, target_prefix, limit=100, token=None):
+    """Search the index for matches starting with target_prefix.
+
+    Args:
+       subject: The index to use. Should be a urn that points to the sha256
+                namespace.
+       target_prefix: The prefix to match against the index.
+       limit: Either a tuple of (start, limit) or a maximum number of results to
+              return.
+       token: A DB token.
+
+    Yields:
+      URNs of files which have the same data as this file - as read from the
+      index.
+    """
+    if isinstance(limit, (tuple, list)):
+      start, length = limit  # pylint: disable=unpacking-non-sequence
+    else:
+      start = 0
+      length = limit
+
+    prefix = (DataStore.FILE_HASH_TEMPLATE % target_prefix).lower()
+    results = self.ResolvePrefix(subject, prefix, limit=limit, token=token)
+
+    for i, (_, hit, _) in enumerate(results):
+      if i < start:
+        continue
+      if i >= start + length:
+        break
+      yield rdfvalue.RDFURN(hit)
+
+  def FileHashIndexQueryMultiple(self, locations, timestamp=None, token=None):
+    results = self.MultiResolvePrefix(
+        locations, DataStore.FILE_HASH_PREFIX, timestamp=timestamp, token=token)
+    for hash_obj, matches in results:
+      yield (hash_obj, [file_urn for _, file_urn, _ in matches])
+
+  def AFF4FetchChildren(self, subject, timestamp=None, limit=None, token=None):
+    results = self.ResolvePrefix(
+        subject,
+        DataStore.AFF4_INDEX_DIR_PREFIX,
+        timestamp=timestamp,
+        limit=limit,
+        token=token)
+    for predicate, _, timestamp in results:
+      yield (predicate[len(DataStore.AFF4_INDEX_DIR_PREFIX):], timestamp)
+
+  def AFF4MultiFetchChildren(self,
+                             subjects,
+                             timestamp=None,
+                             limit=None,
+                             token=None):
+    results = self.MultiResolvePrefix(
+        subjects,
+        DataStore.AFF4_INDEX_DIR_PREFIX,
+        timestamp=timestamp,
+        limit=limit,
+        token=token)
+    for subject, matches in results:
+      children = []
+      for predicate, _, timestamp in matches:
+        children.append((predicate[len(DataStore.AFF4_INDEX_DIR_PREFIX):],
+                         timestamp))
+      yield (subject, children)
 
 
 class DBSubjectLock(object):

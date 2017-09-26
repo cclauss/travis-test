@@ -8,8 +8,9 @@ from grr.lib.rdfvalues import structs as rdf_structs
 from grr.proto import jobs_pb2
 from grr.server import access_control
 from grr.server import aff4
+from grr.server import data_store
 from grr.server import sequential_collection
-from grr.server.aff4_objects import queue as aff4_queue
+from grr.server.aff4_objects import aff4_queue
 
 
 class HuntResultNotification(rdf_structs.RDFProtoStruct):
@@ -18,6 +19,15 @@ class HuntResultNotification(rdf_structs.RDFProtoStruct):
       rdfvalue.RDFDatetime,
       rdfvalue.RDFURN,
   ]
+
+  def ResultRecord(self):
+    # TODO(user): The subpath could be part of the notification.
+    return data_store.Record(
+        queue_id=self.result_collection_urn,
+        timestamp=self.timestamp,
+        suffix=self.suffix,
+        subpath="Results",
+        value=None)
 
 
 RESULT_NOTIFICATION_QUEUE = rdfvalue.RDFURN("aff4:/hunt_results_queue")
@@ -48,12 +58,10 @@ class HuntResultQueue(aff4_queue.Queue):
         the earliest (unclaimed) notification will determine the collection.
 
     Returns:
-      A pair (collection, results) where collection is the collection that
-      notifications were retrieved for and results is a list of tuples (id,
-      timestamp, suffix) where id identifies the notification within the queue
-      and (stimestmp, suffix) identifies the GrrMessage within the result
+      A pair (collection, results) where collection is the collection
+      that notifications were retrieved for and results is a list of
+      Record objects which identify GrrMessage within the result
       collection.
-
     """
 
     class CollectionFilter(object):
@@ -76,18 +84,18 @@ class HuntResultQueue(aff4_queue.Queue):
         blocking_sleep_interval=15,
         blocking_lock_timeout=600,
         token=token) as queue:
-      for record_id, value in queue.ClaimRecords(
+      for record in queue.ClaimRecords(
           record_filter=f.FilterRecord,
           start_time=start_time,
           timeout=lease_time,
           limit=100000):
-        results.append((record_id, value.timestamp, value.suffix))
+        results.append(record)
     return (f.collection, results)
 
   @classmethod
-  def DeleteNotifications(cls, record_ids, token=None):
+  def DeleteNotifications(cls, records, token=None):
     """Delete hunt notifications."""
-    cls.DeleteRecords(record_ids, token=token)
+    cls.DeleteRecords(records, token=token)
 
 
 class HuntResultCollection(sequential_collection.GrrMessageCollection):

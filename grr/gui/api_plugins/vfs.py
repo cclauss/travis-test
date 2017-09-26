@@ -235,6 +235,9 @@ class ApiFile(rdf_structs.RDFProtoStruct):
     if type_obj is not None:
       self.type = type_obj
       self.age = type_obj.age
+      # Without self.Set self.age would reference "age" attribute instead of a
+      # protobuf field.
+      self.Set("age", type_obj.age)
 
     if with_details:
       self.details = ApiAff4ObjectRepresentation().InitFromAff4Object(file_obj)
@@ -277,8 +280,8 @@ class ApiGetFileDetailsHandler(api_call_handler_base.ApiCallHandler):
         age=age,
         token=token)
 
-    return ApiGetFileDetailsResult(file=ApiFile().InitFromAff4Object(
-        file_obj, with_details=True))
+    return ApiGetFileDetailsResult(
+        file=ApiFile().InitFromAff4Object(file_obj, with_details=True))
 
 
 class ApiListFilesArgs(rdf_structs.RDFProtoStruct):
@@ -318,8 +321,8 @@ class ApiListFilesHandler(api_call_handler_base.ApiCallHandler):
       age = aff4.NEWEST_TIME
 
     directory = aff4.FACTORY.Open(
-        args.client_id.ToClientURN().Add(path), mode="r",
-        token=token).Upgrade(aff4_standard.VFSDirectory)
+        args.client_id.ToClientURN().Add(path), mode="r", token=token).Upgrade(
+            aff4_standard.VFSDirectory)
 
     if args.directories_only:
       children = [
@@ -526,8 +529,8 @@ class ApiGetFileVersionTimesHandler(api_call_handler_base.ApiCallHandler):
         token=token)
 
     type_values = list(fd.GetValuesForAttribute(fd.Schema.TYPE))
-    return ApiGetFileVersionTimesResult(times=sorted(
-        [t.age for t in type_values], reverse=True))
+    return ApiGetFileVersionTimesResult(
+        times=sorted([t.age for t in type_values], reverse=True))
 
 
 class ApiGetFileDownloadCommandArgs(rdf_structs.RDFProtoStruct):
@@ -729,7 +732,6 @@ class ApiGetVfsTimelineHandler(api_call_handler_base.ApiCallHandler):
 
     # Get the stats attributes for all clients.
     attribute = aff4.Attribute.GetAttributeByName("stat")
-
     items = []
     for subject, values in data_store.DB.MultiResolvePrefix(
         child_urns,
