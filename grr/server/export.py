@@ -17,6 +17,7 @@ from grr.lib import registry
 from grr.lib import utils
 from grr.lib.rdfvalues import client as rdf_client
 from grr.lib.rdfvalues import paths as rdf_paths
+from grr.lib.rdfvalues import protodict as rdf_protodict
 from grr.lib.rdfvalues import structs as rdf_structs
 from grr.proto import export_pb2
 from grr.server import aff4
@@ -159,6 +160,18 @@ class ExportedBytes(rdf_structs.RDFProtoStruct):
   rdf_deps = [
       ExportedMetadata,
   ]
+
+
+class ExportedString(rdf_structs.RDFProtoStruct):
+  protobuf = export_pb2.ExportedString
+  rdf_deps = [
+      ExportedMetadata,
+  ]
+
+
+class ExportedDictItem(rdf_structs.RDFProtoStruct):
+  protobuf = export_pb2.ExportedDictItem
+  rdf_deps = [ExportedMetadata]
 
 
 class ExportedArtifactFilesDownloaderResult(rdf_structs.RDFProtoStruct):
@@ -309,12 +322,11 @@ class DataAgnosticExportConverter(ExportConverter):
         if hasattr(self, desc.name) and value_to_flatten.HasField(desc.name):
           setattr(self, desc.name, getattr(value_to_flatten, desc.name))
 
-    output_class = type(
-        self.ExportedClassNameForValue(value), (AutoExportedProtoStruct,),
-        dict(Flatten=Flatten))
+    descriptors = []
+    enums = {}
 
     # Metadata is always the first field of exported data.
-    output_class.AddDescriptor(
+    descriptors.append(
         rdf_structs.ProtoEmbedded(
             name="metadata", field_number=1, nested=ExportedMetadata))
 
@@ -331,24 +343,36 @@ class DataAgnosticExportConverter(ExportConverter):
                            rdf_structs.ProtoUnsignedInteger,
                            rdf_structs.ProtoRDFValue, rdf_structs.ProtoEnum)):
         # Incrementing field number by 1, as 1 is always occuppied by metadata.
-        output_class.AddDescriptor(desc.Copy(field_number=number + 1))
+        descriptors.append(desc.Copy(field_number=number + 1))
 
       if (isinstance(desc, rdf_structs.ProtoEnum) and
           not isinstance(desc, rdf_structs.ProtoBoolean)):
         # Attach the enum container to the class for easy reference:
-        setattr(output_class, desc.enum_name, desc.enum_container)
+        enums[desc.enum_name] = desc.enum_container
+
+    # Create the class as late as possible. This will modify a
+    # metaclass registry, we need to make sure there are no problems.
+    output_class = type(
+        self.ExportedClassNameForValue(value), (AutoExportedProtoStruct,),
+        dict(Flatten=Flatten))
+
+    for descriptor in descriptors:
+      output_class.AddDescriptor(descriptor)
+
+    for name, container in enums.iteritems():
+      setattr(output_class, name, container)
 
     return output_class
 
   def Convert(self, metadata, value, token=None):
     class_name = self.ExportedClassNameForValue(value)
     try:
-      class_obj = DataAgnosticExportConverter.classes_cache[class_name]
+      cls = DataAgnosticExportConverter.classes_cache[class_name]
     except KeyError:
-      class_obj = self.MakeFlatRDFClass(value)
-      DataAgnosticExportConverter.classes_cache[class_name] = class_obj
+      cls = self.MakeFlatRDFClass(value)
+      DataAgnosticExportConverter.classes_cache[class_name] = cls
 
-    result_obj = class_obj()
+    result_obj = cls()
     result_obj.Flatten(metadata, value)
     yield result_obj
 
@@ -369,8 +393,8 @@ class StatEntryToExportedFileConverter(ExportConverter):
     super(StatEntryToExportedFileConverter, self).__init__(*args, **kwargs)
     # If either of these are true we need to open the file to get more
     # information
-    self.open_file_for_read = (self.options.export_files_hashes or
-                               self.options.export_files_contents)
+    self.open_file_for_read = (
+        self.options.export_files_hashes or self.options.export_files_contents)
 
   @staticmethod
   def ParseSignedData(signed_data, result):
@@ -942,6 +966,55 @@ class RDFBytesToExportedBytesConverter(ExportConverter):
     result = ExportedBytes(
         metadata=metadata, data=data.SerializeToString(), length=len(data))
     return [result]
+
+
+class RDFStringToExportedStringConverter(ExportConverter):
+
+  input_rdf_type = "RDFString"
+
+  def Convert(self, metadata, data, token=None):
+    return [ExportedString(metadata=metadata, data=data.SerializeToString())]
+
+
+class DictToExportedDictItemsConverter(ExportConverter):
+  """Export converter that converts Dict to ExportedDictItems."""
+
+  input_rdf_type = "Dict"
+
+  def _IterateDict(self, d, key=""):
+    if isinstance(d, (list, tuple)):
+      for i, v in enumerate(d):
+        next_key = "%s[%d]" % (key, i)
+        for v in self._IterateDict(v, key=next_key):
+          yield v
+    elif isinstance(d, set):
+      for i, v in enumerate(sorted(d)):
+        next_key = "%s[%d]" % (key, i)
+        for v in self._IterateDict(v, key=next_key):
+          yield v
+    elif isinstance(d, (dict, rdf_protodict.Dict)):
+      for k in sorted(d):
+        k = utils.SmartStr(k)
+
+        v = d[k]
+        if not key:
+          next_key = k
+        else:
+          next_key = key + "." + k
+
+        for v in self._IterateDict(v, key=next_key):
+          yield v
+    else:
+      yield key, d
+
+  def Convert(self, metadata, data, token=None):
+    result = []
+    d = data.ToDict()
+    for k, v in self._IterateDict(d):
+      result.append(
+          ExportedDictItem(metadata=metadata, key=k, value=utils.SmartStr(v)))
+
+    return result
 
 
 class GrrMessageConverter(ExportConverter):

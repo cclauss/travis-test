@@ -1460,7 +1460,7 @@ class GRRHTTPClient(object):
 
     cn = self.communicator.common_name
     logging.info("%s: Sending %s(%s), Received %s messages in %s sec. "
-                 "Sleeping for %s", cn,
+                 "Sleeping for %s sec.", cn,
                  len(message_list),
                  len(payload_data),
                  len(response.messages), response.duration,
@@ -1656,7 +1656,7 @@ class ClientCommunicator(communicator.Communicator):
 
     if server_cert_serial < config.CONFIG["Client.server_serial_number"]:
       # We can not accept this serial number...
-      raise IOError("Server cert is too old.")
+      raise IOError("Server certificate serial number is too old.")
     elif server_cert_serial > config.CONFIG["Client.server_serial_number"]:
       logging.info("Server serial number updated to %s", server_cert_serial)
       config.CONFIG.Set("Client.server_serial_number", server_cert_serial)

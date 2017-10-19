@@ -80,7 +80,7 @@ message FlowContext {
 }
 
 // The hunt context.
-// Next field: 15
+// Next field: 16
 message HuntContext {
   optional ClientResources client_resources = 1;
   optional uint64 create_time = 2 [(sem_type) = {
@@ -107,6 +107,7 @@ message HuntContext {
   optional ClientResourcesStats usage_stats = 12;
   optional uint64 clients_with_results_count = 13;
   optional uint64 results_count = 14;
+  optional uint64 completed_clients_count = 15;
 }
 
 // This is the user's access token.
@@ -321,7 +322,7 @@ message FlowRunnerArgs {
     }];
 }
 
-// Next field ID: 27
+// Next field ID: 30
 message HuntRunnerArgs {
   optional string hunt_name = 1 [(sem_type) = {
       description: "The name of the class implementing the hunt to run.",
@@ -381,6 +382,33 @@ message HuntRunnerArgs {
       friendly_name: "Crash Limit",
     }];
 
+  optional uint64 avg_results_per_client_limit = 27 [(sem_type) = {
+      description: "If the average number of results per client becomes "
+      "greater than this limit, the hunt will be automatically stopped. The "
+      "average is calculated only after 1000 clients report back to the "
+      "hunt.",
+      label: ADVANCED,
+      friendly_name: "Average Results-per-Client Limit"
+    }];
+
+  optional uint64 avg_cpu_seconds_per_client_limit = 28 [(sem_type) = {
+      description: "If the average CPU usage seconds per client becomes "
+      "greater than this limit, the hunt will be automatically stopped. The "
+      "average is calculated only after 1000 clients report back to the "
+      "hunt.",
+      label: ADVANCED,
+      friendly_name: "Average CPU-Usage-per-Client Limit (seconds)"
+    }];
+
+  optional uint64 avg_network_bytes_per_client_limit = 29 [(sem_type) = {
+      description: "If the average network usage per client becomes "
+      "greater than this limit, the hunt will be automatically stopped. The "
+      "average is calculated only after 1000 clients report back to the "
+      "hunt.",
+      label: ADVANCED,
+      friendly_name: "Average Network-Usage-per-Client Limit (bytes)"
+    }];
+
   optional uint64 expiry_time = 11 [(sem_type) = {
       type: "Duration",
       description: "Expiry time for the hunt.",
@@ -425,14 +453,16 @@ message HuntRunnerArgs {
       description: "A cpu limit imposed on each client in the hunt.",
       label: ADVANCED,
       friendly_name: "Per Client CPU Limit",
-    }];
+    },
+    default=600];  // 10 minutes.
 
   optional uint64 per_client_network_limit_bytes = 24 [(sem_type) = {
       description: "A network limit (in bytes) imposed on each client in the "
       "hunt.",
       label: ADVANCED,
       friendly_name: "Per Client Network Limit (bytes)",
-    }];
+    },
+    default=100000000];  // 100 MB
 
   optional FlowLikeObjectReference original_object = 26 [(sem_type) = {
       description: "If this hunt is a copy of another hunt or flow, we store "
@@ -972,36 +1002,6 @@ message GlobArgs {
       label: HIDDEN,
     }, default=false];
 
-}
-
-// Next field ID: 6
-message SearchFileContentArgs {
-  repeated string paths = 1 [(sem_type) = {
-      type: "GlobExpression",
-      description: "A path to glob that supports: ** path recursion, * "
-          "wildcards and %% expansions",
-    }];
-
-  optional PathSpec.PathType pathtype = 2 [(sem_type) = {
-      description: "Type of access to glob in.",
-    }, default=OS];
-
-  optional PathSpec root_path = 5 [(sem_type) = {
-    description: "The root path to begin the glob.  Users should almost never"
-                  " need to change this. root_path.pathtype is unused in"
-                  " favor of pathtype to allow it to be modified by users.",
-    label: ADVANCED;
-  }];
-
-  optional BareGrepSpec grep = 3 [(sem_type) = {
-      friendly_name: "File Content Search",
-      description: "Leave empty to match files by filename only."
-    }];
-
-  optional bool also_download = 4 [(sem_type) = {
-      friendly_name: "Download matching files",
-      description: "If checked, download any matching files."
-    }];
 }
 
 // Next field ID: 5
@@ -1825,4 +1825,78 @@ message DumpACPITableArgs {
       description: "Version of Chipsec component to be used.",
       label: ADVANCED
     }, default="1.2.4.1"];
+}
+
+message YaraProcessScanRequest {
+  optional string yara_signature = 1 [(sem_type) = {
+      type: "YaraSignature",
+      description: "The yara signature(s) to use for scanning.",
+    }];
+  repeated uint64 pids = 2 [(sem_type) = {
+      description: "The pids to scan. No pids given indicates all processes.",
+    }];
+  optional string process_regex = 3 [(sem_type) = {
+      description: "A regex to match against the process name. Only matching "
+      "names will be scanned.",
+    }];
+  optional bool ignore_grr_process = 4 [ default = true, (sem_type) = {
+      description: "By default, the GRR process is not scanned. Clear this "
+      "flag to change this behavior.",
+      label: ADVANCED,
+    }];
+  optional uint32 per_process_timeout = 5 [(sem_type) = {
+      description: "A timeout in seconds that is applied while scanning; "
+      "applies to each scan individually.",
+    }];
+}
+
+message YaraProcessScanError {
+  optional Process process = 1 [(sem_type) = {
+      description: "The process that returned an error while scanning.",
+    }];
+  optional string error = 2 [(sem_type) = {
+      description: "The error that was returned.",
+    }];
+}
+
+message YaraStringMatch {
+  optional string string_id = 1 [(sem_type) = {
+      description: "The name of the string that matched.",
+    }];
+  optional uint64 offset = 2 [(sem_type) = {
+      description: "The offset into the data.",
+    }];
+  optional bytes data = 3 [(sem_type) = {
+      description: "The actual data that matched.",
+    }];
+}
+
+message YaraMatch {
+  optional string rule_name = 1 [(sem_type) = {
+      description: "The name of the rule that triggered.",
+    }];
+  repeated YaraStringMatch string_matches = 2 [(sem_type) = {
+      description: "The list of strings that matched.",
+    }];
+}
+
+message YaraProcessScanMatch {
+  optional Process process = 1 [(sem_type) = {
+      description: "The process that returned one or more matches.",
+    }];
+  repeated YaraMatch match = 2 [(sem_type) = {
+      description: "Details about the matches.",
+    }];
+}
+
+message YaraProcessScanResponse {
+  repeated YaraProcessScanMatch matches = 1 [(sem_type) = {
+      description: "A list of processes with signature matches.",
+    }];
+  repeated YaraProcessScanError errors = 2 [(sem_type) = {
+      description: "A list of processes that we failed to scan.",
+    }];
+  repeated Process misses = 3 [(sem_type) = {
+      description: "A list of processes that came back without matches.",
+    }];
 }

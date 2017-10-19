@@ -22,6 +22,7 @@ from grr.server import events
 from grr.server import flow
 from grr.server import grr_collections
 from grr.server import output_plugin
+from grr.server import queue_manager
 from grr.server.aff4_objects import cronjobs
 from grr.server.flows.general import transfer
 from grr.server.hunts import implementation
@@ -391,25 +392,38 @@ class GenericHunt(implementation.GRRHunt):
           next_state="MarkDone",
           sync=False,
           runner_args=self.args.flow_runner_args)
-      with data_store.DB.GetMutationPool(token=self.token) as pool:
+      with data_store.DB.GetMutationPool() as pool:
         grr_collections.RDFUrnCollection.StaticAdd(
             self.started_flows_collection_urn, flow_urn, mutation_pool=pool)
+
+  STOP_BATCH_SIZE = 10000
 
   def Stop(self, reason=None):
     super(GenericHunt, self).Stop(reason=reason)
 
     started_flows = grr_collections.RDFUrnCollection(
-        self.started_flows_collection_urn, token=self.token)
+        self.started_flows_collection_urn)
 
-    self.Log("Hunt stop. Terminating all the started flows.")
     num_terminated_flows = 0
-    with data_store.DB.GetMutationPool(token=self.token) as mutation_pool:
-      for started_flow in started_flows:
-        flow.GRRFlow.MarkForTermination(
-            started_flow,
-            reason="Parent hunt stopped.",
-            mutation_pool=mutation_pool)
-        num_terminated_flows += 1
+    self.Log("Hunt stop. Terminating all the started flows.")
+
+    # Delete hunt flows states.
+    for flows_batch in utils.Grouper(started_flows,
+                                     self.__class__.STOP_BATCH_SIZE):
+      with queue_manager.QueueManager(token=self.token) as manager:
+        manager.MultiDestroyFlowStates(flows_batch)
+
+      with data_store.DB.GetMutationPool() as mutation_pool:
+        for f in flows_batch:
+          flow.GRRFlow.MarkForTermination(
+              f, reason="Parent hunt stopped.", mutation_pool=mutation_pool)
+
+      num_terminated_flows += len(flows_batch)
+
+    # Delete hunt's requests and responses to ensure no more
+    # processing is going to occur.
+    with queue_manager.QueueManager(token=self.token) as manager:
+      manager.DestroyFlowStates(self.session_id)
 
     self.Log("%d flows terminated.", num_terminated_flows)
 
@@ -486,7 +500,7 @@ class VariableGenericHunt(GenericHunt):
   @flow.StateHandler()
   def RunClient(self, responses):
     client_ids_to_schedule = set(responses)
-    with data_store.DB.GetMutationPool(token=self.token) as pool:
+    with data_store.DB.GetMutationPool() as pool:
       for flow_request in self.args.flows:
         for requested_client_id in flow_request.client_ids:
           if requested_client_id in client_ids_to_schedule:

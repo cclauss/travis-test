@@ -128,7 +128,7 @@ class ApiFlowDescriptor(rdf_structs.RDFProtoStruct):
     self.category = flow_cls.category.strip("/")
     self.doc = flow_cls.__doc__
     self.args_type = flow_cls.args_type.__name__
-    self.default_args = flow_cls.GetDefaultArgs(token=token)
+    self.default_args = flow_cls.GetDefaultArgs(username=token.username)
     self.behaviours = sorted(flow_cls.behaviours)
 
     return self
@@ -198,6 +198,10 @@ class ApiFlow(rdf_structs.RDFProtoStruct):
 
       if flow_obj.Get(flow_obj.Schema.CLIENT_CRASH):
         self.state = "CLIENT_CRASHED"
+      elif flow_obj.Get(flow_obj.Schema.PENDING_TERMINATION):
+        self.state = flow_obj.context.state = "ERROR"
+        reason = flow_obj.Get(flow_obj.Schema.PENDING_TERMINATION).reason
+        flow_obj.context.status = "Pending termination: %s" % reason
       else:
         self.state = flow_obj.context.state
 
@@ -226,8 +230,9 @@ class ApiFlow(rdf_structs.RDFProtoStruct):
           flow_state_data = flow_state_dict.ToDict()
 
           if flow_state_data:
-            self.state_data = (api_call_handler_utils.ApiDataObject()
-                               .InitFromDataObject(flow_state_data))
+            self.state_data = (
+                api_call_handler_utils.ApiDataObject()
+                .InitFromDataObject(flow_state_data))
     except Exception as e:  # pylint: disable=broad-except
       self.internal_error = "Error while opening flow: %s" % str(e)
 
@@ -364,8 +369,7 @@ class ApiListFlowResultsHandler(api_call_handler_base.ApiCallHandler):
 
   def Handle(self, args, token=None):
     flow_urn = args.flow_id.ResolveClientFlowURN(args.client_id, token=token)
-    output_collection = flow.GRRFlow.ResultCollectionForFID(
-        flow_urn, token=token)
+    output_collection = flow.GRRFlow.ResultCollectionForFID(flow_urn)
 
     items = api_call_handler_utils.FilterCollection(
         output_collection, args.offset, args.count, args.filter)
@@ -397,7 +401,7 @@ class ApiListFlowLogsHandler(api_call_handler_base.ApiCallHandler):
 
   def Handle(self, args, token=None):
     flow_urn = args.flow_id.ResolveClientFlowURN(args.client_id, token=token)
-    logs_collection = flow.GRRFlow.LogCollectionForFID(flow_urn, token=token)
+    logs_collection = flow.GRRFlow.LogCollectionForFID(flow_urn)
 
     result = api_call_handler_utils.FilterCollection(
         logs_collection, args.offset, args.count, args.filter)
@@ -549,7 +553,7 @@ class ApiGetFlowFilesArchiveHandler(api_call_handler_base.ApiCallHandler):
         args.client_id, flow_obj.runner_args.flow_name,
         flow_urn.Basename().replace(":", "_"))
 
-    collection = flow.GRRFlow.ResultCollectionForFID(flow_urn, token=token)
+    collection = flow.GRRFlow.ResultCollectionForFID(flow_urn)
 
     if args.archive_format == args.ArchiveFormat.ZIP:
       archive_format = api_call_handler_utils.CollectionArchiveGenerator.ZIP
@@ -769,7 +773,7 @@ class ApiListFlowsHandler(api_call_handler_base.ApiCallHandler):
 
     nested_children_urns = dict(
         aff4.FACTORY.RecursiveMultiListChildren(
-            [fd.urn for fd in root_children], token=token))
+            [fd.urn for fd in root_children]))
     nested_children = aff4.FACTORY.MultiOpen(
         set(itertools.chain(*nested_children_urns.values())),
         aff4_type=flow.GRRFlow,
@@ -952,8 +956,7 @@ class ApiGetExportedFlowResultsHandler(api_call_handler_base.ApiCallHandler):
 
     flow_urn = args.flow_id.ResolveClientFlowURN(args.client_id, token=token)
 
-    output_collection = flow.GRRFlow.TypedResultCollectionForFID(
-        flow_urn, token=token)
+    output_collection = flow.GRRFlow.TypedResultCollectionForFID(flow_urn)
 
     plugin = plugin_cls(source_urn=flow_urn, token=token)
     content_generator = instant_output_plugin.ApplyPluginToMultiTypeCollection(

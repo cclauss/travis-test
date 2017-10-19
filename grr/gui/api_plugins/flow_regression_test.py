@@ -4,6 +4,8 @@
 
 
 
+import psutil
+
 from grr.gui import api_regression_test_lib
 from grr.gui.api_plugins import flow as flow_plugin
 
@@ -12,6 +14,7 @@ from grr.lib import utils
 from grr.lib.rdfvalues import flows as rdf_flows
 from grr.lib.rdfvalues import paths as rdf_paths
 from grr.server import aff4
+from grr.server import data_store
 from grr.server import flow
 from grr.server import output_plugin
 from grr.server import queue_manager
@@ -22,6 +25,7 @@ from grr.server.flows.general import transfer
 from grr.server.hunts import standard_test
 from grr.server.output_plugins import email_plugin
 from grr.test_lib import acl_test_lib
+from grr.test_lib import client_test_lib
 from grr.test_lib import flow_test_lib
 from grr.test_lib import hunt_test_lib
 from grr.test_lib import test_lib
@@ -54,7 +58,23 @@ class ApiGetFlowHandlerRegressionTest(
           "GetFlow",
           args=flow_plugin.ApiGetFlowArgs(
               client_id=client_urn.Basename(), flow_id=flow_id.Basename()),
-          replace={flow_id.Basename(): "F:ABCDEF12"})
+          replace={
+              flow_id.Basename(): "F:ABCDEF12"
+          })
+
+      with data_store.DB.GetMutationPool() as pool:
+        flow.GRRFlow.MarkForTermination(
+            flow_id, reason="Some reason", mutation_pool=pool)
+
+      # Fetch the same flow which is now should be marked as pending
+      # termination.
+      self.Check(
+          "GetFlow",
+          args=flow_plugin.ApiGetFlowArgs(
+              client_id=client_urn.Basename(), flow_id=flow_id.Basename()),
+          replace={
+              flow_id.Basename(): "F:ABCDEF13"
+          })
 
 
 class ApiListFlowsHandlerRegressionTest(
@@ -107,9 +127,11 @@ class ApiListFlowRequestsHandlerRegressionTest(
           client_id=self.client_id,
           token=self.token)
 
-    mock = flow_test_lib.MockClient(self.client_id, None, token=self.token)
-    while mock.Next():
-      pass
+      test_process = client_test_lib.MockWindowsProcess(name="test_process")
+      with utils.Stubber(psutil, "Process", lambda: test_process):
+        mock = flow_test_lib.MockClient(self.client_id, None, token=self.token)
+        while mock.Next():
+          pass
 
     replace = {flow_urn.Basename(): "W:ABCDEF"}
 
@@ -164,7 +186,9 @@ class ApiListFlowResultsHandlerRegressionTest(
         "ListFlowResults",
         args=flow_plugin.ApiListFlowResultsArgs(
             client_id=self.client_id.Basename(), flow_id=flow_urn.Basename()),
-        replace={flow_urn.Basename(): "W:ABCDEF"})
+        replace={
+            flow_urn.Basename(): "W:ABCDEF"
+        })
 
 
 class ApiListFlowLogsHandlerRegressionTest(
@@ -236,7 +260,9 @@ class ApiGetFlowResultsExportCommandHandlerRegressionTest(
         "GetFlowResultsExportCommand",
         args=flow_plugin.ApiGetFlowResultsExportCommandArgs(
             client_id=self.client_id.Basename(), flow_id=flow_urn.Basename()),
-        replace={flow_urn.Basename()[2:]: "ABCDEF"})
+        replace={
+            flow_urn.Basename()[2:]: "ABCDEF"
+        })
 
 
 class ApiListFlowOutputPluginsHandlerRegressionTest(
@@ -273,7 +299,9 @@ class ApiListFlowOutputPluginsHandlerRegressionTest(
         "ListFlowOutputPlugins",
         args=flow_plugin.ApiListFlowOutputPluginsArgs(
             client_id=self.client_id.Basename(), flow_id=flow_urn.Basename()),
-        replace={flow_urn.Basename(): "W:ABCDEF"})
+        replace={
+            flow_urn.Basename(): "W:ABCDEF"
+        })
 
 
 class ApiListFlowOutputPluginLogsHandlerRegressionTest(
@@ -316,7 +344,9 @@ class ApiListFlowOutputPluginLogsHandlerRegressionTest(
             client_id=self.client_id.Basename(),
             flow_id=flow_urn.Basename(),
             plugin_id="EmailOutputPlugin_0"),
-        replace={flow_urn.Basename(): "W:ABCDEF"})
+        replace={
+            flow_urn.Basename(): "W:ABCDEF"
+        })
 
 
 class ApiListFlowOutputPluginErrorsHandlerRegressionTest(
@@ -357,7 +387,9 @@ class ApiListFlowOutputPluginErrorsHandlerRegressionTest(
             client_id=self.client_id.Basename(),
             flow_id=flow_urn.Basename(),
             plugin_id="FailingDummyHuntOutputPlugin_0"),
-        replace={flow_urn.Basename(): "W:ABCDEF"})
+        replace={
+            flow_urn.Basename(): "W:ABCDEF"
+        })
 
 
 class ApiCreateFlowHandlerRegressionTest(
@@ -417,7 +449,9 @@ class ApiCancelFlowHandlerRegressionTest(
         "CancelFlow",
         args=flow_plugin.ApiCancelFlowArgs(
             client_id=self.client_id.Basename(), flow_id=flow_urn.Basename()),
-        replace={flow_urn.Basename(): "W:ABCDEF"})
+        replace={
+            flow_urn.Basename(): "W:ABCDEF"
+        })
 
 
 class ApiListFlowDescriptorsHandlerRegressionTest(

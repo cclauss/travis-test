@@ -157,8 +157,8 @@ class ExportTest(ExportTestBase):
                      result[1] == DummyRDFValue("someA")))
 
   def _ConvertsCollectionWithValuesWithSingleConverter(self, coll_type):
-    with data_store.DB.GetMutationPool(token=self.token) as pool:
-      fd = coll_type(rdfvalue.RDFURN("aff4:/testcoll"), token=self.token)
+    with data_store.DB.GetMutationPool() as pool:
+      fd = coll_type(rdfvalue.RDFURN("aff4:/testcoll"))
       src1 = rdf_client.ClientURN("C.0000000000000000")
       fd.AddAsMessage(DummyRDFValue("some"), src1, mutation_pool=pool)
       fixture_test_lib.ClientFixture(src1, token=self.token)
@@ -179,9 +179,9 @@ class ExportTest(ExportTestBase):
         hunts_results.HuntResultCollection)
 
   def _ConvertsCollectionWithMultipleConverters(self, coll_type):
-    fd = coll_type(rdfvalue.RDFURN("aff4:/testcoll"), token=self.token)
+    fd = coll_type(rdfvalue.RDFURN("aff4:/testcoll"))
 
-    with data_store.DB.GetMutationPool(token=self.token) as pool:
+    with data_store.DB.GetMutationPool() as pool:
       src1 = rdf_client.ClientURN("C.0000000000000000")
       fd.AddAsMessage(DummyRDFValue3("some1"), src1, mutation_pool=pool)
       fixture_test_lib.ClientFixture(src1, token=self.token)
@@ -390,11 +390,11 @@ class ExportTest(ExportTestBase):
     results = list(converter.Convert(self.metadata, stat, token=self.token))
 
     self.assertEqual(len(results), 1)
-    self.assertEqual(
-        results[0].urn,
-        rdfvalue.RDFURN(
-            self.client_id.Add("registry/HKEY_USERS/S-1-5-20/Software/"
-                               "Microsoft/Windows/CurrentVersion/Run/Sidebar")))
+    self.assertEqual(results[0].urn,
+                     rdfvalue.RDFURN(
+                         self.client_id.Add(
+                             "registry/HKEY_USERS/S-1-5-20/Software/"
+                             "Microsoft/Windows/CurrentVersion/Run/Sidebar")))
     self.assertEqual(results[0].last_modified,
                      rdfvalue.RDFDatetimeSeconds(1247546054))
     self.assertEqual(results[0].data, "")
@@ -528,11 +528,13 @@ class ExportTest(ExportTestBase):
                 ),
                 rdf_client.NetworkAddress(
                     address_type=rdf_client.NetworkAddress.Family.INET,
-                    packed_bytes=socket.inet_pton(socket.AF_INET, "10.0.0.1"),),
+                    packed_bytes=socket.inet_pton(socket.AF_INET, "10.0.0.1"),
+                ),
                 rdf_client.NetworkAddress(
                     address_type=rdf_client.NetworkAddress.Family.INET6,
                     packed_bytes=socket.inet_pton(socket.AF_INET6,
-                                                  "2001:720:1500:1::a100"),)
+                                                  "2001:720:1500:1::a100"),
+                )
             ])
     ])
 
@@ -552,14 +554,17 @@ class ExportTest(ExportTestBase):
         addresses=[
             rdf_client.NetworkAddress(
                 address_type=rdf_client.NetworkAddress.Family.INET,
-                packed_bytes=socket.inet_pton(socket.AF_INET, "127.0.0.1"),),
+                packed_bytes=socket.inet_pton(socket.AF_INET, "127.0.0.1"),
+            ),
             rdf_client.NetworkAddress(
                 address_type=rdf_client.NetworkAddress.Family.INET,
-                packed_bytes=socket.inet_pton(socket.AF_INET, "10.0.0.1"),),
+                packed_bytes=socket.inet_pton(socket.AF_INET, "10.0.0.1"),
+            ),
             rdf_client.NetworkAddress(
                 address_type=rdf_client.NetworkAddress.Family.INET6,
                 packed_bytes=socket.inet_pton(socket.AF_INET6,
-                                              "2001:720:1500:1::a100"),)
+                                              "2001:720:1500:1::a100"),
+            )
         ])
 
     converter = export.InterfaceToExportedNetworkInterfaceConverter()
@@ -602,8 +607,8 @@ class ExportTest(ExportTestBase):
     self.assertEqual(results[2].anomaly.type, checkresults[1].anomaly[1].type)
     self.assertEqual(results[2].anomaly.symptom,
                      checkresults[1].anomaly[1].symptom)
-    self.assertEqual(results[2].anomaly.anomaly_reference_id,
-                     "\n".join(checkresults[1].anomaly[1].anomaly_reference_id))
+    self.assertEqual(results[2].anomaly.anomaly_reference_id, "\n".join(
+        checkresults[1].anomaly[1].anomaly_reference_id))
     self.assertEqual(results[2].anomaly.finding,
                      checkresults[1].anomaly[1].finding[0])
 
@@ -809,8 +814,8 @@ class ExportTest(ExportTestBase):
     converter = export.FileFinderResultConverter()
     results = list(
         converter.BatchConvert(
-            [(self.metadata, file_finder_result), (self.metadata,
-                                                   file_finder_result2)],
+            [(self.metadata, file_finder_result),
+             (self.metadata, file_finder_result2)],
             token=self.token))
 
     exported_files = [
@@ -862,6 +867,19 @@ class ExportTest(ExportTestBase):
 
     self.assertEqual(exported_bytes[0].data, data)
     self.assertEqual(exported_bytes[0].length, 6)
+
+  def testRDFStringConverter(self):
+    data = rdfvalue.RDFString("foobar")
+
+    converters = export.ExportConverter.GetConvertersByValue(data)
+    self.assertTrue(converters)
+    for converter in converters:
+      converted_data = list(converter().Convert(
+          self.metadata, data, token=self.token))
+      self.assertEqual(len(converted_data), 1)
+      for converted in converted_data:
+        self.assertIsInstance(converted, export.ExportedString)
+        self.assertEqual(converted.data, str(data))
 
   def testGrrMessageConverter(self):
     payload = DummyRDFValue4(
@@ -956,6 +974,121 @@ class ExportTest(ExportTestBase):
     self.assertEqual(len(results), 1)
     self.assertEqual(results[0].dns_servers, " ".join(dns_servers))
     self.assertEqual(results[0].dns_suffixes, " ".join(dns_suffixes))
+
+
+class DictToExportedDictItemsConverterTest(ExportTestBase):
+  """Tests for DictToExportedDictItemsConverter."""
+
+  def setUp(self):
+    super(DictToExportedDictItemsConverterTest, self).setUp()
+    self.converter = export.DictToExportedDictItemsConverter()
+
+  def testConvertsDictWithPrimitiveValues(self):
+    source = rdf_protodict.Dict()
+    source["foo"] = "bar"
+    source["bar"] = 42
+
+    # Serialize/unserialize to make sure we deal with the object that is
+    # similar to what we may get from the datastore.
+    source = rdf_protodict.Dict.FromSerializedString(source.SerializeToString())
+
+    converted = list(
+        self.converter.Convert(self.metadata, source, token=self.token))
+
+    self.assertEqual(len(converted), 2)
+
+    # Output should be stable sorted by dict's keys.
+    self.assertEqual(converted[0].key, "bar")
+    self.assertEqual(converted[0].value, "42")
+    self.assertEqual(converted[1].key, "foo")
+    self.assertEqual(converted[1].value, "bar")
+
+  def testConvertsDictWithNestedSetListOrTuple(self):
+    # Note that set's contents will be sorted on export.
+    variants = [set([43, 42, 44]), (42, 43, 44), [42, 43, 44]]
+
+    for variant in variants:
+      source = rdf_protodict.Dict()
+      source["foo"] = "bar"
+      source["bar"] = variant
+
+      # Serialize/unserialize to make sure we deal with the object that is
+      # similar to what we may get from the datastore.
+      source = rdf_protodict.Dict.FromSerializedString(
+          source.SerializeToString())
+
+      converted = list(
+          self.converter.Convert(self.metadata, source, token=self.token))
+
+      self.assertEqual(len(converted), 4)
+      self.assertEqual(converted[0].key, "bar[0]")
+      self.assertEqual(converted[0].value, "42")
+      self.assertEqual(converted[1].key, "bar[1]")
+      self.assertEqual(converted[1].value, "43")
+      self.assertEqual(converted[2].key, "bar[2]")
+      self.assertEqual(converted[2].value, "44")
+      self.assertEqual(converted[3].key, "foo")
+      self.assertEqual(converted[3].value, "bar")
+
+  def testConvertsDictWithNestedDict(self):
+    source = rdf_protodict.Dict()
+    source["foo"] = "bar"
+    source["bar"] = {"a": 42, "b": 43}
+
+    # Serialize/unserialize to make sure we deal with the object that is
+    # similar to what we may get from the datastore.
+    source = rdf_protodict.Dict.FromSerializedString(source.SerializeToString())
+
+    converted = list(
+        self.converter.Convert(self.metadata, source, token=self.token))
+
+    self.assertEqual(len(converted), 3)
+
+    # Output should be stable sorted by dict's keys.
+    self.assertEqual(converted[0].key, "bar.a")
+    self.assertEqual(converted[0].value, "42")
+    self.assertEqual(converted[1].key, "bar.b")
+    self.assertEqual(converted[1].value, "43")
+    self.assertEqual(converted[2].key, "foo")
+    self.assertEqual(converted[2].value, "bar")
+
+  def testConvertsDictWithNestedDictAndIterables(self):
+    source = rdf_protodict.Dict()
+    source["foo"] = "bar"
+    # pyformat: disable
+    source["bar"] = {
+        "a": {
+            "c": [42, 43, 44, {"x": "y"}],
+            "d": "oh"
+        },
+        "b": 43
+    }
+    # pyformat: enable
+
+    # Serialize/unserialize to make sure we deal with the object that is
+    # similar to what we may get from the datastore.
+    source = rdf_protodict.Dict.FromSerializedString(source.SerializeToString())
+
+    converted = list(
+        self.converter.Convert(self.metadata, source, token=self.token))
+
+    self.assertEqual(len(converted), 7)
+
+    # Output should be stable sorted by dict's keys.
+    self.assertEqual(converted[0].key, "bar.a.c[0]")
+    self.assertEqual(converted[0].value, "42")
+    self.assertEqual(converted[1].key, "bar.a.c[1]")
+    self.assertEqual(converted[1].value, "43")
+    self.assertEqual(converted[2].key, "bar.a.c[2]")
+    self.assertEqual(converted[2].value, "44")
+    self.assertEqual(converted[3].key, "bar.a.c[3].x")
+    self.assertEqual(converted[3].value, "y")
+    self.assertEqual(converted[4].key, "bar.a.d")
+    self.assertEqual(converted[4].value, "oh")
+    self.assertEqual(converted[5].key, "bar.b")
+    self.assertEqual(converted[5].value, "43")
+    self.assertEqual(converted[6].key, "foo")
+    self.assertEqual(converted[6].value, "bar")
 
 
 class ArtifactFilesDownloaderResultConverterTest(ExportTestBase):
@@ -1074,8 +1207,8 @@ class ArtifactFilesDownloaderResultConverterTest(ExportTestBase):
     result = collectors.ArtifactFilesDownloaderResult(
         original_result=self.registry_stat,
         found_pathspec=rdf_paths.PathSpec(path="foo", pathtype="OS"),
-        downloaded_file=rdf_client.StatEntry(pathspec=rdf_paths.PathSpec(
-            path="foo", pathtype="OS")))
+        downloaded_file=rdf_client.StatEntry(
+            pathspec=rdf_paths.PathSpec(path="foo", pathtype="OS")))
 
     converter = export.ArtifactFilesDownloaderResultConverter()
     converted = list(converter.Convert(self.metadata, result, token=self.token))

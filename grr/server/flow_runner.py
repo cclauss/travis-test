@@ -190,7 +190,7 @@ class FlowRunner(object):
       RuntimeError: on parent missing logs_collection.
     """
     return grr_collections.LogCollection(
-        self._GetLogCollectionURN(logs_collection_urn), token=self.token)
+        self._GetLogCollectionURN(logs_collection_urn))
 
   def InitializeContext(self, args):
     """Initializes the context of this flow."""
@@ -868,20 +868,21 @@ class FlowRunner(object):
       # Only write the reply to the collection if we are the parent flow.
       self.QueueReplyForResultCollection(response)
 
-  def FlushMessages(self):
-    """Flushes the messages that were queued."""
-    # Only flush queues if we are the top level runner.
-    if self.parent_runner is None:
-      self.queue_manager.Flush()
-
+  def FlushQueuedReplies(self):
     if self.queued_replies:
-      with data_store.DB.GetMutationPool(token=self.token) as pool:
+      with data_store.DB.GetMutationPool() as pool:
         for response in self.queued_replies:
           sequential_collection.GeneralIndexedCollection.StaticAdd(
               self.flow_obj.output_urn, response, mutation_pool=pool)
           multi_type_collection.MultiTypeCollection.StaticAdd(
               self.flow_obj.multi_type_output_urn, response, mutation_pool=pool)
       self.queued_replies = []
+
+  def FlushMessages(self):
+    """Flushes the messages that were queued."""
+    # Only flush queues if we are the top level runner.
+    if self.parent_runner is None:
+      self.queue_manager.Flush()
 
   def Error(self, backtrace, client_id=None, status=None):
     """Kills this flow with an error."""
@@ -1104,7 +1105,7 @@ class FlowRunner(object):
         log_message=status)
     logs_collection_urn = self._GetLogCollectionURN(
         self.runner_args.logs_collection_urn)
-    with data_store.DB.GetMutationPool(token=self.token) as pool:
+    with data_store.DB.GetMutationPool() as pool:
       grr_collections.LogCollection.StaticAdd(
           logs_collection_urn, log_entry, mutation_pool=pool)
 
@@ -1163,8 +1164,7 @@ class FlowRunner(object):
           self.flow_obj.Schema.NOTIFICATION,
           notification,
           replace=False,
-          sync=True,
-          token=self.token)
+          sync=True)
 
       # Disable further notifications.
       self.context.user_notified = True

@@ -211,19 +211,14 @@ class Responses(object):
 
   def _LogFlowState(self, responses):
     session_id = responses[0].session_id
-    token = access_control.ACLToken(username="GRRWorker", reason="Logging")
-    token.supervisor = True
 
-    logging.error("No valid Status message.\nState:\n%s\n%s\n%s",
-                  data_store.DB.ResolvePrefix(
-                      session_id.Add("state"), "flow:", token=token),
-                  data_store.DB.ResolvePrefix(
-                      session_id.Add(
-                          "state/request:%08X" % responses[0].request_id),
-                      "flow:",
-                      token=token),
-                  data_store.DB.ResolvePrefix(
-                      queues.FLOWS, "notify:%s" % session_id, token=token))
+    logging.error(
+        "No valid Status message.\nState:\n%s\n%s\n%s",
+        data_store.DB.ResolvePrefix(session_id.Add("state"), "flow:"),
+        data_store.DB.ResolvePrefix(
+            session_id.Add("state/request:%08X" % responses[0].request_id),
+            "flow:"),
+        data_store.DB.ResolvePrefix(queues.FLOWS, "notify:%s" % session_id))
 
 
 class FakeResponses(Responses):
@@ -445,12 +440,19 @@ class FlowBase(aff4.AFF4Volume):
     # Otherwise make a new runner.
     return self.CreateRunner()
 
-  def Flush(self):
-    """Flushes the flow/hunt and all its requests to the data_store."""
+  def _CheckLeaseAndFlush(self):
     # Check for Lock expiration first.
     self.CheckLease()
+    # Flush the results. We might declare ourselves done in Save and
+    # the results should be in before that.
+    if self.runner:
+      self.runner.FlushQueuedReplies()
     self.Save()
     self.WriteState()
+
+  def Flush(self):
+    """Flushes the flow/hunt and all its requests to the data_store."""
+    self._CheckLeaseAndFlush()
     self.Load()
     super(FlowBase, self).Flush()
     # Writing the messages queued in the queue_manager of the runner always has
@@ -459,10 +461,7 @@ class FlowBase(aff4.AFF4Volume):
 
   def Close(self):
     """Flushes the flow and all its requests to the data_store."""
-    # Check for Lock expiration first.
-    self.CheckLease()
-    self.Save()
-    self.WriteState()
+    self._CheckLeaseAndFlush()
     super(FlowBase, self).Close()
     # Writing the messages queued in the queue_manager of the runner always has
     # to be the last thing that happens or we will have a race condition.
@@ -855,18 +854,17 @@ class GRRFlow(FlowBase):
     return self.runner
 
   @classmethod
-  def GetDefaultArgs(cls, token=None):
-    """Return a useful default args semantic value.
+  def GetDefaultArgs(cls, username=None):
+    """Returns a useful default args semantic value.
 
     This should be extended by flows.
 
     Args:
-      token: The ACL token for the user.
+      username: The username to get the default args for.
 
     Returns:
       an instance of cls.args_type pre-populated with useful data
     """
-    _ = token
     return cls.args_type()
 
   def HeartBeat(self):
@@ -1058,30 +1056,6 @@ class GRRFlow(FlowBase):
         output.append("")
     return "\n".join(output)
 
-  @staticmethod
-  def GetFlowRequests(flow_urns, token=None):
-    """Returns all outstanding requests for the flows in flow_urns."""
-
-    # TODO(user): This should be in the data store.
-
-    flow_requests = {}
-    flow_request_urns = [flow_urn.Add("state") for flow_urn in flow_urns]
-
-    for flow_urn, values in data_store.DB.MultiResolvePrefix(
-        flow_request_urns, "flow:", token=token):
-      for subject, serialized, _ in values:
-        try:
-          if "status" in subject:
-            msg = rdf_flows.GrrMessage.FromSerializedString(serialized)
-          else:
-            msg = rdf_flows.RequestState.FromSerializedString(serialized)
-        except Exception as e:  # pylint: disable=broad-except
-          logging.warn("Error while parsing: %s", e)
-          continue
-
-        flow_requests.setdefault(flow_urn, []).append(msg)
-    return flow_requests
-
   # All the collections flows use.
 
   # Results collection.
@@ -1090,20 +1064,19 @@ class GRRFlow(FlowBase):
     return self.urn.Add(RESULTS_SUFFIX)
 
   @classmethod
-  def ResultCollectionForFID(cls, flow_id, token=None):
+  def ResultCollectionForFID(cls, flow_id):
     """Returns the ResultCollection for the flow with a given flow_id.
 
     Args:
       flow_id: The id of the flow, a RDFURN of the form aff4:/flows/F:123456.
-      token: A data store token.
     Returns:
       The collection containing the results for the flow identified by the id.
     """
     return sequential_collection.GeneralIndexedCollection(
-        flow_id.Add(RESULTS_SUFFIX), token=token)
+        flow_id.Add(RESULTS_SUFFIX))
 
   def ResultCollection(self):
-    return self.ResultCollectionForFID(self.session_id, token=self.token)
+    return self.ResultCollectionForFID(self.session_id)
 
   # Results collection per type.
   @property
@@ -1111,12 +1084,12 @@ class GRRFlow(FlowBase):
     return self.urn.Add(RESULTS_PER_TYPE_SUFFIX)
 
   @classmethod
-  def TypedResultCollectionForFID(cls, flow_id, token=None):
+  def TypedResultCollectionForFID(cls, flow_id):
     return multi_type_collection.MultiTypeCollection(
-        flow_id.Add(RESULTS_PER_TYPE_SUFFIX), token=token)
+        flow_id.Add(RESULTS_PER_TYPE_SUFFIX))
 
   def TypedResultCollection(self):
-    return self.TypedResultCollectionForFID(self.session_id, token=self.token)
+    return self.TypedResultCollectionForFID(self.session_id)
 
   # Logs collection.
   @property
@@ -1124,11 +1097,11 @@ class GRRFlow(FlowBase):
     return self.urn.Add(LOGS_SUFFIX)
 
   @classmethod
-  def LogCollectionForFID(cls, flow_id, token=None):
-    return grr_collections.LogCollection(flow_id.Add(LOGS_SUFFIX), token=token)
+  def LogCollectionForFID(cls, flow_id):
+    return grr_collections.LogCollection(flow_id.Add(LOGS_SUFFIX))
 
   def LogCollection(self):
-    return self.LogCollectionForFID(self.session_id, token=self.token)
+    return self.LogCollectionForFID(self.session_id)
 
 
 class WellKnownFlow(GRRFlow):

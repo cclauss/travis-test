@@ -63,9 +63,8 @@ class ApiListHuntResultsRegressionTest(
 
   def Run(self):
     hunt_urn = rdfvalue.RDFURN("aff4:/hunts/H:123456")
-    results = implementation.GRRHunt.ResultCollectionForHID(
-        hunt_urn, token=self.token)
-    with data_store.DB.GetMutationPool(token=self.token) as pool:
+    results = implementation.GRRHunt.ResultCollectionForHID(hunt_urn)
+    with data_store.DB.GetMutationPool() as pool:
       result = rdf_flows.GrrMessage(
           payload=rdfvalue.RDFString("blah1"),
           age=rdfvalue.RDFDatetime().FromSecondsFromEpoch(1))
@@ -116,7 +115,9 @@ class ApiGetHuntHandlerRegressionTest(api_regression_test_lib.ApiRegressionTest,
     self.Check(
         "GetHunt",
         args=hunt_plugin.ApiGetHuntArgs(hunt_id=hunt_urn.Basename()),
-        replace={hunt_urn.Basename(): "H:123456"})
+        replace={
+            hunt_urn.Basename(): "H:123456"
+        })
 
 
 class ApiGetHuntHandlerHuntCopyRegressionTest(
@@ -142,7 +143,9 @@ class ApiGetHuntHandlerHuntCopyRegressionTest(
     self.Check(
         "GetHunt",
         args=hunt_plugin.ApiGetHuntArgs(hunt_id=hunt_urn.Basename()),
-        replace={hunt_urn.Basename(): "H:123456"})
+        replace={
+            hunt_urn.Basename(): "H:123456"
+        })
 
 
 class ApiGetHuntHandlerFlowCopyRegressionTest(
@@ -169,7 +172,9 @@ class ApiGetHuntHandlerFlowCopyRegressionTest(
     self.Check(
         "GetHunt",
         args=hunt_plugin.ApiGetHuntArgs(hunt_id=hunt_urn.Basename()),
-        replace={hunt_urn.Basename(): "H:123456"})
+        replace={
+            hunt_urn.Basename(): "H:123456"
+        })
 
 
 class ApiListHuntLogsHandlerRegressionTest(
@@ -192,17 +197,23 @@ class ApiListHuntLogsHandlerRegressionTest(
     self.Check(
         "ListHuntLogs",
         args=hunt_plugin.ApiListHuntLogsArgs(hunt_id=hunt_obj.urn.Basename()),
-        replace={hunt_obj.urn.Basename(): "H:123456"})
+        replace={
+            hunt_obj.urn.Basename(): "H:123456"
+        })
     self.Check(
         "ListHuntLogs",
         args=hunt_plugin.ApiListHuntLogsArgs(
             hunt_id=hunt_obj.urn.Basename(), count=1),
-        replace={hunt_obj.urn.Basename(): "H:123456"})
+        replace={
+            hunt_obj.urn.Basename(): "H:123456"
+        })
     self.Check(
         "ListHuntLogs",
         args=hunt_plugin.ApiListHuntLogsArgs(
             hunt_id=hunt_obj.urn.Basename(), offset=1, count=1),
-        replace={hunt_obj.urn.Basename(): "H:123456"})
+        replace={
+            hunt_obj.urn.Basename(): "H:123456"
+        })
 
 
 class ApiListHuntErrorsHandlerRegressionTest(
@@ -228,17 +239,23 @@ class ApiListHuntErrorsHandlerRegressionTest(
     self.Check(
         "ListHuntErrors",
         args=hunt_plugin.ApiListHuntErrorsArgs(hunt_id=hunt_obj.urn.Basename()),
-        replace={hunt_obj.urn.Basename(): "H:123456"})
+        replace={
+            hunt_obj.urn.Basename(): "H:123456"
+        })
     self.Check(
         "ListHuntErrors",
         args=hunt_plugin.ApiListHuntErrorsArgs(
             hunt_id=hunt_obj.urn.Basename(), count=1),
-        replace={hunt_obj.urn.Basename(): "H:123456"})
+        replace={
+            hunt_obj.urn.Basename(): "H:123456"
+        })
     self.Check(
         "ListHuntErrors",
         args=hunt_plugin.ApiListHuntErrorsArgs(
             hunt_id=hunt_obj.urn.Basename(), offset=1, count=1),
-        replace={hunt_obj.urn.Basename(): "H:123456"})
+        replace={
+            hunt_obj.urn.Basename(): "H:123456"
+        })
 
 
 class ApiListHuntCrashesHandlerRegressionTest(
@@ -262,8 +279,7 @@ class ApiListHuntCrashesHandlerRegressionTest(
       hunt_test_lib.TestHuntHelperWithMultipleMocks(client_mocks, False,
                                                     self.token)
 
-    crashes = implementation.GRRHunt.CrashCollectionForHID(
-        hunt_obj.urn, token=self.token)
+    crashes = implementation.GRRHunt.CrashCollectionForHID(hunt_obj.urn)
     crash = list(crashes)[0]
     session_id = crash.session_id.Basename()
     replace = {hunt_obj.urn.Basename(): "H:123456", session_id: "H:11223344"}
@@ -342,7 +358,9 @@ class ApiGetHuntResultsExportCommandHandlerRegressionTest(
         "GetHuntResultsExportCommand",
         args=hunt_plugin.ApiGetHuntResultsExportCommandArgs(
             hunt_id=hunt_obj.urn.Basename()),
-        replace={hunt_obj.urn.Basename()[2:]: "123456"})
+        replace={
+            hunt_obj.urn.Basename()[2:]: "123456"
+        })
 
 
 class ApiListHuntOutputPluginsHandlerRegressionTest(
@@ -374,7 +392,9 @@ class ApiListHuntOutputPluginsHandlerRegressionTest(
         "ListHuntOutputPlugins",
         args=hunt_plugin.ApiListHuntOutputPluginsArgs(
             hunt_id=hunt_obj.urn.Basename()),
-        replace={hunt_obj.urn.Basename(): "H:123456"})
+        replace={
+            hunt_obj.urn.Basename(): "H:123456"
+        })
 
 
 class ApiListHuntOutputPluginLogsHandlerRegressionTest(
@@ -413,7 +433,9 @@ class ApiListHuntOutputPluginLogsHandlerRegressionTest(
         args=hunt_plugin.ApiListHuntOutputPluginLogsArgs(
             hunt_id=hunt_urn.Basename(),
             plugin_id="DummyHuntTestOutputPlugin_0"),
-        replace={hunt_urn.Basename(): "H:123456"})
+        replace={
+            hunt_urn.Basename(): "H:123456"
+        })
 
 
 class ApiListHuntOutputPluginErrorsHandlerRegressionTest(
@@ -455,7 +477,9 @@ class ApiListHuntOutputPluginErrorsHandlerRegressionTest(
         args=hunt_plugin.ApiListHuntOutputPluginErrorsArgs(
             hunt_id=hunt_urn.Basename(),
             plugin_id="FailingDummyHuntOutputPlugin_0"),
-        replace={hunt_urn.Basename(): "H:123456"})
+        replace={
+            hunt_urn.Basename(): "H:123456"
+        })
 
 
 class ApiGetHuntStatsHandlerRegressionTest(
@@ -507,13 +531,6 @@ class ApiListHuntClientsHandlerRegressionTest(
 
     # Create replace dictionary.
     replace = {hunt_urn.Basename(): "H:123456"}
-
-    # Add all sub flows to replace dict.
-    all_flows = implementation.GRRHunt.GetAllSubflowUrns(
-        hunt_urn, self.client_ids, token=self.token)
-
-    for flow_urn in all_flows:
-      replace[flow_urn.Basename()] = "W:123456"
 
     self.Check(
         "ListHuntClients",
@@ -574,7 +591,9 @@ class ApiDeleteHuntHandlerRegressionTest(
     self.Check(
         "DeleteHunt",
         args=hunt_plugin.ApiDeleteHuntArgs(hunt_id=hunt.urn.Basename()),
-        replace={hunt.urn.Basename(): "H:123456"})
+        replace={
+            hunt.urn.Basename(): "H:123456"
+        })
 
 
 def main(argv):

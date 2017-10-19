@@ -265,8 +265,7 @@ class HuntRunner(object):
 
   def Publish(self, event_name, msg, delay=0):
     """Sends the message to event listeners."""
-    events_lib.Events.PublishEvent(
-        event_name, msg, delay=delay, token=self.token)
+    events_lib.Events.PublishEvent(event_name, msg, delay=delay)
 
   def CallFlow(self,
                flow_name=None,
@@ -359,8 +358,9 @@ class HuntRunner(object):
       subflow_network_limit = self.runner_args.per_client_network_limit_bytes
 
     if self.runner_args.network_bytes_limit:
-      remaining_network_quota = (self.runner_args.network_bytes_limit -
-                                 self.context.network_bytes_sent)
+      remaining_network_quota = (
+          self.runner_args.network_bytes_limit -
+          self.context.network_bytes_sent)
       if subflow_network_limit is None:
         subflow_network_limit = remaining_network_quota
       else:
@@ -387,6 +387,10 @@ class HuntRunner(object):
     self.QueueRequest(state)
 
     return child_urn
+
+  def FlushQueuedReplies(self):
+    # Hunts do not send replies.
+    pass
 
   def FlushMessages(self):
     """Flushes the messages that were queued."""
@@ -584,7 +588,7 @@ class HuntRunner(object):
         flow_name=self.hunt_obj.__class__.__name__,
         log_message=status)
     logs_collection_urn = self.hunt_obj.logs_collection_urn
-    with data_store.DB.GetMutationPool(token=self.token) as pool:
+    with data_store.DB.GetMutationPool() as pool:
       grr_collections.LogCollection.StaticAdd(
           logs_collection_urn, log_entry, mutation_pool=pool)
 
@@ -630,7 +634,7 @@ class HuntRunner(object):
         action=event_action,
         urn=self.hunt_obj.urn,
         description=self.runner_args.description)
-    events_lib.Events.PublishEvent("Audit", event, token=self.hunt_obj.token)
+    events_lib.Events.PublishEvent("Audit", event)
 
   def Start(self):
     """This uploads the rules to the foreman and, thus, starts the hunt."""
@@ -844,6 +848,8 @@ class HuntRunner(object):
 class GRRHunt(flow.FlowBase):
   """The GRR Hunt class."""
 
+  MIN_CLIENTS_FOR_AVERAGE_THRESHOLDS = 1000
+
   class SchemaCls(flow.FlowBase.SchemaCls):
     """The schema for hunts.
 
@@ -941,11 +947,10 @@ class GRRHunt(flow.FlowBase):
     Returns:
       The collection containing the results for the hunt identified by the id.
     """
-    return hunts_results.HuntResultCollection(
-        hunt_id.Add("Results"), token=token)
+    return hunts_results.HuntResultCollection(hunt_id.Add("Results"))
 
   def ResultCollection(self):
-    return self.ResultCollectionForHID(self.session_id, token=self.token)
+    return self.ResultCollectionForHID(self.session_id)
 
   # Collection for results by type.
   @property
@@ -953,12 +958,12 @@ class GRRHunt(flow.FlowBase):
     return self.urn.Add("ResultsPerType")
 
   @classmethod
-  def TypedResultCollectionForHID(cls, hunt_id, token=None):
+  def TypedResultCollectionForHID(cls, hunt_id):
     return multi_type_collection.MultiTypeCollection(
-        hunt_id.Add("ResultsPerType"), token=token)
+        hunt_id.Add("ResultsPerType"))
 
   def TypedResultCollection(self):
-    return self.TypedResultCollectionForHID(self.session_id, token=self.token)
+    return self.TypedResultCollectionForHID(self.session_id)
 
   # Collection for logs.
   @property
@@ -966,11 +971,11 @@ class GRRHunt(flow.FlowBase):
     return self.urn.Add("Logs")
 
   @classmethod
-  def LogCollectionForHID(cls, hunt_id, token=None):
-    return grr_collections.LogCollection(hunt_id.Add("Logs"), token=token)
+  def LogCollectionForHID(cls, hunt_id):
+    return grr_collections.LogCollection(hunt_id.Add("Logs"))
 
   def LogCollection(self):
-    return self.LogCollectionForHID(self.session_id, token=self.token)
+    return self.LogCollectionForHID(self.session_id)
 
   # Collection for crashes.
   @classmethod
@@ -978,14 +983,14 @@ class GRRHunt(flow.FlowBase):
     return hunt_id.Add("Crashes")
 
   @classmethod
-  def CrashCollectionForHID(cls, hunt_id, token=None):
-    return grr_collections.CrashCollection(hunt_id.Add("Crashes"), token=token)
+  def CrashCollectionForHID(cls, hunt_id):
+    return grr_collections.CrashCollection(hunt_id.Add("Crashes"))
 
   def RegisterCrash(self, crash_details):
     hunt_crashes = self.__class__.CrashCollectionForHID(self.urn)
     hunt_crashes_len = hunt_crashes.CalculateLength()
 
-    with data_store.DB.GetMutationPool(token=self.token) as pool:
+    with data_store.DB.GetMutationPool() as pool:
       hunt_crashes.Add(crash_details, mutation_pool=pool)
 
     # Account for a crash detail that we've just added.
@@ -1004,9 +1009,8 @@ class GRRHunt(flow.FlowBase):
     return self.urn.Add("ErrorClients")
 
   @classmethod
-  def ErrorCollectionForHID(cls, hunt_id, token=None):
-    return grr_collections.HuntErrorCollection(
-        hunt_id.Add("ErrorClients"), token=token)
+  def ErrorCollectionForHID(cls, hunt_id):
+    return grr_collections.HuntErrorCollection(hunt_id.Add("ErrorClients"))
 
   # Collection for output plugin status objects.
   @property
@@ -1014,9 +1018,9 @@ class GRRHunt(flow.FlowBase):
     return self.urn.Add("OutputPluginsStatus")
 
   @classmethod
-  def PluginStatusCollectionForHID(cls, hunt_id, token=None):
+  def PluginStatusCollectionForHID(cls, hunt_id):
     return grr_collections.PluginStatusCollection(
-        hunt_id.Add("OutputPluginsStatus"), token=token)
+        hunt_id.Add("OutputPluginsStatus"))
 
   # Collection for output plugin status errors.
   @property
@@ -1024,9 +1028,9 @@ class GRRHunt(flow.FlowBase):
     return self.urn.Add("OutputPluginsErrors")
 
   @classmethod
-  def PluginErrorCollectionForHID(cls, hunt_id, token=None):
+  def PluginErrorCollectionForHID(cls, hunt_id):
     return grr_collections.PluginStatusCollection(
-        hunt_id.Add("OutputPluginsErrors"), token=token)
+        hunt_id.Add("OutputPluginsErrors"))
 
   # Collection for clients that reported an error.
   @property
@@ -1034,13 +1038,12 @@ class GRRHunt(flow.FlowBase):
     return self.urn.Add("ClientsWithResults")
 
   @classmethod
-  def ClientsWithResultsCollectionForHID(cls, hunt_id, token=None):
+  def ClientsWithResultsCollectionForHID(cls, hunt_id):
     return grr_collections.ClientUrnCollection(
-        hunt_id.Add("ClientsWithResults"), token=token)
+        hunt_id.Add("ClientsWithResults"))
 
   def ClientsWithResultsCollection(self):
-    return self.ClientsWithResultsCollectionForHID(
-        self.session_id, token=self.token)
+    return self.ClientsWithResultsCollectionForHID(self.session_id)
 
   # Collection for clients the hunt ran on.
   @property
@@ -1048,9 +1051,8 @@ class GRRHunt(flow.FlowBase):
     return self.urn.Add("AllClients")
 
   @classmethod
-  def AllClientsCollectionForHID(cls, hunt_id, token=None):
-    return grr_collections.ClientUrnCollection(
-        hunt_id.Add("AllClients"), token=token)
+  def AllClientsCollectionForHID(cls, hunt_id):
+    return grr_collections.ClientUrnCollection(hunt_id.Add("AllClients"))
 
   # Collection for clients that have completed this hunt.
   @property
@@ -1058,9 +1060,8 @@ class GRRHunt(flow.FlowBase):
     return self.urn.Add("CompletedClients")
 
   @classmethod
-  def CompletedClientsCollectionForHID(cls, hunt_id, token=None):
-    return grr_collections.ClientUrnCollection(
-        hunt_id.Add("CompletedClients"), token=token)
+  def CompletedClientsCollectionForHID(cls, hunt_id):
+    return grr_collections.ClientUrnCollection(hunt_id.Add("CompletedClients"))
 
   @property
   def results_metadata_urn(self):
@@ -1075,12 +1076,12 @@ class GRRHunt(flow.FlowBase):
     return self.context.creator
 
   def _AddURNToCollection(self, urn, collection_urn):
-    with data_store.DB.GetMutationPool(token=self.token) as pool:
+    with data_store.DB.GetMutationPool() as pool:
       grr_collections.ClientUrnCollection.StaticAdd(
           collection_urn, urn, mutation_pool=pool)
 
   def _AddHuntErrorToCollection(self, error, collection_urn):
-    with data_store.DB.GetMutationPool(token=self.token) as pool:
+    with data_store.DB.GetMutationPool() as pool:
       grr_collections.HuntErrorCollection.StaticAdd(
           collection_urn, error, mutation_pool=pool)
 
@@ -1252,6 +1253,60 @@ class GRRHunt(flow.FlowBase):
     """A shortcut method for stopping the hunt."""
     self.GetRunner().Stop(reason=reason)
 
+  def StopHuntIfAverageLimitsExceeded(self):
+    # Do nothing if the hunt is already stopped.
+    state = self.Get(self.Schema.STATE)
+    if state == "STOPPED":
+      return
+
+    if (self.context.completed_clients_count <
+        self.MIN_CLIENTS_FOR_AVERAGE_THRESHOLDS):
+      return
+
+    # Check average per-client results count limit.
+    if self.runner_args.avg_results_per_client_limit:
+      avg_results_per_client = (
+          self.context.results_count / float(
+              self.context.completed_clients_count))
+      if (avg_results_per_client >
+          self.runner_args.avg_results_per_client_limit):
+        # Stop the hunt since we get too many results per client.
+        reason = ("Hunt %s reached the average results per client "
+                  "limit of %d and was stopped.") % (
+                      self.urn.Basename(),
+                      self.runner_args.avg_results_per_client_limit)
+        self.Stop(reason=reason)
+
+    # Check average per-client CPU seconds limit.
+    if self.runner_args.avg_cpu_seconds_per_client_limit:
+      avg_cpu_seconds_per_client = (
+          (self.context.client_resources.cpu_usage.user_cpu_time +
+           self.context.client_resources.cpu_usage.system_cpu_time) / float(
+               self.context.completed_clients_count))
+      if (avg_cpu_seconds_per_client >
+          self.runner_args.avg_cpu_seconds_per_client_limit):
+        # Stop the hunt since we use too many CPUs per client.
+        reason = ("Hunt %s reached the average CPU seconds per client "
+                  "limit of %d and was stopped.") % (
+                      self.urn.Basename(),
+                      self.runner_args.avg_cpu_seconds_per_client_limit)
+        self.Stop(reason=reason)
+
+    # Check average per-client network bytes limit.
+    if self.runner_args.avg_network_bytes_per_client_limit:
+      avg_network_bytes_per_client = (
+          self.context.network_bytes_sent / float(
+              self.context.completed_clients_count))
+      if (avg_network_bytes_per_client >
+          self.runner_args.avg_network_bytes_per_client_limit):
+        # Stop the hunt since we use too many network bytes sent
+        # per client.
+        reason = ("Hunt %s reached the average network bytes per client "
+                  "limit of %d and was stopped.") % (
+                      self.urn.Basename(),
+                      self.runner_args.avg_network_bytes_per_client_limit)
+        self.Stop(reason=reason)
+
   def AddResultsToCollection(self, responses, client_id):
     if responses.success:
       with self.lock:
@@ -1262,7 +1317,7 @@ class GRRHunt(flow.FlowBase):
             for response in responses
         ]
 
-        with data_store.DB.GetMutationPool(token=self.token) as pool:
+        with data_store.DB.GetMutationPool() as pool:
           for msg in msgs:
             hunts_results.HuntResultCollection.StaticAdd(
                 self.results_collection_urn, msg, mutation_pool=pool)
@@ -1271,10 +1326,13 @@ class GRRHunt(flow.FlowBase):
             multi_type_collection.MultiTypeCollection.StaticAdd(
                 self.multi_type_output_urn, msg, mutation_pool=pool)
 
+        self.context.completed_clients_count += 1
         if responses:
           self.RegisterClientWithResults(client_id)
           self.context.clients_with_results_count += 1
           self.context.results_count += len(responses)
+
+        self.StopHuntIfAverageLimitsExceeded()
 
         # Update stats.
         stats.STATS.IncrementCounter("hunt_results_added", delta=len(msgs))
@@ -1334,7 +1392,7 @@ class GRRHunt(flow.FlowBase):
   @flow.StateHandler()
   def Start(self):
     """Initializes this hunt from arguments."""
-    with data_store.DB.GetMutationPool(token=self.token) as mutation_pool:
+    with data_store.DB.GetMutationPool() as mutation_pool:
       self.CreateCollections(mutation_pool)
 
     if not self.runner_args.description:
@@ -1414,7 +1472,7 @@ class GRRHunt(flow.FlowBase):
   def GetClientsCounts(self):
 
     collections_dict = dict(
-        (urn, col_type(urn, token=self.token))
+        (urn, col_type(urn))
         for urn, col_type in
         [(self.all_clients_collection_urn, grr_collections.ClientUrnCollection),
          (self.completed_clients_collection_urn, grr_collections.
@@ -1436,7 +1494,7 @@ class GRRHunt(flow.FlowBase):
 
   def GetClientsErrors(self, client_id=None):
     collection = grr_collections.HuntErrorCollection(
-        self.clients_errors_collection_urn, token=self.token)
+        self.clients_errors_collection_urn)
     errors = collection.GenerateItems()
     if not client_id:
       return errors
@@ -1444,12 +1502,11 @@ class GRRHunt(flow.FlowBase):
       return [error for error in errors if error.client_id == client_id]
 
   def GetClients(self):
-    col = self.AllClientsCollectionForHID(self.session_id, token=self.token)
+    col = self.AllClientsCollectionForHID(self.session_id)
     return set(col.GenerateItems())
 
   def GetCompletedClients(self):
-    col = self.CompletedClientsCollectionForHID(
-        self.session_id, token=self.token)
+    col = self.CompletedClientsCollectionForHID(self.session_id)
     return set(col.GenerateItems())
 
   def GetClientsByStatus(self):
@@ -1481,33 +1538,6 @@ class GRRHunt(flow.FlowBase):
     runner = self.GetRunner()
     if not runner.IsCompleted():
       runner.CheckExpiry()
-
-  @staticmethod
-  def GetAllSubflowUrns(hunt_urn, client_urns, top_level_only=False,
-                        token=None):
-    """Lists all subflows for a given hunt for all clients in client_urns."""
-
-    # TODO(user): This should be in the data store.
-
-    client_ids = [urn.Split()[0] for urn in client_urns]
-    client_bases = [hunt_urn.Add(client_id) for client_id in client_ids]
-
-    all_flows = []
-    act_flows = client_bases
-
-    while act_flows:
-      next_flows = []
-      for _, children in aff4.FACTORY.MultiListChildren(act_flows, token=token):
-        for flow_urn in children:
-          if flow_urn.Basename() != flow.RESULTS_PER_TYPE_SUFFIX:
-            next_flows.append(flow_urn)
-      all_flows.extend(next_flows)
-      act_flows = next_flows
-
-      if top_level_only:
-        break
-
-    return all_flows
 
   def _ValidateState(self):
     if self.context is None:
