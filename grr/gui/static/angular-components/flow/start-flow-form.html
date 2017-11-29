@@ -1,7 +1,7 @@
 <div ng-if="!controller.requestSent">
 
 <div class="context-help">
-  <a href="/help/user_manual.html#_flows" target="_blank">
+  <a href="/help/investigating-with-grr/flows/index.html" target="_blank">
     <i class="glyphicon glyphicon-question-sign"></i>
   </a>
 </div>
@@ -14,12 +14,14 @@ Please Select a flow to launch from the tree on the left.
 
   <grr-flow-form flow-args="controller.flowArguments"
                  flow-runner-args="controller.flowRunnerArguments"
-                 with-output-plugins="clientId">
+                 with-output-plugins="clientId"
+                 has-errors="controller.flowFormHasErrors">
   </grr-flow-form>
 
   <div class="form-group">
     <div class="col-sm-offset-2 col-sm-3 padded">
       <button class="btn btn-success Launch"
+              ng-disabled="controller.flowFormHasErrors"
               ng-click="controller.startClientFlow()">
         Launch
       </button>

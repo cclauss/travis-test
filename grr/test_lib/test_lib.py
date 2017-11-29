@@ -11,6 +11,7 @@ import logging
 import os
 import pdb
 import platform
+import re
 import shutil
 import socket
 import sys
@@ -22,6 +23,7 @@ import unittest
 
 import mock
 import pkg_resources
+import yaml
 
 import unittest
 
@@ -48,6 +50,7 @@ from grr.server.aff4_objects import aff4_grr
 from grr.server.aff4_objects import filestore
 from grr.server.aff4_objects import users
 
+from grr.server.flows.general import audit
 from grr.server.flows.general import discovery
 from grr.server.hunts import results as hunts_results
 
@@ -114,14 +117,7 @@ class GRRBaseTest(unittest.TestCase):
   def setUp(self):
     super(GRRBaseTest, self).setUp()
 
-    tmpdir = os.environ.get("TEST_TMPDIR") or config.CONFIG["Test.tmpdir"]
-
-    if platform.system() != "Windows":
-      # Make a temporary directory for test files.
-      self.temp_dir = tempfile.mkdtemp(dir=tmpdir)
-    else:
-      self.temp_dir = tempfile.mkdtemp()
-
+    self.temp_dir = TempDirPath()
     config.CONFIG.SetWriteBack(os.path.join(self.temp_dir, "writeback.yaml"))
 
     logging.info("Starting test: %s.%s", self.__class__.__name__,
@@ -137,6 +133,7 @@ class GRRBaseTest(unittest.TestCase):
     filestore.FileStoreInit().Run()
     hunts_results.ResultQueueInitHook().Run()
     email_alerts.EmailAlerterInit().RunOnce()
+    audit.AuditEventListener.created_logs.clear()
 
     # Stub out the email function
     self.emails_sent = []
@@ -649,20 +646,6 @@ def RequiresPackage(package_name):
   return Decorator
 
 
-def SetLabel(*labels):
-  """Sets a label on a function so we can run tests with different types."""
-
-  def Decorator(f):
-    # If the method is not already tagged, we replace its label (the default
-    # label is "small").
-    function_labels = getattr(f, "labels", set())
-    f.labels = function_labels.union(set(labels))
-
-    return f
-
-  return Decorator
-
-
 class GrrTestProgram(unittest.TestProgram):
   """A Unit test program which is compatible with conf based args parsing.
 
@@ -725,6 +708,124 @@ class RemotePDB(pdb.Pdb):
     (clientsocket, address) = RemotePDB.skt.accept()
     RemotePDB.handle = clientsocket.makefile("rw", 1)
     logging.warn("Received a connection from %s", address)
+
+
+def _TempRootPath():
+  root = os.environ.get("TEST_TMPDIR") or config.CONFIG["Test.tmpdir"]
+  if platform.system() != "Windows":
+    return root
+  else:
+    return None
+
+
+# TODO(hanuszczak): Consider moving this to some utility module.
+def TempDirPath(suffix="", prefix="tmp"):
+  """Creates a temporary directory based on the environment configuration.
+
+  The directory will be placed in folder as specified by the `TEST_TMPDIR`
+  environment variable if available or fallback to `Test.tmpdir` of the current
+  configuration if not.
+
+  Args:
+    suffix: A suffix to end the directory name with.
+    prefix: A prefix to begin the directory name with.
+
+  Returns:
+    An absolute path to the created directory.
+  """
+  return tempfile.mkdtemp(suffix=suffix, prefix=prefix, dir=_TempRootPath())
+
+
+# TODO(hanuszczak): Consider moving this to some utility module.
+def TempFilePath(suffix="", prefix="tmp", dir=None):  # pylint: disable=redefined-builtin
+  """Creates a temporary file based on the environment configuration.
+
+  If no directory is specified the file will be placed in folder as specified by
+  the `TEST_TMPDIR` environment variable if available or fallback to
+  `Test.tmpdir` of the current configuration if not.
+
+  If directory is specified it must be part of the default test temporary
+  directory.
+
+  Args:
+    suffix: A suffix to end the file name with.
+    prefix: A prefix to begin the file name with.
+    dir: A directory to place the file in.
+
+  Returns:
+    An absolute path to the created file.
+
+  Raises:
+    ValueError: If the specified directory is not part of the default test
+        temporary directory.
+  """
+  root = _TempRootPath()
+  if not dir:
+    dir = root
+  elif root and not os.path.commonprefix([dir, root]):
+    raise ValueError("path '%s' must start with '%s'" % (dir, root))
+
+  _, path = tempfile.mkstemp(suffix=suffix, prefix=prefix, dir=dir)
+  return path
+
+
+class AutoTempDirPath(object):
+  """Creates a temporary directory based on the environment configuration.
+
+  The directory will be placed in folder as specified by the `TEST_TMPDIR`
+  environment variable if available or fallback to `Test.tmpdir` of the current
+  configuration if not.
+
+  This object is a context manager and the directory is automatically removed
+  when it goes out of scope.
+
+  Args:
+    suffix: A suffix to end the directory name with.
+    prefix: A prefix to begin the directory name with.
+    remove_non_empty: If set to `True` the directory removal will succeed even
+        if it is not empty.
+
+  Returns:
+    An absolute path to the created directory.
+  """
+
+  def __init__(self, suffix="", prefix="tmp", remove_non_empty=False):
+    self.suffix = suffix
+    self.prefix = prefix
+    self.remove_non_empty = remove_non_empty
+
+  def __enter__(self):
+    self.path = TempDirPath(suffix=self.suffix, prefix=self.prefix)
+    return self.path
+
+  def __exit__(self, exc_type, exc_value, traceback):
+    del exc_type  # Unused.
+    del exc_value  # Unused.
+    del traceback  # Unused.
+
+    if self.remove_non_empty:
+      shutil.rmtree(self.path)
+    else:
+      os.rmdir(self.path)
+
+
+class PrivateKeyNotFoundException(Exception):
+
+  def __init__(self):
+    super(PrivateKeyNotFoundException,
+          self).__init__("Private key not found in config file.")
+
+
+def GetClientId(writeback_file):
+  """Given the path to a client's writeback file, returns its client id."""
+  with open(writeback_file) as f:
+    parsed_yaml = yaml.safe_load(f.read())
+  serialized_pkey = parsed_yaml.get("Client.private_key", None)
+  if serialized_pkey is None:
+    raise PrivateKeyNotFoundException
+  pkey = rdf_crypto.RSAPrivateKey(serialized_pkey)
+  client_urn = comms.ClientCommunicator(private_key=pkey).common_name
+  return re.compile(r"^aff4:/").sub("", client_urn.SerializeToString())
 
 
 def main(argv=None):

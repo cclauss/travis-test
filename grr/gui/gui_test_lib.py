@@ -2,6 +2,7 @@
 """Helper functionality for gui testing."""
 
 import atexit
+import copy
 import functools
 import logging
 import os
@@ -523,12 +524,25 @@ $('body').injector().get('$browser').notifyWhenNoOutstandingRequests(function() 
 
     self._MakeFixtures()
 
-    # Clean artifacts sources.
+    # TODO(hanuszczak): Once again, this is a very messy way of dealing with
+    # registry cleanup issues. This should be refactored in the future.
+    # pylint: disable=protected-access
+    registry = artifact_registry.REGISTRY
+    self._original_registry_sources = copy.deepcopy(registry._sources)
+    # pylint: enable=protected-access
     artifact_registry.REGISTRY.ClearSources()
     artifact_registry.REGISTRY.AddDatastoreSources(
         [aff4.ROOT_URN.Add("artifact_store")])
 
     self.InstallACLChecks()
+
+  def tearDown(self):
+    super(GRRSeleniumTest, self).tearDown()
+    # pylint: disable=protected-access
+    registry = artifact_registry.REGISTRY
+    registry._sources = self._original_registry_sources
+    registry._dirty = True
+    # pylint: enable=protected-access
 
   def DoAfterTestCheck(self):
     super(GRRSeleniumTest, self).DoAfterTestCheck()

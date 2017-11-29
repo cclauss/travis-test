@@ -28,7 +28,7 @@ class TestRDFValueArray(rdf_protodict.RDFValueArray):
   rdf_type = rdfvalue.RDFString
 
 
-class DictTest(test_base.RDFProtoTestCase):
+class DictTest(test_base.RDFProtoTestMixin, test_lib.GRRBaseTest):
   """Test the Dict implementation."""
 
   rdfvalue_class = rdf_protodict.Dict
@@ -102,7 +102,8 @@ class DictTest(test_base.RDFProtoTestCase):
         key1={"A": 1},
         key2=rdf_protodict.Dict({
             "A": 1
-        }),)
+        }),
+    )
 
     sample = rdf_protodict.Dict(**test_dict)
     self.CheckTestDict(test_dict, sample)
@@ -180,7 +181,7 @@ class DictTest(test_base.RDFProtoTestCase):
     self.assertEqual(len(list(req.client_state.items())), 0)
 
 
-class AttributedDictTest(test_base.RDFValueTestCase):
+class AttributedDictTest(test_base.RDFValueTestMixin, test_lib.GRRBaseTest):
   """Test AttributedDictFile operations."""
 
   rdfvalue_class = rdf_protodict.AttributedDict
@@ -199,7 +200,6 @@ class AttributedDictTest(test_base.RDFValueTestCase):
     self.assertEquals(terminator.mission, "Terminate")
     # We don't want a conflicted Terminator
     self.assertFalse(terminator.GetItem("happy_face"))
-    self.assertRaises(AttributeError, terminator.happy_face)
 
   def testAttributedDictSettingsAreAttr(self):
     t800 = {"target": "Sarah Connor", "mission": "Terminate"}
@@ -208,7 +208,7 @@ class AttributedDictTest(test_base.RDFValueTestCase):
     self.assertEquals(terminator.mission, "Terminate")
 
 
-class RDFValueArrayTest(test_base.RDFProtoTestCase):
+class RDFValueArrayTest(test_base.RDFProtoTestMixin, test_lib.GRRBaseTest):
   """Test the Dict implementation."""
 
   rdfvalue_class = rdf_protodict.RDFValueArray
@@ -273,7 +273,7 @@ class RDFValueArrayTest(test_base.RDFProtoTestCase):
     self.assertEqual(sample.Pop(), "world")
 
 
-class EmbeddedRDFValueTest(test_base.RDFProtoTestCase):
+class EmbeddedRDFValueTest(test_base.RDFProtoTestMixin, test_lib.GRRBaseTest):
   rdfvalue_class = rdf_protodict.EmbeddedRDFValue
 
   def GenerateSample(self, number=0):

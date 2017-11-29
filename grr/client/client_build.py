@@ -13,9 +13,6 @@ import sys
 
 from grr import config as grr_config
 
-# pylint: disable=unused-import
-from grr.client import client_plugins
-# pylint: enable=unused-import
 from grr.client import client_startup
 
 from grr.lib import build
@@ -310,8 +307,7 @@ class MultiTemplateRepacker(object):
             if signed_template:
               repack_args.append("--signed_template")
           elif template.endswith(".rpm.zip"):
-            passwd = self.GetRPMPassPhrase()
-            repack_args.append("--sign")
+            bulk_sign_installers = True
 
         print "Calling %s" % " ".join(repack_args)
         results.append(
@@ -343,14 +339,21 @@ class MultiTemplateRepacker(object):
       raise
 
     if bulk_sign_installers:
-      to_sign = []
+      to_sign = {}
       for root, _, files in os.walk(output_dir):
         for f in files:
           if f.endswith(".exe"):
-            to_sign.append(os.path.join(root, f))
-      signer = repacking.TemplateRepacker().GetSigner(
-          ["ClientBuilder Context", "Target:Windows"])
-      signer.SignFiles(to_sign)
+            to_sign.setdefault("windows", []).append(os.path.join(root, f))
+          elif f.endswith(".rpm"):
+            to_sign.setdefault("rpm", []).append(os.path.join(root, f))
+      if to_sign.get("windows"):
+        signer = repacking.TemplateRepacker().GetSigner(
+            ["ClientBuilder Context", "Target:Windows"])
+        signer.SignFiles(to_sign.get("windows"))
+      if to_sign.get("rpm"):
+        signer = repacking.TemplateRepacker().GetSigner(
+            ["ClientBuilder Context", "Target:Linux", "Target:LinuxRpm"])
+        signer.AddSignatureToRPMs(to_sign.get("rpm"))
 
 
 def GetClientConfig(filename):

@@ -314,13 +314,14 @@ class ClientRepacker(BuilderBase):
     """Given a generated client config, attempt to check for common errors."""
     errors = []
 
-    location = config_obj.Get("Client.server_urls", context=self.context)
-    if not location:
-      errors.append("Empty Client.server_urls")
+    if not config.CONFIG["ClientBuilder.fleetspeak_enabled"]:
+      location = config_obj.Get("Client.server_urls", context=self.context)
+      if not location:
+        errors.append("Empty Client.server_urls")
 
-    for url in location:
-      if not url.startswith("http"):
-        errors.append("Bad Client.server_urls specified %s" % url)
+      for url in location:
+        if not url.startswith("http"):
+          errors.append("Bad Client.server_urls specified %s" % url)
 
     key_data = config_obj.GetRaw(
         "Client.executable_signing_public_key",
@@ -332,10 +333,11 @@ class ClientRepacker(BuilderBase):
       errors.append(
           "Invalid Client.executable_signing_public_key: %s" % key_data)
 
-    certificate = config_obj.GetRaw(
-        "CA.certificate", default=None, context=self.context)
-    if certificate is None or not certificate.startswith("-----BEGIN CERTIF"):
-      errors.append("CA certificate missing from config.")
+    if not config.CONFIG["ClientBuilder.fleetspeak_enabled"]:
+      certificate = config_obj.GetRaw(
+          "CA.certificate", default=None, context=self.context)
+      if certificate is None or not certificate.startswith("-----BEGIN CERTIF"):
+        errors.append("CA certificate missing from config.")
 
     for bad_opt in ["Client.private_key"]:
       if config_obj.Get(bad_opt, context=self.context, default=""):
@@ -361,13 +363,18 @@ class WindowsClientRepacker(ClientRepacker):
     errors = super(WindowsClientRepacker, self).ValidateEndConfig(
         config_obj, errors_fatal=errors_fatal)
 
-    for path in config_obj.GetRaw("Client.tempdir_roots"):
+    install_dir = config_obj["Client.install_path"]
+    for path in config_obj["Client.tempdir_roots"]:
       if path.startswith("/"):
         errors.append(
             "Client.tempdir_root %s starts with /, probably has Unix path." %
             path)
+      if not path.startswith(install_dir):
+        errors.append(
+            "Client.tempdir_root %s is not inside the install_dir %s, this is "
+            "a security risk" % ((path, install_dir)))
 
-    if config_obj.GetRaw("Logging.path").startswith("/"):
+    if config_obj.Get("Logging.path").startswith("/"):
       errors.append("Logging.path starts with /, probably has Unix path. %s" %
                     config_obj["Logging.path"])
 
@@ -586,9 +593,8 @@ class LinuxClientRepacker(ClientRepacker):
 
     deb_in_dir = os.path.join(template_path, "dist/debian/debian.in/")
 
-    self.GenerateDirectory(deb_in_dir,
-                           os.path.join(template_path, "dist/debian"),
-                           [("grr-client", package_name)])
+    self.GenerateDirectory(deb_in_dir, os.path.join(
+        template_path, "dist/debian"), [("grr-client", package_name)])
 
     # Generate directories for the /usr/sbin link.
     utils.EnsureDirExists(
@@ -723,7 +729,7 @@ class CentosClientRepacker(LinuxClientRepacker):
 
   def Sign(self, rpm_filename):
     if self.signer:
-      return self.signer.AddSignatureToRPM(rpm_filename)
+      return self.signer.AddSignatureToRPMs([rpm_filename])
 
   def MakeDeployableBinary(self, template_path, output_path):
     """This will add the config to the client template and create a .rpm."""

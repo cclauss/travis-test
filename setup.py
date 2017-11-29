@@ -13,7 +13,7 @@ from setuptools.command.develop import develop
 from setuptools.command.install import install
 from setuptools.command.sdist import sdist
 
-IGNORE_GUI_DIRS = ["node_modules", "bower_components", "tmp"]
+IGNORE_GUI_DIRS = ["node_modules", "tmp"]
 
 
 def find_data_files(source, ignore_dirs=None):
@@ -51,8 +51,7 @@ def run_make_files(make_docs=False,
   if make_ui_files:
     subprocess.check_call(["npm", "install"], cwd="grr/gui/static")
     subprocess.check_call(
-        ["npm", "install", "-g", "bower", "gulp"], cwd="grr/gui/static")
-    subprocess.check_call(["bower", "update"], cwd="grr/gui/static")
+        ["npm", "install", "-g", "gulp"], cwd="grr/gui/static")
     subprocess.check_call(["gulp", "compile"], cwd="grr/gui/static")
 
 
@@ -123,9 +122,7 @@ setup_args = dict(
     packages=find_packages(),
     zip_safe=False,
     include_package_data=True,
-    ext_modules=[Extension(
-        "grr._semantic",
-        ["accelerated/accelerated.c"],)],
+    ext_modules=[Extension("grr._semantic", ["accelerated/accelerated.c"])],
     cmdclass={
         "develop": Develop,
         "install": install,
@@ -145,8 +142,9 @@ setup_args = dict(
         "requests==2.9.1",
         "protobuf==3.3.0",
         "Werkzeug==0.11.3",
-        "wheel==0.29",
+        "wheel==0.30",
         "virtualenv==15.0.3",
+        "yara-python==3.6.3",
     ],
     extras_require={
         # The following requirements are needed in Windows.

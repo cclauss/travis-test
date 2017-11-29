@@ -4,7 +4,7 @@
 from grr.lib import config_lib
 from grr.lib import rdfvalue
 
-config_lib.DEFINE_integer("Datastore.maximum_blob_size", 15 * 1024 * 1024,
+config_lib.DEFINE_integer("Datastore.maximum_blob_size", 512 * 1024,
                           "Maximum blob size we may store in the datastore.")
 
 config_lib.DEFINE_string("Datastore.implementation", "FakeDataStore",
@@ -108,52 +108,25 @@ config_lib.DEFINE_integer(
           "connection before failing (0 means we wait "
           "forever)."))
 
-# HTTP data store.
-config_lib.DEFINE_string(
-    "HTTPDataStore.username",
-    default="httpuser",
-    help="The username to connect to the http data store.")
-
-config_lib.DEFINE_string(
-    "HTTPDataStore.password",
-    default="httppass",
-    help="The password to connect to the http data store.")
+config_lib.DEFINE_integer(
+    "Mysql.max_query_size",
+    8 * 1024 * 1024,
+    help=("Maximum query size (in bytes). Queries sent by GRR to MySQL "
+          "may be slightly bigger than the specified maximum. This "
+          "value has to be smaller than MySQL's max_allowed_packet "
+          "configuration value."))
 
 config_lib.DEFINE_integer(
-    "HTTPDataStore.read_timeout",
-    5,
-    help="HTTP socket read timeout in seconds.")
+    "Mysql.max_values_per_query",
+    10000,
+    help=("Maximum number of subjects touched by a single query."))
 
 config_lib.DEFINE_integer(
-    "HTTPDataStore.replay_timeout",
-    5,
-    help=("HTTP socket read timeout when replaying "
-          "requests, in seconds."))
+    "Mysql.max_retries",
+    10,
+    help="Maximum number of retries (happens in case a query fails).")
 
-config_lib.DEFINE_integer(
-    "HTTPDataStore.send_timeout",
-    5,
-    help="HTTP socket send timeout in seconds.")
-
-config_lib.DEFINE_integer(
-    "HTTPDataStore.login_timeout",
-    5,
-    help=("HTTP socket timeout when remote servers are "
-          "logging in."))
-
-config_lib.DEFINE_integer(
-    "HTTPDataStore.reconnect_timeout",
-    10 * 60,
-    help=("Number of seconds to spend attempting to "
-          "reconnect to the database. Attempt every "
-          "retry_timeout seconds."))
-
-config_lib.DEFINE_integer(
-    "HTTPDataStore.retry_time",
-    5,
-    help=("Number of seconds to wait in-between attempts"
-          "to reconnect to the database."))
-
+# CloudBigTable data store.
 config_lib.DEFINE_string(
     "CloudBigtable.project_id",
     default=None,

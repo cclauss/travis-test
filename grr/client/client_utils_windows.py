@@ -115,6 +115,18 @@ def WinChmod(filename, acl_list, user=None):
       filename, win32security.DACL_SECURITY_INFORMATION, security_descriptor)
 
 
+def WinVerifyFileOwner(filename):
+  """Verifies that <filename> is owned by the current user."""
+  # On   Windows  server   OSs,  files   created  by   users  in   the
+  # Administrators group  will be  owned by Administrators  instead of
+  # the user  creating the file  so this  check won't work.   Since on
+  # Windows GRR  uses its own  temp directory inside  the installation
+  # dir, whenever someone  can modify that dir it's  already game over
+  # so this check doesn't add much.
+  del filename
+  return True
+
+
 def WinFindProxies():
   """Tries to find proxies by interrogating all the user's settings.
 
@@ -138,8 +150,9 @@ def WinFindProxies():
       break
 
     try:
-      subkey = (sid + "\\Software\\Microsoft\\Windows"
-                "\\CurrentVersion\\Internet Settings")
+      subkey = (
+          sid + "\\Software\\Microsoft\\Windows"
+          "\\CurrentVersion\\Internet Settings")
 
       internet_settings = _winreg.OpenKey(_winreg.HKEY_USERS, subkey)
 

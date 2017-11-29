@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 """Tests for the artifact libraries."""
 
+import copy
 import os
 
 from grr import config
@@ -17,13 +18,33 @@ from grr.test_lib import test_lib
 
 class ArtifactHandlingTest(test_lib.GRRBaseTest):
 
+  # FIXME(hanuszczak): So, this test class clears the artifact registry sources.
+  # This is a problem, because other test classes might depend on original
+  # artifacts and we do not want to have them wiped out completely (only
+  # temporarily). As a quick and dirty hack we just store the internal registry
+  # sources during the test class initialization and restore it later. This is
+  # far from nice solution and should be refactored in the future.
+
+  @classmethod
+  def setUpClass(cls):
+    super(ArtifactHandlingTest, cls).setUpClass()
+
+    registry = artifact_registry.REGISTRY
+    cls._original_registry_sources = copy.deepcopy(registry._sources)
+
+  @classmethod
+  def tearDownClass(cls):
+    super(ArtifactHandlingTest, cls).tearDownClass()
+
+    registry = artifact_registry.REGISTRY
+    registry._sources = cls._original_registry_sources
+    registry._dirty = True
+
   def setUp(self):
     super(ArtifactHandlingTest, self).setUp()
     self.test_artifacts_dir = os.path.join(self.base_path, "artifacts")
     self.test_artifacts_file = os.path.join(self.test_artifacts_dir,
                                             "test_artifacts.json")
-    artifact_registry.REGISTRY.ClearSources()
-    artifact_registry.REGISTRY.AddFileSource(self.test_artifacts_file)
 
   def testArtifactsValidate(self):
     """Check each artifact we have passes validation."""
@@ -157,7 +178,7 @@ class ArtifactHandlingTest(test_lib.GRRBaseTest):
     for art_obj in artifact_registry.REGISTRY.GetArtifacts():
       # Exercise conversions to ensure we can move back and forth between the
       # different forms.
-      art_json = art_obj.ToPrettyJson(extended=False)
+      art_json = art_obj.ToJson()
       new_art_obj = artifact_registry.REGISTRY.ArtifactsFromYaml(art_json)[0]
       self.assertEqual(new_art_obj.ToPrimitiveDict(), art_obj.ToPrimitiveDict())
 
@@ -319,7 +340,7 @@ class UserMergeTest(test_lib.GRRBaseTest):
                                        u"/home/blakey/Desktop")])
 
 
-class ArtifactTests(rdf_test_base.RDFValueTestCase):
+class ArtifactTests(rdf_test_base.RDFValueTestMixin, test_lib.GRRBaseTest):
   """Test the Artifact implementation."""
 
   rdfvalue_class = artifact_registry.Artifact

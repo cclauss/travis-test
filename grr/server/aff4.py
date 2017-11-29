@@ -607,6 +607,44 @@ class Factory(object):
         pool.MultiSet(new_urn, values, replace=False)
         self._UpdateChildIndex(new_urn, pool)
 
+  def ExistsWithType(self,
+                     urn,
+                     aff4_type=None,
+                     follow_symlinks=True,
+                     age=NEWEST_TIME,
+                     token=None):
+    """Checks if an object with a given URN and type exists in the datastore.
+
+    Args:
+      urn: The urn to check.
+      aff4_type: Expected object type.
+      follow_symlinks: If object opened is a symlink, follow it.
+      age: The age policy used to check this object. Should be either
+         NEWEST_TIME or a time range given as a tuple (start, end) in
+         microseconds since Jan 1st, 1970.
+      token: The Security Token to use for opening this item.
+
+    Raises:
+      ValueError: if aff4_type is not specified.
+
+    Returns:
+      True if there's an object with a matching type at a given URN, False
+      otherwise.
+    """
+    if not aff4_type:
+      raise ValueError("aff4_type can't be None")
+
+    try:
+      self.Open(
+          urn,
+          aff4_type=aff4_type,
+          follow_symlinks=follow_symlinks,
+          age=age,
+          token=token)
+      return True
+    except InstantiationError:
+      return False
+
   def Open(self,
            urn,
            aff4_type=None,
@@ -914,14 +952,6 @@ class Factory(object):
           res["last"] = rdfvalue.RDFDatetime(v[1])
       yield res
 
-  def Exists(self, urn):
-    """Returns whether the provided urn exists."""
-    try:
-      self.Stat(urn).next()
-      return True
-    except StopIteration:
-      return False
-
   def Create(self,
              urn,
              aff4_type,
@@ -1036,8 +1066,7 @@ class Factory(object):
                   len(marked_urns), utils.SmartUnicode(urns))
 
     logging.debug(u"Removing %d root objects when removing %s: %s",
-                  len(marked_root_urns),
-                  utils.SmartUnicode(urns),
+                  len(marked_root_urns), utils.SmartUnicode(urns),
                   utils.SmartUnicode(marked_root_urns))
 
     pool = data_store.DB.GetMutationPool()
@@ -1745,8 +1774,7 @@ class AFF4Object(object):
       # Get the Attribute object from our schema.
       attribute = Attribute.PREDICATES[attribute_name]
       cls = attribute.attribute_type
-      self._AddAttributeToCache(attribute,
-                                LazyDecoder(cls, value, ts),
+      self._AddAttributeToCache(attribute, LazyDecoder(cls, value, ts),
                                 self.synced_attributes)
     except KeyError:
       pass
@@ -2323,7 +2351,7 @@ class AFF4Volume(AFF4Object):
     CONTAINS = Attribute("aff4:contains", rdfvalue.RDFURN,
                          "An AFF4 object contained in this container.")
 
-  def ListChildren(self, limit=1000000, age=NEWEST_TIME):
+  def ListChildren(self, limit=None, age=NEWEST_TIME):
     """Yields RDFURNs of all the children of this object.
 
     Args:
@@ -2344,7 +2372,7 @@ class AFF4Volume(AFF4Object):
   def OpenChildren(self,
                    children=None,
                    mode="r",
-                   limit=1000000,
+                   limit=None,
                    chunk_limit=100000,
                    age=NEWEST_TIME):
     """Yields AFF4 Objects of all our direct children.
@@ -2380,7 +2408,7 @@ class AFF4Volume(AFF4Object):
           to_read, mode=mode, token=self.token, age=age):
         yield child
         result_count += 1
-        if result_count >= limit:
+        if limit and result_count >= limit:
           return
 
   @property

@@ -1,11 +1,8 @@
 #!/usr/bin/env python
 # -*- mode: python; encoding: utf-8 -*-
 """Test client actions."""
-
-import __builtin__
 import collections
 import os
-import platform
 import posix
 import stat
 
@@ -22,15 +19,6 @@ from grr.lib.rdfvalues import flows as rdf_flows
 from grr.lib.rdfvalues import paths as rdf_paths
 from grr.test_lib import client_test_lib
 from grr.test_lib import test_lib
-
-if platform.system() == "Linux":
-  # pylint: disable=g-import-not-at-top
-  # Trying to import this module on non-Linux platforms won't work.
-  from grr.client.client_actions.linux import linux
-  # pylint: enable=g-import-not-at-top
-
-
-# pylint: mode=test
 
 
 class ProgressAction(actions.ActionPlugin):
@@ -108,51 +96,6 @@ class ActionTest(client_test_lib.EmptyActionTest):
       x.st_atime = y.st_atime = 0
 
       self.assertRDFValuesEqual(x, y)
-
-  def testEnumerateUsersLinux(self):
-    """Enumerate users from the wtmp file."""
-    # Linux only
-    if platform.system() != "Linux":
-      return
-
-    path = os.path.join(self.base_path, "VFSFixture/var/log/wtmp")
-    old_open = __builtin__.open
-    old_listdir = os.listdir
-
-    # Mock the open call
-    def MockedOpen(requested_path, mode="rb"):
-      # Any calls to open the wtmp get the mocked out version.
-      if "wtmp" in requested_path:
-        self.assertEqual(requested_path, "/var/log/wtmp")
-        return old_open(path)
-
-      # Everything else has to be opened normally.
-      return old_open(requested_path, mode)
-
-    __builtin__.open = MockedOpen
-    os.listdir = lambda x: ["wtmp"]
-    try:
-      results = self.RunAction(linux.EnumerateUsers)
-    finally:
-      # Restore the original methods.
-      __builtin__.open = old_open
-      os.listdir = old_listdir
-
-    found = 0
-    for result in results:
-      # This appears in ut_type RUN_LVL, not ut_type USER_PROCESS.
-      self.assertNotEqual("runlevel", result.username)
-      if result.username == "user1":
-        found += 1
-        self.assertEqual(result.last_logon, 1296552099 * 1000000)
-      elif result.username == "user2":
-        found += 1
-        self.assertEqual(result.last_logon, 1296552102 * 1000000)
-      elif result.username == "user3":
-        found += 1
-        self.assertEqual(result.last_logon, 1296569997 * 1000000)
-
-    self.assertEqual(found, 3)
 
   def testProcessListing(self):
     """Tests if listing processes works."""
@@ -247,8 +190,8 @@ class ActionTest(client_test_lib.EmptyActionTest):
       """Only return True for the root path."""
       return path == "/"
 
-    with utils.MultiStubber((os, "statvfs", MockStatFS), (os.path, "ismount",
-                                                          MockIsMount)):
+    with utils.MultiStubber((os, "statvfs", MockStatFS),
+                            (os.path, "ismount", MockIsMount)):
 
       # This test assumes "/" is the mount point for /usr/bin
       results = self.RunAction(

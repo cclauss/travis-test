@@ -236,7 +236,8 @@ class HTTPManager(object):
           headers=headers,
           method=method,
           timeout=timeout,
-          verify_cb=verify_cb,)
+          verify_cb=verify_cb,
+      )
 
       if not result.Success():
         tries += 1
@@ -311,7 +312,8 @@ class HTTPManager(object):
             headers=headers,
             method=method,
             timeout=timeout,
-            proxies=proxydict,)
+            proxies=proxydict,
+        )
 
         data = handle.content
 
@@ -553,7 +555,7 @@ class GRRClientWorker(object):
     # Last time when we've sent stats back to the server.
     self.last_stats_sent_time = None
 
-    self.proc = psutil.Process(os.getpid())
+    self.proc = psutil.Process()
 
     # Use this to control the nanny transaction log.
     self.nanny_controller = client_utils.NannyController()
@@ -583,9 +585,6 @@ class GRRClientWorker(object):
 
   def ClientMachineIsIdle(self):
     return psutil.cpu_percent(0.05) <= 100 * self.IDLE_THRESHOLD
-
-  def __del__(self):
-    self.nanny_controller.StopNanny()
 
   def Drain(self, max_size=1024):
     """Return a GrrQueue message list from the queue, draining it.
@@ -744,7 +743,8 @@ class GRRClientWorker(object):
     return rdf_client.UploadedFile(
         bytes_uploaded=gzip_fd.total_read,
         file_id=response.data,
-        hash=gzip_fd.HashObject(),)
+        hash=gzip_fd.HashObject(),
+    )
 
   def GetRekallProfile(self, profile_name, version="v1.0"):
     response = self.http_manager.OpenServerEndpoint(u"/rekall_profiles/%s/%s" %
@@ -1119,11 +1119,6 @@ class GRRThreadedWorker(GRRClientWorker, threading.Thread):
     """Returns the total size of messages ready to be sent."""
     return self._out_queue.Size()
 
-  def __del__(self):
-    # This signals our worker thread to quit.
-    self._in_queue.put(None, block=True)
-    self.nanny_controller.StopNanny()
-
   def OnStartup(self):
     """A handler that is called on client startup."""
     # We read the transaction log and fail any requests that are in it. If there
@@ -1347,7 +1342,9 @@ class GRRHTTPClient(object):
         path="control?api=%s" % config.CONFIG["Network.api"],
         verify_cb=self.VerifyServerControlResponse,
         data=data,
-        headers={"Content-Type": "binary/octet-stream"})
+        headers={
+            "Content-Type": "binary/octet-stream"
+        })
 
     if response.code == 406:
       self.InitiateEnrolment()
@@ -1647,9 +1644,9 @@ class ClientCommunicator(communicator.Communicator):
     # Check that the server certificate verifies
     try:
       server_certificate.Verify(ca_certificate.GetPublicKey())
-    except rdf_crypto.VerificationError:
+    except rdf_crypto.VerificationError as e:
       self.server_name = None
-      raise IOError("Server cert is invalid.")
+      raise IOError("Server cert is invalid: %s" % e)
 
     # Make sure that the serial number is higher.
     server_cert_serial = server_certificate.GetSerialNumber()
@@ -1668,6 +1665,8 @@ class ClientCommunicator(communicator.Communicator):
     self.server_certificate = server_certificate
     self.ca_certificate = ca_certificate
     self.server_public_key = server_certificate.GetPublicKey()
+    # If we still have a cached session key, we need to remove it.
+    self._ClearServerCipherCache()
 
   def EncodeMessages(self, message_list, result, **kwargs):
     # Force the right API to be used
