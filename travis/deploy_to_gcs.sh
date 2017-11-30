@@ -22,7 +22,7 @@ print(datetime.utcfromtimestamp(
 "
 commit_timestamp=$(python -c "${pyscript}")
 
-gcs_dest="gs://${GCS_BUCKET}/${commit_timestamp}_${TRAVIS_COMMIT}/travis_job_${TRAVIS_JOB_NUMBER}_${GCS_TAG}/"
+gcs_dest="gs://${GCS_BUCKET}/${commit_timestamp}_${TRAVIS_COMMIT}/travis_job_${TRAVIS_JOB_NUMBER}_${GCS_TAG}"
 
 echo Uploading templates to "${gcs_dest}"
 gsutil -m cp gcs_upload_dir/* "${gcs_dest}"
