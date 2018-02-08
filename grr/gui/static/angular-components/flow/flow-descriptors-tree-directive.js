@@ -1,8 +1,8 @@
 'use strict';
 
-goog.provide('grrUi.flow.flowDescriptorsTreeDirective.FlowDescriptorsTreeController');
+goog.provide('grrUi.flow.flowDescriptorsTreeDirective');
 goog.provide('grrUi.flow.flowDescriptorsTreeDirective.FlowDescriptorsTreeDirective');
-goog.require('grrUi.core.apiService.stripTypeInfo');
+goog.require('grrUi.core.apiService');  // USE: stripTypeInfo
 
 goog.scope(function() {
 
@@ -18,7 +18,7 @@ var stripTypeInfo = grrUi.core.apiService.stripTypeInfo;
  * @param {!grrUi.core.apiService.ApiService} grrApiService
  * @ngInject
  */
-grrUi.flow.flowDescriptorsTreeDirective.FlowDescriptorsTreeController =
+const FlowDescriptorsTreeController =
     function($scope, $element, grrApiService) {
   /** @private {!angular.Scope} */
   this.scope_ = $scope;
@@ -50,8 +50,6 @@ grrUi.flow.flowDescriptorsTreeDirective.FlowDescriptorsTreeController =
                           this.onDescriptorsOrSettingsChange_.bind(this));
 
 };
-var FlowDescriptorsTreeController =
-    grrUi.flow.flowDescriptorsTreeDirective.FlowDescriptorsTreeController;
 
 
 /**

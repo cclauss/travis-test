@@ -1,6 +1,6 @@
 'use strict';
 
-goog.provide('grrUi.core.clockDirective.ClockController');
+goog.provide('grrUi.core.clockDirective');
 goog.provide('grrUi.core.clockDirective.ClockDirective');
 
 goog.scope(function() {
@@ -14,7 +14,7 @@ goog.scope(function() {
  * @constructor
  * @ngInject
  */
-grrUi.core.clockDirective.ClockController =
+const ClockController =
     function($scope, $interval, grrTimeService) {
   /** @private {grrUi.core.timeService.TimeService} */
   this.grrTimeService_ = grrTimeService;
@@ -26,15 +26,13 @@ grrUi.core.clockDirective.ClockController =
   $interval(this.updateLiveClock_.bind(this), 1000);
 };
 
-var ClockController =
-    grrUi.core.clockDirective.ClockController;
 
 /**
  * Updates the clock based on the current time.
  *
  * @private
  */
-grrUi.core.clockDirective.ClockController.prototype.updateLiveClock_ =
+ClockController.prototype.updateLiveClock_ =
     function() {
   this.formattedClock = this.grrTimeService_.formatAsUTC();
 };
@@ -42,7 +40,7 @@ grrUi.core.clockDirective.ClockController.prototype.updateLiveClock_ =
 /**
  * Directive that displays RDFDatetime values.
  *
- * @constructor
+ * @return {!angular.Directive} Directive definition object.
  * @ngInject
  * @export
  */

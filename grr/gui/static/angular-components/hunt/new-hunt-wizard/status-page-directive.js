@@ -1,5 +1,6 @@
 'use strict';
 
+goog.provide('grrUi.hunt.newHuntWizard.statusPageDirective');
 goog.provide('grrUi.hunt.newHuntWizard.statusPageDirective.StatusPageDirective');
 
 goog.scope(function() {
@@ -7,7 +8,7 @@ goog.scope(function() {
 /**
  * Directive for showing wizard-like forms with multiple named steps/pages.
  *
- * @constructor
+ * @return {!angular.Directive} Directive definition object.
  * @ngInject
  * @export
  */
@@ -31,5 +32,4 @@ grrUi.hunt.newHuntWizard.statusPageDirective.StatusPageDirective = function() {
  */
 grrUi.hunt.newHuntWizard.statusPageDirective.StatusPageDirective
     .directive_name = 'grrNewHuntStatusPage';
-
 });  // goog.scope

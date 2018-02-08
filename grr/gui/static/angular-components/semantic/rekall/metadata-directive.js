@@ -1,5 +1,6 @@
 'use strict';
 
+goog.provide('grrUi.semantic.rekall.metadataDirective');
 goog.provide('grrUi.semantic.rekall.metadataDirective.MetadataDirective');
 
 goog.scope(function() {
@@ -8,7 +9,6 @@ goog.scope(function() {
  * Directive that displays rekall metadata messages.
  *
  * @return {!angular.Directive} Directive definition object.
- * @constructor
  * @ngInject
  * @export
  */

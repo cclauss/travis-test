@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 """Tests for the main content view."""
 
-
 import unittest
 from grr.gui import gui_test_lib
 
@@ -52,8 +51,8 @@ class TestClientSearch(gui_test_lib.SearchClientTestBase,
   def _WaitForSearchResults(self, target_count):
     self.WaitUntil(self.IsElementPresent, "css=grr-clients-list")
     self.WaitUntilNot(self.IsTextPresent, "Loading...")
-    self.assertEqual(target_count,
-                     self.GetCssCount("css=grr-clients-list tbody > tr"))
+    self.WaitUntilEqual(target_count, self.GetCssCount,
+                        "css=grr-clients-list tbody > tr")
 
   def testPageTitleChangesAccordingToQuery(self):
     self.Open("/#/search?q=foo")
@@ -61,6 +60,10 @@ class TestClientSearch(gui_test_lib.SearchClientTestBase,
 
     self.Type("client_query", text="host:Host-1", end_with_enter=True)
     self.WaitUntilEqual("GRR | Search for \"host:Host-1\"", self.GetPageTitle)
+
+    # Not entering any search term checks for all clients.
+    self.Open("/#/search")
+    self.WaitUntilEqual("GRR | Client List", self.GetPageTitle)
 
   def testEmptySearchShowsAllClients(self):
     self.Open("/")

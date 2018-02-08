@@ -16,9 +16,10 @@ from grr.lib import utils
 from grr.lib.rdfvalues import client as rdf_client
 from grr.lib.rdfvalues import paths as rdf_paths
 from grr.lib.rdfvalues import structs as rdf_structs
-from grr.proto.api import user_pb2
+from grr_response_proto.api import user_pb2
 from grr.server import access_control
 from grr.server import aff4
+from grr.server import data_store
 from grr.server import flow
 
 from grr.server.aff4_objects import aff4_grr
@@ -237,6 +238,8 @@ class ApiGrrUserInterfaceTraits(rdf_structs.RDFProtoStruct):
 
 
 class ApiGrrUser(rdf_structs.RDFProtoStruct):
+  """API object describing the user."""
+
   protobuf = user_pb2.ApiGrrUser
   rdf_deps = [
       ApiGrrUserInterfaceTraits,
@@ -253,6 +256,17 @@ class ApiGrrUser(rdf_structs.RDFProtoStruct):
       self.user_type = self.UserType.USER_TYPE_STANDARD
 
     return self
+
+  def InitFromDatabaseObject(self, db_obj):
+    self.obj = db_obj.username
+
+    if db_obj.user_type == db_obj.UserType.USER_TYPE_ADMIN:
+      self.user_type = self.UserType.USER_TYPE_ADMIN
+    else:
+      self.user_type = self.UserType.USER_TYPE_STANDARD
+
+    self.settings.ui_mode = db_obj.ui_mode
+    self.settings.canary_mode = db_obj.canary_mode
 
 
 def _InitApiApprovalFromAff4Object(api_approval, approval_obj):
@@ -764,7 +778,7 @@ class ApiCronJobApprovalArgsBase(rdf_structs.RDFProtoStruct):
   __abstract = True  # pylint: disable=g-bad-name
 
   def BuildSubjectUrn(self):
-    return aff4.ROOT_URN.Add("cron").Add(self.cron_job_id)
+    return self.cron_job_id.ToURN()
 
   def BuildApprovalObjUrn(self):
     return aff4.ROOT_URN.Add("ACL").Add(self.BuildSubjectUrn().Path()).Add(
@@ -774,6 +788,7 @@ class ApiCronJobApprovalArgsBase(rdf_structs.RDFProtoStruct):
 class ApiCreateCronJobApprovalArgs(ApiCronJobApprovalArgsBase):
   protobuf = user_pb2.ApiCreateCronJobApprovalArgs
   rdf_deps = [
+      api_cron.ApiCronJobId,
       ApiCronJobApproval,
   ]
 
@@ -790,6 +805,9 @@ class ApiCreateCronJobApprovalHandler(ApiCreateApprovalHandlerBase):
 
 class ApiGetCronJobApprovalArgs(ApiCronJobApprovalArgsBase):
   protobuf = user_pb2.ApiGetCronJobApprovalArgs
+  rdf_deps = [
+      api_cron.ApiCronJobId,
+  ]
 
 
 class ApiGetCronJobApprovalHandler(ApiGetApprovalHandlerBase):
@@ -803,6 +821,9 @@ class ApiGetCronJobApprovalHandler(ApiGetApprovalHandlerBase):
 
 class ApiGrantCronJobApprovalArgs(ApiCronJobApprovalArgsBase):
   protobuf = user_pb2.ApiGrantCronJobApprovalArgs
+  rdf_deps = [
+      api_cron.ApiCronJobId,
+  ]
 
 
 class ApiGrantCronJobApprovalHandler(ApiGrantApprovalHandlerBase):
@@ -857,15 +878,19 @@ class ApiGetOwnGrrUserHandler(api_call_handler_base.ApiCallHandler):
 
     result = ApiGrrUser(username=token.username)
 
-    try:
-      user_record = aff4.FACTORY.Open(
-          aff4.ROOT_URN.Add("users").Add(token.username),
-          aff4_users.GRRUser,
-          token=token)
+    if data_store.RelationalDBReadEnabled():
+      user_record = data_store.REL_DB.ReadGRRUser(token.username)
+      result.InitFromDatabaseObject(user_record)
+    else:
+      try:
+        user_record = aff4.FACTORY.Open(
+            aff4.ROOT_URN.Add("users").Add(token.username),
+            aff4_users.GRRUser,
+            token=token)
 
-      result.InitFromAff4Object(user_record)
-    except IOError:
-      result.settings = aff4_users.GRRUser.SchemaCls.GUI_SETTINGS()
+        result.InitFromAff4Object(user_record)
+      except IOError:
+        result.settings = aff4_users.GRRUser.SchemaCls.GUI_SETTINGS()
 
     result.interface_traits = (
         self.interface_traits or ApiGrrUserInterfaceTraits())
@@ -888,6 +913,12 @@ class ApiUpdateGrrUserHandler(api_call_handler_base.ApiCallHandler):
         mode="w",
         token=token) as user_fd:
       user_fd.Set(user_fd.Schema.GUI_SETTINGS(args.settings))
+
+    if data_store.RelationalDBWriteEnabled():
+      data_store.REL_DB.WriteGRRUser(
+          token.username,
+          ui_mode=args.settings.mode,
+          canary_mode=args.settings.canary_mode)
 
 
 class ApiGetPendingUserNotificationsCountResult(rdf_structs.RDFProtoStruct):

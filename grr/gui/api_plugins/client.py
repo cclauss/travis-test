@@ -9,15 +9,16 @@ from grr.gui import api_call_handler_utils
 from grr.gui.api_plugins import stats as api_stats
 from grr.lib import rdfvalue
 from grr.lib import utils
-from grr.lib.rdfvalues import aff4_rdfvalues
 from grr.lib.rdfvalues import client as rdf_client
 from grr.lib.rdfvalues import cloud
 from grr.lib.rdfvalues import flows
+from grr.lib.rdfvalues import objects
 from grr.lib.rdfvalues import structs as rdf_structs
-from grr.proto.api import client_pb2
+from grr_response_proto.api import client_pb2
 from grr.server import aff4
 from grr.server import client_index
 from grr.server import data_store
+from grr.server import db
 from grr.server import events
 from grr.server import flow
 from grr.server import ip_resolver
@@ -63,7 +64,7 @@ class ApiClient(rdf_structs.RDFProtoStruct):
 
   protobuf = client_pb2.ApiClient
   rdf_deps = [
-      aff4_rdfvalues.AFF4ObjectLabel,
+      objects.ClientLabel,
       ApiClientId,
       rdfvalue.ByteSize,
       rdf_client.ClientInformation,
@@ -86,7 +87,6 @@ class ApiClient(rdf_structs.RDFProtoStruct):
     self.hardware_info = client_obj.Get(client_obj.Schema.HARDWARE_INFO)
     self.os_info = rdf_client.Uname(
         system=client_obj.Get(client_obj.Schema.SYSTEM),
-        node=client_obj.Get(client_obj.Schema.HOSTNAME),
         release=client_obj.Get(client_obj.Schema.OS_RELEASE),
         # TODO(user): Check if ProtoString.Validate should be fixed
         # to do an isinstance() check on a value. Is simple type
@@ -95,7 +95,8 @@ class ApiClient(rdf_structs.RDFProtoStruct):
             client_obj.Get(client_obj.Schema.OS_VERSION, "")),
         kernel=client_obj.Get(client_obj.Schema.KERNEL),
         machine=client_obj.Get(client_obj.Schema.ARCH),
-        fqdn=client_obj.Get(client_obj.Schema.FQDN),
+        fqdn=(client_obj.Get(client_obj.Schema.FQDN) or
+              client_obj.Get(client_obj.Schema.HOSTNAME)),
         install_date=client_obj.Get(client_obj.Schema.INSTALL_DATE))
     self.knowledge_base = client_obj.Get(client_obj.Schema.KNOWLEDGE_BASE)
     self.memory_size = client_obj.Get(client_obj.Schema.MEMORY_SIZE)
@@ -108,7 +109,10 @@ class ApiClient(rdf_structs.RDFProtoStruct):
     if last_crash is not None:
       self.last_crash_at = last_crash.timestamp
 
-    self.labels = client_obj.GetLabels()
+    self.labels = [
+        objects.ClientLabel(name=l.name, owner=l.owner)
+        for l in client_obj.GetLabels()
+    ]
     self.interfaces = client_obj.Get(client_obj.Schema.INTERFACES)
     kb = client_obj.Get(client_obj.Schema.KNOWLEDGE_BASE)
     self.users = kb and kb.users or []
@@ -466,6 +470,16 @@ class ApiAddClientsLabelsHandler(api_call_handler_base.ApiCallHandler):
           mode="rw",
           token=token)
       for client_obj in client_objs:
+        if data_store.RelationalDBWriteEnabled():
+          cid = client_obj.urn.Basename()
+          try:
+            data_store.REL_DB.AddClientLabels(cid, token.username, args.labels)
+            idx = client_index.ClientIndex()
+            idx.AddClientLabels(cid, args.labels)
+          except db.UnknownClientError:
+            # TODO(amoser): Remove after data migration.
+            pass
+
         client_obj.AddLabels(args.labels)
         index.AddClient(client_obj)
         client_obj.Close()
@@ -521,6 +535,17 @@ class ApiRemoveClientsLabelsHandler(api_call_handler_base.ApiCallHandler):
           mode="rw",
           token=token)
       for client_obj in client_objs:
+        if data_store.RelationalDBWriteEnabled():
+          cid = client_obj.urn.Basename()
+          data_store.REL_DB.RemoveClientLabels(cid, token.username, args.labels)
+          labels_to_remove = set(args.labels)
+          existing_labels = data_store.REL_DB.GetClientLabels(cid)
+          for label in existing_labels:
+            labels_to_remove.discard(label.name)
+          if labels_to_remove:
+            idx = client_index.ClientIndex()
+            idx.RemoveClientLabels(cid, labels_to_remove)
+
         index.RemoveClientLabels(client_obj)
         self.RemoveClientLabels(client_obj, args.labels)
         index.AddClient(client_obj)
@@ -543,7 +568,7 @@ class ApiRemoveClientsLabelsHandler(api_call_handler_base.ApiCallHandler):
 class ApiListClientsLabelsResult(rdf_structs.RDFProtoStruct):
   protobuf = client_pb2.ApiListClientsLabelsResult
   rdf_deps = [
-      aff4_rdfvalues.AFF4ObjectLabel,
+      objects.ClientLabel,
   ]
 
 
@@ -560,7 +585,7 @@ class ApiListClientsLabelsHandler(api_call_handler_base.ApiCallHandler):
         token=token)
     label_objects = []
     for label in labels_index.ListLabels():
-      label_objects.append(aff4_rdfvalues.AFF4ObjectLabel(name=label))
+      label_objects.append(objects.ClientLabel(name=label))
 
     return ApiListClientsLabelsResult(items=label_objects)
 

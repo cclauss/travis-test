@@ -1,6 +1,6 @@
 'use strict';
 
-goog.provide('grrUi.hunt.huntOverviewDirective.HuntOverviewController');
+goog.provide('grrUi.hunt.huntOverviewDirective');
 goog.provide('grrUi.hunt.huntOverviewDirective.HuntOverviewDirective');
 
 goog.scope(function() {
@@ -19,13 +19,13 @@ grrUi.hunt.huntOverviewDirective.AUTO_REFRESH_INTERVAL_MS = 15 * 1000;
  * @param {!grrUi.routing.routingService.RoutingService} grrRoutingService
  * @ngInject
  */
-grrUi.hunt.huntOverviewDirective.HuntOverviewController = function(
+const HuntOverviewController = function(
     $scope, grrApiService, grrRoutingService) {
   /** @private {!angular.Scope} */
   this.scope_ = $scope;
 
   /** @type {string} */
-  this.scope_.huntUrn;
+  this.scope_.huntId;
 
   /** @private {!grrUi.core.apiService.ApiService} */
   this.grrApiService_ = grrApiService;
@@ -46,11 +46,9 @@ grrUi.hunt.huntOverviewDirective.HuntOverviewController = function(
     this.grrApiService_.cancelPoll(this.pollPromise_);
   }.bind(this));
 
-  this.scope_.$watch('huntUrn', this.startPolling_.bind(this));
+  this.scope_.$watch('huntId', this.startPolling_.bind(this));
 };
 
-var HuntOverviewController =
-    grrUi.hunt.huntOverviewDirective.HuntOverviewController;
 
 
 /**
@@ -62,9 +60,8 @@ HuntOverviewController.prototype.startPolling_ = function() {
   this.grrApiService_.cancelPoll(this.pollPromise_);
   this.pollPromise_ = undefined;
 
-  if (angular.isDefined(this.scope_['huntUrn'])) {
-    var huntUrnComponents = this.scope_['huntUrn'].split('/');
-    this.huntId = huntUrnComponents[huntUrnComponents.length - 1];
+  if (angular.isDefined(this.scope_['huntId'])) {
+    this.huntId = this.scope_['huntId'];
 
     var huntUrl = 'hunts/' + this.huntId;
     var interval = grrUi.hunt.huntOverviewDirective.AUTO_REFRESH_INTERVAL_MS;
@@ -83,14 +80,14 @@ HuntOverviewController.prototype.startPolling_ = function() {
 /**
  * Directive for displaying log records of a hunt with a given URN.
  *
- * @constructor
+ * @return {!angular.Directive} Directive definition object.
  * @ngInject
  * @export
  */
 grrUi.hunt.huntOverviewDirective.HuntOverviewDirective = function() {
   return {
     scope: {
-      huntUrn: '=',
+      huntId: '=',
     },
     restrict: 'E',
     templateUrl: '/static/angular-components/hunt/hunt-overview.html',

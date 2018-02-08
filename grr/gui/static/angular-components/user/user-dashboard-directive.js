@@ -1,6 +1,6 @@
 'use strict';
 
-goog.provide('grrUi.user.userDashboardDirective.UserDashboardController');
+goog.provide('grrUi.user.userDashboardDirective');
 goog.provide('grrUi.user.userDashboardDirective.UserDashboardDirective');
 
 
@@ -13,7 +13,7 @@ goog.provide('grrUi.user.userDashboardDirective.UserDashboardDirective');
  * @param {!grrUi.routing.routingService.RoutingService} grrRoutingService
  * @ngInject
  */
-grrUi.user.userDashboardDirective.UserDashboardController = function(
+const UserDashboardController = function(
     $scope, grrApiService, grrRoutingService) {
   /** @private {!angular.Scope} */
   this.scope_ = $scope;
@@ -36,8 +36,6 @@ grrUi.user.userDashboardDirective.UserDashboardController = function(
                             created_by: 'me'
                           }).then(this.onHunts_.bind(this));
 };
-var UserDashboardController =
-    grrUi.user.userDashboardDirective.UserDashboardController;
 
 
 /**
@@ -64,11 +62,10 @@ UserDashboardController.prototype.onHunts_ = function(response) {
 /**
  * Handles clicks in the client panel.
  *
- * @param {string} clientUrn Client urn corresponding to a clicked row.
+ * @param {string} clientId Client ID corresponding to a clicked row.
  * @export
  */
-UserDashboardController.prototype.onClientClicked = function(clientUrn) {
-  var clientId = clientUrn.split('/')[1];
+UserDashboardController.prototype.onClientClicked = function(clientId) {
   this.grrRoutingService_.go('client', {clientId: clientId});
 };
 

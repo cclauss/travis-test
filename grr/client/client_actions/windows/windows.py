@@ -6,7 +6,6 @@ of the same name. Windows-only actions are registered with the server via
 libs/server_stubs.py
 """
 
-
 import binascii
 import ctypes
 import logging
@@ -24,6 +23,7 @@ from grr import config
 from grr.client import actions
 
 from grr.client.client_actions import standard
+from grr.lib import rdfvalue
 from grr.lib.rdfvalues import client as rdf_client
 from grr.lib.rdfvalues import protodict as rdf_protodict
 
@@ -60,7 +60,7 @@ class GetInstallDate(actions.ActionPlugin):
                              "Software\\Microsoft\\Windows NT\\CurrentVersion",
                              0, _winreg.KEY_READ)
     install_date = _winreg.QueryValueEx(subkey, "InstallDate")
-    self.SendReply(rdf_protodict.DataBlob(integer=install_date[0]))
+    self.SendReply(rdfvalue.RDFDatetime().FromSecondsFromEpoch(install_date[0]))
 
 
 class EnumerateInterfaces(actions.ActionPlugin):
@@ -197,8 +197,9 @@ def RunWMIQuery(query, baseobj=r"winmgmts:\root\cimv2"):
   try:
     for result in query_results:
       response = rdf_protodict.Dict()
-      properties = (list(result.Properties_) +
-                    list(getattr(result, "SystemProperties_", [])))
+      properties = (
+          list(result.Properties_) +
+          list(getattr(result, "SystemProperties_", [])))
 
       for prop in properties:
         if prop.Name not in IGNORE_PROPS:

@@ -1,8 +1,6 @@
 #!/usr/bin/env python
 """Tests for ApiCallRobotRouter."""
 
-
-
 import os
 import StringIO
 import zipfile
@@ -42,7 +40,7 @@ class ApiRobotCreateFlowHandlerTest(test_lib.GRRBaseTest):
 
   def setUp(self):
     super(ApiRobotCreateFlowHandlerTest, self).setUp()
-    self.client_id = self.SetupClients(1)[0]
+    self.client_id = self.SetupClient(0)
 
   def testPassesFlowArgsThroughIfNoOverridesSpecified(self):
     h = rr.ApiRobotCreateFlowHandler(robot_id="foo")
@@ -76,7 +74,7 @@ class ApiCallRobotRouterTest(test_lib.GRRBaseTest):
 
   def setUp(self):
     super(ApiCallRobotRouterTest, self).setUp()
-    self.client_id = self.SetupClients(1)[0]
+    self.client_id = self.SetupClient(0)
     self.robot_id = "TestRobot"
 
   def testSearchClientsIsDisabledByDefault(self):
@@ -508,7 +506,7 @@ users:
 
   def setUp(self):
     super(ApiCallRobotRouterE2ETest, self).setUp()
-    self.client_id = self.SetupClients(1)[0]
+    self.client_id = self.SetupClient(0)
 
   def tearDown(self):
     super(ApiCallRobotRouterE2ETest, self).tearDown()
@@ -534,9 +532,7 @@ users:
             os.path.join(self.base_path, "numbers.txt"),
             os.path.join(self.base_path, "numbers.txt.ver2")
         ],
-        action=rdf_file_finder.FileFinderAction(
-            action_type=rdf_file_finder.FileFinderAction.Action.DOWNLOAD)
-    ).AsPrimitiveProto()
+        action=rdf_file_finder.FileFinderAction.Download()).AsPrimitiveProto()
     flow_obj = client_ref.CreateFlow(
         name=file_finder.FileFinder.__name__, args=args)
     self.assertEqual(flow_obj.data.state, flow_obj.data.RUNNING)
@@ -560,8 +556,8 @@ users:
     self.assertEqual(len(results), 3)
     # We expect results to be FileFinderResult.
     self.assertItemsEqual(
-        [os.path.basename(r.payload.stat_entry.pathspec.path)
-         for r in results], ["test.plist", "numbers.txt", "numbers.txt.ver2"])
+        [os.path.basename(r.payload.stat_entry.pathspec.path) for r in results],
+        ["test.plist", "numbers.txt", "numbers.txt.ver2"])
 
     # Now downloads the files archive.
     zip_stream = StringIO.StringIO()

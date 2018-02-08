@@ -1,29 +1,29 @@
 'use strict';
 
-goog.require('grrUi.semantic.semanticProtosDiffDirective.diffAnnotate');
+goog.module('grrUi.semantic.semanticProtosDiffDirectiveTest');
 
-describe('grrSemanticProtosDiff directive', function() {
+const {diffAnnotate} = goog.require('grrUi.semantic.semanticProtosDiffDirective');
 
-  describe('diffAnnotate()', function() {
-    var diffAnnotate = grrUi.semantic.semanticProtosDiffDirective.diffAnnotate;
+describe('grrSemanticProtosDiff directive', () => {
+  describe('diffAnnotate()', () => {
 
-    it('does nothing for 2 plain equal data structures', function() {
-      var value = {
+    it('does nothing for 2 plain equal data structures', () => {
+      const value = {
         type: 'Foo',
         value: {
           a: {
             type: 'RDFString',
-            value: 'foo'
+            value: 'foo',
           },
           b: {
             type: 'RDFInteger',
-            value: 42
-          }
-        }
+            value: 42,
+          },
+        },
       };
 
-      var originalValue = angular.copy(value);
-      var newValue = angular.copy(value);
+      const originalValue = angular.copy(value);
+      const newValue = angular.copy(value);
       diffAnnotate(originalValue, newValue);
 
       // Check that the values haven't changed.
@@ -31,24 +31,24 @@ describe('grrSemanticProtosDiff directive', function() {
       expect(newValue).toEqual(value);
     });
 
-    it('marks changed primitive attribute as changed', function() {
-      var originalValue = {
+    it('marks changed primitive attribute as changed', () => {
+      const originalValue = {
         type: 'Foo',
         value: {
           a: {
             type: 'RDFString',
-            value: 'foo'
-          }
-        }
+            value: 'foo',
+          },
+        },
       };
-      var newValue = {
+      const newValue = {
         type: 'Foo',
         value: {
           a: {
             type: 'RDFString',
-            value: 'bar'
-          }
-        }
+            value: 'bar',
+          },
+        },
       };
 
       diffAnnotate(originalValue, newValue);
@@ -59,9 +59,9 @@ describe('grrSemanticProtosDiff directive', function() {
           a: {
             type: 'RDFString',
             value: 'foo',
-            _diff: 'changed'
-          }
-        }
+            _diff: 'changed',
+          },
+        },
       });
       expect(newValue).toEqual({
         type: 'Foo',
@@ -69,78 +69,30 @@ describe('grrSemanticProtosDiff directive', function() {
           a: {
             type: 'RDFString',
             value: 'bar',
-            _diff: 'changed'
-          }
-        }
+            _diff: 'changed',
+          },
+        },
       });
     });
 
-    it('marks primitive attribute as changed on type change', function() {
-      var originalValue = {
-        type: 'Foo',
-        value: {
-          a: {
-            type: 'RDFString',
-            value: 'foo'
-          }
-        }
-      };
-      var newValue = {
-        type: 'Foo',
-        value: {
-          a: {
-            type: 'ClientURN',
-            value: 'foo'
-          }
-        }
-      };
-
-      diffAnnotate(originalValue, newValue);
-
-      expect(originalValue).toEqual({
+    it('marks primitive attribute as changed on type change', () => {
+      const originalValue = {
         type: 'Foo',
         value: {
           a: {
             type: 'RDFString',
             value: 'foo',
-            _diff: 'changed'
-          }
-        }
-      });
-      expect(newValue).toEqual({
+          },
+        },
+      };
+      const newValue = {
         type: 'Foo',
         value: {
           a: {
             type: 'ClientURN',
             value: 'foo',
-            _diff: 'changed'
-          }
-        }
-      });
-    });
-
-    it('marks added primitive attribute as added', function() {
-      var originalValue = {
-        type: 'Foo',
-        value: {
-          a: {
-            type: 'RDFString',
-            value: 'foo'
-          }
-        }
-      };
-      var newValue = {
-        type: 'Foo',
-        value: {
-          a: {
-            type: 'RDFString',
-            value: 'foo'
           },
-          b: {
-            type: 'RDFString',
-            value: 'bar'
-          }
-        }
+        },
       };
 
       diffAnnotate(originalValue, newValue);
@@ -151,10 +103,33 @@ describe('grrSemanticProtosDiff directive', function() {
           a: {
             type: 'RDFString',
             value: 'foo',
-          }
-        }
+            _diff: 'changed',
+          },
+        },
       });
       expect(newValue).toEqual({
+        type: 'Foo',
+        value: {
+          a: {
+            type: 'ClientURN',
+            value: 'foo',
+            _diff: 'changed',
+          },
+        },
+      });
+    });
+
+    it('marks added primitive attribute as added', () => {
+      const originalValue = {
+        type: 'Foo',
+        value: {
+          a: {
+            type: 'RDFString',
+            value: 'foo',
+          },
+        },
+      };
+      const newValue = {
         type: 'Foo',
         value: {
           a: {
@@ -164,34 +139,8 @@ describe('grrSemanticProtosDiff directive', function() {
           b: {
             type: 'RDFString',
             value: 'bar',
-            _diff: 'added'
-          }
-        }
-      });
-    });
-
-    it('marks removed primitive attribute as removed', function() {
-      var originalValue = {
-        type: 'Foo',
-        value: {
-          a: {
-            type: 'RDFString',
-            value: 'foo'
           },
-          b: {
-            type: 'RDFString',
-            value: 'bar'
-          }
-        }
-      };
-      var newValue = {
-        type: 'Foo',
-        value: {
-          a: {
-            type: 'RDFString',
-            value: 'foo'
-          }
-        }
+        },
       };
 
       diffAnnotate(originalValue, newValue);
@@ -203,12 +152,7 @@ describe('grrSemanticProtosDiff directive', function() {
             type: 'RDFString',
             value: 'foo',
           },
-          b: {
-            type: 'RDFString',
-            value: 'bar',
-            _diff: 'removed'
-          }
-        }
+        },
       });
       expect(newValue).toEqual({
         type: 'Foo',
@@ -216,37 +160,93 @@ describe('grrSemanticProtosDiff directive', function() {
           a: {
             type: 'RDFString',
             value: 'foo',
-          }
-        }
-      });
-    });
-
-    it('marks added and removed primitive attributes in the same value', function() {
-      var originalValue = {
-        type: 'Foo',
-        value: {
-          a: {
-            type: 'RDFString',
-            value: 'foo'
           },
           b: {
             type: 'RDFString',
-            value: 'bar'
-          }
-        }
-      };
-      var newValue = {
+            value: 'bar',
+            _diff: 'added',
+          },
+        },
+      });
+    });
+
+    it('marks removed primitive attribute as removed', () => {
+      const originalValue = {
         type: 'Foo',
         value: {
           a: {
             type: 'RDFString',
-            value: 'foo'
+            value: 'foo',
+          },
+          b: {
+            type: 'RDFString',
+            value: 'bar',
+          },
+        },
+      };
+      const newValue = {
+        type: 'Foo',
+        value: {
+          a: {
+            type: 'RDFString',
+            value: 'foo',
+          },
+        },
+      };
+
+      diffAnnotate(originalValue, newValue);
+
+      expect(originalValue).toEqual({
+        type: 'Foo',
+        value: {
+          a: {
+            type: 'RDFString',
+            value: 'foo',
+          },
+          b: {
+            type: 'RDFString',
+            value: 'bar',
+            _diff: 'removed',
+          },
+        },
+      });
+      expect(newValue).toEqual({
+        type: 'Foo',
+        value: {
+          a: {
+            type: 'RDFString',
+            value: 'foo',
+          },
+        },
+      });
+    });
+
+    it('marks added and removed primitive attributes in the same value', () => {
+      const originalValue = {
+        type: 'Foo',
+        value: {
+          a: {
+            type: 'RDFString',
+            value: 'foo',
+          },
+          b: {
+            type: 'RDFString',
+            value: 'bar',
+          },
+        },
+      };
+      const newValue = {
+        type: 'Foo',
+        value: {
+          a: {
+            type: 'RDFString',
+            value: 'foo',
           },
           c: {
             type: 'RDFString',
-            value: 'aha'
-          }
-        }
+            value: 'aha',
+          },
+        },
       };
 
       diffAnnotate(originalValue, newValue);
@@ -261,9 +261,9 @@ describe('grrSemanticProtosDiff directive', function() {
           b: {
             type: 'RDFString',
             value: 'bar',
-            _diff: 'removed'
-          }
-        }
+            _diff: 'removed',
+          },
+        },
       });
       expect(newValue).toEqual({
         type: 'Foo',
@@ -275,102 +275,28 @@ describe('grrSemanticProtosDiff directive', function() {
           c: {
             type: 'RDFString',
             value: 'aha',
-            _diff: 'added'
-          }
-        }
+            _diff: 'added',
+          },
+        },
       });
     });
 
-    it('marks primitive item added to a list as added', function() {
-      var originalValue = [
+    it('marks primitive item added to a list as added', () => {
+      const originalValue = [
         {
           type: 'RDFString',
-          value: 'foo'
-        }
-      ];
-      var newValue = [
-        {
-          type: 'RDFString',
-          value: 'foo'
+          value: 'foo',
         },
-        {
-          type: 'RDFString',
-          value: 'bar'
-        }
       ];
-
-      diffAnnotate(originalValue, newValue);
-
-      expect(originalValue).toEqual([
+      const newValue = [
         {
           type: 'RDFString',
-          value: 'foo'
-        }
-      ]);
-      expect(newValue).toEqual([
-        {
-          type: 'RDFString',
-          value: 'foo'
+          value: 'foo',
         },
         {
           type: 'RDFString',
           value: 'bar',
-          _diff: 'added'
-        }
-      ]);
-    });
-
-    it('marks primitive item removed from a list as removed', function() {
-      var originalValue = [
-        {
-          type: 'RDFString',
-          value: 'foo'
         },
-        {
-          type: 'RDFString',
-          value: 'bar'
-        }
-      ];
-      var newValue = [
-        {
-          type: 'RDFString',
-          value: 'foo'
-        }
-      ];
-
-      diffAnnotate(originalValue, newValue);
-
-      expect(originalValue).toEqual([
-        {
-          type: 'RDFString',
-          value: 'foo'
-        },
-        {
-          type: 'RDFString',
-          value: 'bar',
-          _diff: 'removed'
-        }
-      ]);
-      expect(newValue).toEqual([
-        {
-          type: 'RDFString',
-          value: 'foo'
-        }
-      ]);
-    });
-
-    it('marks changed list item as added and removed', function() {
-      var originalValue = [
-        {
-          type: 'RDFString',
-          value: 'foo'
-        }
-      ];
-      var newValue = [
-        {
-          type: 'RDFString',
-          value: 'bar'
-        }
       ];
 
       diffAnnotate(originalValue, newValue);
@@ -379,43 +305,117 @@ describe('grrSemanticProtosDiff directive', function() {
         {
           type: 'RDFString',
           value: 'foo',
-          _diff: 'removed'
-        }
+        },
+      ]);
+      expect(newValue).toEqual([
+        {
+          type: 'RDFString',
+          value: 'foo',
+        },
+        {
+          type: 'RDFString',
+          value: 'bar',
+          _diff: 'added',
+        },
+      ]);
+    });
+
+    it('marks primitive item removed from a list as removed', () => {
+      const originalValue = [
+        {
+          type: 'RDFString',
+          value: 'foo',
+        },
+        {
+          type: 'RDFString',
+          value: 'bar',
+        },
+      ];
+      const newValue = [
+        {
+          type: 'RDFString',
+          value: 'foo',
+        },
+      ];
+
+      diffAnnotate(originalValue, newValue);
+
+      expect(originalValue).toEqual([
+        {
+          type: 'RDFString',
+          value: 'foo',
+        },
+        {
+          type: 'RDFString',
+          value: 'bar',
+          _diff: 'removed',
+        },
+      ]);
+      expect(newValue).toEqual([
+        {
+          type: 'RDFString',
+          value: 'foo',
+        },
+      ]);
+    });
+
+    it('marks changed list item as added and removed', () => {
+      const originalValue = [
+        {
+          type: 'RDFString',
+          value: 'foo',
+        },
+      ];
+      const newValue = [
+        {
+          type: 'RDFString',
+          value: 'bar',
+        },
+      ];
+
+      diffAnnotate(originalValue, newValue);
+
+      expect(originalValue).toEqual([
+        {
+          type: 'RDFString',
+          value: 'foo',
+          _diff: 'removed',
+        },
       ]);
       expect(newValue).toEqual([
         {
           type: 'RDFString',
           value: 'bar',
-          _diff: 'added'
-        }
+          _diff: 'added',
+        },
       ]);
     });
 
-    it('treats lists as unchanged if the order of items changed', function() {
-      var originalValue = [
+    it('treats lists as unchanged if the order of items changed', () => {
+      const originalValue = [
         {
           type: 'RDFString',
-          value: 'foo'
+          value: 'foo',
         },
         {
           type: 'RDFString',
-          value: 'bar'
-        }
+          value: 'bar',
+        },
 
       ];
-      var savedOriginalValue = angular.copy(originalValue);
+      const savedOriginalValue = angular.copy(originalValue);
 
-      var newValue = [
+      const newValue = [
         {
           type: 'RDFString',
-          value: 'bar'
+          value: 'bar',
         },
         {
           type: 'RDFString',
-          value: 'foo'
+          value: 'foo',
         },
       ];
-      var savedNewValue = angular.copy(newValue);
+      const savedNewValue = angular.copy(newValue);
 
       diffAnnotate(originalValue, newValue);
 
@@ -424,26 +424,26 @@ describe('grrSemanticProtosDiff directive', function() {
       expect(newValue).toEqual(savedNewValue);
     });
 
-    it('treats lists as unchanged if duplicate items were added', function() {
-      var originalValue = [
+    it('treats lists as unchanged if duplicate items were added', () => {
+      const originalValue = [
         {
           type: 'RDFString',
-          value: 'foo'
-        }
+          value: 'foo',
+        },
       ];
-      var savedOriginalValue = angular.copy(originalValue);
+      const savedOriginalValue = angular.copy(originalValue);
 
-      var newValue = [
+      const newValue = [
         {
           type: 'RDFString',
-          value: 'foo'
+          value: 'foo',
         },
         {
           type: 'RDFString',
-          value: 'foo'
-        }
+          value: 'foo',
+        },
       ];
-      var savedNewValue = angular.copy(newValue);
+      const savedNewValue = angular.copy(newValue);
 
       diffAnnotate(originalValue, newValue);
 
@@ -453,3 +453,6 @@ describe('grrSemanticProtosDiff directive', function() {
     });
   });
 });
+
+
+exports = {};

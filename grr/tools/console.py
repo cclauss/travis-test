@@ -4,7 +4,6 @@
 We can schedule a new flow for a specific client.
 """
 
-
 # pylint: disable=unused-import
 # Import things that are useful from the console.
 import collections
@@ -24,7 +23,6 @@ from grr.lib import server_plugins
 
 from grr import config
 from grr.config import contexts
-from grr.endtoend_tests import base
 from grr.lib import flags
 from grr.lib import type_info
 from grr.lib import utils
@@ -35,6 +33,7 @@ from grr.server import artifact_utils
 from grr.server import console_utils
 from grr.server import data_store
 from grr.server import export_utils
+from grr.server import fleetspeak_connector
 from grr.server import flow
 from grr.server import flow_runner
 from grr.server import flow_utils
@@ -51,12 +50,8 @@ from grr.server.aff4_objects import security
 from grr.server.console_utils import *
 # pylint: enable=wildcard-import
 
-from grr.server.flows import console
-from grr.server.flows.console import debugging
 from grr.server.flows.general import memory
 # pylint: enable=unused-import
-
-from grr.tools import end_to_end_tests
 
 flags.DEFINE_string("client", None,
                     "Initialise the console with this client id "
@@ -98,6 +93,8 @@ def main(argv):
                            "Context applied when running the console binary.")
   server_startup.Init()
 
+  fleetspeak_connector.Init()
+
   # To make the console easier to use, we make a default token which will be
   # used in StartFlow operations.
   data_store.default_token = access_control.ACLToken(
@@ -112,8 +109,7 @@ def main(argv):
       # Bring some symbols from other modules into the console's
       # namespace.
       "StartFlowAndWait": flow_utils.StartFlowAndWait,
-      "StartFlowAndWorker": debugging.StartFlowAndWorker,
-      "RunEndToEndTests": end_to_end_tests.RunEndToEndTests,
+      "StartFlowAndWorker": console_utils.StartFlowAndWorker,
   }
 
   locals_vars.update(globals())  # add global variables to console

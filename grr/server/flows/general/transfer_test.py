@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 """Test the file transfer mechanism."""
 
-
 import hashlib
 import os
 import platform
@@ -63,6 +62,7 @@ class TestTransfer(flow_test_lib.FlowTestsBaseclass):
 
   def setUp(self):
     super(TestTransfer, self).setUp()
+    self.client_id = self.SetupClient(0)
 
     # Set suitable defaults for testing
     self.old_window_size = transfer.GetFile.WINDOW_SIZE
@@ -373,7 +373,7 @@ class TestTransfer(flow_test_lib.FlowTestsBaseclass):
     for pathspec in pathspecs:
       urn = pathspec.AFF4Path(self.client_id)
       fd = aff4.FACTORY.Open(urn, token=self.token)
-      self.assertEqual("Hello", fd.Read(100000))
+      self.assertEqual("Hello", fd.read())
 
   def testMultiGetFileDeduplication(self):
     client_mock = action_mocks.MultiGetFileClientMock()

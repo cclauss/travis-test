@@ -1,6 +1,6 @@
 'use strict';
 
-goog.provide('grrUi.artifact.artifactManagerViewDirective.ArtifactManagerViewController');
+goog.provide('grrUi.artifact.artifactManagerViewDirective');
 goog.provide('grrUi.artifact.artifactManagerViewDirective.ArtifactManagerViewDirective');
 
 
@@ -16,7 +16,7 @@ goog.scope(function() {
  * @param {!grrUi.artifact.artifactDialogService.ArtifactDialogService} grrArtifactDialogService
  * @ngInject
  */
-grrUi.artifact.artifactManagerViewDirective.ArtifactManagerViewController =
+const ArtifactManagerViewController =
     function($scope, grrApiService, grrArtifactDialogService) {
 
   /** @private {!angular.Scope} */
@@ -48,8 +48,6 @@ grrUi.artifact.artifactManagerViewDirective.ArtifactManagerViewController =
   /** @export {boolean} */
   this.allDescriptorsSelected = false;
 };
-var ArtifactManagerViewController =
-    grrUi.artifact.artifactManagerViewDirective.ArtifactManagerViewController;
 
 
 /**
@@ -151,7 +149,7 @@ ArtifactManagerViewController.prototype.updateNumSelectedDescriptors =
 /**
  * Directive that displays artifact manager view.
  *
- * @constructor
+ * @return {!angular.Directive} Directive definition object.
  * @ngInject
  * @export
  */

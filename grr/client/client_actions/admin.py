@@ -215,6 +215,12 @@ class UpdateConfiguration(actions.ActionPlugin):
 
   def Run(self, arg):
     """Does the actual work."""
+    try:
+      if self.grr_worker.client.FleetspeakEnabled():
+        raise ValueError("Not supported on Fleetspeak enabled clients.")
+    except AttributeError:
+      pass
+
     smart_arg = {utils.SmartStr(field): value for field, value in arg.items()}
 
     disallowed_fields = [
@@ -223,14 +229,8 @@ class UpdateConfiguration(actions.ActionPlugin):
     ]
 
     if disallowed_fields:
-      logging.warning("Received an update request for restricted field(s) %s.",
-                      ",".join(disallowed_fields))
-
-    filtered_arg = {
-        field: value
-        for field, value in smart_arg.items()
-        if field in UpdateConfiguration.UPDATABLE_FIELDS
-    }
+      raise ValueError("Received an update request for restricted field(s) %s.",
+                       ",".join(disallowed_fields))
 
     if platform.system() != "Windows":
       # Check config validity before really applying the changes. This isn't
@@ -245,7 +245,7 @@ class UpdateConfiguration(actions.ActionPlugin):
 
       # Write canary_config changes to temp_filename.
       canary_config.SetWriteBack(temp_filename)
-      self._UpdateConfig(filtered_arg, canary_config)
+      self._UpdateConfig(smart_arg, canary_config)
 
       try:
         # Assert temp_filename is usable by loading it.
@@ -259,7 +259,7 @@ class UpdateConfiguration(actions.ActionPlugin):
       os.unlink(temp_filename)
 
     # The changes seem to work, so push them to the real config.
-    self._UpdateConfig(filtered_arg, config.CONFIG)
+    self._UpdateConfig(smart_arg, config.CONFIG)
 
 
 def GetClientInformation():
@@ -291,14 +291,17 @@ class GetClientStats(actions.ActionPlugin):
 
     proc = psutil.Process(os.getpid())
     meminfo = proc.memory_info()
+    boot_time = rdfvalue.RDFDatetime().FromSecondsFromEpoch(psutil.boot_time())
+    create_time = rdfvalue.RDFDatetime().FromSecondsFromEpoch(
+        proc.create_time())
     response = rdf_client.ClientStats(
         RSS_size=meminfo.rss,
         VMS_size=meminfo.vms,
         memory_percent=proc.memory_percent(),
         bytes_received=stats.STATS.GetMetricValue("grr_client_received_bytes"),
         bytes_sent=stats.STATS.GetMetricValue("grr_client_sent_bytes"),
-        create_time=long(proc.create_time() * 1e6),
-        boot_time=long(psutil.boot_time() * 1e6))
+        create_time=create_time,
+        boot_time=boot_time)
 
     samples = self.grr_worker.stats_collector.cpu_samples
     for (timestamp, user, system, percent) in samples:
@@ -349,10 +352,9 @@ class SendStartupInfo(actions.ActionPlugin):
   def Run(self, unused_arg, ttl=None):
     """Returns the startup information."""
     logging.debug("Sending startup information.")
-
+    boot_time = rdfvalue.RDFDatetime().FromSecondsFromEpoch(psutil.boot_time())
     response = rdf_client.StartupInfo(
-        boot_time=long(psutil.boot_time() * 1e6),
-        client_info=GetClientInformation())
+        boot_time=boot_time, client_info=GetClientInformation())
 
     self.grr_worker.SendReply(
         response,

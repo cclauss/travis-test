@@ -1,6 +1,6 @@
 'use strict';
 
-goog.provide('grrUi.cron.cronJobStatusIconDirective.CronJobStatusIconController');
+goog.provide('grrUi.cron.cronJobStatusIconDirective');
 goog.provide('grrUi.cron.cronJobStatusIconDirective.CronJobStatusIconDirective');
 
 
@@ -10,7 +10,7 @@ goog.scope(function() {
 /**
  * Directive that displays cron status icons for a given cron.
  *
- * @constructor
+ * @return {!angular.Directive} Directive definition object.
  * @ngInject
  * @export
  */
@@ -31,6 +31,4 @@ grrUi.cron.cronJobStatusIconDirective.CronJobStatusIconDirective =
  */
 grrUi.cron.cronJobStatusIconDirective.CronJobStatusIconDirective
     .directive_name = 'grrCronJobStatusIcon';
-
-
 });  // goog.scope

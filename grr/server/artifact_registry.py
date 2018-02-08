@@ -14,7 +14,7 @@ from grr.lib import utils
 from grr.lib.rdfvalues import client as rdf_client
 from grr.lib.rdfvalues import protodict
 from grr.lib.rdfvalues import structs
-from grr.proto import artifact_pb2
+from grr_response_proto import artifact_pb2
 from grr.server import artifact_utils
 from grr.server import data_store
 from grr.server import sequential_collection
@@ -278,7 +278,7 @@ class ArtifactRegistry(object):
       try:
         with open(file_path, mode="rb") as fh:
           logging.debug("Loading artifacts from %s", file_path)
-          for artifact_val in self.ArtifactsFromYaml(fh.read(1000000)):
+          for artifact_val in self.ArtifactsFromYaml(fh.read()):
             self.RegisterArtifact(
                 artifact_val,
                 source="file:%s" % file_path,
@@ -409,7 +409,7 @@ class ArtifactRegistry(object):
     """
     self._CheckDirty(reload_datastore_artifacts=reload_datastore_artifacts)
     results = set()
-    for artifact in self._artifacts.itervalues():
+    for artifact in self._artifacts.values():
 
       # artifact.supported_os = [] matches all OSes
       if os_name and artifact.supported_os and (

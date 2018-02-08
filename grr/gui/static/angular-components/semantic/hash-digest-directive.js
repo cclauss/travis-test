@@ -1,6 +1,6 @@
 'use strict';
 
-goog.provide('grrUi.semantic.hashDigestDirective.HashDigestController');
+goog.provide('grrUi.semantic.hashDigestDirective');
 goog.provide('grrUi.semantic.hashDigestDirective.HashDigestDirective');
 
 goog.scope(function() {
@@ -14,7 +14,7 @@ goog.scope(function() {
  * @constructor
  * @ngInject
  */
-grrUi.semantic.hashDigestDirective.HashDigestController = function(
+const HashDigestController = function(
     $scope, $window) {
   /** @private {!angular.Scope} */
   this.scope_ = $scope;
@@ -28,8 +28,6 @@ grrUi.semantic.hashDigestDirective.HashDigestController = function(
   this.scope_.$watch('::value', this.onValueChange.bind(this));
 };
 
-var HashDigestController =
-    grrUi.semantic.hashDigestDirective.HashDigestController;
 
 
 /**
@@ -72,7 +70,7 @@ HashDigestController.prototype.onValueChange = function(newValue) {
 /**
  * Directive that displays a HashDigest value.
  *
- * @constructor
+ * @return {!angular.Directive} Directive definition object.
  * @ngInject
  * @export
  */

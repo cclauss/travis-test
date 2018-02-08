@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 """Standard RDFValues."""
 
-
 import re
 import urlparse
 
@@ -9,8 +8,8 @@ from grr.lib import config_lib
 from grr.lib import rdfvalue
 from grr.lib import type_info
 from grr.lib.rdfvalues import structs as rdf_structs
-from grr.proto import jobs_pb2
-from grr.proto import sysinfo_pb2
+from grr_response_proto import jobs_pb2
+from grr_response_proto import sysinfo_pb2
 
 
 class RegularExpression(rdfvalue.RDFString):

@@ -1,6 +1,6 @@
 'use strict';
 
-goog.provide('grrUi.semantic.objectLabelDirective.ObjectLabelController');
+goog.provide('grrUi.semantic.objectLabelDirective');
 goog.provide('grrUi.semantic.objectLabelDirective.ObjectLabelDirective');
 
 goog.scope(function() {
@@ -13,7 +13,7 @@ goog.scope(function() {
  * @constructor
  * @ngInject
  */
-grrUi.semantic.objectLabelDirective.ObjectLabelController = function($scope) {
+const ObjectLabelController = function($scope) {
   /** @private {!angular.Scope} */
   this.scope_ = $scope;
 
@@ -26,8 +26,6 @@ grrUi.semantic.objectLabelDirective.ObjectLabelController = function($scope) {
   this.scope_.$watch('::value', this.onValueChange_.bind(this));
 };
 
-var ObjectLabelController =
-    grrUi.semantic.objectLabelDirective.ObjectLabelController;
 
 
 /**
@@ -57,7 +55,7 @@ ObjectLabelController.prototype.onValueChange_ = function(newValue) {
 /**
  * Directive that displays AFF4 object label.
  *
- * @constructor
+ * @return {!angular.Directive} Directive definition object.
  * @ngInject
  * @export
  */
@@ -87,7 +85,7 @@ grrUi.semantic.objectLabelDirective.ObjectLabelDirective.directive_name =
  * @export
  */
 grrUi.semantic.objectLabelDirective.ObjectLabelDirective.semantic_type =
-    'AFF4ObjectLabel';
+    'ClientLabel';
 
 
 });  // goog.scope

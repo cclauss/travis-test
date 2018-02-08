@@ -18,11 +18,10 @@ from grr.gui.api_plugins import vfs as api_vfs
 from grr.lib import rdfvalue
 from grr.lib import utils
 from grr.lib.rdfvalues import client as rdf_client
-from grr.lib.rdfvalues import flows as rdf_flows
 from grr.lib.rdfvalues import hunts as rdf_hunts
 from grr.lib.rdfvalues import stats as rdf_stats
 from grr.lib.rdfvalues import structs as rdf_structs
-from grr.proto.api import hunt_pb2
+from grr_response_proto.api import hunt_pb2
 from grr.server import aff4
 from grr.server import events
 from grr.server import flow
@@ -71,7 +70,7 @@ class HuntNotDeletableError(Error):
 
 
 class ApiHuntId(rdfvalue.RDFString):
-  """Class encapsulating client ids."""
+  """Class encapsulating hunt ids."""
 
   def __init__(self, initializer=None, age=None):
     super(ApiHuntId, self).__init__(initializer=initializer, age=age)
@@ -167,6 +166,7 @@ class ApiHunt(rdf_structs.RDFProtoStruct):
       self.is_robot = context.creator == "GRRWorker"
       self.results_count = context.results_count
       self.clients_with_results_count = context.clients_with_results_count
+      self.clients_queued_count = context.clients_queued_count
       if hunt.runner_args.original_object.object_type != "UNKNOWN":
         ref = ApiFlowLikeObjectReference()
         self.original_object = ref.FromFlowLikeObjectReference(
@@ -229,6 +229,47 @@ class ApiHuntClient(rdf_structs.RDFProtoStruct):
       api_client.ApiClientId,
       api_flow.ApiFlowId,
   ]
+
+
+class ApiHuntLog(rdf_structs.RDFProtoStruct):
+  protobuf = hunt_pb2.ApiHuntLog
+  rdf_deps = [
+      api_client.ApiClientId,
+      api_flow.ApiFlowId,
+      rdfvalue.RDFDatetime,
+  ]
+
+  def InitFromFlowLog(self, fl):
+    if fl.HasField("client_id"):
+      self.client_id = fl.client_id.Basename()
+      if fl.HasField("urn"):
+        self.flow_id = fl.urn.RelativeName(fl.client_id)
+
+    self.timestamp = fl.age
+    self.log_message = fl.log_message
+    self.flow_name = fl.flow_name
+
+    return self
+
+
+class ApiHuntError(rdf_structs.RDFProtoStruct):
+  protobuf = hunt_pb2.ApiHuntError
+  rdf_deps = [
+      api_client.ApiClientId,
+      rdfvalue.RDFDatetime,
+  ]
+
+  def InitFromHuntError(self, he):
+    if he.HasField("client_id"):
+      self.client_id = he.client_id.Basename()
+
+    if he.HasField("backtrace"):
+      self.backtrace = he.backtrace
+
+    self.log_message = he.log_message
+    self.timestamp = he.age
+
+    return self
 
 
 class ApiListHuntsArgs(rdf_structs.RDFProtoStruct):
@@ -643,9 +684,7 @@ class ApiListHuntLogsArgs(rdf_structs.RDFProtoStruct):
 
 class ApiListHuntLogsResult(rdf_structs.RDFProtoStruct):
   protobuf = hunt_pb2.ApiListHuntLogsResult
-  rdf_deps = [
-      rdf_flows.FlowLog,
-  ]
+  rdf_deps = [ApiHuntLog]
 
 
 class ApiListHuntLogsHandler(api_call_handler_base.ApiCallHandler):
@@ -662,7 +701,9 @@ class ApiListHuntLogsHandler(api_call_handler_base.ApiCallHandler):
     result = api_call_handler_utils.FilterCollection(
         logs_collection, args.offset, args.count, args.filter)
 
-    return ApiListHuntLogsResult(items=result, total_count=len(logs_collection))
+    return ApiListHuntLogsResult(
+        items=[ApiHuntLog().InitFromFlowLog(x) for x in result],
+        total_count=len(logs_collection))
 
 
 class ApiListHuntErrorsArgs(rdf_structs.RDFProtoStruct):
@@ -675,7 +716,7 @@ class ApiListHuntErrorsArgs(rdf_structs.RDFProtoStruct):
 class ApiListHuntErrorsResult(rdf_structs.RDFProtoStruct):
   protobuf = hunt_pb2.ApiListHuntErrorsResult
   rdf_deps = [
-      rdf_hunts.HuntError,
+      ApiHuntError,
   ]
 
 
@@ -694,7 +735,8 @@ class ApiListHuntErrorsHandler(api_call_handler_base.ApiCallHandler):
         errors_collection, args.offset, args.count, args.filter)
 
     return ApiListHuntErrorsResult(
-        items=result, total_count=len(errors_collection))
+        items=[ApiHuntError().InitFromHuntError(x) for x in result],
+        total_count=len(errors_collection))
 
 
 class ApiGetHuntClientCompletionStatsArgs(rdf_structs.RDFProtoStruct):
@@ -886,10 +928,10 @@ class ApiGetHuntFilesArchiveHandler(api_call_handler_base.ApiCallHandler):
 
     hunt_api_object = ApiHunt().InitFromAff4Object(hunt)
     description = ("Files downloaded by hunt %s (%s, '%s') created by user %s "
-                   "on %s" %
-                   (hunt_api_object.name, hunt_api_object.urn.Basename(),
-                    hunt_api_object.description, hunt_api_object.creator,
-                    hunt_api_object.created))
+                   "on %s" % (hunt_api_object.name,
+                              hunt_api_object.urn.Basename(),
+                              hunt_api_object.description,
+                              hunt_api_object.creator, hunt_api_object.created))
 
     collection = implementation.GRRHunt.ResultCollectionForHID(hunt_urn)
 
@@ -993,11 +1035,12 @@ class ApiGetHuntFileHandler(api_call_handler_base.ApiCallHandler):
       except aff4.InstantiationError:
         break
 
-    raise HuntFileNotFoundError(
-        "File %s with timestamp %s and client %s "
-        "wasn't found among the results of hunt %s" %
-        (utils.SmartStr(args.vfs_path), utils.SmartStr(args.timestamp),
-         utils.SmartStr(args.client_id), utils.SmartStr(args.hunt_id)))
+    raise HuntFileNotFoundError("File %s with timestamp %s and client %s "
+                                "wasn't found among the results of hunt %s" %
+                                (utils.SmartStr(args.vfs_path),
+                                 utils.SmartStr(args.timestamp),
+                                 utils.SmartStr(args.client_id),
+                                 utils.SmartStr(args.hunt_id)))
 
 
 class ApiGetHuntStatsArgs(rdf_structs.RDFProtoStruct):
@@ -1112,7 +1155,7 @@ class ApiGetHuntContextHandler(api_call_handler_base.ApiCallHandler):
         args.hunt_id.ToURN(), aff4_type=implementation.GRRHunt, token=token)
 
     if isinstance(hunt.context, rdf_hunts.HuntContext):  # New style hunt.
-      # TODO(user): Hunt state will go away soon, we don't render it anymore.
+      # TODO(amoser): Hunt state will go away soon, we don't render it anymore.
       state = api_call_handler_utils.ApiDataObject()
       result = ApiGetHuntContextResult(context=hunt.context, state=state)
       # Assign args last since it needs the other fields set to

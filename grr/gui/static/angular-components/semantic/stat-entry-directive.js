@@ -1,10 +1,10 @@
 'use strict';
 
-goog.provide('grrUi.semantic.statEntryDirective.StatEntryController');
+goog.provide('grrUi.semantic.statEntryDirective');
 goog.provide('grrUi.semantic.statEntryDirective.StatEntryDirective');
 
-goog.require('grrUi.core.fileDownloadUtils.pathSpecToAff4Path');
-goog.require('grrUi.core.serverErrorButtonDirective.ServerErrorButtonDirective');
+goog.require('grrUi.core.fileDownloadUtils');  // USE: pathSpecToAff4Path
+goog.require('grrUi.core.serverErrorButtonDirective');  // USE: ServerErrorButtonDirective
 
 goog.scope(function() {
 
@@ -21,7 +21,7 @@ var pathSpecToAff4Path = grrUi.core.fileDownloadUtils.pathSpecToAff4Path;
  * @constructor
  * @ngInject
  */
-grrUi.semantic.statEntryDirective.StatEntryController = function(
+const StatEntryController = function(
     $rootScope, $scope, grrApiService) {
   /** @private {!angular.Scope} */
   this.rootScope_ = $rootScope;
@@ -50,8 +50,6 @@ grrUi.semantic.statEntryDirective.StatEntryController = function(
   this.scope_.$watch('::value', this.onValueChange_.bind(this));
 };
 
-var StatEntryController =
-    grrUi.semantic.statEntryDirective.StatEntryController;
 
 
 /**

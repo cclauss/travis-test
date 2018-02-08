@@ -1,8 +1,8 @@
 'use strict';
 
-goog.provide('grrUi.flow.flowOverviewDirective.FlowOverviewController');
+goog.provide('grrUi.flow.flowOverviewDirective');
 goog.provide('grrUi.flow.flowOverviewDirective.FlowOverviewDirective');
-goog.require('grrUi.core.utils.stripAff4Prefix');
+goog.require('grrUi.core.utils');  // USE: stripAff4Prefix
 
 goog.scope(function() {
 
@@ -21,7 +21,7 @@ grrUi.flow.flowOverviewDirective.AUTO_REFRESH_INTERVAL_MS = 15 * 1000;
  * @param {!grrUi.core.apiService.ApiService} grrApiService
  * @ngInject
  */
-grrUi.flow.flowOverviewDirective.FlowOverviewController = function(
+const FlowOverviewController = function(
     $scope, grrApiService) {
   /** @private {!angular.Scope} */
   this.scope_ = $scope;
@@ -43,8 +43,6 @@ grrUi.flow.flowOverviewDirective.FlowOverviewController = function(
                           this.startPolling.bind(this));
 };
 
-var FlowOverviewController =
-    grrUi.flow.flowOverviewDirective.FlowOverviewController;
 
 
 /**

@@ -1,11 +1,11 @@
 'use strict';
 
-goog.provide('grrUi.semantic.semanticProtosDiffDirective.SemanticProtosDiffController');
+goog.provide('grrUi.semantic.semanticProtosDiffDirective');
 goog.provide('grrUi.semantic.semanticProtosDiffDirective.SemanticProtosDiffDirective');
 goog.provide('grrUi.semantic.semanticProtosDiffDirective.diffAnnotate');
 
-goog.require('grrUi.semantic.semanticDiffAnnotatedProtoDirective.SemanticDiffAnnotatedProtoDirective');
-goog.require('grrUi.semantic.semanticProtoDirective.SemanticProtoDirective');
+goog.require('grrUi.semantic.semanticDiffAnnotatedProtoDirective');  // USE: SemanticDiffAnnotatedProtoDirective
+goog.require('grrUi.semantic.semanticProtoDirective');  // USE: SemanticProtoDirective
 
 goog.scope(function() {
 
@@ -182,7 +182,7 @@ var diffAnnotate = grrUi.semantic.semanticProtosDiffDirective.diffAnnotate;
  * @constructor
  * @ngInject
  */
-grrUi.semantic.semanticProtosDiffDirective.SemanticProtosDiffController = function(
+const SemanticProtosDiffController = function(
     $scope) {
   /** @private {!angular.Scope} */
   this.scope_ = $scope;
@@ -208,8 +208,6 @@ grrUi.semantic.semanticProtosDiffDirective.SemanticProtosDiffController = functi
                           this.onValuesChange_.bind(this));
 };
 
-var SemanticProtosDiffController =
-    grrUi.semantic.semanticProtosDiffDirective.SemanticProtosDiffController;
 
 
 /**

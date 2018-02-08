@@ -19,7 +19,7 @@ from grr.lib.rdfvalues import client as rdf_client
 from grr.lib.rdfvalues import paths as rdf_paths
 from grr.lib.rdfvalues import protodict as rdf_protodict
 from grr.lib.rdfvalues import structs as rdf_structs
-from grr.proto import export_pb2
+from grr_response_proto import export_pb2
 from grr.server import aff4
 from grr.server.aff4_objects import filestore
 from grr.server.flows.general import collectors as flow_collectors
@@ -39,6 +39,10 @@ class Error(Exception):
 
 class NoConverterFound(Error):
   """Raised when no converter is found for particular value."""
+
+
+class ExportError(Error):
+  """Unspecified error while exporting."""
 
 
 class ExportOptions(rdf_structs.RDFProtoStruct):
@@ -181,6 +185,11 @@ class ExportedArtifactFilesDownloaderResult(rdf_structs.RDFProtoStruct):
       ExportedMetadata,
       ExportedRegistryKey,
   ]
+
+
+class ExportedYaraProcessScanMatch(rdf_structs.RDFProtoStruct):
+  protobuf = export_pb2.ExportedYaraProcessScanMatch
+  rdf_deps = [ExportedProcess, ExportedMetadata]
 
 
 class ExportConverter(object):
@@ -405,7 +414,7 @@ class StatEntryToExportedFileConverter(ExportConverter):
       # Verify_sigs is not available so we can't parse signatures. If you want
       # this functionality, please install the verify-sigs package:
       # https://github.com/anthrotype/verify-sigs
-      # TODO(user): Make verify-sigs a pip package and add a dependency.
+      # TODO(amoser): Make verify-sigs a pip package and add a dependency.
       return
 
     try:
@@ -1146,8 +1155,8 @@ class FileStoreHashConverter(ExportConverter):
     """Convert batch of FileStoreHashs."""
 
     urns = [urn for metadata, urn in metadata_value_pairs]
-    urns_dict = dict([(urn, metadata)
-                      for metadata, urn in metadata_value_pairs])
+    urns_dict = dict(
+        [(urn, metadata) for metadata, urn in metadata_value_pairs])
 
     results = []
     for hash_urn, client_files in filestore.HashFileStore.GetClientsForHashes(
@@ -1225,12 +1234,12 @@ class ArtifactFilesDownloaderResultConverter(ExportConverter):
             metadata or ExportedMetadata(), original_result, token=token))
 
     if not exported_results:
-      raise RuntimeError("Got 0 exported result when a single one "
-                         "was expected.")
+      raise ExportError("Got 0 exported result when a single one "
+                        "was expected.")
 
     if len(exported_results) > 1:
-      raise RuntimeError("Got > 1 exported results when a single "
-                         "one was expected, seems like a logical bug.")
+      raise ExportError("Got > 1 exported results when a single "
+                        "one was expected, seems like a logical bug.")
 
     return exported_results[0]
 
@@ -1321,6 +1330,29 @@ class ArtifactFilesDownloaderResultConverter(ExportConverter):
 
     for r in self.BatchConvert([(metadata, value)], token=token):
       yield r
+
+
+class YaraProcessScanResponseConverter(ExportConverter):
+  input_rdf_type = "YaraProcessScanMatch"
+
+  def Convert(self, metadata, yara_match, token=None):
+    """Convert a single YaraProcessScanMatch."""
+
+    conv = ProcessToExportedProcessConverter(options=self.options)
+    process = list(
+        conv.Convert(ExportedMetadata(), yara_match.process, token=token))[0]
+
+    seen_rules = set()
+    for m in yara_match.match:
+      if m.rule_name in seen_rules:
+        continue
+
+      seen_rules.add(m.rule_name)
+      yield ExportedYaraProcessScanMatch(
+          metadata=metadata,
+          process=process,
+          rule_name=m.rule_name,
+          scan_time_us=yara_match.scan_time_us)
 
 
 class RekallResponseConverter(ExportConverter):
@@ -1476,8 +1508,8 @@ class DynamicRekallResponseConverter(RekallResponseConverter):
         utils.SmartStr(class_name), (rdf_structs.RDFProtoStruct,), {})
 
     if not tables:
-      raise RuntimeError("Can't generate output class without Rekall table "
-                         "definition.")
+      raise ExportError("Can't generate output class without Rekall table "
+                        "definition.")
 
     field_number = 1
     output_class.AddDescriptor(
@@ -1509,7 +1541,7 @@ class DynamicRekallResponseConverter(RekallResponseConverter):
           column_name = column_header["name"]
 
         if not column_name:
-          raise RuntimeError("Can't determine column name in table header.")
+          raise ExportError("Can't determine column name in table header.")
 
         if column_name in used_names:
           continue

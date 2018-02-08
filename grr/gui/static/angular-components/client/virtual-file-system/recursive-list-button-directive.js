@@ -1,12 +1,11 @@
 'use strict';
 
-goog.provide('grrUi.client.virtualFileSystem.recursiveListButtonDirective.RecursiveListButtonController');
+goog.provide('grrUi.client.virtualFileSystem.recursiveListButtonDirective');
 goog.provide('grrUi.client.virtualFileSystem.recursiveListButtonDirective.RecursiveListButtonDirective');
 
-goog.require('grrUi.client.virtualFileSystem.events');
+goog.require('grrUi.client.virtualFileSystem.events');  // USE: REFRESH_FOLDER_EVENT
 
-goog.require('grrUi.client.virtualFileSystem.utils.ensurePathIsFolder');
-goog.require('grrUi.client.virtualFileSystem.utils.getFolderFromPath');
+goog.require('grrUi.client.virtualFileSystem.utils');  // USE: ensurePathIsFolder, getFolderFromPath
 
 
 goog.scope(function() {
@@ -35,8 +34,7 @@ var getFolderFromPath = grrUi.client.virtualFileSystem.utils.getFolderFromPath;
  * @param {!grrUi.core.reflectionService.ReflectionService} grrReflectionService
  * @ngInject
  */
-grrUi.client.virtualFileSystem.recursiveListButtonDirective
-    .RecursiveListButtonController = function(
+const RecursiveListButtonController = function(
     $rootScope, $scope, $timeout, $uibModal, grrApiService, grrReflectionService) {
   /** @private {!angular.Scope} */
   this.rootScope_ = $rootScope;
@@ -74,9 +72,6 @@ grrUi.client.virtualFileSystem.recursiveListButtonDirective
   this.scope_.$watchGroup(['clientId', 'filePath'],
                           this.onClientOrPathChange_.bind(this));
 };
-var RecursiveListButtonController =
-    grrUi.client.virtualFileSystem.recursiveListButtonDirective
-    .RecursiveListButtonController;
 
 
 /**

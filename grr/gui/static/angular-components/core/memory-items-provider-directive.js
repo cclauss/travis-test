@@ -1,8 +1,9 @@
 'use strict';
 
+goog.provide('grrUi.core.memoryItemsProviderDirective');
 goog.provide('grrUi.core.memoryItemsProviderDirective.MemoryItemsProviderController');
 goog.provide('grrUi.core.memoryItemsProviderDirective.MemoryItemsProviderDirective');
-goog.require('grrUi.core.itemsProviderController.ItemsProviderController');
+goog.require('grrUi.core.itemsProviderController');  // USE: ItemsProviderController
 
 goog.scope(function() {
 
@@ -127,7 +128,7 @@ MemoryItemsProviderController.prototype.fetchFilteredItems = function(
  * conjunction with grr-paged-filtered-table and grr-infinite-table
  * directives.
  *
- * @constructor
+ * @return {!angular.Directive} Directive definition object.
  * @ngInject
  * @export
  */

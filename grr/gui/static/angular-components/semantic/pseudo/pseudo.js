@@ -1,9 +1,10 @@
 'use strict';
 
-goog.provide('grrUi.semantic.pseudo.module');
+goog.provide('grrUi.semantic.pseudo');
+goog.provide('grrUi.semantic.pseudo.pseudoModule');
 
-goog.require('grrUi.core.module');
-goog.require('grrUi.semantic.pseudo.fetchMoreLinkDirective.FetchMoreLinkDirective');
+goog.require('grrUi.core');  // USE: coreModule
+goog.require('grrUi.semantic.pseudo.fetchMoreLinkDirective');  // USE: FetchMoreLinkDirective
 
 
 /**
@@ -15,17 +16,17 @@ goog.require('grrUi.semantic.pseudo.fetchMoreLinkDirective.FetchMoreLinkDirectiv
  * By convention pseudo types names start with a double underscore, i.e.:
  * __FetchMoreLink, etc.
  */
-grrUi.semantic.pseudo.module = angular.module('grrUi.semantic.pseudo',
-                                              [grrUi.core.module.name,
+grrUi.semantic.pseudo.pseudoModule = angular.module('grrUi.semantic.pseudo',
+                                              [grrUi.core.coreModule.name,
                                                'ui.bootstrap']);
 
-grrUi.semantic.pseudo.module.directive(
+grrUi.semantic.pseudo.pseudoModule.directive(
     grrUi.semantic.pseudo.fetchMoreLinkDirective.FetchMoreLinkDirective
         .directive_name,
     grrUi.semantic.pseudo.fetchMoreLinkDirective.FetchMoreLinkDirective);
 
 
-grrUi.semantic.pseudo.module.run(
+grrUi.semantic.pseudo.pseudoModule.run(
     function(grrSemanticValueDirectivesRegistryService) {
 
   var registry = grrSemanticValueDirectivesRegistryService;

@@ -2,12 +2,13 @@
 # -*- mode: python; encoding: utf-8 -*-
 """Tests for the FileFinder flow."""
 
-
-
 import collections
 import glob
 import hashlib
 import os
+import platform
+import subprocess
+import unittest
 
 from grr.client import vfs
 from grr.lib import flags
@@ -231,6 +232,7 @@ class TestFileFinderFlow(flow_test_lib.FlowTestsBaseclass):
     self.client_mock = FileFinderActionMock()
     self.fixture_path = os.path.join(self.base_path, "searching")
     self.path = os.path.join(self.fixture_path, "*.log")
+    self.client_id = test_lib.TEST_CLIENT_ID
 
   def testFileFinderStatActionWithoutConditions(self):
     self.RunFlowAndCheckResults(
@@ -269,6 +271,26 @@ class TestFileFinderFlow(flow_test_lib.FlowTestsBaseclass):
     result_paths = [stat.AFF4Path(self.client_id) for stat in stat_entries]
 
     self.assertItemsEqual(expected_files, result_paths)
+
+  FS_NODUMP_FL = 0x00000040
+  FS_UNRM_FL = 0x00000002
+
+  @unittest.skipIf(platform.system() != "Linux", "requires Linux")
+  def testFileFinderStatExtFlags(self):
+    with test_lib.AutoTempFilePath() as temp_filepath:
+      if subprocess.call(["which", "chattr"]) != 0:
+        raise unittest.SkipTest("`chattr` command is not available")
+      if subprocess.call(["chattr", "+d", temp_filepath]) != 0:
+        reason = "extended attributes not supported by filesystem"
+        raise unittest.SkipTest(reason)
+
+      action = rdf_file_finder.FileFinderAction.Stat()
+      results = self.RunFlow(action=action, paths=[temp_filepath])
+      self.assertEqual(len(results), 1)
+
+      stat_entry = results[0][1].stat_entry
+      self.assertTrue(stat_entry.st_flags_linux & self.FS_NODUMP_FL)
+      self.assertFalse(stat_entry.st_flags_linux & self.FS_UNRM_FL)
 
   def testFileFinderDownloadActionWithoutConditions(self):
     self.RunFlowAndCheckResults(
@@ -481,16 +503,10 @@ class TestFileFinderFlow(flow_test_lib.FlowTestsBaseclass):
         for f in expected_files
     ]
 
-    hash_action = rdf_file_finder.FileFinderAction(
-        action_type=rdf_file_finder.FileFinderAction.Action.HASH)
-    hash_action.hash.max_size = max(sizes) + 1
-    hash_action.hash.oversized_file_policy = (
-        rdf_file_finder.FileFinderHashActionOptions.OversizedFilePolicy.SKIP)
-
-    download_action = rdf_file_finder.FileFinderAction(
-        action_type=rdf_file_finder.FileFinderAction.Action.DOWNLOAD)
-    download_action.download.max_size = max(sizes) + 1
-    download_action.download.oversized_file_policy = "SKIP"
+    hash_action = rdf_file_finder.FileFinderAction.Hash(
+        max_size=max(sizes) + 1, oversized_file_policy="SKIP")
+    download_action = rdf_file_finder.FileFinderAction.Download(
+        max_size=max(sizes) + 1, oversized_file_policy="SKIP")
 
     for action in [hash_action, download_action]:
       self.RunFlowAndCheckResults(
@@ -504,19 +520,10 @@ class TestFileFinderFlow(flow_test_lib.FlowTestsBaseclass):
     # Read a bit more than a typical chunk (600 * 1024).
     expected_size = 750 * 1024
 
-    hash_action = rdf_file_finder.FileFinderAction(
-        action_type=rdf_file_finder.FileFinderAction.Action.HASH)
-    hash_action.hash.max_size = expected_size
-    hash_action.hash.oversized_file_policy = (
-        rdf_file_finder.FileFinderHashActionOptions.OversizedFilePolicy.
-        HASH_TRUNCATED)
-
-    download_action = rdf_file_finder.FileFinderAction(
-        action_type=rdf_file_finder.FileFinderAction.Action.DOWNLOAD)
-    download_action.download.max_size = expected_size
-    download_action.download.oversized_file_policy = (
-        rdf_file_finder.FileFinderDownloadActionOptions.OversizedFilePolicy.
-        HASH_TRUNCATED)
+    hash_action = rdf_file_finder.FileFinderAction.Hash(
+        max_size=expected_size, oversized_file_policy="HASH_TRUNCATED")
+    download_action = rdf_file_finder.FileFinderAction.Download(
+        max_size=expected_size, oversized_file_policy="HASH_TRUNCATED")
 
     for action in [hash_action, download_action]:
       results = self.RunFlow(paths=[image_path], action=action)
@@ -538,14 +545,11 @@ class TestFileFinderFlow(flow_test_lib.FlowTestsBaseclass):
 
   def testDownloadActionSizeLimitWithDownloadTruncatedPolicy(self):
     image_path = os.path.join(self.base_path, "test_img.dd")
-
-    action = rdf_file_finder.FileFinderAction(
-        action_type=rdf_file_finder.FileFinderAction.Action.DOWNLOAD)
     # Read a bit more than a typical chunk (600 * 1024).
-    expected_size = action.download.max_size = 750 * 1024
-    action.download.oversized_file_policy = (
-        rdf_file_finder.FileFinderDownloadActionOptions.OversizedFilePolicy.
-        DOWNLOAD_TRUNCATED)
+    expected_size = 750 * 1024
+
+    action = rdf_file_finder.FileFinderAction.Download(
+        max_size=expected_size, oversized_file_policy="DOWNLOAD_TRUNCATED")
 
     results = self.RunFlow(paths=[image_path], action=action)
 
@@ -693,8 +697,7 @@ class TestFileFinderFlow(flow_test_lib.FlowTestsBaseclass):
     self.CheckFilesInCollection(["*.log", "auth.log"], session_id=session_id)
 
   def testAppliesLiteralConditionWhenMemoryPathTypeIsUsed(self):
-    with vfs_test_lib.VFSOverrider(rdf_paths.PathSpec.PathType.OS,
-                                   vfs_test_lib.FakeTestDataVFSHandler):
+    with vfs_test_lib.FakeTestDataVFSOverrider():
       with vfs_test_lib.VFSOverrider(rdf_paths.PathSpec.PathType.MEMORY,
                                      vfs_test_lib.FakeTestDataVFSHandler):
         paths = ["/var/log/auth.log", "/etc/ssh/sshd_config"]
@@ -814,6 +817,10 @@ class TestFileFinderFlow(flow_test_lib.FlowTestsBaseclass):
 class TestClientFileFinderFlow(flow_test_lib.FlowTestsBaseclass):
   """Test the ClientFileFinder flow."""
 
+  def setUp(self):
+    super(TestClientFileFinderFlow, self).setUp()
+    self.client_id = test_lib.TEST_CLIENT_ID
+
   def _RunCFF(self, paths, action):
     for s in flow_test_lib.TestFlowHelper(
         file_finder.ClientFileFinder.__name__,
@@ -830,7 +837,7 @@ class TestClientFileFinderFlow(flow_test_lib.FlowTestsBaseclass):
     return results
 
   def testClientFileFinder(self):
-    paths = [os.path.join(self.base_path, "**/*.plist")]
+    paths = [os.path.join(self.base_path, "{**,.}/*.plist")]
     action = rdf_file_finder.FileFinderAction.Action.STAT
     results = self._RunCFF(paths, action)
 

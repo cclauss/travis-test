@@ -1,6 +1,6 @@
 'use strict';
 
-goog.provide('grrUi.hunt.huntGraphDirective.HuntGraphController');
+goog.provide('grrUi.hunt.huntGraphDirective');
 goog.provide('grrUi.hunt.huntGraphDirective.HuntGraphDirective');
 
 goog.scope(function() {
@@ -15,7 +15,7 @@ goog.scope(function() {
  * @param {!grrUi.core.apiService.ApiService} grrApiService
  * @ngInject
  */
-grrUi.hunt.huntGraphDirective.HuntGraphController = function($scope, $element, grrApiService) {
+const HuntGraphController = function($scope, $element, grrApiService) {
     /** @private {!angular.Scope} */
     this.scope_ = $scope;
 
@@ -26,7 +26,7 @@ grrUi.hunt.huntGraphDirective.HuntGraphController = function($scope, $element, g
     this.grrApiService_ = grrApiService;
 
     /** @type {string} */
-    this.scope_.huntUrn;
+    this.scope_.huntId;
 
     /** @export {boolean} */
     this.inProgress = false;
@@ -43,33 +43,31 @@ grrUi.hunt.huntGraphDirective.HuntGraphController = function($scope, $element, g
     /** @export {number} */
     this.maxSampleSize = 1000;
 
-    this.scope_.$watch('huntUrn', this.onHuntUrnChange_.bind(this));
+    this.scope_.$watch('huntId', this.onHuntIdChange_.bind(this));
 };
 
-var HuntGraphController = grrUi.hunt.huntGraphDirective.HuntGraphController;
 
 
 /**
- * Handles huntUrn attribute changes.
+ * Handles huntId attribute changes.
  *
  * @private
  */
-HuntGraphController.prototype.onHuntUrnChange_ = function() {
+HuntGraphController.prototype.onHuntIdChange_ = function() {
     this.hunt = null;
     this.huntSummary = null;
 
-    if (angular.isDefined(this.scope_.huntUrn)) {
-        var huntUrnComponents = this.scope_.huntUrn.split('/');
-        this.huntId = huntUrnComponents[huntUrnComponents.length - 1];
-        this.inProgress = true;
+    if (angular.isDefined(this.scope_.huntId)) {
+      this.huntId = this.scope_['huntId'];
+      this.inProgress = true;
 
-        var url = 'hunts/' + this.huntId + '/client-completion-stats';
-        var params = {
-            'strip_type_info': 1,
-            'size': this.maxSampleSize
-        };
-        this.grrApiService_.get(url, params).then(
-            this.onHuntGraphFetched_.bind(this));
+      var url = 'hunts/' + this.huntId + '/client-completion-stats';
+      var params = {
+        'strip_type_info': 1,
+        'size': this.maxSampleSize
+      };
+      this.grrApiService_.get(url, params).then(
+          this.onHuntGraphFetched_.bind(this));
     }
 };
 
@@ -144,14 +142,14 @@ HuntGraphController.prototype.drawGraph_ = function() {
 /**
  * Directive for displaying errors of a hunt with a given URN.
  *
- * @constructor
+ * @return {!angular.Directive} Directive definition object.
  * @ngInject
  * @export
  */
 grrUi.hunt.huntGraphDirective.HuntGraphDirective = function() {
     return {
         scope: {
-            huntUrn: '='
+            huntId: '='
         },
         restrict: 'E',
         templateUrl: '/static/angular-components/hunt/hunt-graph.html',

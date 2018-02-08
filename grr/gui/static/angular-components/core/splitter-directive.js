@@ -1,6 +1,6 @@
 'use strict';
 
-goog.provide('grrUi.core.splitterDirective.SplitterController');
+goog.provide('grrUi.core.splitterDirective');
 goog.provide('grrUi.core.splitterDirective.SplitterDirective');
 goog.provide('grrUi.core.splitterDirective.SplitterPaneDirective');
 
@@ -17,7 +17,7 @@ goog.scope(function() {
  * @param {!angular.$interval} $interval
  * @ngInject
  */
-grrUi.core.splitterDirective.SplitterController = function(
+const SplitterController = function(
     $scope, $element, $interval) {
   /** @private {!angular.Scope} */
   this.scope_ = $scope;
@@ -36,7 +36,6 @@ grrUi.core.splitterDirective.SplitterController = function(
 };
 
 
-var SplitterController = grrUi.core.splitterDirective.SplitterController;
 
 
 /**
@@ -148,7 +147,7 @@ grrUi.core.splitterDirective.SplitterDirective.directive_name =
 /**
  * Registers splitter pane in the splitter.
  *
- * @constructor
+ * @return {!angular.Directive} Directive definition object.
  * @ngInject
  * @export
  */

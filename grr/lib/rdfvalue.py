@@ -9,7 +9,6 @@ implementations must be imported _before_ the relevant classes are referenced
 from this module.
 """
 
-
 import abc
 import calendar
 import collections
@@ -444,8 +443,7 @@ class RDFDatetime(RDFInteger):
 
   @classmethod
   def Now(cls):
-    res = cls(int(time.time() * cls.converter))
-    return res
+    return cls(int(time.time() * cls.converter))
 
   def Format(self, fmt):
     """Return the value as a string formatted as per strftime semantics."""
@@ -469,7 +467,9 @@ class RDFDatetime(RDFInteger):
     return self._value
 
   def FromSecondsFromEpoch(self, value):
-    self._value = value * self.converter
+    # Convert to int in case we get fractional seconds with higher
+    # resolution than what this class supports.
+    self._value = int(value * self.converter)
 
     return self
 
@@ -729,7 +729,7 @@ class ByteSize(RDFInteger):
       ("mi", 1024**2),
       ("gi", 1024**3),))
 
-  REGEX = re.compile("^([0-9.]+)([kmgi]*)b?$")
+  REGEX = re.compile("^([0-9.]+)([kmgi]*)b?$", re.I)
 
   def __init__(self, initializer=None, age=None):
     super(ByteSize, self).__init__(None, age)
@@ -750,16 +750,16 @@ class ByteSize(RDFInteger):
   def __str__(self):
     size_token = ""
     if self._value > 1024**3:
-      size_token = "Gb"
+      size_token = "GiB"
       value = float(self._value) / 1024**3
     elif self._value > 1024**2:
-      size_token = "Mb"
+      size_token = "MiB"
       value = float(self._value) / 1024**2
     elif self._value > 1024:
-      size_token = "Kb"
+      size_token = "KiB"
       value = float(self._value) / 1024
     else:
-      return utils.SmartStr(self._value) + "b"
+      return utils.SmartStr(self._value) + "B"
 
     return "%.1f%s" % (value, size_token)
 
@@ -1044,7 +1044,7 @@ class SessionID(RDFURN):
 
 class FlowSessionID(SessionID):
 
-  # TODO(user): This is code to fix some legacy issues. Remove this when all
+  # TODO(amoser): This is code to fix some legacy issues. Remove this when all
   # clients are built after Dec 2014.
 
   def ParseFromString(self, initializer):

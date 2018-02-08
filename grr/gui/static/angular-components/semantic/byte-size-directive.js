@@ -1,8 +1,7 @@
 'use strict';
 
-goog.provide('grrUi.semantic.byteSizeDirective.ByteSizeController');
+goog.provide('grrUi.semantic.byteSizeDirective');
 goog.provide('grrUi.semantic.byteSizeDirective.ByteSizeDirective');
-goog.provide('grrUi.semantic.byteSizeDirective.stringifyByteSize');
 
 goog.scope(function() {
 
@@ -23,22 +22,21 @@ var GB_UNIT = MB_UNIT * 1024;
  * @param {number} value Value in bytes to be stringified.
  * @return {Array<number|string>} Array with a number and size token.
  */
-grrUi.semantic.byteSizeDirective.stringifyByteSize = function(value) {
+const stringifyByteSize = function(value) {
   if (value == 0) {
     return [0, ''];
   }
 
   if (value > GB_UNIT) {
-    return [value / GB_UNIT, 'Gb'];
+    return [value / GB_UNIT, 'GiB'];
   } else if (value > MB_UNIT) {
-    return [value / MB_UNIT, 'Mb'];
+    return [value / MB_UNIT, 'MiB'];
   } else if (value > KB_UNIT) {
-    return [value / KB_UNIT, 'Kb'];
+    return [value / KB_UNIT, 'KiB'];
   } else {
-    return [value, 'b'];
+    return [value, 'B'];
   }
 };
-var stringifyByteSize = grrUi.semantic.byteSizeDirective.stringifyByteSize;
 
 
 /**
@@ -48,7 +46,7 @@ var stringifyByteSize = grrUi.semantic.byteSizeDirective.stringifyByteSize;
  * @constructor
  * @ngInject
  */
-grrUi.semantic.byteSizeDirective.ByteSizeController = function($scope) {
+const ByteSizeController = function($scope) {
   /** @private {!angular.Scope} */
   this.scope_ = $scope;
 
@@ -58,8 +56,6 @@ grrUi.semantic.byteSizeDirective.ByteSizeController = function($scope) {
   this.scope_.$watch('::value', this.onValueChange.bind(this));
 };
 
-var ByteSizeController =
-    grrUi.semantic.byteSizeDirective.ByteSizeController;
 
 
 /**

@@ -1,6 +1,6 @@
 'use strict';
 
-goog.provide('grrUi.hunt.newHuntWizard.copyFormDirective.CopyFormController');
+goog.provide('grrUi.hunt.newHuntWizard.copyFormDirective');
 goog.provide('grrUi.hunt.newHuntWizard.copyFormDirective.CopyFormDirective');
 
 goog.scope(function() {
@@ -14,7 +14,7 @@ goog.scope(function() {
  * @constructor
  * @ngInject
  */
-grrUi.hunt.newHuntWizard.copyFormDirective.CopyFormController =
+const CopyFormController =
     function($scope, grrReflectionService, grrApiService) {
   /** @private {!angular.Scope} */
   this.scope_ = $scope;
@@ -35,22 +35,19 @@ grrUi.hunt.newHuntWizard.copyFormDirective.CopyFormController =
     this.createHuntArgsDescriptor = descriptor['ApiCreateHuntArgs'];
     this.huntRefDescriptor = descriptor['ApiHuntReference'];
 
-    this.scope_.$watch('huntUrn', this.onHuntUrnChange_.bind(this));
+    this.scope_.$watch('huntId', this.onHuntIdChange_.bind(this));
   }.bind(this));
 };
-var CopyFormController =
-    grrUi.hunt.newHuntWizard.copyFormDirective.CopyFormController;
 
 
 /**
- * Handles huntUrn attribute changes.
+ * Handles huntId attribute changes.
  *
  * @private
  */
-CopyFormController.prototype.onHuntUrnChange_ = function() {
-  if (angular.isDefined(this.scope_.huntUrn)) {
-    var huntUrnComponents = this.scope_.huntUrn.split('/');
-    this.huntId = huntUrnComponents[huntUrnComponents.length - 1];
+CopyFormController.prototype.onHuntIdChange_ = function() {
+  if (angular.isDefined(this.scope_['huntId'])) {
+    this.huntId = this.scope_['huntId'];
 
     this.grrApiService_.get('hunts/' + this.huntId).then(
         this.onHuntFetched_.bind(this));
@@ -93,7 +90,7 @@ CopyFormController.prototype.onHuntFetched_ = function(response) {
 grrUi.hunt.newHuntWizard.copyFormDirective.CopyFormDirective = function() {
   return {
     scope: {
-      huntUrn: '=',
+      huntId: '=',
       onResolve: '&',
       onReject: '&'
     },

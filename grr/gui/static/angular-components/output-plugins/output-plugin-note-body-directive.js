@@ -1,6 +1,6 @@
 'use strict';
 
-goog.provide('grrUi.outputPlugins.outputPluginNoteBodyDirective.OutputPluginNoteBodyController');
+goog.provide('grrUi.outputPlugins.outputPluginNoteBodyDirective');
 goog.provide('grrUi.outputPlugins.outputPluginNoteBodyDirective.OutputPluginNoteBodyDirective');
 
 
@@ -13,12 +13,11 @@ goog.scope(function() {
  * @param {!angular.Scope} $scope
  * @param {!angular.$compile} $compile
  * @param {!angular.jQuery} $element
- * @param {!grrUi.core.semanticRegistry.SemanticRegistryService}
+ * @param {!grrUi.core.semanticRegistryService.SemanticRegistryService}
  *     grrOutputPluginsDirectivesRegistryService
  * @ngInject
  */
-grrUi.outputPlugins.outputPluginNoteBodyDirective
-    .OutputPluginNoteBodyController = function(
+const OutputPluginNoteBodyController = function(
         $scope, $compile, $element,
         grrOutputPluginsDirectivesRegistryService) {
   /** @private {!angular.Scope} */
@@ -33,16 +32,13 @@ grrUi.outputPlugins.outputPluginNoteBodyDirective
   /** @private {!angular.jQuery} */
   this.element_ = $element;
 
-  /** @private {!grrUi.core.semanticRegistry.SemanticRegistryService} */
+  /** @private {!grrUi.core.semanticRegistryService.SemanticRegistryService} */
   this.grrOutputPluginsDirectivesRegistryService_ =
       grrOutputPluginsDirectivesRegistryService;
 
   this.scope_.$watch('outputPlugin',
                      this.onOutputPluginChange_.bind(this));
 };
-var OutputPluginNoteBodyController =
-    grrUi.outputPlugins.outputPluginNoteBodyDirective
-    .OutputPluginNoteBodyController;
 
 
 
@@ -117,6 +113,4 @@ grrUi.outputPlugins.outputPluginNoteBodyDirective
  */
 grrUi.outputPlugins.outputPluginNoteBodyDirective.OutputPluginNoteBodyDirective
     .directive_name = 'grrOutputPluginNoteBody';
-
-
 });

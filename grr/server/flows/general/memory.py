@@ -5,15 +5,10 @@ These flows allow for distributing memory access modules to clients and
 performing basic analysis.
 """
 
-
-
 import json
 import logging
 
-from rekall import constants
-
 from grr import config
-from grr.client.components.rekall_support import rekall_pb2
 from grr.client.components.rekall_support import rekall_types
 from grr.lib import registry
 from grr.lib.rdfvalues import client as rdf_client
@@ -22,7 +17,8 @@ from grr.lib.rdfvalues import paths as rdf_paths
 from grr.lib.rdfvalues import standard
 from grr.lib.rdfvalues import structs as rdf_structs
 
-from grr.proto import flows_pb2
+from grr_response_proto import flows_pb2
+from grr_response_proto import rekall_pb2
 from grr.server import aff4
 from grr.server import flow
 from grr.server import rekall_profile_server
@@ -167,7 +163,7 @@ class AnalyzeClientMemory(transfer.LoadComponentMixin, flow.GRRFlow):
     # still valid).
     request.profiles.append(
         self.GetProfileByName("inventory",
-                              constants.PROFILE_REPOSITORY_VERSION))
+                              server_stubs.REKALL_PROFILE_REPOSITORY_VERSION))
 
     if self.args.debug_logging:
       request.session[u"logging_level"] = u"DEBUG"
@@ -361,7 +357,6 @@ class ListVADBinaries(flow.GRRFlow):
         # collectors.ArtifactCollectorFlow.__name__,
         "ArtifactCollectorFlow",
         artifact_list=["FullVADBinaryList"],
-        store_results_in_aff4=False,
         next_state="FetchBinaries")
 
   @flow.StateHandler()
@@ -390,8 +385,7 @@ class ListVADBinaries(flow.GRRFlow):
           next_state="HandleDownloadedFiles",
           paths=[rdf_paths.GlobExpression(b.CollapsePath()) for b in binaries],
           pathtype=rdf_paths.PathSpec.PathType.OS,
-          action=rdf_file_finder.FileFinderAction(
-              action_type=rdf_file_finder.FileFinderAction.Action.DOWNLOAD))
+          action=rdf_file_finder.FileFinderAction.Download())
     else:
       for b in binaries:
         self.SendReply(b)

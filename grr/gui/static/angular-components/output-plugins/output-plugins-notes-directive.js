@@ -1,6 +1,6 @@
 'use strict';
 
-goog.provide('grrUi.outputPlugins.outputPluginsNotesDirective.OutputPluginsNotesController');
+goog.provide('grrUi.outputPlugins.outputPluginsNotesDirective');
 goog.provide('grrUi.outputPlugins.outputPluginsNotesDirective.OutputPluginsNotesDirective');
 
 
@@ -14,7 +14,7 @@ goog.scope(function() {
  * @param {!grrUi.core.apiService.ApiService} grrApiService
  * @ngInject
  */
-grrUi.outputPlugins.outputPluginsNotesDirective.OutputPluginsNotesController =
+const OutputPluginsNotesController =
     function($scope, grrApiService) {
   /** @private {!angular.Scope} */
   this.scope_ = $scope;
@@ -31,9 +31,6 @@ grrUi.outputPlugins.outputPluginsNotesDirective.OutputPluginsNotesController =
   this.scope_.$watch('outputPluginsUrl',
                      this.onOutputPluginsUrlChange_.bind(this));
 };
-var OutputPluginsNotesController =
-    grrUi.outputPlugins.outputPluginsNotesDirective
-    .OutputPluginsNotesController;
 
 
 /**
@@ -59,7 +56,7 @@ OutputPluginsNotesController.prototype.onOutputPluginsUrlChange_ = function(
 /**
  * Directive for displaying notes for output plugins of a flow or hunt.
  *
- * @constructor
+ * @return {!angular.Directive} Directive definition object.
  * @ngInject
  * @export
  */

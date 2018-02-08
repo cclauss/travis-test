@@ -1,9 +1,9 @@
 'use strict';
 
-goog.provide('grrUi.core.downloadCollectionAsDirective.DownloadCollectionAsController');
+goog.provide('grrUi.core.downloadCollectionAsDirective');
 goog.provide('grrUi.core.downloadCollectionAsDirective.DownloadCollectionAsDirective');
 
-goog.require('grrUi.core.serverErrorButtonDirective.ServerErrorButtonDirective');
+goog.require('grrUi.core.serverErrorButtonDirective');  // USE: ServerErrorButtonDirective
 
 goog.scope(function() {
 
@@ -21,7 +21,7 @@ var ERROR_EVENT_NAME =
  * @param {!grrUi.core.apiService.ApiService} grrApiService
  * @ngInject
  */
-grrUi.core.downloadCollectionAsDirective.DownloadCollectionAsController = function(
+const DownloadCollectionAsController = function(
     $rootScope, $scope, grrApiService) {
   /** @private {!angular.Scope} */
   this.rootScope_ = $rootScope;
@@ -42,8 +42,6 @@ grrUi.core.downloadCollectionAsDirective.DownloadCollectionAsController = functi
   /** @type {string} */
   this.selectedPlugin = 'csv-zip';
 };
-var DownloadCollectionAsController =
-    grrUi.core.downloadCollectionAsDirective.DownloadCollectionAsController;
 
 
 /**

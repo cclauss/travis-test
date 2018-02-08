@@ -1,9 +1,9 @@
 #!/usr/bin/env python
-"""Root (i.e. administravie) actions support in GRR API client library."""
+"""Root (i.e. administrative) actions support in GRR API client library."""
 
 from grr_api_client import utils
-from grr.proto.api import user_pb2
-from grr.proto.api.root import user_management_pb2
+from grr_response_proto.api import user_pb2
+from grr_response_proto.api.root import user_management_pb2
 
 
 class GrrUserBase(object):

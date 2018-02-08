@@ -1,6 +1,6 @@
 'use strict';
 
-goog.provide('grrUi.cron.cronJobFlowsListDirective.CronJobFlowsListController');
+goog.provide('grrUi.cron.cronJobFlowsListDirective');
 goog.provide('grrUi.cron.cronJobFlowsListDirective.CronJobFlowsListDirective');
 
 goog.scope(function() {
@@ -13,7 +13,7 @@ goog.scope(function() {
  * @param {!grrUi.core.apiService.ApiService} grrApiService
  * @ngInject
  */
-grrUi.cron.cronJobFlowsListDirective.CronJobFlowsListController = function(
+const CronJobFlowsListController = function(
     $scope, grrApiService) {
   /** @private {!angular.Scope} */
   this.scope_ = $scope;
@@ -30,22 +30,20 @@ grrUi.cron.cronJobFlowsListDirective.CronJobFlowsListController = function(
   /** @type {?string} */
   this.selectedFlowId;
 
-  this.scope_.$watch('cronJobUrn', this.onCronJobUrnChange_.bind(this));
+  this.scope_.$watch('cronJobId', this.onCronJobIdChange_.bind(this));
 };
-var CronJobFlowsListController =
-    grrUi.cron.cronJobFlowsListDirective.CronJobFlowsListController;
 
 
 /**
  * Handles changes of clientId binding.
  *
- * @param {?string} cronJobUrn New binding value.
+ * @param {?string} cronJobId New binding value.
  * @private
  */
-CronJobFlowsListController.prototype.onCronJobUrnChange_ = function(
-    cronJobUrn) {
-  if (angular.isString(cronJobUrn)) {
-    var components = cronJobUrn.split('/');
+CronJobFlowsListController.prototype.onCronJobIdChange_ = function(
+    cronJobId) {
+  if (angular.isString(cronJobId)) {
+    var components = cronJobId.split('/');
     this.cronJobId  = components[components.length - 1];
     this.flowsUrl = '/cron-jobs/' + this.cronJobId + '/flows';
   }
@@ -68,8 +66,8 @@ CronJobFlowsListController.prototype.closeDetails = function() {
 grrUi.cron.cronJobFlowsListDirective.CronJobFlowsListDirective = function() {
   return {
     scope: {
-      cronJobUrn: '=',
-      selectedFlowUrn: '=?'
+      cronJobId: '=',
+      selectedFlowId: '=?'
     },
     restrict: 'E',
     templateUrl: '/static/angular-components/cron/cron-job-flows-list.html',

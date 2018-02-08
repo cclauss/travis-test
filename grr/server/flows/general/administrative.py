@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 """Administrative flows for managing the clients state."""
 
-
 import logging
 import shlex
 import threading
@@ -21,9 +20,10 @@ from grr.lib.rdfvalues import paths
 from grr.lib.rdfvalues import protodict
 from grr.lib.rdfvalues import standard
 from grr.lib.rdfvalues import structs as rdf_structs
-from grr.proto import flows_pb2
+from grr_response_proto import flows_pb2
 from grr.server import aff4
 from grr.server import data_store
+from grr.server import db
 from grr.server import email_alerts
 from grr.server import events
 from grr.server import flow
@@ -62,9 +62,19 @@ class ClientCrashEventListener(flow.EventListener):
                            flow_session_id=None,
                            hunt_session_id=None):
     # Update last crash attribute of the client.
+
+    # AFF4.
     with aff4.FACTORY.Create(
         client_id, aff4_grr.VFSGRRClient, token=self.token) as client_obj:
       client_obj.Set(client_obj.Schema.LAST_CRASH(crash_details))
+
+    # Relational db.
+    if data_store.RelationalDBWriteEnabled():
+      try:
+        data_store.REL_DB.WriteClientCrashInfo(client_id.Basename(),
+                                               crash_details)
+      except db.UnknownClientError:
+        pass
 
     # Duplicate the crash information in a number of places so we can find it
     # easily.
@@ -287,9 +297,9 @@ class ExecutePythonHack(flow.GRRFlow):
         python_hack_root_urn.Add(self.args.hack_name), token=self.token)
 
     if not isinstance(fd, collects.GRRSignedBlob):
-      raise RuntimeError("Python hack %s not found." % self.args.hack_name)
+      raise flow.FlowError("Python hack %s not found." % self.args.hack_name)
 
-    # TODO(user): This will break if someone wants to execute lots of Python.
+    # TODO(amoser): This will break if someone wants to execute lots of Python.
     for python_blob in fd:
       self.CallClient(
           server_stubs.ExecutePython,
@@ -430,8 +440,15 @@ class OnlineNotification(flow.GRRFlow):
 
   @classmethod
   def GetDefaultArgs(cls, username=None):
-    return cls.args_type(
-        email="%s@%s" % (username, config.CONFIG.Get("Logging.domain")))
+    args = cls.args_type()
+    try:
+      args.email = "%s@%s" % (username, config.CONFIG.Get("Logging.domain"))
+    except ValueError:
+      # Just set no default if the email is not well-formed. Example: when
+      # username contains '@' character.
+      pass
+
+    return args
 
   @flow.StateHandler()
   def Start(self):
@@ -454,7 +471,7 @@ class OnlineNotification(flow.GRRFlow):
           hostname=hostname,
           url="/clients/%s" % self.client_id.Basename(),
           creator=self.token.username,
-          signature=utils.SmartUnicode(config.CONFIG["Email.signature"])),
+          signature=utils.SmartUnicode(config.CONFIG["Email.signature"]))
 
       email_alerts.EMAIL_ALERTER.SendEmail(
           self.args.email,
@@ -490,12 +507,6 @@ class UpdateClient(flow.GRRFlow):
 
   AUTHORIZED_LABELS = ["admin"]
 
-  system_platform_mapping = {
-      "Darwin": "darwin",
-      "Linux": "linux",
-      "Windows": "windows"
-  }
-
   args_type = UpdateClientArgs
 
   @flow.StateHandler()
@@ -503,51 +514,46 @@ class UpdateClient(flow.GRRFlow):
     """Start."""
     blob_path = self.args.blob_path
     if not blob_path:
-      # No explicit path was given, we guess a reasonable default here.
-      client = aff4.FACTORY.Open(self.client_id, token=self.token)
-      client_platform = client.Get(client.Schema.SYSTEM)
-      if not client_platform:
-        raise RuntimeError("Can't determine client platform, please specify.")
-      blob_urn = "aff4:/config/executables/%s/agentupdates" % (
-          self.system_platform_mapping[client_platform])
-      blob_dir = aff4.FACTORY.Open(blob_urn, token=self.token)
-      updates = sorted(list(blob_dir.ListChildren()))
-      if not updates:
-        raise RuntimeError(
-            "No matching updates found, please specify one manually.")
-      blob_path = updates[-1]
-
-    if not ("windows" in utils.SmartStr(self.args.blob_path) or
-            "darwin" in utils.SmartStr(self.args.blob_path) or
-            "linux" in utils.SmartStr(self.args.blob_path)):
-      raise RuntimeError("Update not supported for this urn, use aff4:/config"
-                         "/executables/<platform>/agentupdates/<version>")
+      raise flow.FlowError("Please specify an installer binary.")
 
     aff4_blobs = aff4.FACTORY.Open(blob_path, token=self.token)
     if not isinstance(aff4_blobs, collects.GRRSignedBlob):
-      raise RuntimeError("%s is not a valid GRRSignedBlob." % blob_path)
+      raise flow.FlowError("%s is not a valid GRRSignedBlob." % blob_path)
 
     offset = 0
     write_path = "%d_%s" % (time.time(), aff4_blobs.urn.Basename())
     for i, blob in enumerate(aff4_blobs):
+      if i < aff4_blobs.chunks - 1:
+        more_data = True
+        next_state = "CheckUpdateAgent"
+      else:
+        more_data = False
+        next_state = "Interrogate"
+
       self.CallClient(
           server_stubs.UpdateAgent,
           executable=blob,
-          more_data=i < aff4_blobs.chunks - 1,
+          more_data=more_data,
           offset=offset,
           write_path=write_path,
-          next_state=discovery.Interrogate.__name__,
+          next_state=next_state,
           use_client_env=False)
 
       offset += len(blob.data)
 
   @flow.StateHandler()
+  def CheckUpdateAgent(self, responses):
+    if not responses.success:
+      raise flow.FlowError(
+          "Error while calling UpdateAgent: %s" % responses.status)
+
+  @flow.StateHandler()
   def Interrogate(self, responses):
     if not responses.success:
-      self.Log("Installer reported an error: %s" % responses.status)
-    else:
-      self.Log("Installer completed.")
-      self.CallFlow(discovery.Interrogate.__name__, next_state="Done")
+      raise flow.FlowError("Installer reported an error: %s" % responses.status)
+
+    self.Log("Installer completed.")
+    self.CallFlow(discovery.Interrogate.__name__, next_state="Done")
 
   @flow.StateHandler()
   def Done(self):
@@ -783,31 +789,45 @@ class ClientStartupHandler(flow.EventListener):
       return
 
     client_id = message.source
+    new_si = message.payload
+    drift = rdfvalue.Duration("5m")
 
-    client = aff4.FACTORY.Create(
-        client_id, aff4_grr.VFSGRRClient, mode="rw", token=self.token)
-    old_info = client.Get(client.Schema.CLIENT_INFO)
-    old_boot = client.Get(client.Schema.LAST_BOOT_TIME, 0)
-    startup_info = rdf_client.StartupInfo(message.payload)
-    info = startup_info.client_info
+    if data_store.RelationalDBReadEnabled():
+      current_si = data_store.REL_DB.ReadClientStartupInfo(client_id.Basename())
 
-    # Only write to the datastore if we have new information.
-    new_data = (info.client_name, info.client_version, info.revision,
-                info.build_time, info.client_description)
-    old_data = (old_info.client_name, old_info.client_version,
-                old_info.revision, old_info.build_time,
-                old_info.client_description)
+      # We write the updated record if the client_info has any changes
+      # or the boot time is more than 5 minutes different.
+      if (not current_si or current_si.client_info != new_si.client_info or
+          abs(current_si.boot_time - new_si.boot_time) > drift):
+        data_store.REL_DB.WriteClientStartupInfo(client_id.Basename(), new_si)
 
-    if new_data != old_data:
-      client.Set(client.Schema.CLIENT_INFO(info))
+    else:
+      changes = False
+      with aff4.FACTORY.Create(
+          client_id, aff4_grr.VFSGRRClient, mode="rw",
+          token=self.token) as client:
+        old_info = client.Get(client.Schema.CLIENT_INFO)
+        old_boot = client.Get(client.Schema.LAST_BOOT_TIME, 0)
 
-    client.AddLabels(info.labels, owner="GRR")
+        info = new_si.client_info
 
-    # Allow for some drift in the boot times (5 minutes).
-    if abs(int(old_boot) - int(startup_info.boot_time)) > 300 * 1e6:
-      client.Set(client.Schema.LAST_BOOT_TIME(startup_info.boot_time))
+        # Only write to the datastore if we have new information.
+        if info != old_info:
+          client.Set(client.Schema.CLIENT_INFO(info))
+          changes = True
 
-    client.Close()
+        client.AddLabels(info.labels, owner="GRR")
+
+        # Allow for some drift in the boot times (5 minutes).
+        if not old_boot or abs(old_boot - new_si.boot_time) > drift:
+          client.Set(client.Schema.LAST_BOOT_TIME(new_si.boot_time))
+          changes = True
+
+      if data_store.RelationalDBWriteEnabled() and changes:
+        try:
+          data_store.REL_DB.WriteClientStartupInfo(client_id.Basename(), new_si)
+        except db.UnknownClientError:
+          pass
 
     events.Events.PublishEventInline("ClientStartup", message, token=self.token)
 
@@ -871,7 +891,7 @@ class LaunchBinary(flow.GRRFlow):
   def Start(self):
     fd = aff4.FACTORY.Open(self.args.binary, token=self.token)
     if not isinstance(fd, collects.GRRSignedBlob):
-      raise RuntimeError("Executable binary %s not found." % self.args.binary)
+      raise flow.FlowError("Executable binary %s not found." % self.args.binary)
 
     offset = 0
     write_path = "%d" % time.time()

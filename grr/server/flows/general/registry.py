@@ -1,12 +1,11 @@
 #!/usr/bin/env python
 """Gather information from the registry on windows."""
 
-
 from grr.lib.rdfvalues import file_finder as rdf_file_finder
 from grr.lib.rdfvalues import paths as rdf_paths
 from grr.lib.rdfvalues import structs as rdf_structs
 from grr.path_detection import windows as path_detection_windows
-from grr.proto import flows_pb2
+from grr_response_proto import flows_pb2
 from grr.server import aff4
 from grr.server import artifact
 from grr.server import artifact_utils
@@ -85,8 +84,7 @@ class RegistryFinder(flow.GRRFlow):
         paths=self.args.keys_paths,
         pathtype=rdf_paths.PathSpec.PathType.REGISTRY,
         conditions=self.ConditionsToFileFinderConditions(self.args.conditions),
-        action=rdf_file_finder.FileFinderAction(
-            action_type=rdf_file_finder.FileFinderAction.Action.STAT),
+        action=rdf_file_finder.FileFinderAction.Stat(),
         next_state="Done")
 
   @flow.StateHandler()
@@ -117,7 +115,6 @@ class CollectRunKeyBinaries(flow.GRRFlow):
         collectors.ArtifactCollectorFlow.__name__,
         artifact_list=["WindowsRunKeys"],
         use_tsk=True,
-        store_results_in_aff4=False,
         next_state="ParseRunKeys")
 
   @flow.StateHandler()

@@ -1,6 +1,6 @@
 'use strict';
 
-goog.provide('grrUi.semantic.flowIdDirective.FlowIdController');
+goog.provide('grrUi.semantic.flowIdDirective');
 goog.provide('grrUi.semantic.flowIdDirective.FlowIdDirective');
 
 goog.scope(function() {
@@ -13,14 +13,13 @@ goog.scope(function() {
  * @constructor
  * @ngInject
  */
-grrUi.semantic.flowIdDirective.FlowIdController = function($scope) {
+const FlowIdController = function($scope) {
   /** @private {!angular.Scope} */
   this.scope_ = $scope;
 
   /** @type {string} */
   this.clientId;
 };
-var FlowIdController = grrUi.semantic.flowIdDirective.FlowIdController;
 
 
 /**

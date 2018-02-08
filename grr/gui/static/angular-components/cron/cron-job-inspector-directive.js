@@ -1,5 +1,6 @@
 'use strict';
 
+goog.provide('grrUi.cron.cronJobInspectorDirective');
 goog.provide('grrUi.cron.cronJobInspectorDirective.CronJobInspectorDirective');
 
 goog.scope(function() {
@@ -12,7 +13,7 @@ goog.scope(function() {
 grrUi.cron.cronJobInspectorDirective.CronJobInspectorDirective = function() {
   return {
     scope: {
-      cronJobUrn: '=',
+      cronJobId: '=',
     },
     restrict: 'E',
     templateUrl: '/static/angular-components/cron/cron-job-inspector.html'

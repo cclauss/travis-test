@@ -34,7 +34,6 @@ bytes. The data store can then treat the type as an opaque type (and will not be
 able to filter it directly).
 """
 
-
 import abc
 import atexit
 import collections
@@ -57,11 +56,23 @@ from grr.lib.rdfvalues import flows as rdf_flows
 from grr.server import access_control
 from grr.server import blob_store
 from grr.server import stats_values
+from grr.server.databases import registry_init
 
 flags.DEFINE_bool("list_storage", False, "List all storage subsystems present.")
 
 # A global data store handle
 DB = None
+# The global relational db handle.
+REL_DB = None
+
+
+def RelationalDBWriteEnabled():
+  return bool(REL_DB)
+
+
+def RelationalDBReadEnabled():
+  return config.CONFIG["Database.useForReads"]
+
 
 # There are stub methods that don't return/yield as indicated by the docstring.
 # pylint: disable=g-doc-return-or-yield
@@ -556,7 +567,7 @@ class DataStore(object):
     try:
       cls = blob_store.Blobstore.GetPlugin(blobstore_name)
     except KeyError:
-      raise RuntimeError("No blob store %s found." % blobstore_name)
+      raise ValueError("No blob store %s found." % blobstore_name)
 
     self.blobstore = cls()
 
@@ -874,9 +885,8 @@ class DataStore(object):
     if after_urn:
       after_urn = utils.SmartStr(after_urn)
       if not after_urn.startswith(subject_prefix):
-        raise RuntimeError(
-            "after_urn \"%s\" does not begin with prefix \"%s\"" %
-            (after_urn, subject_prefix))
+        raise ValueError("after_urn \"%s\" does not begin with prefix \"%s\"" %
+                         (after_urn, subject_prefix))
     return after_urn
 
   @abc.abstractmethod
@@ -1577,7 +1587,7 @@ class DBSubjectLock(object):
       lease_time: The minimum length of time the lock will remain valid in
         seconds. Note this will be converted to usec for storage.
     Raises:
-      RuntimeError: No lease time was provided.
+      ValueError: No lease time was provided.
     """
     self.subject = utils.SmartStr(subject)
     self.store = data_store
@@ -1585,7 +1595,7 @@ class DBSubjectLock(object):
     self.expires = None
     self.locked = False
     if lease_time is None:
-      raise RuntimeError("Trying to lock without a lease time.")
+      raise ValueError("Trying to lock without a lease time.")
     self._Acquire(lease_time)
     self.lease_time = lease_time
 
@@ -1638,6 +1648,7 @@ class DataStoreInit(registry.InitHook):
   def Run(self):
     """Initialize the data_store."""
     global DB  # pylint: disable=global-statement
+    global REL_DB  # pylint: disable=global-statement
 
     if flags.FLAGS.list_storage:
       self._ListStorageOptions()
@@ -1651,7 +1662,7 @@ class DataStoreInit(registry.InitHook):
       print msg
       print "Available options:"
       self._ListStorageOptions()
-      raise RuntimeError(msg)
+      raise ValueError(msg)
 
     DB = cls()  # pylint: disable=g-bad-name
     DB.Initialize()
@@ -1664,6 +1675,18 @@ class DataStoreInit(registry.InitHook):
           docstring="Size of data store in bytes",
           units="BYTES")
       DB.InitializeMonitorThread()
+
+    # Initialize a relational DB if configured.
+    rel_db_name = config.CONFIG["Database.implementation"]
+    if not rel_db_name:
+      return
+
+    try:
+      cls = registry_init.REGISTRY[rel_db_name]
+      logging.info("Using database implementation %s", rel_db_name)
+      REL_DB = cls()
+    except KeyError:
+      raise ValueError("Database %s not found." % rel_db_name)
 
   def RunOnce(self):
     """Initialize some Varz."""

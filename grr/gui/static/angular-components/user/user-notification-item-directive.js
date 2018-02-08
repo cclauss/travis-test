@@ -1,14 +1,12 @@
 'use strict';
 
-goog.provide('grrUi.user.userNotificationItemDirective.UserNotificationItemController');
+goog.provide('grrUi.user.userNotificationItemDirective');
 goog.provide('grrUi.user.userNotificationItemDirective.UserNotificationItemDirective');
 goog.provide('grrUi.user.userNotificationItemDirective.annotateApiNotification');
 goog.provide('grrUi.user.userNotificationItemDirective.openReference');
-goog.require('grrUi.client.virtualFileSystem.fileViewDirective.getFileId');
-goog.require('grrUi.core.apiService.encodeUrlPath');
-goog.require('grrUi.core.apiService.stripTypeInfo');
-goog.require('grrUi.core.utils.getLastPathComponent');
-goog.require('grrUi.core.utils.stripAff4Prefix');
+goog.require('grrUi.client.virtualFileSystem.fileViewDirective');  // USE: getFileId
+goog.require('grrUi.core.apiService');  // USE: encodeUrlPath, stripTypeInfo
+goog.require('grrUi.core.utils');  // USE: getLastPathComponent, stripAff4Prefix
 
 goog.scope(function() {
 
@@ -146,7 +144,7 @@ var getFileIdFromFullPath_ = function(vfsPath) {
  * @constructor
  * @ngInject
  */
-grrUi.user.userNotificationItemDirective.UserNotificationItemController =
+const UserNotificationItemController =
   function($scope, $window) {
   /** @private {!angular.Scope} */
   this.scope_ = $scope;
@@ -157,7 +155,6 @@ grrUi.user.userNotificationItemDirective.UserNotificationItemController =
   this.scope_.$watch('notification', this.onNotificationChanged_.bind(this));
 };
 
-var UserNotificationItemController = grrUi.user.userNotificationItemDirective.UserNotificationItemController;
 
 
 /**
@@ -186,8 +183,7 @@ UserNotificationItemController.prototype.openReference = function() {
 /**
  * Directive for showing a notification.
  *
- * @return {angular.Directive} Directive definition object.
- * @constructor
+ * @return {!angular.Directive} Directive definition object.
  * @ngInject
  * @export
  */

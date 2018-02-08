@@ -62,7 +62,6 @@ setup_args = dict(
     cmdclass={"sdist": Sdist},
     entry_points={
         "console_scripts": [
-            "grr_api_shell = grr.gui.api_client.api_shell:main",
             "grr_console = grr.server.distro_entry:Console",
             "grr_config_updater = grr.server.distro_entry:ConfigUpdater",
             "grr_frontend = grr.server.distro_entry:GrrFrontend",
@@ -76,17 +75,14 @@ setup_args = dict(
     },
     install_requires=[
         "google-api-python-client==1.6.2",
+        "google-auth==1.2.1",
         "google-cloud-bigquery==0.22.1",
-        "google-cloud-bigtable==0.22.0",
         "grr-response-core==%s" % VERSION.get("Version", "packagedepends"),
-        "grr-response-client==%s" % VERSION.get("Version", "packagedepends"),
         "Jinja2==2.9.5",
-        "oauth2client==4.1.0",
         "pexpect==4.0.1",
         "portpicker==1.1.1",
         "python-crontab==2.0.1",
         "python-debian==0.1.31",
-        "rekall-core~=1.6.0",
         "Werkzeug==0.11.3",
         "wsgiref==0.1.2",
     ],

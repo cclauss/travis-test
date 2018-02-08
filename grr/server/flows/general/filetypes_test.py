@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 """Tests for grr.server.flows.general.filetypes."""
 
-
 import os
 
 from grr.client.client_actions import plist
@@ -27,7 +26,7 @@ class TestPlistFlows(flow_test_lib.FlowTestsBaseclass):
     for s in flow_test_lib.TestFlowHelper(
         flow_name,
         client_mock,
-        client_id=self.client_id,
+        client_id=test_lib.TEST_CLIENT_ID,
         token=self.token,
         request=request):
       session_id = s

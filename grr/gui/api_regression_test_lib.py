@@ -1,8 +1,6 @@
 #!/usr/bin/env python
 """Base test classes for API handlers tests."""
 
-
-
 import abc
 import json
 import logging
@@ -68,7 +66,9 @@ class ApiRegressionTestMetaclass(registry.MetaclassRegistry):
           cls_name,
           (mixin, cls, test_lib.GRRBaseTest),
           # pylint: disable=protected-access
-          {"testForRegression": lambda x: x._testForRegression()})
+          {
+              "testForRegression": lambda x: x._testForRegression()
+          })
       module = sys.modules[cls.__module__]
       setattr(module, cls_name, test_cls)
 
@@ -77,6 +77,8 @@ ApiRegressionTestMetaclass.RegisterConnectionMixin(
     api_regression_http.HttpApiV1RegressionTestMixin)
 ApiRegressionTestMetaclass.RegisterConnectionMixin(
     api_regression_http.HttpApiV2RegressionTestMixin)
+ApiRegressionTestMetaclass.RegisterConnectionMixin(
+    api_regression_http.HttpApiV2RelationalDBRegressionTestMixin)
 
 
 @pytest.mark.small
@@ -104,6 +106,7 @@ class ApiRegressionTest(test_lib.GRRBaseTest):
   api_method = None
   # Handler class that's used to handle the requests.
   handler = None
+
   # The api_regression label can be used to exclude/include API regression
   # tests from/into test runs.
 
@@ -161,6 +164,21 @@ class ApiRegressionTest(test_lib.GRRBaseTest):
 
     return content
 
+  @property
+  def golden_file_class_name(self):
+    """Returns a test class name to be used when working with a golden file."""
+
+    test_class_name = self.__class__.__name__
+    try:
+      conn_type = getattr(self.__class__, "use_golden_files_of")
+    except AttributeError:
+      pass
+    else:
+      test_class_name = (
+          test_class_name[:-len(self.__class__.connection_type)] + conn_type)
+
+    return test_class_name
+
   def Check(self, method, args=None, replace=None):
     """Does the regression check."""
     router = api_auth_manager.API_AUTH_MGR.GetRouterForUser(self.token.username)
@@ -169,7 +187,7 @@ class ApiRegressionTest(test_lib.GRRBaseTest):
     check = self.HandleCheck(
         mdata, args=args, replace=lambda s: self._Replace(s, replace=replace))
 
-    check["test_class"] = self.__class__.__name__
+    check["test_class"] = self.golden_file_class_name
     check["api_method"] = method
 
     self.checks.append(check)
@@ -195,7 +213,7 @@ class ApiRegressionTest(test_lib.GRRBaseTest):
     checks = prev_data[self.__class__.handler.__name__]
     relevant_checks = []
     for check in checks:
-      if check["test_class"] == self.__class__.__name__:
+      if check["test_class"] == self.golden_file_class_name:
         relevant_checks.append(check)
 
     self.Run()
@@ -242,19 +260,29 @@ class ApiRegressionGoldenOutputGenerator(object):
         if getattr(test_class, "connection_type", "") != self.connection_type:
           continue
 
-        test_class.setUpClass()
-        loaded = self.loader.loadTestsFromTestCase(test_class)
-        for t in loaded:
-          try:
-            t.setUp()
-            t.Run()
+        # If a test is meant to use other tests data, there's nothing to
+        # generate.
+        if getattr(test_class, "use_golden_files_of", ""):
+          continue
 
-            sample_data.setdefault(handler.__name__, []).extend(t.checks)
+        test_class.setUpClass()
+        try:
+          test_instance = test_class()
+          test_instance.setUp()
+          try:
+            test_instance.Run()
+            sample_data.setdefault(handler.__name__, []).extend(
+                test_instance.checks)
           finally:
             try:
               t.tearDown()
             except Exception as e:  # pylint: disable=broad-except
               logging.exception(e)
+        finally:
+          try:
+            test_class.tearDownClass()
+          except Exception as e:  # pylint: disable=broad-except
+            logging.exception(e)
 
     json_sample_data = json.dumps(
         sample_data, indent=2, sort_keys=True, separators=(",", ": "))

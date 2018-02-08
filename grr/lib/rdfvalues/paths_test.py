@@ -5,11 +5,10 @@
 """These are tests for the PathSpec implementation."""
 
 
-
 from grr.lib import flags
 from grr.lib.rdfvalues import paths as rdf_paths
 from grr.lib.rdfvalues import test_base
-from grr.proto import jobs_pb2
+from grr_response_proto import jobs_pb2
 from grr.test_lib import test_lib
 
 

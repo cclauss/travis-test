@@ -7,7 +7,7 @@
 # The main use case is to provide a single point where users may switch GRR
 # installations. For example a common use case is to install an updated GRR
 # installation from source:
-# https://github.com/google/grr-doc/blob/master/installfrompip.adoc#installing-grr-server-for-dev-ie-tracking-head
+# http://grr-doc.readthedocs.io/en/stable/installing-grr-server/from-released-pip.html
 
 # While this could be handled by systemd drop-in overrides for the services, we
 # would need to do something for the other components (grr_config_updater,

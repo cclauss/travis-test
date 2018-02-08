@@ -1,6 +1,6 @@
 'use strict';
 
-goog.provide('grrUi.client.clientUsernamesDirective.ClientUsernamesController');
+goog.provide('grrUi.client.clientUsernamesDirective');
 goog.provide('grrUi.client.clientUsernamesDirective.ClientUsernamesDirective');
 
 
@@ -14,7 +14,7 @@ goog.scope(function() {
  * @constructor
  * @ngInject
  */
-grrUi.client.clientUsernamesDirective.ClientUsernamesController = function(
+const ClientUsernamesController = function(
     $scope) {
   /** @private {!angular.Scope} */
   this.scope_ = $scope;
@@ -25,8 +25,6 @@ grrUi.client.clientUsernamesDirective.ClientUsernamesController = function(
   this.scope_.$watch('::value', this.onValueChange_.bind(this));
 };
 
-var ClientUsernamesController =
-    grrUi.client.clientUsernamesDirective.ClientUsernamesController;
 
 
 /**
@@ -50,7 +48,7 @@ ClientUsernamesController.prototype.onValueChange_ = function() {
  * It separates a string of usernames on a client by the space character into a
  * list of objects, and delegates rendering of it to grr-semantic-value.
  *
- * @constructor
+ * @return {!angular.Directive} Directive definition object.
  * @ngInject
  * @export
  */

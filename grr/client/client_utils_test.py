@@ -2,25 +2,17 @@
 # -*- mode: python; encoding: utf-8 -*-
 """Test client utility functions."""
 
-
-import exceptions
 import hashlib
 import imp
 import os
 import sys
-import tempfile
-import time
 import mock
 import mox
 
 import unittest
 from grr.client import client_utils_common
-from grr.client import client_utils_linux
 from grr.client import client_utils_osx
 from grr.lib import flags
-from grr.lib import utils
-from grr.lib.rdfvalues import flows as rdf_flows
-from grr.lib.rdfvalues import paths as rdf_paths
 from grr.test_lib import test_lib
 
 
@@ -34,50 +26,6 @@ def GetVolumeNameForVolumeMountPoint(_):
 
 class ClientUtilsTest(test_lib.GRRBaseTest):
   """Test the client utils."""
-
-  def testLinGetRawDevice(self):
-    """Test the parser for linux mounts."""
-    proc_mounts = """rootfs / rootfs rw 0 0
-none /sys sysfs rw,nosuid,nodev,noexec,relatime 0 0
-none /proc proc rw,nosuid,nodev,noexec,relatime 0 0
-none /dev devtmpfs rw,relatime,size=4056920k,nr_inodes=1014230,mode=755 0 0
-none /dev/pts devpts rw,nosuid,noexec,relatime,gid=5,mode=620,ptmxmode=000 0 0
-/dev/mapper/root / ext4 rw,relatime,errors=remount-ro,barrier=1,data=ordered 0 0
-none /sys/fs/fuse/connections fusectl rw,relatime 0 0
-none /sys/kernel/debug debugfs rw,relatime 0 0
-none /sys/kernel/security securityfs rw,relatime 0 0
-none /dev/shm tmpfs rw,nosuid,nodev,relatime 0 0
-none /var/run tmpfs rw,nosuid,relatime 0 0
-none /var/lock tmpfs rw,nosuid,nodev,noexec,relatime 0 0
-none /lib/init/rw tmpfs rw,nosuid,relatime,mode=755 0 0
-/dev/sda1 /boot ext2 rw,relatime,errors=continue 0 0
-/dev/mapper/usr /usr/local/ ext4 rw,relatime,barrier=1,data=writeback 0 0
-binfmt_misc /proc/sys/fs/binfmt_misc binfmt_misc rw,nosuid,relatime 0 0
-server.nfs:/vol/home /home/user nfs rw,nosuid,relatime 0 0
-"""
-    mountpoints = client_utils_linux.GetMountpoints(proc_mounts)
-
-    def GetMountpointsMock():
-      return mountpoints
-
-    old_getmountpoints = client_utils_linux.GetMountpoints
-    client_utils_linux.GetMountpoints = GetMountpointsMock
-
-    for filename, expected_device, expected_path, device_type in [
-        ("/etc/passwd", "/dev/mapper/root", "/etc/passwd",
-         rdf_paths.PathSpec.PathType.OS),
-        ("/usr/local/bin/ls", "/dev/mapper/usr", "/bin/ls",
-         rdf_paths.PathSpec.PathType.OS), ("/proc/net/sys", "none", "/net/sys",
-                                           rdf_paths.PathSpec.PathType.UNSET),
-        ("/home/user/test.txt", "server.nfs:/vol/home", "/test.txt",
-         rdf_paths.PathSpec.PathType.UNSET)
-    ]:
-      raw_pathspec, path = client_utils_linux.LinGetRawDevice(filename)
-
-      self.assertEqual(expected_device, raw_pathspec.path)
-      self.assertEqual(device_type, raw_pathspec.pathtype)
-      self.assertEqual(expected_path, path)
-      client_utils_linux.GetMountpoints = old_getmountpoints
 
   def testWinSplitPathspec(self):
     """Test windows split pathspec functionality."""
@@ -94,7 +42,7 @@ server.nfs:/vol/home /home/user nfs rw,nosuid,relatime 0 0
                  "/Windows"), (r"C:\\", "\\\\?\\Volume{11111}", "/")]
 
     for filename, expected_device, expected_path in testdata:
-      raw_pathspec, path = client_utils_windows.WinGetRawDevice(filename)
+      raw_pathspec, path = client_utils_windows.GetRawDevice(filename)
 
       # Pathspec paths are always absolute and therefore must have a leading /.
       self.assertEqual(expected_device, raw_pathspec.path)
@@ -102,13 +50,6 @@ server.nfs:/vol/home /home/user nfs rw,nosuid,relatime 0 0
 
   def SetupWinEnvironment(self):
     """Mock windows includes."""
-
-    winreg = imp.new_module("_winreg")
-    winreg.error = exceptions.Exception
-    sys.modules["_winreg"] = winreg
-
-    ntsecuritycon = imp.new_module("ntsecuritycon")
-    sys.modules["ntsecuritycon"] = ntsecuritycon
 
     pywintypes = imp.new_module("pywintypes")
     pywintypes.error = Exception
@@ -119,18 +60,20 @@ server.nfs:/vol/home /home/user nfs rw,nosuid,relatime 0 0
     winfile.GetVolumePathName = GetVolumePathName
     sys.modules["win32file"] = winfile
 
-    win32security = imp.new_module("win32security")
-    sys.modules["win32security"] = win32security
+    sys.modules["_winreg"] = imp.new_module("_winreg")
+    sys.modules["ntsecuritycon"] = imp.new_module("ntsecuritycon")
+    sys.modules["win32security"] = imp.new_module("win32security")
+    sys.modules["win32api"] = imp.new_module("win32api")
+    sys.modules["win32service"] = imp.new_module("win32service")
+    sys.modules["win32process"] = imp.new_module("win32process")
+    sys.modules["win32serviceutil"] = imp.new_module("win32serviceutil")
+    sys.modules["winerror"] = imp.new_module("winerror")
 
-    win32api = imp.new_module("win32api")
-    sys.modules["win32api"] = win32api
-
-    win32service = imp.new_module("win32service")
-    sys.modules["win32service"] = win32service
-    win32serviceutil = imp.new_module("win32serviceutil")
-    sys.modules["win32serviceutil"] = win32serviceutil
-    winerror = imp.new_module("winerror")
-    sys.modules["winerror"] = winerror
+    # Importing process.py pulls in lots of Windows specific stuff.
+    # pylint: disable=g-import-not-at-top
+    from grr.client import windows
+    windows.process = None
+    # pylint: enable=g-import-not-at-top
 
   def testExecutionWhiteList(self):
     """Test if unknown commands are filtered correctly."""
@@ -161,55 +104,10 @@ server.nfs:/vol/home /home/user nfs rw,nosuid,relatime 0 0
   def testExecutionTimeLimit(self):
     """Test if the time limit works."""
 
-    (_, _, _, time_used) = client_utils_common.Execute("/bin/sleep", ["10"], 1)
+    _, _, _, time_used = client_utils_common.Execute("/bin/sleep", ["10"], 0.1)
 
-    # This should take just a bit longer than one second.
-    self.assertTrue(time_used < 2.0)
-
-  def testLinuxNanny(self):
-    """Tests the linux nanny."""
-    # Starting nannies is disabled in tests. For this one we need it.
-    self.nanny_stubber.Stop()
-    self.exit_called = False
-
-    def MockExit(value):
-      self.exit_called = value
-      # Kill the nanny thread.
-      raise RuntimeError("Nannythread exiting.")
-
-    with utils.Stubber(os, "_exit", MockExit):
-      nanny_controller = client_utils_linux.NannyController()
-      nanny_controller.StartNanny(unresponsive_kill_period=0.5)
-
-      for _ in range(10):
-        # Unfortunately we really need to sleep because we cant mock out
-        # time.time.
-        time.sleep(0.1)
-        nanny_controller.Heartbeat()
-
-      self.assertEqual(self.exit_called, False)
-
-      # Main thread sleeps for long enough for the nanny to fire.
-      time.sleep(1)
-      self.assertEqual(self.exit_called, -1)
-
-      nanny_controller.StopNanny()
-
-  def testLinuxNannyLog(self):
-    """Tests the linux nanny transaction log."""
-    with tempfile.NamedTemporaryFile() as fd:
-      nanny_controller = client_utils_linux.NannyController()
-      nanny_controller.StartNanny(nanny_logfile=fd.name)
-      grr_message = rdf_flows.GrrMessage(session_id="W:test")
-
-      nanny_controller.WriteTransactionLog(grr_message)
-      self.assertRDFValuesEqual(grr_message,
-                                nanny_controller.GetTransactionLog())
-      nanny_controller.CleanTransactionLog()
-
-      self.assertIsNone(nanny_controller.GetTransactionLog())
-
-      nanny_controller.StopNanny()
+    # This should take just a bit longer than 0.1 seconds.
+    self.assertLess(time_used, 0.5)
 
 
 class OSXVersionTests(test_lib.GRRBaseTest):
@@ -269,36 +167,32 @@ class MultiHasherTest(unittest.TestCase):
     self.assertFalse(hash_object.sha256)
 
   def testHashFileWhole(self):
-    tmp_path = test_lib.TempFilePath()
-    with open(tmp_path, "wb") as tmp_file:
-      tmp_file.write("foobar")
+    with test_lib.AutoTempFilePath() as tmp_path:
+      with open(tmp_path, "wb") as tmp_file:
+        tmp_file.write("foobar")
 
-    hasher = client_utils_common.MultiHasher(["md5", "sha1"])
-    hasher.HashFilePath(tmp_path, len("foobar"))
+      hasher = client_utils_common.MultiHasher(["md5", "sha1"])
+      hasher.HashFilePath(tmp_path, len("foobar"))
 
-    hash_object = hasher.GetHashObject()
-    self.assertEqual(hash_object.num_bytes, len("foobar"))
-    self.assertEqual(hash_object.md5, self._GetHash(hashlib.md5, "foobar"))
-    self.assertEqual(hash_object.sha1, self._GetHash(hashlib.sha1, "foobar"))
-    self.assertFalse(hash_object.sha256)
-
-    os.remove(tmp_path)
+      hash_object = hasher.GetHashObject()
+      self.assertEqual(hash_object.num_bytes, len("foobar"))
+      self.assertEqual(hash_object.md5, self._GetHash(hashlib.md5, "foobar"))
+      self.assertEqual(hash_object.sha1, self._GetHash(hashlib.sha1, "foobar"))
+      self.assertFalse(hash_object.sha256)
 
   def testHashFilePart(self):
-    tmp_path = test_lib.TempFilePath()
-    with open(tmp_path, "wb") as tmp_file:
-      tmp_file.write("foobar")
+    with test_lib.AutoTempFilePath() as tmp_path:
+      with open(tmp_path, "wb") as tmp_file:
+        tmp_file.write("foobar")
 
-    hasher = client_utils_common.MultiHasher(["md5", "sha1"])
-    hasher.HashFilePath(tmp_path, len("foo"))
+      hasher = client_utils_common.MultiHasher(["md5", "sha1"])
+      hasher.HashFilePath(tmp_path, len("foo"))
 
-    hash_object = hasher.GetHashObject()
-    self.assertEqual(hash_object.num_bytes, len("foo"))
-    self.assertEqual(hash_object.md5, self._GetHash(hashlib.md5, "foo"))
-    self.assertEqual(hash_object.sha1, self._GetHash(hashlib.sha1, "foo"))
-    self.assertFalse(hash_object.sha256)
-
-    os.remove(tmp_path)
+      hash_object = hasher.GetHashObject()
+      self.assertEqual(hash_object.num_bytes, len("foo"))
+      self.assertEqual(hash_object.md5, self._GetHash(hashlib.md5, "foo"))
+      self.assertEqual(hash_object.sha1, self._GetHash(hashlib.sha1, "foo"))
+      self.assertFalse(hash_object.sha256)
 
   def testHashBufferProgress(self):
     progress = mock.Mock()

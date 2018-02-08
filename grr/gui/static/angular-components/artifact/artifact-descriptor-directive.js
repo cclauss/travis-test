@@ -1,6 +1,6 @@
 'use strict';
 
-goog.provide('grrUi.artifact.artifactDescriptorDirective.ArtifactDescriptorController');
+goog.provide('grrUi.artifact.artifactDescriptorDirective');
 goog.provide('grrUi.artifact.artifactDescriptorDirective.ArtifactDescriptorDirective');
 
 
@@ -14,20 +14,18 @@ goog.scope(function() {
  * @constructor
  * @ngInject
  */
-grrUi.artifact.artifactDescriptorDirective.ArtifactDescriptorController = function($scope) {
+const ArtifactDescriptorController = function($scope) {
   /** @private {!angular.Scope} */
   this.scope_ = $scope;
 };
 
-var ArtifactDescriptorController =
-    grrUi.artifact.artifactDescriptorDirective.ArtifactDescriptorController;
 
 
 /**
  * Directive that displays artifact descriptor (artifact itself, processors and
  * source).
  *
- * @constructor
+ * @return {!angular.Directive} Directive definition object.
  * @ngInject
  * @export
  */

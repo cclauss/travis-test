@@ -1,9 +1,9 @@
 'use strict';
 
-goog.provide('grrUi.core.resultsCollectionDirective.ResultsCollectionController');
+goog.provide('grrUi.core.resultsCollectionDirective');
 goog.provide('grrUi.core.resultsCollectionDirective.ResultsCollectionDirective');
 
-goog.require('grrUi.core.fileDownloadUtils.getPathSpecFromValue');
+goog.require('grrUi.core.fileDownloadUtils');  // USE: getPathSpecFromValue
 
 
 goog.scope(function() {
@@ -23,7 +23,7 @@ var MAX_ITEMS_TO_CHECK_FOR_FILES = 50;
  * @param {!angular.Scope} $scope
  * @ngInject
  */
-grrUi.core.resultsCollectionDirective.ResultsCollectionController = function(
+const ResultsCollectionController = function(
     $scope) {
 
   /** @private {!angular.Scope} */
@@ -42,8 +42,6 @@ grrUi.core.resultsCollectionDirective.ResultsCollectionController = function(
   /** @private {number} */
   this.numCheckedItems_ = 0;
 };
-var ResultsCollectionController =
-    grrUi.core.resultsCollectionDirective.ResultsCollectionController;
 
 /**
  * Transformation callback for results table items provider that determines
@@ -82,7 +80,7 @@ ResultsCollectionController.prototype.transformItems = function(items) {
 /**
  * Directive for displaying results collection via given URLs.
  *
- * @constructor
+ * @return {!angular.Directive} Directive definition object.
  * @ngInject
  * @export
  */

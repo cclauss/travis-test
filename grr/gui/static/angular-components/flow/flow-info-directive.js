@@ -1,6 +1,6 @@
 'use strict';
 
-goog.provide('grrUi.flow.flowInfoDirective.FlowInfoController');
+goog.provide('grrUi.flow.flowInfoDirective');
 goog.provide('grrUi.flow.flowInfoDirective.FlowInfoDirective');
 
 goog.scope(function() {
@@ -12,11 +12,10 @@ goog.scope(function() {
  * @param {!angular.Scope} $scope
  * @ngInject
  */
-grrUi.flow.flowInfoDirective.FlowInfoController = function($scope) {
+const FlowInfoController = function($scope) {
   /** @private {!angular.Scope} */
   this.scope_ = $scope;
 };
-var FlowInfoController = grrUi.flow.flowInfoDirective.FlowInfoController;
 
 
 /**

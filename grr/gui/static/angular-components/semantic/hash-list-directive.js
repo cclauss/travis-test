@@ -1,6 +1,6 @@
 'use strict';
 
-goog.provide('grrUi.semantic.hashListDirective.HashListController');
+goog.provide('grrUi.semantic.hashListDirective');
 goog.provide('grrUi.semantic.hashListDirective.HashListDirective');
 
 goog.scope(function() {
@@ -20,7 +20,7 @@ var HASH_SIZE = 32;
  * @constructor
  * @ngInject
  */
-grrUi.semantic.hashListDirective.HashListController = function(
+const HashListController = function(
     $scope, $window) {
   /** @private {!angular.Scope} */
   this.scope_ = $scope;
@@ -34,8 +34,6 @@ grrUi.semantic.hashListDirective.HashListController = function(
   this.scope_.$watch('::value', this.onValueChange.bind(this));
 };
 
-var HashListController =
-    grrUi.semantic.hashListDirective.HashListController;
 
 
 /**

@@ -1,8 +1,8 @@
 'use strict';
 
-goog.provide('grrUi.semantic.bytesDirective.BytesController');
+goog.provide('grrUi.semantic.bytesDirective');
 goog.provide('grrUi.semantic.bytesDirective.BytesDirective');
-goog.require('grrUi.forms.bytesFormDirective.bytesToHexEncodedString');
+goog.require('grrUi.forms.bytesFormDirective');  // USE: bytesToHexEncodedString
 
 goog.scope(function() {
 
@@ -15,7 +15,7 @@ goog.scope(function() {
  * @constructor
  * @ngInject
  */
-grrUi.semantic.bytesDirective.BytesController = function(
+const BytesController = function(
     $scope, $window) {
   /** @private {!angular.Scope} */
   this.scope_ = $scope;
@@ -29,8 +29,6 @@ grrUi.semantic.bytesDirective.BytesController = function(
   this.scope_.$watch('::value', this.onValueChange.bind(this));
 };
 
-var BytesController =
-    grrUi.semantic.bytesDirective.BytesController;
 
 
 /**
@@ -84,7 +82,7 @@ BytesController.prototype.onValueChange = function(newValue) {
 /**
  * Directive that displays Bytes values.
  *
- * @constructor
+ * @return {!angular.Directive} Directive definition object.
  * @ngInject
  * @export
  */

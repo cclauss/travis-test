@@ -1,9 +1,9 @@
 'use strict';
 
-goog.provide('grrUi.forms.clientLabelFormDirective.ClientLabelFormController');
+goog.provide('grrUi.forms.clientLabelFormDirective');
 goog.provide('grrUi.forms.clientLabelFormDirective.ClientLabelFormDirective');
 
-goog.require('grrUi.core.apiService.stripTypeInfo');
+goog.require('grrUi.core.apiService');  // USE: stripTypeInfo
 
 goog.scope(function() {
 
@@ -18,7 +18,7 @@ var stripTypeInfo = grrUi.core.apiService.stripTypeInfo;
  * @constructor
  * @ngInject
  */
-grrUi.forms.clientLabelFormDirective.ClientLabelFormController =
+const ClientLabelFormController =
     function($scope, grrApiService) {
   /** @private {!angular.Scope} */
   this.scope_ = $scope;
@@ -53,8 +53,6 @@ grrUi.forms.clientLabelFormDirective.ClientLabelFormController =
     }.bind(this));
   }.bind(this));
 };
-var ClientLabelFormController =
-    grrUi.forms.clientLabelFormDirective.ClientLabelFormController;
 
 
 ClientLabelFormController.prototype.$onInit = function() {
@@ -65,10 +63,9 @@ ClientLabelFormController.prototype.$onInit = function() {
 /**
  * Directive that displays a client label selector.
  *
- * @constructor
+ * @return {!angular.Directive} Directive definition object.
  * @ngInject
  * @export
- * @return {!angular.Directive} Directive definition object.
  */
 grrUi.forms.clientLabelFormDirective.ClientLabelFormDirective = function() {
   return {

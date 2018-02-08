@@ -1,27 +1,32 @@
 'use strict';
 
-goog.require('grrUi.core.module');
-goog.require('grrUi.tests.module');
+goog.module('grrUi.core.periodicRefreshDirectiveTest');
 
-describe('grr-periodic-refresh directive', function() {
-  var $compile, $interval, $rootScope;
+const {coreModule} = goog.require('grrUi.core');
+const {testsModule} = goog.require('grrUi.tests');
 
-  beforeEach(module(grrUi.core.module.name));
-  beforeEach(module(grrUi.tests.module.name));
 
-  beforeEach(inject(function($injector) {
+describe('grr-periodic-refresh directive', () => {
+  let $compile;
+  let $interval;
+  let $rootScope;
+
+
+  beforeEach(module(coreModule.name));
+  beforeEach(module(testsModule.name));
+
+  beforeEach(inject(($injector) => {
     $compile = $injector.get('$compile');
     $interval = $injector.get('$interval');
     $rootScope = $injector.get('$rootScope');
   }));
 
-  it('reloads children elements effectively updating one-time bindings',
-     function() {
+  it('reloads children elements effectively updating one-time bindings', () => {
     $rootScope.value = 42;
 
-    var template = '<grr-periodic-refresh interval="1000">' +
+    const template = '<grr-periodic-refresh interval="1000">' +
         '{$ ::value $}</grr-periodic-refresh>';
-    var element = $compile(template)($rootScope);
+    const element = $compile(template)($rootScope);
     $rootScope.$apply();
 
     expect(element.text()).toContain('42');
@@ -38,12 +43,12 @@ describe('grr-periodic-refresh directive', function() {
     expect(element.text()).toContain('43');
   });
 
-  it('calls a callback on timer', function() {
+  it('calls a callback on timer', () => {
     $rootScope.callback = jasmine.createSpy('callback');
 
-    var template = '<grr-periodic-refresh interval="1000" ' +
+    const template = '<grr-periodic-refresh interval="1000" ' +
         'on-refresh="callback()"></grr-periodic-refresh>';
-    var element = $compile(template)($rootScope);
+    $compile(template)($rootScope);
     $rootScope.$apply();
 
     expect($rootScope.callback).not.toHaveBeenCalled();
@@ -51,5 +56,7 @@ describe('grr-periodic-refresh directive', function() {
     $interval.flush(1001);
     expect($rootScope.callback).toHaveBeenCalled();
   });
-
 });
+
+
+exports = {};

@@ -1,10 +1,9 @@
 'use strict';
 
-goog.provide('grrUi.forms.semanticProtoRepeatedFieldFormDirective.SemanticProtoRepeatedFieldFormController');
+goog.provide('grrUi.forms.semanticProtoRepeatedFieldFormDirective');
 goog.provide('grrUi.forms.semanticProtoRepeatedFieldFormDirective.SemanticProtoRepeatedFieldFormDirective');
 
-goog.require('grrUi.core.utils.camelCaseToDashDelimited');
-goog.require('grrUi.forms.semanticValueFormDirective.SemanticValueFormController');
+goog.require('grrUi.core.utils');  // USE: camelCaseToDashDelimited
 
 
 goog.scope(function() {
@@ -18,12 +17,11 @@ var camelCaseToDashDelimited = grrUi.core.utils.camelCaseToDashDelimited;
  * @param {!angular.Scope} $scope
  * @param {!angular.jQuery} $element
  * @param {!angular.$compile} $compile
- * @param {!grrUi.core.semanticRegistry.SemanticRegistryService}
+ * @param {!grrUi.core.semanticRegistryService.SemanticRegistryService}
  *     grrSemanticRepeatedFormDirectivesRegistryService
  * @ngInject
  */
-grrUi.forms.semanticProtoRepeatedFieldFormDirective
-    .SemanticProtoRepeatedFieldFormController = function(
+const SemanticProtoRepeatedFieldFormController = function(
         $scope, $element, $compile,
         grrSemanticRepeatedFormDirectivesRegistryService) {
   /** @private {!angular.Scope} */
@@ -35,7 +33,7 @@ grrUi.forms.semanticProtoRepeatedFieldFormDirective
   /** @private {!angular.$compile} */
   this.compile_ = $compile;
 
-  /** @private {!grrUi.core.semanticRegistry.SemanticRegistryService} */
+  /** @private {!grrUi.core.semanticRegistryService.SemanticRegistryService} */
   this.grrSemanticRepeatedFormDirectivesRegistryService_ =
       grrSemanticRepeatedFormDirectivesRegistryService;
 
@@ -49,9 +47,6 @@ grrUi.forms.semanticProtoRepeatedFieldFormDirective
                           this.onFieldDescriptorChange_.bind(this));
 };
 
-var SemanticProtoRepeatedFieldFormController =
-    grrUi.forms.semanticProtoRepeatedFieldFormDirective
-    .SemanticProtoRepeatedFieldFormController;
 
 
 /**

@@ -1,6 +1,6 @@
 'use strict';
 
-goog.provide('grrUi.semantic.huntIdDirective.HuntIdController');
+goog.provide('grrUi.semantic.huntIdDirective');
 goog.provide('grrUi.semantic.huntIdDirective.HuntIdDirective');
 
 goog.scope(function() {

@@ -2,7 +2,6 @@
 # -*- mode: python; encoding: utf-8 -*-
 """Test the fileview interface."""
 
-
 import unittest
 from grr.gui import gui_test_lib
 from grr.gui.api_plugins.client import ApiSearchClientsHandler
@@ -53,7 +52,7 @@ class TestNotifications(gui_test_lib.GRRSeleniumTest):
     super(TestNotifications, self).setUp()
 
     # Have something for us to look at.
-    self.client_id = self.SetupClients(1)[0]
+    self.client_id = self.SetupClient(0)
     self.session_id = self.GenerateNotifications(self.client_id, self.token)
     self.RequestAndGrantClientApproval(self.client_id)
 

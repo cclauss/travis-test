@@ -1,8 +1,8 @@
 'use strict';
 
-goog.provide('grrUi.semantic.semanticVersionedProtoDirective.SemanticVersionedProtoController');
+goog.provide('grrUi.semantic.semanticVersionedProtoDirective');
 goog.provide('grrUi.semantic.semanticVersionedProtoDirective.SemanticVersionedProtoDirective');
-goog.require('grrUi.semantic.semanticProtoDirective.buildNonUnionItems');
+goog.require('grrUi.semantic.semanticProtoDirective');  // USE: buildNonUnionItems
 
 goog.scope(function() {
 
@@ -12,7 +12,7 @@ goog.scope(function() {
  *
  * @param {!angular.Scope} $scope Directive's scope.
  * @param {!grrUi.core.reflectionService.ReflectionService} grrReflectionService
- * @constructor
+ * @return {!angular.Directive} Directive definition object.
  * @ngInject
  */
 var SemanticVersionedProtoController = function($scope, grrReflectionService) {
@@ -127,5 +127,4 @@ grrUi.semantic.semanticVersionedProtoDirective.SemanticVersionedProtoDirective =
  */
 grrUi.semantic.semanticVersionedProtoDirective.SemanticVersionedProtoDirective.directive_name =
     'grrSemanticVersionedProto';
-
 });  // goog.scope

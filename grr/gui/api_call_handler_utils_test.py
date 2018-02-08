@@ -2,8 +2,6 @@
 # -*- mode: python; encoding: utf-8 -*-
 """Contains tests for api_call_handler_utils."""
 
-
-
 import hashlib
 import os
 import tarfile
@@ -31,7 +29,7 @@ class CollectionArchiveGeneratorTest(test_lib.GRRBaseTest):
 
   def setUp(self):
     super(CollectionArchiveGeneratorTest, self).setUp()
-    self.client_id = self.SetupClients(1)[0]
+    self.client_id = self.SetupClient(0)
     path1 = self.client_id.Add("fs/os/foo/bar/hello1.txt")
     archive_path1 = (
         u"test_prefix/%s/fs/os/foo/bar/hello1.txt" % self.client_id.Basename())
@@ -58,9 +56,10 @@ class CollectionArchiveGeneratorTest(test_lib.GRRBaseTest):
     self.archive_paths = [archive_path1, archive_path2]
     for path in self.paths:
       self.stat_entries.append(
-          rdf_client.StatEntry(pathspec=rdf_paths.PathSpec(
-              path="foo/bar/" + str(path).split("/")[-1],
-              pathtype=rdf_paths.PathSpec.PathType.OS)))
+          rdf_client.StatEntry(
+              pathspec=rdf_paths.PathSpec(
+                  path="foo/bar/" + str(path).split("/")[-1],
+                  pathtype=rdf_paths.PathSpec.PathType.OS)))
 
     self.fd = None
 
@@ -145,16 +144,17 @@ class CollectionArchiveGeneratorTest(test_lib.GRRBaseTest):
     self.assertEqual(contents, "hello2")
 
     manifest = yaml.safe_load(zip_fd.read(manifest_name))
-    self.assertEqual(manifest, {
-        "description": "Test description",
-        "processed_files": 2,
-        "archived_files": 2,
-        "ignored_files": 0,
-        "failed_files": 0
-    })
+    self.assertEqual(
+        manifest, {
+            "description": "Test description",
+            "processed_files": 2,
+            "archived_files": 2,
+            "ignored_files": 0,
+            "failed_files": 0
+        })
 
     client_info = yaml.safe_load(zip_fd.read(client_info_name))
-    self.assertEqual(client_info["system_info"]["node"], "Host-0")
+    self.assertEqual(client_info["system_info"]["fqdn"], "Host-0.example.com")
 
   def testCreatesTarContainingFilesAndClientInfosAndManifest(self):
     _, fd_path = self._GenerateArchive(
@@ -182,7 +182,7 @@ class CollectionArchiveGeneratorTest(test_lib.GRRBaseTest):
       client_info_name = (
           "test_prefix/%s/client_info.yaml" % self.client_id.Basename())
       client_info = yaml.safe_load(tar_fd.extractfile(client_info_name).read())
-      self.assertEqual(client_info["system_info"]["node"], "Host-0")
+      self.assertEqual(client_info["system_info"]["fqdn"], "Host-0.example.com")
 
   def testCorrectlyAccountsForFailedFiles(self):
     path2 = (u"aff4:/%s/fs/os/foo/bar/中国新闻网新闻中.txt" % self.client_id.Basename())
@@ -205,21 +205,23 @@ class CollectionArchiveGeneratorTest(test_lib.GRRBaseTest):
     self.assertTrue(self.archive_paths[1] not in names)
 
     manifest = yaml.safe_load(zip_fd.read("test_prefix/MANIFEST"))
-    self.assertEqual(manifest, {
-        "description":
-            "Test description",
-        "processed_files":
-            2,
-        "archived_files":
-            1,
-        "ignored_files":
-            0,
-        "failed_files":
-            1,
-        "failed_files_list": [
-            u"aff4:/%s/fs/os/foo/bar/中国新闻网新闻中.txt" % self.client_id.Basename()
-        ]
-    })
+    self.assertEqual(
+        manifest, {
+            "description":
+                "Test description",
+            "processed_files":
+                2,
+            "archived_files":
+                1,
+            "ignored_files":
+                0,
+            "failed_files":
+                1,
+            "failed_files_list": [
+                u"aff4:/%s/fs/os/foo/bar/中国新闻网新闻中.txt" %
+                self.client_id.Basename()
+            ]
+        })
 
   def testIgnoresFilesNotMatchingPredicate(self):
     _, fd_path = self._GenerateArchive(
@@ -235,21 +237,23 @@ class CollectionArchiveGeneratorTest(test_lib.GRRBaseTest):
     self.assertEqual(len(names), 3)
 
     manifest = yaml.safe_load(zip_fd.read("test_prefix/MANIFEST"))
-    self.assertEqual(manifest, {
-        "description":
-            "Test description",
-        "processed_files":
-            2,
-        "archived_files":
-            1,
-        "ignored_files":
-            1,
-        "failed_files":
-            0,
-        "ignored_files_list": [
-            u"aff4:/%s/fs/os/foo/bar/中国新闻网新闻中.txt" % self.client_id.Basename()
-        ]
-    })
+    self.assertEqual(
+        manifest, {
+            "description":
+                "Test description",
+            "processed_files":
+                2,
+            "archived_files":
+                1,
+            "ignored_files":
+                1,
+            "failed_files":
+                0,
+            "ignored_files_list": [
+                u"aff4:/%s/fs/os/foo/bar/中国新闻网新闻中.txt" %
+                self.client_id.Basename()
+            ]
+        })
 
 
 class FilterCollectionTest(test_lib.GRRBaseTest):

@@ -2,12 +2,16 @@
 """Test flow copy UI."""
 
 
-import unittest
-from grr.gui import gui_test_lib
+import mock
 
+import unittest
+
+from grr.gui import api_call_router_with_approval_checks
+from grr.gui import gui_test_lib
 from grr.lib import flags
 from grr.lib.rdfvalues import client as rdf_client
 from grr.lib.rdfvalues import file_finder as rdf_file_finder
+from grr.server import access_control
 from grr.server import aff4
 from grr.server import flow
 from grr.server import output_plugin
@@ -47,8 +51,7 @@ class TestFlowCopy(gui_test_lib.GRRSeleniumTest,
         token=self.token)
 
     # Navigate to client and select newly created flow.
-    self.Open("/#c=C.0000000000000001")
-    self.Click("css=a[grrtarget='client.flows']")
+    self.Open("/#/clients/C.0000000000000001/flows")
     self.Click("css=td:contains('ListProcesses')")
 
     # Open wizard and check if flow arguments are copied.
@@ -80,8 +83,7 @@ class TestFlowCopy(gui_test_lib.GRRSeleniumTest,
         token=self.token)
 
     # Navigate to client and select newly created flow.
-    self.Open("/#c=C.0000000000000001")
-    self.Click("css=a[grrtarget='client.flows']")
+    self.Open("/#/clients/C.0000000000000001/flows")
     self.Click("css=td:contains('ListProcesses')")
 
     # Check that there's only one ListProcesses flow.
@@ -110,8 +112,7 @@ class TestFlowCopy(gui_test_lib.GRRSeleniumTest,
         token=self.token)
 
     # Navigate to client and select newly created flow.
-    self.Open("/#c=C.0000000000000001")
-    self.Click("css=a[grrtarget='client.flows']")
+    self.Open("/#/clients/C.0000000000000001/flows")
     self.Click("css=td:contains('ListProcesses')")
 
     # Open wizard and check if flow arguments are copied.
@@ -132,8 +133,7 @@ class TestFlowCopy(gui_test_lib.GRRSeleniumTest,
         token=self.token)
 
     # Navigate to client and select newly created flow.
-    self.Open("/#c=C.0000000000000001")
-    self.Click("css=a[grrtarget='client.flows']")
+    self.Open("/#/clients/C.0000000000000001/flows")
     self.Click("css=td:contains('ListProcesses')")
 
     # Open wizard and change the arguments.
@@ -199,13 +199,12 @@ class TestFlowCopy(gui_test_lib.GRRSeleniumTest,
                    "tr:contains('GetFile'):nth(0).row-selected")
 
   def testCopyingFlowWithRawBytesWithNonAsciiCharsInArgumentsWorks(self):
-    args = rdf_file_finder.FileFinderArgs(
-        paths=["a/b/*"],
-        upload_token=rdf_client.UploadToken(
-            # Encrypted policy is defined simply as "bytes" in its proto
-            # definition. We make sure to assign ascii-incompatible value
-            # to it here.
-            encrypted_policy="\xde\xad\xbe\xef"))
+    # Encrypted policy is defined simply as "bytes" in its proto definition. We
+    # make sure to assign ascii-incompatible value to it here.
+    token = rdf_client.UploadToken(encrypted_policy="\xde\xad\xbe\xef")
+    action = rdf_file_finder.FileFinderAction.Download(upload_token=token)
+    args = rdf_file_finder.FileFinderArgs(action=action, paths=["a/b/*"])
+
     flow.GRRFlow.StartFlow(
         flow_name=flows_file_finder.FileFinder.__name__,
         args=args,
@@ -213,8 +212,7 @@ class TestFlowCopy(gui_test_lib.GRRSeleniumTest,
         token=self.token)
 
     # Navigate to client and select newly created flow.
-    self.Open("/#c=C.0000000000000001")
-    self.Click("css=a[grrtarget='client.flows']")
+    self.Open("/#/clients/C.0000000000000001/flows")
     self.Click("css=td:contains('FileFinder')")
 
     # Open wizard and launch the copy flow.
@@ -226,6 +224,40 @@ class TestFlowCopy(gui_test_lib.GRRSeleniumTest,
                    "css=grr-client-flows-list tr:contains('FileFinder'):nth(1)")
     self.WaitUntil(self.IsElementPresent, "css=grr-client-flows-list "
                    "tr:contains('FileFinder'):nth(0).row-selected")
+
+  def testCopyACLErrorIsCorrectlyDisplayed(self):
+    args = rdf_file_finder.FileFinderArgs(paths=["a/b/*"])
+    flow.GRRFlow.StartFlow(
+        flow_name=flows_file_finder.FileFinder.__name__,
+        args=args,
+        client_id=self.client_id,
+        token=self.token)
+
+    # Navigate to client and select newly created flow.
+    self.Open("/#/clients/C.0000000000000001/flows")
+    self.Click("css=td:contains('FileFinder')")
+
+    # Stub out the API handler to guarantee failure.
+    with mock.patch.object(
+        api_call_router_with_approval_checks.ApiCallRouterWithApprovalChecks,
+        "CreateFlow") as create_flow_mock:
+      # The error has to be an ACL error, since ACL errors are not handled
+      # by the global errors handler and are not automatically displayed.
+      create_flow_mock.side_effect = [
+          access_control.UnauthorizedAccess("oh no!")
+      ]
+
+      # Open wizard and launch the copy flow.
+      self.Click("css=button[name=copy_flow]")
+      self.Click("css=button:contains('Launch')")
+
+    self.WaitUntil(self.IsElementPresent,
+                   "css=.modal-dialog .text-danger:contains('oh no!')")
+
+    # Check that closing the dialog doesn't change flow selection.
+    self.Click("css=button[name=Close]")
+    self.WaitUntil(self.IsElementPresent,
+                   "css=grr-client-flows-view tr.row-selected")
 
 
 def main(argv):

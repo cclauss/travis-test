@@ -1,8 +1,6 @@
 #!/usr/bin/env python
 """Renderers that render RDFValues into JSON compatible data structures."""
 
-
-
 import base64
 import inspect
 import logging
@@ -21,7 +19,7 @@ from grr.lib.rdfvalues import flows as rdf_flows
 from grr.lib.rdfvalues import protodict as rdf_protodict
 from grr.lib.rdfvalues import stats as rdf_stats
 from grr.lib.rdfvalues import structs as rdf_structs
-from grr.proto.api import reflection_pb2
+from grr_response_proto.api import reflection_pb2
 
 from grr.server import aff4
 
@@ -134,14 +132,7 @@ class ApiValueRenderer(object):
     return renderer.RenderValue(value)
 
   def _IncludeTypeInfo(self, result, original_value):
-    # Converted value is placed in the resulting dictionary under the 'value'
-    # key.
-    if hasattr(original_value, "age"):
-      age = original_value.age.AsMicroSecondsFromEpoch()
-    else:
-      age = 0
-
-    return dict(type=original_value.__class__.__name__, value=result, age=age)
+    return dict(type=original_value.__class__.__name__, value=result)
 
   def RenderValue(self, value):
     """Renders given value into plain old python objects."""
@@ -263,7 +254,7 @@ class ApiListRenderer(ApiValueRenderer):
       result = [self._PassThrough(v) for v in list(value)[:self.limit_lists]]
       if len(value) > self.limit_lists:
         result.append(
-            dict(age=0, type=FetchMoreLink.__name__, url="to/be/implemented"))
+            dict(type=FetchMoreLink.__name__, url="to/be/implemented"))
 
     return result
 

@@ -1,5 +1,6 @@
 'use strict';
 
+goog.provide('grrUi.semantic.rekall.logDirective');
 goog.provide('grrUi.semantic.rekall.logDirective.LogDirective');
 
 goog.scope(function() {
@@ -8,7 +9,6 @@ goog.scope(function() {
  * Directive that displays rekall log messages.
  *
  * @return {!angular.Directive} Directive definition object.
- * @constructor
  * @ngInject
  * @export
  */

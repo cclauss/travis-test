@@ -2,13 +2,11 @@
 # -*- mode: python; encoding: utf-8 -*-
 """Tests for the UI forms."""
 
-
-
 import unittest
 from grr.gui import gui_test_lib
 from grr.lib import flags
 from grr.lib.rdfvalues import structs as rdf_structs
-from grr.proto import tests_pb2
+from grr_response_proto import tests_pb2
 from grr.server import flow
 from grr.server.flows.general import file_finder as flows_file_finder
 
@@ -104,7 +102,7 @@ class TestFormsValidation(gui_test_lib.GRRSeleniumTest):
 
   def setUp(self):
     super(TestFormsValidation, self).setUp()
-    self.client_urn = self.SetupClients(1)[0]
+    self.client_urn = self.SetupClient(0)
     self.RequestAndGrantClientApproval(self.client_urn)
 
   def testLaunchFlowButtonIsDisabledIfFlowArgumentsInvalid(self):

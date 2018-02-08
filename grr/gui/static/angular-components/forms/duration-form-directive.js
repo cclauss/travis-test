@@ -1,8 +1,8 @@
 'use strict';
 
-goog.provide('grrUi.forms.durationFormDirective.DurationFormController');
+goog.provide('grrUi.forms.durationFormDirective');
 goog.provide('grrUi.forms.durationFormDirective.DurationFormDirective');
-goog.require('grrUi.semantic.durationDirective.stringifySeconds');
+goog.require('grrUi.semantic.durationDirective');  // USE: stringifySeconds
 
 
 goog.scope(function() {
@@ -14,7 +14,7 @@ goog.scope(function() {
  * @param {!angular.Scope} $scope
  * @ngInject
  */
-grrUi.forms.durationFormDirective.DurationFormController = function(
+const DurationFormController = function(
     $scope) {
   /** @private {!angular.Scope} */
   this.scope_ = $scope;
@@ -33,8 +33,6 @@ grrUi.forms.durationFormDirective.DurationFormController = function(
   this.scope_.$watch('controller.valueString',
                      this.onValueStringChange_.bind(this));
 };
-var DurationFormController =
-    grrUi.forms.durationFormDirective.DurationFormController;
 
 
 /**

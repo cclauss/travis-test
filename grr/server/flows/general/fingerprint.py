@@ -1,13 +1,12 @@
 #!/usr/bin/env python
 """Invoke the fingerprint client action on a file."""
 
-
 from grr.lib import rdfvalue
 from grr.lib.rdfvalues import client as rdf_client
 from grr.lib.rdfvalues import crypto
 from grr.lib.rdfvalues import paths
 from grr.lib.rdfvalues import structs as rdf_structs
-from grr.proto import flows_pb2
+from grr_response_proto import flows_pb2
 from grr.server import aff4
 from grr.server import flow
 from grr.server import server_stubs

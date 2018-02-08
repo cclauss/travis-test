@@ -1,19 +1,20 @@
-goog.provide('grrUi.routing.module');
-goog.require('grrUi.core.apiService.encodeUrlPath');
-goog.require('grrUi.routing.rewriteUrl');
-goog.require('grrUi.routing.routingService.RoutingService');
+goog.provide('grrUi.routing');
+goog.provide('grrUi.routing.routingModule');
+goog.require('grrUi.core.apiService');         // USE: encodeUrlPath
+goog.require('grrUi.routing.rewriteUrl');      // USE: rewriteUrl
+goog.require('grrUi.routing.routingService');  // USE: RoutingService
 
 
 /**
  * Angular module for core GRR UI components.
  */
-grrUi.routing.module = angular.module('grrUi.routing', ['ui.router']);
+grrUi.routing.routingModule = angular.module('grrUi.routing', ['ui.router']);
 
-grrUi.routing.module.service(
+grrUi.routing.routingModule.service(
     grrUi.routing.routingService.RoutingService.service_name,
     grrUi.routing.routingService.RoutingService);
 
-grrUi.routing.module.config(function ($stateProvider, $urlRouterProvider, $urlMatcherFactoryProvider) {
+grrUi.routing.routingModule.config(function ($stateProvider, $urlRouterProvider, $urlMatcherFactoryProvider) {
 
   $urlMatcherFactoryProvider.type('pathWithUnescapedSlashes', {
     encode: function(item) {
@@ -57,7 +58,11 @@ grrUi.routing.module.config(function ($stateProvider, $urlRouterProvider, $urlMa
       url: '/search?q',
       template: '<grr-clients-list />',
       title: function(params) {
-        return 'Search for "' + params['q'] + '"';
+        if (params['q']) {
+          return 'Search for "' + params['q'] + '"';
+        } else {
+          return 'Client List';
+        }
       }
     })
     .state('apiDocs', {
@@ -269,7 +274,7 @@ grrUi.routing.module.config(function ($stateProvider, $urlRouterProvider, $urlMa
 
     // Try to rewrite URL.
     var url = $location.url().substring(1);
-    var rewrittenUrl = grrUi.routing.rewriteUrl(url);
+    var rewrittenUrl = grrUi.routing.rewriteUrl.rewriteUrl(url);
     if (rewrittenUrl) {
       $location.url(rewrittenUrl);
     }

@@ -1,6 +1,6 @@
 'use strict';
 
-goog.provide('grrUi.semantic.dictDirective.DictController');
+goog.provide('grrUi.semantic.dictDirective');
 goog.provide('grrUi.semantic.dictDirective.DictDirective');
 
 goog.scope(function() {
@@ -9,7 +9,7 @@ goog.scope(function() {
 /**
  * Directive that displays dicts.
  *
- * @constructor
+ * @return {!angular.Directive} Directive definition object.
  * @ngInject
  * @export
  */
@@ -39,6 +39,4 @@ grrUi.semantic.dictDirective.DictDirective.directive_name =
  */
 grrUi.semantic.dictDirective.DictDirective.semantic_types =
     ['dict', 'Dict'];
-
-
 });  // goog.scope

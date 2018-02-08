@@ -1,8 +1,8 @@
 'use strict';
 
-goog.provide('grrUi.flow.copyFlowFormDirective.CopyFlowFormController');
+goog.provide('grrUi.flow.copyFlowFormDirective');
 goog.provide('grrUi.flow.copyFlowFormDirective.CopyFlowFormDirective');
-goog.require('grrUi.core.apiService.stripTypeInfo');
+goog.require('grrUi.core.apiService');  // USE: stripTypeInfo
 
 goog.scope(function() {
 
@@ -16,7 +16,7 @@ var stripTypeInfo = grrUi.core.apiService.stripTypeInfo;
  * @constructor
  * @ngInject
  */
-grrUi.flow.copyFlowFormDirective.CopyFlowFormController =
+const CopyFlowFormController =
     function($scope, grrApiService) {
   /** @private {!angular.Scope} */
   this.scope_ = $scope;
@@ -34,8 +34,6 @@ grrUi.flow.copyFlowFormDirective.CopyFlowFormController =
                           this.onFlowIdClientIdChange_.bind(this));
 };
 
-var CopyFlowFormController =
-    grrUi.flow.copyFlowFormDirective.CopyFlowFormController;
 
 
 /**
@@ -83,9 +81,7 @@ CopyFlowFormController.prototype.proceed = function() {
 
   }.bind(this), function failure(response) {
     var e = response['data']['message'] || 'Unknown error';
-    this.scope_['onReject']({'error': e});
-    return e;
-
+    throw e;
   }.bind(this));
 };
 
@@ -100,7 +96,6 @@ grrUi.flow.copyFlowFormDirective.CopyFlowFormDirective = function() {
       flowId: '=',
       clientId: '=',
       onResolve: '&',
-      onReject: '&'
     },
     restrict: 'E',
     templateUrl: '/static/angular-components/flow/copy-flow-form.html',

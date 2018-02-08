@@ -1,8 +1,8 @@
 'use strict';
 
-goog.provide('grrUi.hunt.newHuntWizard.configureFlowPageDirective.ConfigureFlowPageController');
+goog.provide('grrUi.hunt.newHuntWizard.configureFlowPageDirective');
 goog.provide('grrUi.hunt.newHuntWizard.configureFlowPageDirective.ConfigureFlowPageDirective');
-goog.require('grrUi.forms.utils.valueHasErrors');
+goog.require('grrUi.forms.utils');  // USE: valueHasErrors
 
 goog.scope(function() {
 
@@ -16,8 +16,7 @@ var valueHasErrors = grrUi.forms.utils.valueHasErrors;
  * @constructor
  * @ngInject
  */
-grrUi.hunt.newHuntWizard.configureFlowPageDirective
-    .ConfigureFlowPageController = function($scope) {
+const ConfigureFlowPageController = function($scope) {
   /** @private {!angular.Scope} */
   this.scope_ = $scope;
 
@@ -38,9 +37,6 @@ grrUi.hunt.newHuntWizard.configureFlowPageDirective
                      this.onFlowArgumentsDeepChange_.bind(this),
                      true);
 };
-var ConfigureFlowPageController =
-    grrUi.hunt.newHuntWizard.configureFlowPageDirective
-    .ConfigureFlowPageController;
 
 
 ConfigureFlowPageController.prototype.onFlowArgumentsDeepChange_ = function(

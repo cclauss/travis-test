@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 """Util for modifying the GRR server configuration."""
 
-
 import argparse
 import getpass
 import os
@@ -33,6 +32,7 @@ from grr.server import access_control
 from grr.server import aff4
 from grr.server import artifact
 from grr.server import artifact_registry
+from grr.server import data_migration
 from grr.server import key_utils
 from grr.server import maintenance_utils
 from grr.server import rekall_profile_server
@@ -330,6 +330,11 @@ parser_rotate_key.add_argument(
     help="The key length for the new server key. "
     "Defaults to the Server.rsa_key_length config option.")
 
+parser_migrate_data = subparsers.add_parser(
+    "migrate_data",
+    parents=[],
+    help="Migrates data to the relational database.")
+
 
 def ImportConfig(filename, config):
   """Reads an old config file and imports keys and user accounts."""
@@ -359,7 +364,7 @@ def GenerateCSRFKey(config):
   """Update a config with a random csrf key."""
   secret_key = config.Get("AdminUI.csrf_secret_key", None)
   if not secret_key:
-    # TODO(user): Remove support for django_secret_key.
+    # TODO(amoser): Remove support for django_secret_key.
     secret_key = config.Get("AdminUI.django_secret_key", None)
     if secret_key:
       config.Set("AdminUI.csrf_secret_key", secret_key)
@@ -966,7 +971,7 @@ def main(argv):
     yaml.load(open(flags.FLAGS.file, "rb"))  # Check it will parse.
     try:
       artifact.UploadArtifactYamlFile(
-          open(flags.FLAGS.file, "rb").read(1000000),
+          open(flags.FLAGS.file, "rb").read(),
           overwrite=flags.FLAGS.overwrite_artifact)
     except artifact_registry.ArtifactDefinitionError as e:
       print "Error %s. You may need to set --overwrite_artifact." % e
@@ -1026,6 +1031,8 @@ You are about to rotate the server key. Note that:
 
       maintenance_utils.RotateServerKey(
           cn=flags.FLAGS.common_name, keylength=keylength)
+  elif flags.FLAGS.subparser_name == "migrate_data":
+    data_migration.DataMigrationHelper().Migrate()
 
 
 if __name__ == "__main__":

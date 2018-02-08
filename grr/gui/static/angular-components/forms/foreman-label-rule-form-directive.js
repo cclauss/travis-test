@@ -1,6 +1,6 @@
 'use strict';
 
-goog.provide('grrUi.forms.foremanLabelRuleFormDirective.ForemanLabelRuleFormController');
+goog.provide('grrUi.forms.foremanLabelRuleFormDirective');
 goog.provide('grrUi.forms.foremanLabelRuleFormDirective.ForemanLabelRuleFormDirective');
 
 goog.scope(function() {
@@ -14,7 +14,7 @@ goog.scope(function() {
  * @param {!grrUi.core.reflectionService.ReflectionService} grrReflectionService
  * @ngInject
  */
-grrUi.forms.foremanLabelRuleFormDirective.ForemanLabelRuleFormController =
+const ForemanLabelRuleFormController =
     function($scope, grrReflectionService) {
   /** @private {!angular.Scope} */
   this.scope_ = $scope;
@@ -49,8 +49,6 @@ grrUi.forms.foremanLabelRuleFormDirective.ForemanLabelRuleFormController =
     }.bind(this));
   }.bind(this));
 };
-var ForemanLabelRuleFormController =
-    grrUi.forms.foremanLabelRuleFormDirective.ForemanLabelRuleFormController;
 
 
 /**

@@ -1,13 +1,12 @@
 #!/usr/bin/env python
 """A generic serializer for python dictionaries."""
 
-
 import collections
 
 from grr.lib import rdfvalue
 from grr.lib import utils
 from grr.lib.rdfvalues import structs as rdf_structs
-from grr.proto import jobs_pb2
+from grr_response_proto import jobs_pb2
 
 
 class EmbeddedRDFValue(rdf_structs.RDFProtoStruct):

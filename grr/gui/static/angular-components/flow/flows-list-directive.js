@@ -1,11 +1,11 @@
 'use strict';
 
-goog.provide('grrUi.flow.flowsListDirective.FlowsListController');
+goog.provide('grrUi.flow.flowsListDirective');
 goog.provide('grrUi.flow.flowsListDirective.FlowsListDirective');
 goog.provide('grrUi.flow.flowsListDirective.flattenFlowsList');
 goog.provide('grrUi.flow.flowsListDirective.toggleFlowExpansion');
 
-goog.require('grrUi.core.infiniteTableDirective.InfiniteTableController');
+goog.require('grrUi.core.infiniteTableDirective');  // USE: InfiniteTableController
 
 goog.scope(function() {
 
@@ -18,6 +18,8 @@ var TABLE_ROW_HASH =
 /** @const {number} */
 grrUi.flow.flowsListDirective.AUTO_REFRESH_INTERVAL_MS = 30 * 1000;
 
+/** @const {number} */
+grrUi.flow.flowsListDirective.PAGE_SIZE = 100;
 
 /**
  * Flattens list of flows returned by the server. Every flow in the list
@@ -140,7 +142,7 @@ var toggleFlowExpansion = grrUi.flow.flowsListDirective.toggleFlowExpansion;
  * @param {!grrUi.core.apiService.ApiService} grrApiService
  * @ngInject
  */
-grrUi.flow.flowsListDirective.FlowsListController = function(
+const FlowsListController = function(
     $scope, $element, grrApiService) {
   /** @private {!angular.Scope} */
   this.scope_ = $scope;
@@ -160,6 +162,9 @@ grrUi.flow.flowsListDirective.FlowsListController = function(
   /** @type {number} */
   this.autoRefreshInterval =
       grrUi.flow.flowsListDirective.AUTO_REFRESH_INTERVAL_MS;
+
+  /** @type {number} */
+  this.pageSize = grrUi.flow.flowsListDirective.PAGE_SIZE;
 
   // Push the selection changes back to the scope, so that other UI components
   // can react on the change.
@@ -182,7 +187,6 @@ grrUi.flow.flowsListDirective.FlowsListController = function(
   // this directive can use it.
   this.scope_['triggerUpdate'] = this.triggerUpdate.bind(this);
 };
-var FlowsListController = grrUi.flow.flowsListDirective.FlowsListController;
 
 
 /**

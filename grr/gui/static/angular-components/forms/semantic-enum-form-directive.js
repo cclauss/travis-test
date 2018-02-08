@@ -1,7 +1,6 @@
 'use strict';
 
 goog.provide('grrUi.forms.semanticEnumFormDirective');
-goog.provide('grrUi.forms.semanticEnumFormDirective.SemanticEnumFormController');
 goog.provide('grrUi.forms.semanticEnumFormDirective.SemanticEnumFormDirective');
 
 
@@ -12,7 +11,7 @@ goog.provide('grrUi.forms.semanticEnumFormDirective.SemanticEnumFormDirective');
  * @param {!angular.Scope} $scope
  * @ngInject
  */
-grrUi.forms.semanticEnumFormDirective.SemanticEnumFormController = function(
+const SemanticEnumFormController = function(
     $scope) {
   /** @private {!angular.Scope} */
   this.scope_ = $scope;
@@ -23,8 +22,6 @@ grrUi.forms.semanticEnumFormDirective.SemanticEnumFormController = function(
   this.scope_.$watch('metadata.allowed_values',
                      this.onAllowedValuesChange_.bind(this));
 };
-var SemanticEnumFormController =
-    grrUi.forms.semanticEnumFormDirective.SemanticEnumFormController;
 
 
 /**

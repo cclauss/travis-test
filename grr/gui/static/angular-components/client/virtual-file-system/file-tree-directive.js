@@ -1,11 +1,10 @@
 'use strict';
 
-goog.provide('grrUi.client.virtualFileSystem.fileTreeDirective.FileTreeController');
+goog.provide('grrUi.client.virtualFileSystem.fileTreeDirective');
 goog.provide('grrUi.client.virtualFileSystem.fileTreeDirective.FileTreeDirective');
-goog.require('grrUi.client.virtualFileSystem.events');
-goog.require('grrUi.client.virtualFileSystem.fileViewDirective.getFileId');
-goog.require('grrUi.client.virtualFileSystem.utils.ensurePathIsFolder');
-goog.require('grrUi.client.virtualFileSystem.utils.getFolderFromPath');
+goog.require('grrUi.client.virtualFileSystem.events');  // USE: REFRESH_FOLDER_EVENT
+goog.require('grrUi.client.virtualFileSystem.fileViewDirective');  // USE: getFileId
+goog.require('grrUi.client.virtualFileSystem.utils');  // USE: ensurePathIsFolder, getFolderFromPath
 
 goog.scope(function() {
 
@@ -28,7 +27,7 @@ var getFolderFromPath = grrUi.client.virtualFileSystem.utils.getFolderFromPath;
  * @param {!grrUi.routing.routingService.RoutingService} grrRoutingService
  * @ngInject
  */
-grrUi.client.virtualFileSystem.fileTreeDirective.FileTreeController = function(
+const FileTreeController = function(
     $rootScope, $scope, $element, grrApiService, grrRoutingService) {
   /** @private {!angular.Scope} */
   this.rootScope_ = $rootScope;
@@ -60,8 +59,6 @@ grrUi.client.virtualFileSystem.fileTreeDirective.FileTreeController = function(
       this.onSelectedFilePathChange_.bind(this));
 };
 
-var FileTreeController =
-    grrUi.client.virtualFileSystem.fileTreeDirective.FileTreeController;
 
 
 /**

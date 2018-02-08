@@ -1,7 +1,9 @@
 #!/usr/bin/env python
 """This file contains various utility classes used by GRR."""
 
+import array
 import base64
+import collections
 import copy
 import cStringIO
 import errno
@@ -9,11 +11,13 @@ import functools
 import getpass
 import os
 import pipes
+import platform
 import Queue
 import random
 import re
 import shutil
 import socket
+import stat
 import struct
 import tarfile
 import tempfile
@@ -25,6 +29,10 @@ import zlib
 
 
 class Error(Exception):
+  pass
+
+
+class ParsingError(Error):
   pass
 
 
@@ -530,7 +538,7 @@ class Struct(object):
       parsed_data = struct.unpack(format_str, data[:self.size])
 
     except struct.error:
-      raise RuntimeError("Unable to parse")
+      raise ParsingError("Unable to parse")
 
     for i in range(len(self._fields)):
       setattr(self, self._fields[i][1], parsed_data[i])
@@ -619,11 +627,11 @@ def Xor(string, key):
   return "".join([chr(c ^ key) for c in bytearray(string)])
 
 
-def XorByteArray(array, key):
+def XorByteArray(arr, key):
   """Xors every item in the array with key and returns it."""
-  for i in xrange(len(array)):
-    array[i] ^= key
-  return array
+  for i in xrange(len(arr)):
+    arr[i] ^= key
+  return arr
 
 
 def FormatAsHexString(num, width=None, prefix="0x"):
@@ -1504,3 +1512,163 @@ def ResolveHostnameToIP(host, port):
   # (address, port) for IPv4 or (address, port, flow info, scope id)
   # for IPv6. In both cases, we want the first element, the address.
   return ip_addrs[0][4][0]
+
+
+# TODO(hanuszczak): This module is way too big right now. It should be split
+# into several smaller ones (such as `util.paths`, `util.collections` etc.).
+
+
+class Stat(object):
+  """A wrapper around standard `os.[l]stat` function.
+
+  The standard API for using `stat` results is very clunky and unpythonic.
+  This is an attempt to create a more familiar and consistent interface to make
+  the code look cleaner.
+
+  Moreover, standard `stat` does not properly support extended flags - even
+  though the documentation mentions that `stat.st_flags` should work on macOS
+  and Linux it works only on macOS and raises an error on Linux (and Windows).
+  This class handles that and fetches these flags lazily (as it can be costly
+  operation on Linux).
+
+  Args:
+    path: A path to the file to perform `stat` on.
+    follow_symlink: True if `stat` of a symlink should be returned instead of a
+        file that it points to. For non-symlinks this setting has no effect.
+  """
+
+  def __init__(self, path, follow_symlink=True):
+    self._path = path
+    if not follow_symlink:
+      self._stat = os.lstat(path)
+    else:
+      self._stat = os.stat(path)
+
+    self._flags_linux = None
+    self._flags_osx = None
+
+  def GetRaw(self):
+    return self._stat
+
+  def GetPath(self):
+    return self._path
+
+  def GetLinuxFlags(self):
+    if self._flags_linux is None:
+      self._flags_linux = self._FetchLinuxFlags()
+    return self._flags_linux
+
+  def GetOsxFlags(self):
+    if self._flags_osx is None:
+      self._flags_osx = self._FetchOsxFlags()
+    return self._flags_osx
+
+  def GetSize(self):
+    return self._stat.st_size
+
+  def GetAccessTime(self):
+    return self._stat.st_atime
+
+  def GetModificationTime(self):
+    return self._stat.st_mtime
+
+  def GetChangeTime(self):
+    return self._stat.st_ctime
+
+  def GetDevice(self):
+    return self._stat.st_dev
+
+  def IsDirectory(self):
+    return stat.S_ISDIR(self._stat.st_mode)
+
+  def IsRegular(self):
+    return stat.S_ISREG(self._stat.st_mode)
+
+  def IsSocket(self):
+    return stat.S_ISSOCK(self._stat.st_mode)
+
+  def IsSymlink(self):
+    return stat.S_ISLNK(self._stat.st_mode)
+
+  # http://manpages.courier-mta.org/htmlman2/ioctl_list.2.html
+  FS_IOC_GETFLAGS = 0x80086601
+
+  def _FetchLinuxFlags(self):
+    """Fetches Linux extended file flags."""
+    if platform.system() != "Linux":
+      return 0
+
+    # Since we open a file in the next step we do not want to open a symlink.
+    # `lsattr` returns an error when trying to check flags of a symlink, so we
+    # assume that symlinks cannot have them.
+    if self.IsSymlink():
+      return 0
+
+    # Some files (e.g. sockets) cannot be opened. For these we do not really
+    # care about extended flags (they should have none). `lsattr` does not seem
+    # to support such cases anyway. It is also possible that a file has been
+    # deleted (because this method is used lazily).
+    try:
+      fd = os.open(self._path, os.O_RDONLY)
+    except (IOError, OSError):
+      return 0
+
+    try:
+      # This import is Linux-specific.
+      import fcntl  # pylint: disable=g-import-not-at-top
+      buf = array.array("l", [0])
+      fcntl.ioctl(fd, self.FS_IOC_GETFLAGS, buf)
+      return buf[0]
+    except (IOError, OSError):
+      # File system does not support extended attributes.
+      return 0
+    finally:
+      os.close(fd)
+
+  def _FetchOsxFlags(self):
+    """Fetches macOS extended file flags."""
+    if platform.system() != "Darwin":
+      return 0
+
+    return self._stat.st_flags
+
+
+class StatCache(object):
+  """An utility class for avoiding unnecessary syscalls to `[l]stat`.
+
+  This class is useful in situations where manual bookkeeping of stat results
+  in order to prevent extra system calls becomes tedious and complicates control
+  flow. This class makes sure that no unnecessary system calls are made and is
+  smart enough to cache symlink results when a file is not a symlink.
+  """
+
+  _Key = collections.namedtuple("_Key", ("path", "follow_symlink"))  # pylint: disable=invalid-name
+
+  def __init__(self):
+    self._cache = {}
+
+  def Get(self, path, follow_symlink=True):
+    """Stats given file or returns a cached result if available.
+
+    Args:
+      path: A path to the file to perform `stat` on.
+      follow_symlink: True if `stat` of a symlink should be returned instead of
+          a file that it points to. For non-symlinks this setting has no effect.
+
+    Returns:
+      `Stat` object corresponding to the given path.
+    """
+    key = self._Key(path=path, follow_symlink=follow_symlink)
+    try:
+      return self._cache[key]
+    except KeyError:
+      value = Stat(path, follow_symlink=follow_symlink)
+      self._cache[key] = value
+
+      # If we are not following symlinks and the file is a not symlink then
+      # the stat result for this file stays the same even if we want to follow
+      # symlinks.
+      if not follow_symlink and not value.IsSymlink():
+        self._cache[self._Key(path=path, follow_symlink=True)] = value
+
+      return value

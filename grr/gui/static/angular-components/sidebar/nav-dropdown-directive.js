@@ -1,5 +1,6 @@
 'use strict';
 
+goog.provide('grrUi.sidebar.navDropdownDirective');
 goog.provide('grrUi.sidebar.navDropdownDirective.NavDropdownController');
 goog.provide('grrUi.sidebar.navDropdownDirective.NavDropdownDirective');
 
@@ -25,7 +26,7 @@ var NavDropdownController =
 /**
  * Directive for the navDropdown.
  *
- * @constructor
+ * @return {!angular.Directive} Directive definition object.
  * @ngInject
  * @export
  */

@@ -1,8 +1,7 @@
 'use strict';
 
-goog.provide('grrUi.flow.flowResultsDirective.FlowResultsController');
+goog.provide('grrUi.flow.flowResultsDirective');
 goog.provide('grrUi.flow.flowResultsDirective.FlowResultsDirective');
-goog.require('grrUi.core.downloadCollectionFilesDirective.valuePointsToFile');
 
 goog.scope(function() {
 
@@ -15,7 +14,7 @@ goog.scope(function() {
  * @param {!angular.Scope} $scope
  * @ngInject
  */
-grrUi.flow.flowResultsDirective.FlowResultsController = function($scope) {
+const FlowResultsController = function($scope) {
   /** @private {!angular.Scope} */
   this.scope_ = $scope;
 
@@ -37,8 +36,6 @@ grrUi.flow.flowResultsDirective.FlowResultsController = function($scope) {
   this.scope_.$watchGroup(['flowId', 'apiBasePath'],
                           this.onFlowIdOrBasePathChange_.bind(this));
 };
-var FlowResultsController =
-    grrUi.flow.flowResultsDirective.FlowResultsController;
 
 
 /**
@@ -66,7 +63,7 @@ FlowResultsController.prototype.onFlowIdOrBasePathChange_ = function(
 /**
  * Directive for displaying results of a flow with a given URL.
  *
- * @constructor
+ * @return {!angular.Directive} Directive definition object.
  * @ngInject
  * @export
  */

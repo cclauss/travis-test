@@ -1,5 +1,6 @@
 'use strict';
 
+goog.provide('grrUi.semantic.rekall.tableDirective');
 goog.provide('grrUi.semantic.rekall.tableDirective.TableDirective');
 
 goog.scope(function() {
@@ -8,7 +9,6 @@ goog.scope(function() {
  * Directive that displays rekall table and row messages.
  *
  * @return {!angular.Directive} Directive definition object.
- * @constructor
  * @ngInject
  * @export
  */

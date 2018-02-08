@@ -1,8 +1,8 @@
 'use strict';
 
-goog.provide('grrUi.client.hostHistoryDialogDirective.HostHistoryDialogController');
+goog.provide('grrUi.client.hostHistoryDialogDirective');
 goog.provide('grrUi.client.hostHistoryDialogDirective.HostHistoryDialogDirective');
-goog.require('grrUi.core.apiService.stripTypeInfo');
+goog.require('grrUi.core.apiService');  // USE: stripTypeInfo
 
 goog.scope(function() {
 
@@ -17,7 +17,7 @@ var stripTypeInfo = grrUi.core.apiService.stripTypeInfo;
  * @param {!grrUi.core.timeService.TimeService} grrTimeService
  * @ngInject
  */
-grrUi.client.hostHistoryDialogDirective.HostHistoryDialogController =
+const HostHistoryDialogController =
     function($scope, grrApiService, grrTimeService) {
   /** @private {!angular.Scope} */
   this.scope_ = $scope;
@@ -40,8 +40,6 @@ grrUi.client.hostHistoryDialogDirective.HostHistoryDialogController =
   this.scope_.$watchGroup(['clientId', 'fieldPath'], this.onParamsChange_.bind(this));
 };
 
-var HostHistoryDialogController =
-    grrUi.client.hostHistoryDialogDirective.HostHistoryDialogController;
 
 
 /**

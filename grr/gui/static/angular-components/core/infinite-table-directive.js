@@ -1,5 +1,6 @@
 'use strict';
 
+goog.provide('grrUi.core.infiniteTableDirective');
 goog.provide('grrUi.core.infiniteTableDirective.InfiniteTableController');
 goog.provide('grrUi.core.infiniteTableDirective.InfiniteTableDirective');
 
@@ -364,7 +365,7 @@ InfiniteTableController.prototype.refreshData_ = function() {
  * @private
  */
 InfiniteTableController.prototype.onAutoRefreshDataFetched_ = function(newItems) {
-  for (var i = 0; i < newItems.items.length; ++i) {
+  for (var i = newItems.items.length - 1; i >= 0; --i) {
     var newItem = newItems.items[i];
     var key = newItem[InfiniteTableController.UNIQUE_KEY_NAME];
     var rowHash = newItem[InfiniteTableController.ROW_HASH_NAME];
@@ -483,7 +484,7 @@ InfiniteTableController.prototype.onItemsFetched_ = function(
  * Displays tables that are "infinitely scrollable", i.e. they add elements to
  * the bottom on scrolling until they run out of data.
  *
- * @constructor
+ * @return {!angular.Directive} Directive definition object.
  * @ngInject
  * @export
  */

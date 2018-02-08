@@ -1,7 +1,7 @@
 
 'use strict';
 
-goog.provide('grrUi.core.bindKeyDirective.BindKeyController');
+goog.provide('grrUi.core.bindKeyDirective');
 goog.provide('grrUi.core.bindKeyDirective.BindKeyDirective');
 
 goog.scope(function() {
@@ -15,7 +15,7 @@ goog.scope(function() {
  * @constructor
  * @ngInject
  */
-grrUi.core.bindKeyDirective.BindKeyController =
+const BindKeyController =
     function($scope, $element, $attrs) {
   /** @private {!angular.Scope} */
   this.scope_ = $scope;
@@ -41,8 +41,6 @@ grrUi.core.bindKeyDirective.BindKeyController =
   $element.bind("keydown, keypress", this.onKeyDown_.bind(this));
 };
 
-var BindKeyController =
-    grrUi.core.bindKeyDirective.BindKeyController;
 
 /**
  * Updates the bindKey based on the current time.
@@ -63,7 +61,7 @@ BindKeyController.prototype.onKeyDown_ = function(event) {
 /**
  * Directive that displays RDFDatetime values.
  *
- * @constructor
+ * @return {!angular.Directive} Directive definition object.
  * @ngInject
  * @export
  */

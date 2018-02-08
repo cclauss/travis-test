@@ -1,8 +1,9 @@
 'use strict';
 
+goog.provide('grrUi.core.apiItemsProviderDirective');
 goog.provide('grrUi.core.apiItemsProviderDirective.ApiItemsProviderController');
 goog.provide('grrUi.core.apiItemsProviderDirective.ApiItemsProviderDirective');
-goog.require('grrUi.core.itemsProviderController.ItemsProviderController');
+goog.require('grrUi.core.itemsProviderController');  // USE: ItemsProviderController
 
 goog.scope(function() {
 
@@ -200,7 +201,7 @@ ApiItemsProviderController.prototype.onFetchedItems_ = function(response) {
 /**
  * Directive setting up data provider for infinite table directive.
  *
- * @constructor
+ * @return {!angular.Directive} Directive definition object.
  * @ngInject
  * @export
  */

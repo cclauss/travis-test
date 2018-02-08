@@ -1,6 +1,6 @@
 'use strict';
 
-goog.provide('grrUi.acl.huntApprovalViewDirective.HuntApprovalViewController');
+goog.provide('grrUi.acl.huntApprovalViewDirective');
 goog.provide('grrUi.acl.huntApprovalViewDirective.HuntApprovalViewDirective');
 
 goog.scope(function() {
@@ -13,7 +13,7 @@ goog.scope(function() {
  * @constructor
  * @ngInject
  */
-grrUi.acl.huntApprovalViewDirective.HuntApprovalViewController = function(
+const HuntApprovalViewController = function(
     $scope, grrRoutingService) {
   /** @private {!angular.Scope} */
   this.scope_ = $scope;
@@ -41,8 +41,6 @@ grrUi.acl.huntApprovalViewDirective.HuntApprovalViewController = function(
         this.approvalId = params[2];
       }.bind(this));
 };
-var HuntApprovalViewController =
-    grrUi.acl.huntApprovalViewDirective.HuntApprovalViewController;
 
 
 /**

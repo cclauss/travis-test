@@ -1,8 +1,8 @@
 'use strict';
 
-goog.provide('grrUi.semantic.urnDirective.UrnController');
+goog.provide('grrUi.semantic.urnDirective');
 goog.provide('grrUi.semantic.urnDirective.UrnDirective');
-goog.require('grrUi.routing.aff4UrnToUrl');
+goog.require('grrUi.routing.aff4UrnToUrl');  // USE: aff4UrnToUrl
 
 goog.scope(function() {
 
@@ -15,7 +15,7 @@ goog.scope(function() {
  * @constructor
  * @ngInject
  */
-grrUi.semantic.urnDirective.UrnController = function(
+const UrnController = function(
     $scope, grrRoutingService) {
 
   /** @private {!angular.Scope} */
@@ -38,7 +38,6 @@ grrUi.semantic.urnDirective.UrnController = function(
 
   this.scope_.$watch('::value', this.onValueChange_.bind(this));
 };
-var UrnController = grrUi.semantic.urnDirective.UrnController;
 
 
 /**
@@ -56,7 +55,7 @@ UrnController.prototype.onValueChange_ = function(newValue) {
     return;
   }
 
-  var urlResult = grrUi.routing.aff4UrnToUrl(this.plainValue);
+  var urlResult = grrUi.routing.aff4UrnToUrl.aff4UrnToUrl(this.plainValue);
   if (urlResult) {
     this.refState = urlResult.state;
     this.refParams = urlResult.params;
@@ -78,7 +77,7 @@ UrnController.prototype.onClick = function() {
 /**
  * Directive that displays RDFURN values.
  *
- * @constructor
+ * @return {!angular.Directive} Directive definition object.
  * @ngInject
  * @export
  */

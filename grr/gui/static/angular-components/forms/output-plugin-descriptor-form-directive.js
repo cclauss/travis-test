@@ -1,6 +1,6 @@
 'use strict';
 
-goog.provide('grrUi.forms.outputPluginDescriptorFormDirective.OutputPluginDescriptorFormController');
+goog.provide('grrUi.forms.outputPluginDescriptorFormDirective');
 goog.provide('grrUi.forms.outputPluginDescriptorFormDirective.OutputPluginDescriptorFormDirective');
 
 
@@ -15,8 +15,7 @@ goog.scope(function() {
  * @param {!grrUi.core.reflectionService.ReflectionService} grrReflectionService
  * @ngInject
  */
-grrUi.forms.outputPluginDescriptorFormDirective
-    .OutputPluginDescriptorFormController = function(
+const OutputPluginDescriptorFormController = function(
         $scope, grrApiService, grrReflectionService) {
   /** @private {!angular.Scope} */
   this.scope_ = $scope;
@@ -73,9 +72,6 @@ grrUi.forms.outputPluginDescriptorFormDirective
     }.bind(this));
   }.bind(this));
 };
-var OutputPluginDescriptorFormController =
-    grrUi.forms.outputPluginDescriptorFormDirective
-    .OutputPluginDescriptorFormController;
 
 /**
  * OutputPluginDescriptorFormDirective definition.

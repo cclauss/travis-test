@@ -22,14 +22,17 @@ function install() {
   # shared folder they conflict. Copy it local before building sdist.
   mkdir -p "${BUILDDIR}/grr_tmp"
   cp -a /grr "${BUILDDIR}/grr_tmp"
+  cd "${BUILDDIR}/grr_tmp/grr/grr/proto"
+  python setup.py sdist --dist-dir="${BUILDDIR}/proto"
   cd "${BUILDDIR}/grr_tmp/grr"
-  python setup.py sdist --dist-dir="${BUILDDIR}/core" --no-make-docs --no-make-ui-files --no-sync-artifacts
+  python setup.py sdist --dist-dir="${BUILDDIR}/core" --no-make-ui-files --no-sync-artifacts
   cd -
   cd "${BUILDDIR}/grr_tmp/grr/grr/config/grr-response-client/"
   python setup.py sdist --dist-dir="${BUILDDIR}/client"
   cd -
 
   cd "${BUILDDIR}"
+  pip install proto/*.tar.gz
   pip install core/*.tar.gz
   pip install client/*.tar.gz
   cd -

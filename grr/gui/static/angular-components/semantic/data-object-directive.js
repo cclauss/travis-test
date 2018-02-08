@@ -1,6 +1,6 @@
 'use strict';
 
-goog.provide('grrUi.semantic.dataObjectDirective.DataObjectController');
+goog.provide('grrUi.semantic.dataObjectDirective');
 goog.provide('grrUi.semantic.dataObjectDirective.DataObjectDirective');
 
 goog.scope(function() {
@@ -9,7 +9,7 @@ goog.scope(function() {
 /**
  * Directive that displays data objects.
  *
- * @constructor
+ * @return {!angular.Directive} Directive definition object.
  * @ngInject
  * @export
  */
@@ -39,6 +39,4 @@ grrUi.semantic.dataObjectDirective.DataObjectDirective.directive_name =
  */
 grrUi.semantic.dataObjectDirective.DataObjectDirective.semantic_type =
     'ApiDataObject';
-
-
 });  // goog.scope

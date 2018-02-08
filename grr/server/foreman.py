@@ -2,7 +2,6 @@
 # Copyright 2011 Google Inc. All Rights Reserved.
 """RDFValue instances related to the foreman implementation."""
 
-
 import itertools
 
 from grr.lib import rdfvalue
@@ -10,7 +9,7 @@ from grr.lib import utils
 from grr.lib.rdfvalues import protodict as rdf_protodict
 from grr.lib.rdfvalues import standard
 from grr.lib.rdfvalues import structs as rdf_structs
-from grr.proto import jobs_pb2
+from grr_response_proto import jobs_pb2
 from grr.server import aff4
 
 

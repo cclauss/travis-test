@@ -12,14 +12,12 @@ from grr.lib.rdfvalues import anomaly
 from grr.lib.rdfvalues import client as rdf_client
 from grr.lib.rdfvalues import protodict as rdf_protodict
 from grr.lib.rdfvalues import structs as rdf_structs
-from grr.proto import flows_pb2
+from grr_response_proto import flows_pb2
 from grr.server import aff4
 from grr.server import artifact_registry
 from grr.server import artifact_utils
 from grr.server import data_store
 from grr.server import flow
-from grr.server.aff4_objects import aff4_grr
-from grr.server.aff4_objects import software
 
 
 def GetArtifactKnowledgeBase(client_obj, allow_uninitialized=False):
@@ -78,9 +76,9 @@ def GetArtifactKnowledgeBase(client_obj, allow_uninitialized=False):
 def SetCoreGRRKnowledgeBaseValues(kb, client_obj):
   """Set core values from GRR into the knowledgebase."""
   client_schema = client_obj.Schema
-  kb.hostname = utils.SmartUnicode(client_obj.Get(client_schema.FQDN, ""))
-  if not kb.hostname:
-    kb.hostname = utils.SmartUnicode(client_obj.Get(client_schema.HOSTNAME, ""))
+  kb.fqdn = utils.SmartUnicode(client_obj.Get(client_schema.FQDN, ""))
+  if not kb.fqdn:
+    kb.fqdn = utils.SmartUnicode(client_obj.Get(client_schema.HOSTNAME, ""))
   versions = client_obj.Get(client_schema.OS_VERSION)
   if versions and versions.versions:
     kb.os_major_version = versions.versions[0]
@@ -90,36 +88,32 @@ def SetCoreGRRKnowledgeBaseValues(kb, client_obj):
     kb.os = utils.SmartUnicode(client_obj.Get(client_schema.SYSTEM))
 
 
-class CollectArtifactDependenciesArgs(rdf_structs.RDFProtoStruct):
-  protobuf = flows_pb2.CollectArtifactDependenciesArgs
-  rdf_deps = [
-      artifact_registry.ArtifactName,
-  ]
+class KnowledgeBaseInitializationArgs(rdf_structs.RDFProtoStruct):
+  protobuf = flows_pb2.KnowledgeBaseInitializationArgs
 
 
-class CollectArtifactDependencies(flow.GRRFlow):
-  """Collect knowledgebase dependencies for a list of artifacts.
+class KnowledgeBaseInitializationFlow(flow.GRRFlow):
+  """Flow that atttempts to initialize the knowledge base.
 
-  We determine what knowledgebase attributes are required to collect and parse
-  the given list of artifacts. They are then collected and stored in the
+  This flow processes all artifacts specified by the
+  Artifacts.knowledge_base config. We determine what knowledgebase
+  attributes are required, collect them, and return a filled
   knowledgebase.
 
-  We don't try to fulfill dependencies in the tree order, the reasoning is that
-  some artifacts may fail, and some artifacts provide the same dependency.
+  We don't try to fulfill dependencies in the tree order, the
+  reasoning is that some artifacts may fail, and some artifacts
+  provide the same dependency.
 
-  Instead we take an iterative approach and keep requesting artifacts until
-  all dependencies have been met.  If there is more than one artifact that
-  provides a dependency we will collect them all as they likely have
-  different performance characteristics, e.g. accuracy and client impact.
-
-  Note that running a full KnowledgeBaseInitializationFlow is the most complete
-  way to ensure all dependencies have been collected.  We collect explicit
-  dependencies here, but for example if a registry key value retrieved contains
-  an environment variable not already collected it may not get expanded.
+  Instead we take an iterative approach and keep requesting artifacts
+  until all dependencies have been met.  If there is more than one
+  artifact that provides a dependency we will collect them all as they
+  likely have different performance characteristics, e.g. accuracy and
+  client impact.
   """
+
   category = "/Collectors/"
   behaviours = flow.GRRFlow.behaviours + "ADVANCED"
-  args_type = CollectArtifactDependenciesArgs
+  args_type = KnowledgeBaseInitializationArgs
 
   @flow.StateHandler()
   def Start(self):
@@ -147,57 +141,10 @@ class CollectArtifactDependencies(flow.GRRFlow):
           "ArtifactCollectorFlow",
           artifact_list=[artifact_name],
           knowledge_base=self.state.knowledge_base,
-          store_results_in_aff4=False,
           next_state="ProcessBase",
           request_data={
               "artifact_name": artifact_name
           })
-
-  def GetFirstFlowsForCollection(self):
-    """Initialize dependencies and calculate first round of flows.
-
-    Returns:
-      set of artifact names with no dependencies that should be collected first.
-    """
-    artifact_set = set(self.args.artifact_list)
-
-    deps = artifact_registry.REGISTRY.SearchDependencies(
-        self.state.knowledge_base.os, artifact_set)
-    name_deps, self.state.all_deps = deps
-
-    # Find the any dependencies that don't have dependencies themselves as our
-    # starting point.
-    check_deps = name_deps.union(artifact_set)
-    no_deps_names = artifact_registry.REGISTRY.GetArtifactNames(
-        os_name=self.state.knowledge_base.os,
-        name_list=check_deps,
-        exclude_dependents=True)
-
-    # If the only artifacts with no dependencies are the ones we want to collect
-    # that means there is nothing to do.
-    if no_deps_names == artifact_set:
-      return []
-
-    # We're going to collect everything that doesn't have a dependency first.
-    # Anything else we're waiting on a dependency before we can collect.
-
-    # We exclude the original artifacts since we're just fulfilling
-    # dependencies, the original flow will collect the artifacts once the
-    # dependencies are ready.
-    self.state.awaiting_deps_artifacts = list(
-        name_deps - no_deps_names - artifact_set)
-    return no_deps_names
-
-  def InitializeKnowledgeBase(self):
-    """Get the existing KB or create a new one if none exists."""
-    self.client = aff4.FACTORY.Open(self.client_id, token=self.token)
-    self.state.knowledge_base = GetArtifactKnowledgeBase(
-        self.client, allow_uninitialized=True)
-
-    if not self.state.knowledge_base.os:
-      # If we don't know what OS this is, there is no way to proceed.
-      raise flow.FlowError("Client OS not set for: %s, cannot initialize"
-                           " KnowledgeBase" % self.client_id)
 
   def _ScheduleCollection(self):
     # Schedule any new artifacts for which we have now fulfilled dependencies.
@@ -212,7 +159,6 @@ class CollectArtifactDependencies(flow.GRRFlow):
             # collectors.ArtifactCollectorFlow.__name__,
             "ArtifactCollectorFlow",
             artifact_list=[artifact_name],
-            store_results_in_aff4=False,
             next_state="ProcessBase",
             request_data={"artifact_name": artifact_name},
             knowledge_base=self.state.knowledge_base)
@@ -265,11 +211,12 @@ class CollectArtifactDependencies(flow.GRRFlow):
             self.state.all_deps.difference(self.state["fulfilled_deps"]))
 
         if self.args.require_complete:
-          raise flow.FlowError("KnowledgeBase initialization failed as the "
-                               "following artifacts had dependencies that could"
-                               " not be fulfilled %s. Missing: %s" %
-                               (self.state.awaiting_deps_artifacts,
-                                missing_deps))
+          raise flow.FlowError(
+              "KnowledgeBase initialization failed as the "
+              "following artifacts had dependencies that could"
+              " not be fulfilled %s. Missing: %s" %
+              ([utils.SmartStr(a) for a in self.state.awaiting_deps_artifacts],
+               missing_deps))
         else:
           self.Log("Storing incomplete KnowledgeBase. The following artifacts "
                    "had dependencies that could not be fulfilled %s. "
@@ -338,59 +285,14 @@ class CollectArtifactDependencies(flow.GRRFlow):
 
     return provided
 
-  def CopyUserNamesFromKnowledgeBase(self, client):
-    """Copy usernames from knowledgebase to USERNAMES.
-
-    Args:
-      client: client object open for writing
-    """
-    kb = self.state.knowledge_base.users
-    usernames = [user.username for user in kb if user.username]
-    client.AddAttribute(client.Schema.USERNAMES(" ".join(usernames)))
-
-  def CopyOSReleaseFromKnowledgeBase(self, client):
-    """Copy os release and version from KB to client object."""
-    if self.state.knowledge_base.os_release:
-      os_release = self.state.knowledge_base.os_release
-      client.Set(client.Schema.OS_RELEASE(os_release))
-
-      # Override OS version field too.
-      # TODO(user): this actually results in incorrect versions for things
-      #                like Ubuntu (14.4 instead of 14.04). I don't think zero-
-      #                padding is always correct, however.
-      os_version = "%d.%d" % (self.state.knowledge_base.os_major_version,
-                              self.state.knowledge_base.os_minor_version)
-      client.Set(client.Schema.OS_VERSION(os_version))
-
   def NotifyAboutEnd(self):
     client = aff4.FACTORY.Open(self.client_id, mode="r", token=self.token)
     self.Notify("ViewObject", client.urn, "Knowledge Base Updated.")
 
   @flow.StateHandler()
   def End(self, unused_responses):
-    """Finish up and write the results."""
-    client = aff4.FACTORY.Open(self.client_id, mode="rw", token=self.token)
-    client.Set(client.Schema.KNOWLEDGE_BASE, self.state.knowledge_base)
-    self.CopyUserNamesFromKnowledgeBase(client)
-    self.CopyOSReleaseFromKnowledgeBase(client)
-    client.Flush()
+    """Finish up."""
     self.SendReply(self.state.knowledge_base)
-
-
-class KnowledgeBaseInitializationArgs(rdf_structs.RDFProtoStruct):
-  protobuf = flows_pb2.KnowledgeBaseInitializationArgs
-
-
-class KnowledgeBaseInitializationFlow(CollectArtifactDependencies):
-  """Flow that atttempts to initialize the knowledge base.
-
-  This flow processes all artifacts specified by the Artifacts.knowledge_base
-  config.  It it is a CollectArtifactDependencies flow with slightly different
-  setup.
-  """
-  category = "/Collectors/"
-  behaviours = flow.GRRFlow.behaviours + "ADVANCED"
-  args_type = KnowledgeBaseInitializationArgs
 
   def GetFirstFlowsForCollection(self):
     """Initialize dependencies and calculate first round of flows.
@@ -498,7 +400,7 @@ def ApplyParserToResponses(processor_obj, responses, source, flow_obj, token):
 
     elif isinstance(processor_obj, parsers.FileParser):
       if processor_obj.process_together:
-        # TODO(user): This is very brittle, one day we should come
+        # TODO(amoser): This is very brittle, one day we should come
         # up with a better API here.
         urns = [r.AFF4Path(flow_obj.client_id) for r in responses]
         file_objects = list(aff4.FACTORY.MultiOpen(urns, token=token))
@@ -603,29 +505,6 @@ class ArtifactFallbackCollector(flow.GRRFlow):
 
   # List of artifact names for which we are registering as the fallback
   artifacts = []
-
-
-class GRRArtifactMappings(object):
-  """SemanticProto to AFF4 storage mappings.
-
-  Class defining mappings between RDFValues collected by Artifacts, and the
-  location they are stored in the AFF4 hierarchy.
-
-  Each entry in the map contains:
-    1. Location stored relative to the client.
-    2. Name of the AFF4 type.
-    3. Name of the attribute to be changed.
-    4. Method for adding the RDFValue to the Attribute (Overwrite, Append)
-  """
-
-  rdf_map = {
-      "SoftwarePackage": ("info/software",
-                          software.InstalledSoftwarePackages.__name__,
-                          "INSTALLED_PACKAGES", "Append"),
-      "Volume": ("", aff4_grr.VFSGRRClient.__name__, "VOLUMES", "Append"),
-      "HardwareInfo": ("", aff4_grr.VFSGRRClient.__name__, "HARDWARE_INFO",
-                       "Overwrite")
-  }
 
 
 class ArtifactLoader(registry.InitHook):

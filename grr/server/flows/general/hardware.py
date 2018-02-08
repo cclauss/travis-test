@@ -2,9 +2,8 @@
 """These are low-level related flows."""
 
 
-
 from grr.lib.rdfvalues import structs as rdf_structs
-from grr.proto import flows_pb2
+from grr_response_proto import flows_pb2
 from grr.server import aff4
 from grr.server import data_store
 from grr.server import flow
@@ -39,7 +38,6 @@ class DumpFlashImage(transfer.LoadComponentMixin, flow.GRRFlow):
     self.CallFlow(
         collectors.ArtifactCollectorFlow.__name__,
         artifact_list=["LinuxHardwareInfo"],
-        store_results_in_aff4=True,
         next_state="DumpImage")
 
   @flow.StateHandler()
@@ -165,7 +163,7 @@ class DumpACPITable(transfer.LoadComponentMixin, flow.GRRFlow):
       self.Log("Retrieved ACPI table(s) with signature %s" % table_signature)
       with data_store.DB.GetMutationPool() as mutation_pool:
 
-        # TODO(user): Make this work in the UI!?
+        # TODO(amoser): Make this work in the UI!?
         collection_urn = self.client_id.Add(
             "devices/chipsec/acpi/tables/%s" % table_signature)
         for acpi_table_response in response.acpi_tables:

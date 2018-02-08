@@ -7,7 +7,7 @@ from grr.lib.rdfvalues import crypto
 from grr.lib.rdfvalues import paths
 from grr.lib.rdfvalues import standard
 from grr.lib.rdfvalues import structs as rdf_structs
-from grr.proto import flows_pb2
+from grr_response_proto import flows_pb2
 
 
 class FileFinderModificationTimeCondition(rdf_structs.RDFProtoStruct):
@@ -35,6 +35,11 @@ class FileFinderSizeCondition(rdf_structs.RDFProtoStruct):
   protobuf = flows_pb2.FileFinderSizeCondition
 
 
+class FileFinderExtFlagsCondition(rdf_structs.RDFProtoStruct):
+
+  protobuf = flows_pb2.FileFinderExtFlagsCondition
+
+
 class FileFinderContentsRegexMatchCondition(rdf_structs.RDFProtoStruct):
   protobuf = flows_pb2.FileFinderContentsRegexMatchCondition
   rdf_deps = [
@@ -58,7 +63,12 @@ class FileFinderCondition(rdf_structs.RDFProtoStruct):
       FileFinderInodeChangeTimeCondition,
       FileFinderModificationTimeCondition,
       FileFinderSizeCondition,
+      FileFinderExtFlagsCondition,
   ]
+
+
+class FileFinderStatActionOptions(rdf_structs.RDFProtoStruct):
+  protobuf = flows_pb2.FileFinderStatActionOptions
 
 
 class FileFinderHashActionOptions(rdf_structs.RDFProtoStruct):
@@ -72,20 +82,37 @@ class FileFinderDownloadActionOptions(rdf_structs.RDFProtoStruct):
   protobuf = flows_pb2.FileFinderDownloadActionOptions
   rdf_deps = [
       rdfvalue.ByteSize,
+      client.UploadToken,
   ]
 
 
-class FileFinderStatActionOptions(rdf_structs.RDFProtoStruct):
-  protobuf = flows_pb2.FileFinderStatActionOptions
-
-
 class FileFinderAction(rdf_structs.RDFProtoStruct):
+  """An RDF value describing a file-finder action."""
+
   protobuf = flows_pb2.FileFinderAction
   rdf_deps = [
       FileFinderDownloadActionOptions,
       FileFinderHashActionOptions,
       FileFinderStatActionOptions,
   ]
+
+  @classmethod
+  def Stat(cls, **kwargs):
+    action_type = cls.Action.STAT
+    opts = FileFinderStatActionOptions(**kwargs)
+    return FileFinderAction(action_type=action_type, stat=opts)
+
+  @classmethod
+  def Hash(cls, **kwargs):
+    action_type = cls.Action.HASH
+    opts = FileFinderHashActionOptions(**kwargs)
+    return FileFinderAction(action_type=action_type, hash=opts)
+
+  @classmethod
+  def Download(cls, **kwargs):
+    action_type = cls.Action.DOWNLOAD
+    opts = FileFinderDownloadActionOptions(**kwargs)
+    return FileFinderAction(action_type=action_type, download=opts)
 
 
 class FileFinderArgs(rdf_structs.RDFProtoStruct):
@@ -94,7 +121,6 @@ class FileFinderArgs(rdf_structs.RDFProtoStruct):
       FileFinderAction,
       FileFinderCondition,
       paths.GlobExpression,
-      client.UploadToken,
   ]
 
 

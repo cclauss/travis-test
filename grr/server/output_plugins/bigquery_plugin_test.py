@@ -2,7 +2,6 @@
 # -*- mode: python; encoding: utf-8 -*-
 """Tests for BigQuery output plugin."""
 
-
 import gzip
 import json
 import os
@@ -12,6 +11,7 @@ import mock
 from grr import config
 from grr.lib import flags
 from grr.lib import rdfvalue
+from grr.lib import utils
 from grr.lib.rdfvalues import client as rdf_client
 from grr.lib.rdfvalues import flows as rdf_flows
 from grr.lib.rdfvalues import paths as rdf_paths
@@ -27,7 +27,7 @@ class BigQueryOutputPluginTest(flow_test_lib.FlowTestsBaseclass):
 
   def setUp(self):
     super(BigQueryOutputPluginTest, self).setUp()
-    self.client_id = self.SetupClients(1)[0]
+    self.client_id = self.SetupClient(0)
     self.results_urn = self.client_id.Add("Results")
     self.base_urn = rdfvalue.RDFURN("aff4:/foo/bar")
 
@@ -70,11 +70,13 @@ class BigQueryOutputPluginTest(flow_test_lib.FlowTestsBaseclass):
     # description requires you to fix the json so we just compare field names
     # and types.
     schema_fields = [(x["name"], x["type"]) for x in schema]
-    schema_metadata_fields = [(x["name"], x["type"])
-                              for x in schema[0]["fields"]]
+    schema_metadata_fields = [
+        (x["name"], x["type"]) for x in schema[0]["fields"]
+    ]
     expected_fields = [(x["name"], x["type"]) for x in expected_schema_data]
-    expected_metadata_fields = [(x["name"], x["type"])
-                                for x in expected_schema_data[0]["fields"]]
+    expected_metadata_fields = [
+        (x["name"], x["type"]) for x in expected_schema_data[0]["fields"]
+    ]
     self.assertEqual(schema_fields, expected_fields)
     self.assertEqual(schema_metadata_fields, expected_metadata_fields)
 
@@ -155,8 +157,8 @@ class BigQueryOutputPluginTest(flow_test_lib.FlowTestsBaseclass):
     output = self.ProcessResponses(
         plugin_args=bigquery_plugin.BigQueryOutputPluginArgs(),
         responses=[
-            rdf_client.StatEntry(pathspec=rdf_paths.PathSpec(
-                path="/中国新闻网新闻中", pathtype="OS")),
+            rdf_client.StatEntry(
+                pathspec=rdf_paths.PathSpec(path="/中国新闻网新闻中", pathtype="OS")),
             rdf_client.Process(pid=42)
         ],
         process_responses_separately=True)
@@ -189,12 +191,19 @@ class BigQueryOutputPluginTest(flow_test_lib.FlowTestsBaseclass):
               st_mtime=1336129892,
               st_ctime=1336129892))
 
-    # Force an early flush. This max file size value has been chosen to force a
-    # flush at least once, but not for all 10 records.
+    sizes = [37, 687, 722, 755, 788, 821, 684, 719, 752, 785]
+
+    def GetSize(unused_path):
+      return sizes.pop(0)
+
+    # Force an early flush. Gzip is non deterministic since our
+    # metadata is a dict with unpredictable order so we make up the file sizes
+    # such that there is one flush during processing.
     with test_lib.ConfigOverrider({"BigQuery.max_file_post_size": 800}):
-      output = self.ProcessResponses(
-          plugin_args=bigquery_plugin.BigQueryOutputPluginArgs(),
-          responses=responses)
+      with utils.Stubber(os.path, "getsize", GetSize):
+        output = self.ProcessResponses(
+            plugin_args=bigquery_plugin.BigQueryOutputPluginArgs(),
+            responses=responses)
 
     self.assertEqual(len(output), 2)
     # Check that the output is still consistent
@@ -222,8 +231,8 @@ class BigQueryOutputPluginTest(flow_test_lib.FlowTestsBaseclass):
   def testBigQueryPluginFallbackToAFF4(self):
     plugin_args = bigquery_plugin.BigQueryOutputPluginArgs()
     responses = [
-        rdf_client.StatEntry(pathspec=rdf_paths.PathSpec(
-            path="/中国新闻网新闻中", pathtype="OS")),
+        rdf_client.StatEntry(
+            pathspec=rdf_paths.PathSpec(path="/中国新闻网新闻中", pathtype="OS")),
         rdf_client.Process(pid=42),
         rdf_client.Process(pid=43),
         rdf_client.SoftwarePackage(name="test.deb")
@@ -244,8 +253,9 @@ class BigQueryOutputPluginTest(flow_test_lib.FlowTestsBaseclass):
 
     with test_lib.FakeTime(1445995873):
       with mock.patch.object(bigquery, "GetBigQueryClient") as mock_bigquery:
-        mock_bigquery.return_value.configure_mock(
-            **{"InsertData.side_effect": bigquery.BigQueryJobUploadError()})
+        mock_bigquery.return_value.configure_mock(**{
+            "InsertData.side_effect": bigquery.BigQueryJobUploadError()
+        })
         with test_lib.ConfigOverrider({"BigQuery.max_upload_failures": 2}):
           for message in messages:
             plugin.ProcessResponses([message])
@@ -285,8 +295,9 @@ class BigQueryOutputPluginTest(flow_test_lib.FlowTestsBaseclass):
     # Process the same messages to make sure we're re-using the filehandles.
     with test_lib.FakeTime(1445995878):
       with mock.patch.object(bigquery, "GetBigQueryClient") as mock_bigquery:
-        mock_bigquery.return_value.configure_mock(
-            **{"InsertData.side_effect": bigquery.BigQueryJobUploadError()})
+        mock_bigquery.return_value.configure_mock(**{
+            "InsertData.side_effect": bigquery.BigQueryJobUploadError()
+        })
         with test_lib.ConfigOverrider({"BigQuery.max_upload_failures": 2}):
           for message in messages:
             plugin.ProcessResponses([message])

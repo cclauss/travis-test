@@ -10,14 +10,15 @@ from grr.client.client_actions import file_finder
 from grr.client.client_actions import file_fingerprint
 from grr.client.client_actions import searching
 from grr.client.client_actions import standard
+from grr.lib import rdfvalue
 from grr.lib.rdfvalues import client as rdf_client
 from grr.lib.rdfvalues import cloud
 from grr.lib.rdfvalues import flows as rdf_flows
 from grr.lib.rdfvalues import protodict as rdf_protodict
 from grr.server import client_fixture
 from grr.server import server_stubs
-from grr.server import worker_mocks
 from grr.test_lib import client_test_lib
+from grr.test_lib import worker_mocks
 
 
 class ActionMock(object):
@@ -46,8 +47,8 @@ class ActionMock(object):
     self.action_counts = dict((cls_name, 0) for cls_name in self.action_classes)
     self.recorded_args = {}
 
-    self.client_worker = (kwargs.get("client_worker", None) or
-                          worker_mocks.FakeClientWorker())
+    self.client_worker = (
+        kwargs.get("client_worker", None) or worker_mocks.FakeClientWorker())
 
   def RecordCall(self, action_name, action_args):
     self.recorded_args.setdefault(action_name, []).append(action_args)
@@ -173,12 +174,14 @@ class InterrogatedClient(ActionMock):
   def InitializeClient(self,
                        system="Linux",
                        version="12.04",
-                       kernel="3.13.0-39-generic"):
+                       kernel="3.13.0-39-generic",
+                       fqdn="test_node.test"):
     self.system = system
     self.version = version
     self.kernel = kernel
     self.response_count = 0
     self.recorded_messages = []
+    self.fqdn = fqdn
 
   def HandleMessage(self, message):
     """Record all messages."""
@@ -190,7 +193,7 @@ class InterrogatedClient(ActionMock):
     return [
         rdf_client.Uname(
             system=self.system,
-            node="test_node",
+            fqdn=self.fqdn,
             release="5",
             version=self.version,
             kernel=self.kernel,
@@ -199,7 +202,7 @@ class InterrogatedClient(ActionMock):
 
   def GetInstallDate(self, _):
     self.response_count += 1
-    return [rdf_protodict.DataBlob(integer=100)]
+    return [rdfvalue.RDFDatetime().FromSecondsFromEpoch(100)]
 
   def EnumerateInterfaces(self, _):
     self.response_count += 1
@@ -211,7 +214,8 @@ class InterrogatedClient(ActionMock):
                     address_type=rdf_client.NetworkAddress.Family.INET,
                     human_readable="100.100.100.1",
                     packed_bytes=socket.inet_pton(socket.AF_INET,
-                                                  "100.100.100.1"),)
+                                                  "100.100.100.1"),
+                )
             ])
     ]
 
@@ -226,7 +230,8 @@ class InterrogatedClient(ActionMock):
             client_name=config.CONFIG["Client.name"],
             client_version=int(config.CONFIG["Source.version_numeric"]),
             build_time=config.CONFIG["Client.build_time"],
-            labels=["GRRLabel1", "Label2"],)
+            labels=["GRRLabel1", "Label2"],
+        )
     ]
 
   def GetUserInfo(self, user):

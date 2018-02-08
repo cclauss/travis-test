@@ -1,10 +1,10 @@
 'use strict';
 
-goog.provide('grrUi.hunt.modifyHuntDialogDirective.ModifyHuntDialogController');
+goog.provide('grrUi.hunt.modifyHuntDialogDirective');
 goog.provide('grrUi.hunt.modifyHuntDialogDirective.ModifyHuntDialogDirective');
 
-goog.require('grrUi.core.apiService.stripTypeInfo');
-goog.require('grrUi.core.utils.stripAff4Prefix');
+goog.require('grrUi.core.apiService');  // USE: stripTypeInfo
+goog.require('grrUi.core.utils');       // USE: stripAff4Prefix
 
 
 goog.scope(function() {
@@ -23,7 +23,7 @@ var stripTypeInfo = grrUi.core.apiService.stripTypeInfo;
  * @param {!grrUi.acl.aclDialogService.AclDialogService} grrAclDialogService
  * @ngInject
  */
-grrUi.hunt.modifyHuntDialogDirective.ModifyHuntDialogController =
+const ModifyHuntDialogController =
     function($scope, $q, grrApiService, grrAclDialogService) {
   /** @private {!angular.Scope} */
   this.scope_ = $scope;
@@ -43,8 +43,6 @@ grrUi.hunt.modifyHuntDialogDirective.ModifyHuntDialogController =
   this.scope_.$watch('huntId', this.onHuntIdChange_.bind(this));
 };
 
-var ModifyHuntDialogController =
-    grrUi.hunt.modifyHuntDialogDirective.ModifyHuntDialogController;
 
 
 /**

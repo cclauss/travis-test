@@ -1,6 +1,6 @@
 'use strict';
 
-goog.provide('grrUi.flow.clientFlowsViewDirective.ClientFlowsViewController');
+goog.provide('grrUi.flow.clientFlowsViewDirective');
 goog.provide('grrUi.flow.clientFlowsViewDirective.ClientFlowsViewDirective');
 
 goog.scope(function() {
@@ -14,7 +14,7 @@ goog.scope(function() {
  * @param {!grrUi.routing.routingService.RoutingService} grrRoutingService
  * @ngInject
  */
-grrUi.flow.clientFlowsViewDirective.ClientFlowsViewController = function(
+const ClientFlowsViewController = function(
     $scope, grrRoutingService) {
   /** @private {!angular.Scope} */
   this.scope_ = $scope;
@@ -42,8 +42,6 @@ grrUi.flow.clientFlowsViewDirective.ClientFlowsViewController = function(
       this.scope_, ['clientId', 'flowId', 'tab'],
       this.onRoutingParamsChange_.bind(this));
 };
-var ClientFlowsViewController =
-    grrUi.flow.clientFlowsViewDirective.ClientFlowsViewController;
 
 
 /**
@@ -62,7 +60,7 @@ ClientFlowsViewController.prototype.onRoutingParamsChange_ = function(
 };
 
 /**
- * Handles selectedFlowUrn binding changes.
+ * Handles binding changes.
  *
  * @private
  */

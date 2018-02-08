@@ -1,6 +1,6 @@
 'use strict';
 
-goog.provide('grrUi.semantic.semanticProtoDirective.SemanticProtoController');
+goog.provide('grrUi.semantic.semanticProtoDirective');
 goog.provide('grrUi.semantic.semanticProtoDirective.SemanticProtoDirective');
 goog.provide('grrUi.semantic.semanticProtoDirective.buildItems');
 goog.provide('grrUi.semantic.semanticProtoDirective.buildNonUnionItems');
@@ -237,7 +237,7 @@ SemanticProtoController.prototype.onValueChange = function(newValue, oldValue) {
 /**
  * Directive that displays semantic proto fetched from the server.
  *
- * @constructor
+ * @return {!angular.Directive} Directive definition object.
  * @ngInject
  * @export
  */

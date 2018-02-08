@@ -1,10 +1,10 @@
 'use strict';
 
-goog.provide('grrUi.stats.reportListingDirective.ReportListingController');
+goog.provide('grrUi.stats.reportListingDirective');
 goog.provide('grrUi.stats.reportListingDirective.ReportListingDirective');
 goog.provide('grrUi.stats.reportListingDirective.parseStatsReportsApiResponse');
 
-goog.require('grrUi.core.utils.upperCaseToTitleCase');
+goog.require('grrUi.core.utils');  // USE: upperCaseToTitleCase
 
 goog.scope(function() {
 
@@ -68,7 +68,7 @@ var parseStatsReportsApiResponse =
  * @param {!grrUi.stats.reportDescsService.ReportDescsService} grrReportDescsService
  * @ngInject
  */
-grrUi.stats.reportListingDirective.ReportListingController = function(
+const ReportListingController = function(
     $scope, $element, grrReportDescsService) {
   /** @private {!angular.Scope} */
   this.scope_ = $scope;
@@ -114,8 +114,6 @@ grrUi.stats.reportListingDirective.ReportListingController = function(
     this.updateTreeSelection_();
   }.bind(this));
 };
-var ReportListingController =
-    grrUi.stats.reportListingDirective.ReportListingController;
 
 
 /**

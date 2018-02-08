@@ -1,5 +1,6 @@
 'use strict';
 
+goog.provide('grrUi.cron.newCronJobWizard.statusPageDirective');
 goog.provide('grrUi.cron.newCronJobWizard.statusPageDirective.StatusPageDirective');
 
 goog.scope(function() {
@@ -7,7 +8,7 @@ goog.scope(function() {
 /**
  * Directive for showing wizard-like forms with multiple named steps/pages.
  *
- * @constructor
+ * @return {!angular.Directive} Directive definition object.
  * @ngInject
  * @export
  */
@@ -32,5 +33,4 @@ grrUi.cron.newCronJobWizard.statusPageDirective.StatusPageDirective =
  */
 grrUi.cron.newCronJobWizard.statusPageDirective.StatusPageDirective
     .directive_name = 'grrNewCronJobStatusPage';
-
 });  // goog.scope

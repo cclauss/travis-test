@@ -1,9 +1,9 @@
 'use strict';
 
-goog.provide('grrUi.client.virtualFileSystem.fileTimelineDirective.FileTimelineController');
+goog.provide('grrUi.client.virtualFileSystem.fileTimelineDirective');
 goog.provide('grrUi.client.virtualFileSystem.fileTimelineDirective.FileTimelineDirective');
-goog.require('grrUi.client.virtualFileSystem.events');
-goog.require('grrUi.client.virtualFileSystem.utils.getFolderFromPath');
+goog.require('grrUi.client.virtualFileSystem.events');  // USE: REFRESH_FILE_EVENT, REFRESH_FOLDER_EVENT
+goog.require('grrUi.client.virtualFileSystem.utils');  // USE: getFolderFromPath
 
 goog.scope(function() {
 
@@ -26,7 +26,7 @@ var REFRESH_FILE_EVENT =
  * @param {!grrUi.core.apiService.ApiService} grrApiService
  * @ngInject
  */
-grrUi.client.virtualFileSystem.fileTimelineDirective.FileTimelineController = function(
+const FileTimelineController = function(
     $scope, $interval, grrApiService) {
   /** @private {!angular.Scope} */
   this.scope_ = $scope;
@@ -64,8 +64,6 @@ grrUi.client.virtualFileSystem.fileTimelineDirective.FileTimelineController = fu
   this.scope_.$watch('controller.fileContext.selectedFilePath', this.onFilePathChange_.bind(this));
 };
 
-var FileTimelineController =
-    grrUi.client.virtualFileSystem.fileTimelineDirective.FileTimelineController;
 
 
 FileTimelineController.prototype.onFilePathChange_ = function(newFilePath) {

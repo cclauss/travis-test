@@ -1,8 +1,8 @@
 'use strict';
 
-goog.provide('grrUi.hunt.huntStatsDirective.HuntStatsController');
+goog.provide('grrUi.hunt.huntStatsDirective');
 goog.provide('grrUi.hunt.huntStatsDirective.HuntStatsDirective');
-goog.require('grrUi.core.apiService.stripTypeInfo');
+goog.require('grrUi.core.apiService');  // USE: stripTypeInfo
 
 goog.scope(function() {
 
@@ -17,7 +17,7 @@ var stripTypeInfo = grrUi.core.apiService.stripTypeInfo;
  * @param {!grrUi.core.apiService.ApiService} grrApiService
  * @ngInject
  */
-grrUi.hunt.huntStatsDirective.HuntStatsController = function(
+const HuntStatsController = function(
     $scope, $element, grrApiService) {
 
   /** @private {!angular.Scope} */
@@ -44,25 +44,21 @@ grrUi.hunt.huntStatsDirective.HuntStatsController = function(
   /** @export {number} */
   this.totalClientCount;
 
-  $scope.$watch('huntUrn', this.onHuntUrnChange_.bind(this));
+  $scope.$watch('huntId', this.onHuntIdChange_.bind(this));
 };
 
-var HuntStatsController =
-    grrUi.hunt.huntStatsDirective.HuntStatsController;
 
 
 /**
- * Handles huntUrn attribute changes.
- * @param {string} huntUrn The newly set hunt urn.
+ * Handles huntId attribute changes.
+ * @param {string} huntId The newly set hunt urn.
  * @private
  */
-HuntStatsController.prototype.onHuntUrnChange_ = function(huntUrn) {
-  if (!angular.isString(huntUrn)) {
+HuntStatsController.prototype.onHuntIdChange_ = function(huntId) {
+  if (!angular.isString(huntId)) {
     return;
   }
 
-  var components = huntUrn.split('/');
-  var huntId = components[components.length - 1];
   var url = '/hunts/' + huntId + '/stats';
   this.grrApiService_.get(url).then(function success(response) {
     this.stats = response.data['stats'];
@@ -190,14 +186,14 @@ HuntStatsController.prototype.drawSingleHistogram_ = function(element, histogram
 /**
  * Directive for displaying stats of a hunt with a given URN.
  *
- * @constructor
+ * @return {!angular.Directive} Directive definition object.
  * @ngInject
  * @export
  */
 grrUi.hunt.huntStatsDirective.HuntStatsDirective = function() {
   return {
     scope: {
-      huntUrn: '='
+      huntId: '='
     },
     restrict: 'E',
     templateUrl: '/static/angular-components/hunt/hunt-stats.html',

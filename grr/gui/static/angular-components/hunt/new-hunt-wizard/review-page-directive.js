@@ -1,5 +1,6 @@
 'use strict';
 
+goog.provide('grrUi.hunt.newHuntWizard.reviewPageDirective');
 goog.provide('grrUi.hunt.newHuntWizard.reviewPageDirective.ReviewPageDirective');
 
 goog.scope(function() {
@@ -7,7 +8,7 @@ goog.scope(function() {
 /**
  * Directive for showing wizard-like forms with multiple named steps/pages.
  *
- * @constructor
+ * @return {!angular.Directive} Directive definition object.
  * @ngInject
  * @export
  */
@@ -32,5 +33,4 @@ grrUi.hunt.newHuntWizard.reviewPageDirective.ReviewPageDirective = function() {
 grrUi.hunt.newHuntWizard.reviewPageDirective
     .ReviewPageDirective
     .directive_name = 'grrNewHuntReviewPage';
-
 });  // goog.scope

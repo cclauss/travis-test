@@ -5,7 +5,6 @@ This module contains the RDFValue implementations used to communicate with the
 client.
 """
 
-
 import hashlib
 import logging
 import platform
@@ -28,10 +27,10 @@ from grr.lib.rdfvalues import protodict
 from grr.lib.rdfvalues import standard
 from grr.lib.rdfvalues import structs
 
-from grr.proto import flows_pb2
-from grr.proto import jobs_pb2
-from grr.proto import knowledge_base_pb2
-from grr.proto import sysinfo_pb2
+from grr_response_proto import flows_pb2
+from grr_response_proto import jobs_pb2
+from grr_response_proto import knowledge_base_pb2
+from grr_response_proto import sysinfo_pb2
 
 # ntop does not exist on Windows.
 # pylint: disable=g-socket-inet-aton,g-socket-inet-ntoa
@@ -328,6 +327,12 @@ class KnowledgeBase(structs.RDFProtoStruct):
     # knowledge_base.User.
     fields.remove("DEPRECATED_users")
 
+    # We used to have a "hostname" field that contained an fqdn and is
+    # therefore now renamed to "fqdn".
+    # TODO(amoser): Remove once the artifact has removed the provides
+    # section upstream.
+    fields.add("hostname")
+
     fields.remove("users")
     for field in self.users.type_descriptor.type.type_infos.descriptor_names:
       fields.add("users.%s" % field)
@@ -399,6 +404,10 @@ class MacAddress(rdfvalue.RDFBytes):
   @property
   def human_readable_address(self):
     return self._value.encode("hex")
+
+  @human_readable_address.setter
+  def human_readable_address(self, value):
+    self._value = value.decode("hex")
 
 
 class Interface(structs.RDFProtoStruct):
@@ -552,6 +561,7 @@ class ClientStats(structs.RDFProtoStruct):
   rdf_deps = [
       CpuSample,
       IOSample,
+      rdfvalue.RDFDatetime,
   ]
 
   def DownsampleList(self, samples, interval):
@@ -806,12 +816,30 @@ class StatMode(rdfvalue.RDFInteger):
     return utils.SmartStr(self.__unicode__())
 
 
+class StatExtFlagsOsx(rdfvalue.RDFInteger):
+  """Extended file attributes for Mac (set by `chflags`)."""
+
+  data_store_type = "unsigned_integer_32"
+
+
+class StatExtFlagsLinux(rdfvalue.RDFInteger):
+  """Extended file attributes as reported by `lsattr`."""
+
+  data_store_type = "unsigned_integer_32"
+
+
 class Iterator(structs.RDFProtoStruct):
   """An Iterated client action is one which can be resumed on the client."""
   protobuf = jobs_pb2.Iterator
   rdf_deps = [
       protodict.Dict,
   ]
+
+
+class ExtAttr(structs.RDFProtoStruct):
+  """An RDF value representing an extended attributes of a file."""
+
+  protobuf = jobs_pb2.StatEntry.ExtAttr
 
 
 class StatEntry(structs.RDFProtoStruct):
@@ -822,6 +850,9 @@ class StatEntry(structs.RDFProtoStruct):
       paths.PathSpec,
       rdfvalue.RDFDatetimeSeconds,
       StatMode,
+      StatExtFlagsOsx,
+      StatExtFlagsLinux,
+      ExtAttr,
   ]
 
   def AFF4Path(self, client_urn):
@@ -969,19 +1000,20 @@ class Uname(structs.RDFProtoStruct):
     return cls(
         system=system,
         architecture=architecture,
-        node=uname[1],
         release=release,
         version=version,
         machine=uname[4],  # x86, x86_64
         kernel=kernel,
         fqdn=fqdn,
-        pep425tag=pep425tag,)
+        pep425tag=pep425tag,
+    )
 
 
 class StartupInfo(structs.RDFProtoStruct):
   protobuf = jobs_pb2.StartupInfo
   rdf_deps = [
       ClientInformation,
+      rdfvalue.RDFDatetime,
   ]
 
 
@@ -1254,3 +1286,8 @@ class ClientComponent(structs.RDFProtoStruct):
       ClientComponentSummary,
       Uname,
   ]
+
+
+class ListNetworkConnectionsArgs(structs.RDFProtoStruct):
+  """Args for the ListNetworkConnections client action."""
+  protobuf = flows_pb2.ListNetworkConnectionsArgs

@@ -13,7 +13,7 @@ import logging
 
 from grr.lib import rdfvalue
 from grr.lib import type_info
-from grr.proto import semantic_pb2
+from grr_response_proto import semantic_pb2
 
 # Field types present in the proto2 field descriptors.
 TYPE_DOUBLE = 1
@@ -52,7 +52,9 @@ _SEMANTIC_PRIMITIVE_TO_FIELD_TYPE = dict(
     bytes=TYPE_BYTES,
     string=TYPE_STRING,
     integer=TYPE_INT64,
-    unsigned_integer=TYPE_UINT64,)
+    unsigned_integer_32=TYPE_UINT32,
+    unsigned_integer=TYPE_UINT64,
+)
 
 # If True, check that protobuf dependencies are correctly mirrored in
 # RDFProtoStruct.rdf_deps field.
@@ -80,7 +82,7 @@ def DefineFromProtobuf(cls, protobuf):
   semantic_options = message_options.Extensions[semantic_pb2.semantic]
 
   # Hack to avoid dependency loop.
-  # TODO(user): remove this hack
+  # TODO(amoser): remove this hack
   classes_dict = type_info.TypeInfoObject.classes
 
   # Support message descriptions

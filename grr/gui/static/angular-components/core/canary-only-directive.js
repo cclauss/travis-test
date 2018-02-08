@@ -1,8 +1,7 @@
 'use strict';
 
-goog.provide('grrUi.core.canaryOnlyDirective.CanaryOnlyController');
+goog.provide('grrUi.core.canaryOnlyDirective');
 goog.provide('grrUi.core.canaryOnlyDirective.CanaryOnlyDirective');
-goog.provide('grrUi.core.canaryOnlyDirective.NonCanaryOnlyController');
 goog.provide('grrUi.core.canaryOnlyDirective.NonCanaryOnlyDirective');
 
 
@@ -74,10 +73,9 @@ grrUi.core.canaryOnlyDirective.CanaryOnlyDirective
 /**
  * Directive that renders its contents only in nonCanary mode.
  *
- * @constructor
+ * @return {!angular.Directive} Directive definition object.
  * @ngInject
  * @export
- * @return {angular.Directive} Directive definition object.
  */
 grrUi.core.canaryOnlyDirective.NonCanaryOnlyDirective = function() {
   return {

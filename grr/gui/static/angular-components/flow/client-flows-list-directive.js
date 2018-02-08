@@ -1,6 +1,6 @@
 'use strict';
 
-goog.provide('grrUi.flow.clientFlowsListDirective.ClientFlowsListController');
+goog.provide('grrUi.flow.clientFlowsListDirective');
 goog.provide('grrUi.flow.clientFlowsListDirective.ClientFlowsListDirective');
 
 goog.scope(function() {
@@ -18,7 +18,7 @@ goog.scope(function() {
  * @param {!grrUi.routing.routingService.RoutingService} grrRoutingService
  * @ngInject
  */
-grrUi.flow.clientFlowsListDirective.ClientFlowsListController = function(
+const ClientFlowsListController = function(
     $scope, $timeout, $uibModal, grrApiService, grrRoutingService) {
   /** @private {!angular.Scope} */
   this.scope_ = $scope;
@@ -48,8 +48,6 @@ grrUi.flow.clientFlowsListDirective.ClientFlowsListController = function(
 
   this.scope_.$watch('clientId', this.onClientIdChange_.bind(this));
 };
-var ClientFlowsListController =
-    grrUi.flow.clientFlowsListDirective.ClientFlowsListController;
 
 
 /**
@@ -98,13 +96,13 @@ ClientFlowsListController.prototype.cancelButtonClicked = function() {
  * @export
  */
 ClientFlowsListController.prototype.createHuntFromFlow = function() {
-  var huntUrn;
+  var huntId;
 
   var modalScope = this.scope_.$new();
   modalScope['clientId'] = this.scope_['clientId'];
   modalScope['flowId'] = this.scope_['selectedFlowId'];
-  modalScope['resolve'] = function(newHuntUrn) {
-    huntUrn = newHuntUrn;
+  modalScope['resolve'] = function(newHuntId) {
+    huntId = newHuntId;
     modalInstance.close();
   }.bind(this);
   modalScope['reject'] = function() {
@@ -116,14 +114,13 @@ ClientFlowsListController.prototype.createHuntFromFlow = function() {
   });
 
   var modalInstance = this.uibModal_.open({
-    template: '<grr-new-hunt-wizard-create-from-flow-form on-resolve="resolve(huntUrn)" ' +
+    template: '<grr-new-hunt-wizard-create-from-flow-form on-resolve="resolve(huntId)" ' +
         'on-reject="reject()" flow-id="flowId" client-id="clientId" />',
     scope: modalScope,
     windowClass: 'wide-modal high-modal',
     size: 'lg'
   });
   modalInstance.result.then(function resolve() {
-    var huntId = huntUrn.split('/')[2];
     this.grrRoutingService_.go('hunts', {huntId: huntId});
   }.bind(this));
 };
@@ -145,9 +142,6 @@ ClientFlowsListController.prototype.copyFlow = function() {
     newFlowId = newFlowObj['value']['flow_id']['value'];
     modalInstance.close();
   }.bind(this);
-  modalScope['reject'] = function() {
-    modalInstance.dismiss();
-  }.bind(this);
 
   this.scope_.$on('$destroy', function() {
     modalScope.$destroy();
@@ -155,14 +149,18 @@ ClientFlowsListController.prototype.copyFlow = function() {
 
   var modalInstance = this.uibModal_.open({
     template: '<grr-copy-flow-form on-resolve="resolve(flow)" ' +
-        'on-reject="reject()" flow-id="flowId" client-id="clientId" />',
+        'flow-id="flowId" client-id="clientId" />',
     scope: modalScope,
     windowClass: 'wide-modal high-modal',
     size: 'lg'
   });
   modalInstance.result.then(function resolve() {
-    this.grrRoutingService_.go('client.flows', {flowId: newFlowId});
-    this.triggerUpdate();
+    // newFlowId will remain unset if an error happened on the server and
+    // 'resolve' callback was never called.
+    if (angular.isDefined(newFlowId)) {
+      this.grrRoutingService_.go('client.flows', {flowId: newFlowId});
+      this.triggerUpdate();
+    }
   }.bind(this));
 };
 

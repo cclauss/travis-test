@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 """Linux specific actions."""
 
-
 import ctypes
 import ctypes.util
 import glob
@@ -12,6 +11,7 @@ import time
 from grr.client import actions
 from grr.client import client_utils_common
 from grr.client.client_actions import standard
+from grr.lib import rdfvalue
 from grr.lib import utils
 from grr.lib.rdfvalues import client as rdf_client
 from grr.lib.rdfvalues import protodict as rdf_protodict
@@ -168,11 +168,11 @@ class EnumerateInterfaces(actions.ActionPlugin):
 
 class GetInstallDate(actions.ActionPlugin):
   """Estimate the install date of this system."""
-  out_rdfvalues = [rdf_protodict.DataBlob]
+  out_rdfvalues = [rdf_protodict.DataBlob, rdfvalue.RDFDatetime]
 
   def Run(self, unused_args):
-    self.SendReply(
-        rdf_protodict.DataBlob(integer=int(os.stat("/lost+found").st_ctime)))
+    ctime = os.stat("/lost+found").st_ctime
+    self.SendReply(rdfvalue.RDFDatetime().FromSecondsFromEpoch(ctime))
 
 
 class UtmpStruct(utils.Struct):
@@ -221,7 +221,7 @@ class EnumerateUsers(actions.ActionPlugin):
       for offset in xrange(0, len(wtmp), wtmp_struct_size):
         try:
           record = UtmpStruct(wtmp[offset:offset + wtmp_struct_size])
-        except RuntimeError:
+        except utils.ParsingError:
           break
 
         # Users only appear for USER_PROCESS events, others are system.
@@ -320,7 +320,7 @@ class EnumerateRunningServices(actions.ActionPlugin):
   out_rdfvalues = [None]
 
   def Run(self, unused_arg):
-    raise RuntimeError("Not implemented")
+    raise NotImplementedError("Not implemented")
 
 
 class Uninstall(actions.ActionPlugin):
@@ -332,7 +332,7 @@ class Uninstall(actions.ActionPlugin):
   out_rdfvalues = [rdf_protodict.DataBlob]
 
   def Run(self, unused_arg):
-    raise RuntimeError("Not implemented")
+    raise NotImplementedError("Not implemented")
 
 
 class UpdateAgent(standard.ExecuteBinaryCommand):

@@ -16,7 +16,6 @@ On the server the PathSpec is represented as a PathSpec object, and stored
 as an attribute of the AFF4 object. This module defines this abstraction.
 """
 
-
 import itertools
 import posixpath
 import re
@@ -25,7 +24,7 @@ from grr.lib import rdfvalue
 from grr.lib import utils
 from grr.lib.rdfvalues import standard as rdf_standard
 from grr.lib.rdfvalues import structs as rdf_structs
-from grr.proto import jobs_pb2
+from grr_response_proto import jobs_pb2
 from grr.server import artifact_utils
 
 INTERPOLATED_REGEX = re.compile(r"%%([^%]+?)%%")

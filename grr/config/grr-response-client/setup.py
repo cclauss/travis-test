@@ -66,6 +66,7 @@ setup_args = dict(
     entry_points={
         "console_scripts": [
             "grr_client = grr.client.distro_entry:Client",
+            "grr_fleetspeak_client = grr.client.distro_entry:FleetspeakClient",
             "grr_client_build = grr.client.distro_entry:ClientBuild",
             "grr_pool_client = grr.client.distro_entry:PoolClient"
         ]
@@ -79,8 +80,12 @@ setup_args = dict(
         # pinned. Remove it when Rekall dependency is removed or updated.
         "pyaff4==0.24.post3",
         "pyinstaller==3.2.1",
-        "yara-procdump-python==0.1.0.post7",
-    ] + (["chipsec==1.2.4"] if platform.system() == "Linux" else []),
-)
+    ])
+
+if platform.system() == "Linux":
+  setup_args["install_requires"].append("chipsec==1.2.4")
+
+if platform.system() != "Windows":
+  setup_args["install_requires"].append("xattr==0.9.2")
 
 setup(**setup_args)

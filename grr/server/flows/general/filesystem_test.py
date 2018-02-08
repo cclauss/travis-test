@@ -2,7 +2,6 @@
 # -*- mode: python; encoding: utf-8 -*-
 """Test the filesystem related flows."""
 
-
 import hashlib
 import os
 import platform
@@ -28,6 +27,10 @@ from grr.test_lib import vfs_test_lib
 
 class TestFilesystem(flow_test_lib.FlowTestsBaseclass):
   """Test the interrogate flow."""
+
+  def setUp(self):
+    super(TestFilesystem, self).setUp()
+    self.client_id = test_lib.TEST_CLIENT_ID
 
   def testListDirectoryOnFile(self):
     """OS ListDirectory on a file will raise."""
@@ -130,9 +133,10 @@ class TestFilesystem(flow_test_lib.FlowTestsBaseclass):
 
   def testGlob(self):
     """Test that glob works properly."""
+    client_id = self.SetupClient(0)
 
     # Add some usernames we can interpolate later.
-    client = aff4.FACTORY.Open(self.client_id, mode="rw", token=self.token)
+    client = aff4.FACTORY.Open(client_id, mode="rw", token=self.token)
     kb = client.Get(client.Schema.KNOWLEDGE_BASE)
     kb.MergeOrAddUser(rdf_client.User(username="test"))
     kb.MergeOrAddUser(rdf_client.User(username="syslog"))
@@ -152,7 +156,7 @@ class TestFilesystem(flow_test_lib.FlowTestsBaseclass):
       for _ in flow_test_lib.TestFlowHelper(
           filesystem.Glob.__name__,
           client_mock,
-          client_id=self.client_id,
+          client_id=client_id,
           paths=paths,
           pathtype=rdf_paths.PathSpec.PathType.OS,
           token=self.token,
@@ -160,8 +164,7 @@ class TestFilesystem(flow_test_lib.FlowTestsBaseclass):
           check_flow_errors=False):
         pass
 
-    output_path = self.client_id.Add("fs/os").Add(
-        self.base_path.replace("\\", "/"))
+    output_path = client_id.Add("fs/os").Add(self.base_path.replace("\\", "/"))
 
     children = []
     fd = aff4.FACTORY.Open(output_path, token=self.token)
@@ -208,6 +211,7 @@ class TestFilesystem(flow_test_lib.FlowTestsBaseclass):
 
   def testGlobWithStarStarRootPath(self):
     """Test ** expressions with root_path."""
+    self.client_id = self.SetupClient(0)
 
     # Add some usernames we can interpolate later.
     client = aff4.FACTORY.Open(self.client_id, mode="rw", token=self.token)
@@ -334,9 +338,9 @@ class TestFilesystem(flow_test_lib.FlowTestsBaseclass):
     if platform.system() == "Linux":
       expected_results = ["1/foo1", "1/fOo1", "/1/2/fOo2", "/1/2/foo2"]
     self._RunGlob(paths)
-    self.assertItemsEqual(self.flow_replies, [
-        utils.JoinPath(self.temp_dir, x) for x in expected_results
-    ])
+    self.assertItemsEqual(
+        self.flow_replies,
+        [utils.JoinPath(self.temp_dir, x) for x in expected_results])
 
   def testGlobWithInvalidStarStar(self):
     client_mock = action_mocks.GlobClientMock()
@@ -460,6 +464,7 @@ class TestFilesystem(flow_test_lib.FlowTestsBaseclass):
 
   def testGlobDirectory(self):
     """Test that glob expands directories."""
+    self.client_id = self.SetupClient(0)
 
     # Add some usernames we can interpolate later.
     client = aff4.FACTORY.Open(self.client_id, mode="rw", token=self.token)
@@ -642,8 +647,7 @@ class TestFilesystem(flow_test_lib.FlowTestsBaseclass):
           client_mock,
           client_id=self.client_id,
           paths=["/c/Downloads/*"],
-          action=rdf_file_finder.FileFinderAction(
-              action_type=rdf_file_finder.FileFinderAction.Action.DOWNLOAD),
+          action=rdf_file_finder.FileFinderAction.Download(),
           token=self.token):
         pass
 
@@ -684,8 +688,7 @@ class TestFilesystem(flow_test_lib.FlowTestsBaseclass):
           client_mock,
           client_id=self.client_id,
           paths=["/c/Downloads/**5"],
-          action=rdf_file_finder.FileFinderAction(
-              action_type=rdf_file_finder.FileFinderAction.Action.DOWNLOAD),
+          action=rdf_file_finder.FileFinderAction.Download(),
           token=self.token):
         pass
 
@@ -876,12 +879,12 @@ class TestFilesystem(flow_test_lib.FlowTestsBaseclass):
         if isinstance(reply, rdf_client.Volume):
           results.append(reply)
 
-      self.assertItemsEqual([x.unixvolume.mount_point
-                             for x in results], ["/", "/usr"])
+      self.assertItemsEqual([x.unixvolume.mount_point for x in results],
+                            ["/", "/usr"])
       self.assertEqual(len(results), 2)
 
   def testDiskVolumeInfoWindows(self):
-    self.SetupClients(1, system="Windows")
+    self.client_id = self.SetupClient(0, system="Windows")
     with vfs_test_lib.VFSOverrider(rdf_paths.PathSpec.PathType.REGISTRY,
                                    vfs_test_lib.FakeRegistryVFSHandler):
 
@@ -904,8 +907,8 @@ class TestFilesystem(flow_test_lib.FlowTestsBaseclass):
 
         # We asked for D and we guessed systemroot (C) for "/var/tmp", but only
         # C and Z are present, so we should just get C.
-        self.assertItemsEqual([x.windowsvolume.drive_letter
-                               for x in results], ["C:"])
+        self.assertItemsEqual([x.windowsvolume.drive_letter for x in results],
+                              ["C:"])
         self.assertEqual(len(results), 1)
 
       with test_lib.Instrument(flow.GRRFlow, "SendReply") as send_reply:
@@ -923,8 +926,8 @@ class TestFilesystem(flow_test_lib.FlowTestsBaseclass):
               reply, rdf_client.Volume):
             results.append(reply)
 
-        self.assertItemsEqual([x.windowsvolume.drive_letter
-                               for x in results], ["Z:"])
+        self.assertItemsEqual([x.windowsvolume.drive_letter for x in results],
+                              ["Z:"])
         self.assertEqual(len(results), 1)
 
   def testGlobBackslashHandlingNoRegex(self):
@@ -988,7 +991,7 @@ class TestFilesystem(flow_test_lib.FlowTestsBaseclass):
   def testListingRegistryDirectoryDoesNotYieldMtimes(self):
     with vfs_test_lib.RegistryVFSStubber():
 
-      client_id = self.SetupClients(1)[0]
+      client_id = self.SetupClient(0)
       pb = rdf_paths.PathSpec(
           path="/HKEY_LOCAL_MACHINE/SOFTWARE/ListingTest",
           pathtype=rdf_paths.PathSpec.PathType.REGISTRY)

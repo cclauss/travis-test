@@ -1,6 +1,6 @@
 'use strict';
 
-goog.provide('grrUi.semantic.statModeDirective.StatModeController');
+goog.provide('grrUi.semantic.statModeDirective');
 goog.provide('grrUi.semantic.statModeDirective.StatModeDirective');
 
 goog.scope(function() {
@@ -37,7 +37,7 @@ var S_IXOTH = 1;       // 0000001 others, execute/search permission
  * @constructor
  * @ngInject
  */
-grrUi.semantic.statModeDirective.StatModeController = function(
+const StatModeController = function(
     $scope) {
   /** @private {!angular.Scope} */
   this.scope_ = $scope;
@@ -54,8 +54,6 @@ grrUi.semantic.statModeDirective.StatModeController = function(
   this.scope_.$watch('::value', this.onValueChange.bind(this));
 };
 
-var StatModeController =
-    grrUi.semantic.statModeDirective.StatModeController;
 
 
 /**
@@ -243,7 +241,7 @@ StatModeController.prototype.isSocket_ = function(mode) {
 /**
  * Directive that displays RDFDatetime values.
  *
- * @constructor
+ * @return {!angular.Directive} Directive definition object.
  * @param {Function} $filter Angular filter provider.
  * @ngInject
  * @export

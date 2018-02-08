@@ -2,7 +2,6 @@
 """Search for certain files, filter them by given criteria and do something."""
 
 
-
 import stat
 
 from grr import config
@@ -369,7 +368,7 @@ class ClientFileFinder(flow.GRRFlow):
       upload_token = rdf_client.UploadToken()
       upload_token.SetPolicy(policy)
       upload_token.GenerateHMAC()
-      self.args.upload_token = upload_token
+      action.download.upload_token = upload_token
 
     self.CallClient(
         server_stubs.FileFinderOS, request=self.args, next_state="StoreResults")
@@ -395,7 +394,7 @@ class ClientFileFinder(flow.GRRFlow):
       for response in responses:
         if response.uploaded_file.file_id:
           self._CreateAFF4ObjectForUploadedFile(response.uploaded_file)
-          # TODO(user): Make the export support UploadedFile directly.
+          # TODO(amoser): Make the export support UploadedFile directly.
           # This fixes the export which expects the stat_entry in
           # response.stat_entry only.
           response.stat_entry = response.uploaded_file.stat_entry

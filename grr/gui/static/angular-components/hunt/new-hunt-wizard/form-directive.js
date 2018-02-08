@@ -1,9 +1,9 @@
 'use strict';
 
+goog.provide('grrUi.hunt.newHuntWizard.formDirective');
 goog.provide('grrUi.hunt.newHuntWizard.formDirective.DEFAULT_PLUGIN_URL');
-goog.provide('grrUi.hunt.newHuntWizard.formDirective.FormController');
 goog.provide('grrUi.hunt.newHuntWizard.formDirective.FormDirective');
-goog.require('grrUi.core.apiService.stripTypeInfo');
+goog.require('grrUi.core.apiService');  // USE: stripTypeInfo
 
 goog.scope(function() {
 
@@ -24,7 +24,7 @@ var stripTypeInfo = grrUi.core.apiService.stripTypeInfo;
  * @constructor
  * @ngInject
  */
-grrUi.hunt.newHuntWizard.formDirective.FormController =
+const FormController =
     function($scope, grrReflectionService, grrApiService) {
   /** @private {!angular.Scope} */
   this.scope_ = $scope;
@@ -58,8 +58,6 @@ grrUi.hunt.newHuntWizard.formDirective.FormController =
                        this.onCreateHuntArgsChange_.bind(this));
   }.bind(this));
 };
-var FormController =
-    grrUi.hunt.newHuntWizard.formDirective.FormController;
 
 /**
  * Called when 'genericHuntArgs' binding changes.
@@ -125,7 +123,7 @@ FormController.prototype.sendRequest = function() {
 
 /**
  * Called when the wizard resolves. Instead of directly calling the
- * scope callback, this controller method adds additional information (hunt urn)
+ * scope callback, this controller method adds additional information (hunt id)
  * to the callback.
  *
  * @export
@@ -133,8 +131,8 @@ FormController.prototype.sendRequest = function() {
 FormController.prototype.resolve = function() {
   var onResolve = this.scope_['onResolve'];
   if (onResolve && this.serverResponse) {
-    var huntUrn = this.serverResponse['data']['value']['urn']['value'];
-    onResolve({huntUrn: huntUrn});
+    var huntId = this.serverResponse['data']['value']['hunt_id']['value'];
+    onResolve({huntId: huntId});
   }
 };
 
@@ -142,7 +140,7 @@ FormController.prototype.resolve = function() {
 /**
  * Directive for showing wizard-like forms with multiple named steps/pages.
  *
- * @constructor
+ * @return {!angular.Directive} Directive definition object.
  * @ngInject
  * @export
  */

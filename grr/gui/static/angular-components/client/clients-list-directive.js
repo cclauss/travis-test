@@ -1,6 +1,6 @@
 'use strict';
 
-goog.provide('grrUi.client.clientsListDirective.ClientsListController');
+goog.provide('grrUi.client.clientsListDirective');
 goog.provide('grrUi.client.clientsListDirective.ClientsListDirective');
 
 goog.scope(function() {
@@ -16,7 +16,7 @@ goog.scope(function() {
  * @param {!grrUi.routing.routingService.RoutingService} grrRoutingService
  * @ngInject
  */
-grrUi.client.clientsListDirective.ClientsListController = function(
+const ClientsListController = function(
     $scope, grrClientDialogService, grrRoutingService) {
 
   /** @private {!angular.Scope} */
@@ -55,8 +55,6 @@ grrUi.client.clientsListDirective.ClientsListController = function(
       this.onQueryChange_.bind(this));
 };
 
-var ClientsListController = grrUi.client.clientsListDirective
-    .ClientsListController;
 
 
 /**
@@ -79,7 +77,7 @@ ClientsListController.prototype.onQueryChange_ = function(query) {
  * @export
  */
 ClientsListController.prototype.onClientClick = function(client) {
-  var clientId = client['value']['urn']['value'].split('/')[1];
+  var clientId = client['value']['client_id']['value'];
   this.grrRoutingService_.go('client', {clientId: clientId});
 };
 
@@ -113,9 +111,9 @@ ClientsListController.prototype.updateNumSelectedClients = function() {
  */
 ClientsListController.prototype.onClientsFetched = function(items) {
   angular.forEach(items, function(item) {
-    var urn = item['value']['urn']['value'];
-    this.clients[urn] = item;
-    this.selectedClients[urn] = false;
+    var clientId = item['value']['client_id']['value'];
+    this.clients[clientId] = item;
+    this.selectedClients[clientId] = false;
 
     item['_mac_addresses'] = [];
     angular.forEach(item['value']['interfaces'], function(iface) {
@@ -129,7 +127,7 @@ ClientsListController.prototype.onClientsFetched = function(items) {
       item['_usernames'].push(user['value']['username']);
     }.bind(this));
 
-    item['tableKey'] = urn;
+    item['tableKey'] = clientId;
   }.bind(this));
 
   return items;
@@ -158,9 +156,9 @@ ClientsListController.prototype.selectAll = function() {
  */
 ClientsListController.prototype.showLabelsDialog = function(action) {
   var clients = [];
-  for (var clientUrn in this.selectedClients) {
-    if (this.selectedClients[clientUrn]) {
-      clients.push(this.clients[clientUrn]);
+  for (var clientId in this.selectedClients) {
+    if (this.selectedClients[clientId]) {
+      clients.push(this.clients[clientId]);
     }
   }
 

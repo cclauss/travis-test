@@ -1,6 +1,6 @@
 'use strict';
 
-goog.provide('grrUi.semantic.timestampDirective.TimestampController');
+goog.provide('grrUi.semantic.timestampDirective');
 goog.provide('grrUi.semantic.timestampDirective.TimestampDirective');
 
 goog.scope(function() {
@@ -16,7 +16,7 @@ goog.scope(function() {
  * @constructor
  * @ngInject
  */
-grrUi.semantic.timestampDirective.TimestampController = function(
+const TimestampController = function(
     $scope, $element, grrTimeService) {
   /** @private {!angular.Scope} */
   this.scope_ = $scope;
@@ -26,6 +26,9 @@ grrUi.semantic.timestampDirective.TimestampController = function(
 
   /** @private {?string} */
   this.formattedTimestamp;
+
+  /** @private {Array<string>} */
+  this.formattedTimestampComponents;
 
   /** @private {?number} */
   this.value;
@@ -39,8 +42,6 @@ grrUi.semantic.timestampDirective.TimestampController = function(
   this.scope_.$watch('::value', this.onValueChange.bind(this));
 };
 
-var TimestampController =
-    grrUi.semantic.timestampDirective.TimestampController;
 
 
 /**
@@ -64,6 +65,7 @@ TimestampController.prototype.onValueChange = function(newValue) {
       this.value = timestamp;
 
       this.formattedTimestamp = this.timeService_.formatAsUTC(timestamp);
+      this.formattedTimestampComponents = this.formattedTimestamp.split(' ');
     }
   }
 };
@@ -83,7 +85,7 @@ TimestampController.prototype.onMouseEnter = function() {
 /**
  * Directive that displays RDFDatetime values.
  *
- * @constructor
+ * @return {!angular.Directive} Directive definition object.
  * @ngInject
  * @export
  */
@@ -93,10 +95,7 @@ grrUi.semantic.timestampDirective.TimestampDirective = function() {
       value: '='
     },
     restrict: 'E',
-    template: '<span class="timestamp" ' +
-        'ng-if="::controller.formattedTimestamp !== undefined" ' +
-        'ng-mouseenter="controller.onMouseEnter()">' +
-        '{$ ::controller.formattedTimestamp $}</span>',
+    templateUrl: '/static/angular-components/semantic/timestamp.html',
     controller: TimestampController,
     controllerAs: 'controller'
   };

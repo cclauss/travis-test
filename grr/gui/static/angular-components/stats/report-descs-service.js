@@ -1,8 +1,9 @@
 'use strict';
 
+goog.provide('grrUi.stats.reportDescsService');
 goog.provide('grrUi.stats.reportDescsService.ReportDescsService');
 
-goog.require('grrUi.core.apiService.stripTypeInfo');
+goog.require('grrUi.core.apiService');  // USE: stripTypeInfo
 
 goog.scope(function() {
 

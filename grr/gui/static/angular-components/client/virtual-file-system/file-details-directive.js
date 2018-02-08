@@ -1,9 +1,9 @@
 'use strict';
 
-goog.provide('grrUi.client.virtualFileSystem.fileDetailsDirective.FileDetailsController');
+goog.provide('grrUi.client.virtualFileSystem.fileDetailsDirective');
 goog.provide('grrUi.client.virtualFileSystem.fileDetailsDirective.FileDetailsDirective');
-goog.require('grrUi.client.virtualFileSystem.events');
-goog.require('grrUi.core.versionDropdownDirective.VersionDropdownDirective');
+goog.require('grrUi.client.virtualFileSystem.events');  // USE: REFRESH_FILE_EVENT
+goog.require('grrUi.core.versionDropdownDirective');  // USE: VersionDropdownDirective
 
 
 goog.scope(function() {
@@ -23,7 +23,7 @@ var REFRESH_VERSIONS_EVENT =
  * @param {!grrUi.core.apiService.ApiService} grrApiService
  * @ngInject
  */
-grrUi.client.virtualFileSystem.fileDetailsDirective.FileDetailsController = function(
+const FileDetailsController = function(
     $scope, grrApiService) {
   /** @private {!angular.Scope} */
   this.scope_ = $scope;
@@ -61,8 +61,6 @@ grrUi.client.virtualFileSystem.fileDetailsDirective.FileDetailsController = func
       this.onContextChange_.bind(this));
 };
 
-var FileDetailsController =
-    grrUi.client.virtualFileSystem.fileDetailsDirective.FileDetailsController;
 
 
 /**

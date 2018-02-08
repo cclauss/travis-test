@@ -1,8 +1,6 @@
 #!/usr/bin/env python
 """GRR HTTP server implementation."""
 
-
-
 import base64
 import hashlib
 import hmac
@@ -17,7 +15,6 @@ import psutil
 
 from werkzeug import exceptions as werkzeug_exceptions
 from werkzeug import routing as werkzeug_routing
-from werkzeug import utils as werkzeug_utils
 from werkzeug import wrappers as werkzeug_wrappers
 from werkzeug import wsgi as werkzeug_wsgi
 
@@ -29,10 +26,7 @@ from grr.lib import rdfvalue
 from grr.lib import registry
 from grr.lib import utils
 from grr.server import access_control
-from grr.server import aff4
 from grr.server import server_logging
-
-from grr.server.aff4_objects import users as aff4_users
 
 CSRF_DELIMITER = ":"
 CSRF_TOKEN_DURATION = rdfvalue.Duration("10h")
@@ -43,7 +37,7 @@ def GenerateCSRFToken(user_id, time):
   time = time or rdfvalue.RDFDatetime.Now().AsMicroSecondsFromEpoch()
 
   secret = config.CONFIG.Get("AdminUI.csrf_secret_key", None)
-  # TODO(user): Django is deprecated. Remove this at some point.
+  # TODO(amoser): Django is deprecated. Remove this at some point.
   if not secret:
     secret = config.CONFIG["AdminUI.django_secret_key"]
   digester = hmac.new(utils.SmartStr(secret), digestmod=hashlib.sha256)
@@ -236,7 +230,9 @@ class AdminUIApp(object):
         "firebase_auth_domain":
             config.CONFIG["AdminUI.firebase_auth_domain"],
         "firebase_auth_provider":
-            config.CONFIG["AdminUI.firebase_auth_provider"]
+            config.CONFIG["AdminUI.firebase_auth_provider"],
+        "grr_version":
+            config.CONFIG["Source.version_string"]
     }
     template = env.get_template("base.html")
     response = werkzeug_wrappers.Response(
@@ -296,21 +292,8 @@ window.location = '%s' + friendly_hash;
     if not help_path:
       raise werkzeug_exceptions.Forbidden("Error: Invalid help path.")
 
-    try:
-      user_record = aff4.FACTORY.Open(
-          aff4.ROOT_URN.Add("users").Add(request.user),
-          aff4_users.GRRUser,
-          token=self._BuildToken(request, 60))
-
-      settings = user_record.Get(user_record.Schema.GUI_SETTINGS)
-    except IOError:
-      settings = aff4_users.GRRUser.SchemaCls.GUI_SETTINGS()
-
-    if settings.docs_location == settings.DocsLocation.REMOTE:
-      # Proxy remote documentation.
-      return self._RedirectToRemoteHelp(help_path)
-    else:
-      return werkzeug_utils.redirect("/local/help/%s" % help_path)
+    # Proxy remote documentation.
+    return self._RedirectToRemoteHelp(help_path)
 
   @werkzeug_wsgi.responder
   def __call__(self, environ, start_response):
@@ -326,11 +309,9 @@ window.location = '%s' + friendly_hash;
       return e
 
   def WSGIHandler(self):
-    return werkzeug_wsgi.SharedDataMiddleware(
-        self, {
-            "/static": config.CONFIG["AdminUI.document_root"],
-            "/local/help": config.CONFIG["AdminUI.help_root"]
-        })
+    return werkzeug_wsgi.SharedDataMiddleware(self, {
+        "/static": config.CONFIG["AdminUI.document_root"]
+    })
 
 
 class GuiPluginsInit(registry.InitHook):

@@ -1,6 +1,6 @@
 'use strict';
 
-goog.provide('grrUi.client.virtualFileSystem.rWeOwnedButtonDirective.RWeOwnedButtonController');
+goog.provide('grrUi.client.virtualFileSystem.rWeOwnedButtonDirective');
 goog.provide('grrUi.client.virtualFileSystem.rWeOwnedButtonDirective.RWeOwnedButtonDirective');
 
 
@@ -39,8 +39,7 @@ var phrases = ["It is certain",
  * @param {!angularUi.$uibModal} $uibModal Bootstrap UI modal service.
  * @ngInject
  */
-grrUi.client.virtualFileSystem.rWeOwnedButtonDirective
-    .RWeOwnedButtonController = function(
+const RWeOwnedButtonController = function(
     $scope, $uibModal) {
   /** @private {!angular.Scope} */
   this.scope_ = $scope;
@@ -51,9 +50,6 @@ grrUi.client.virtualFileSystem.rWeOwnedButtonDirective
   /** @type {string} */
   this.phrase;
 };
-var RWeOwnedButtonController =
-    grrUi.client.virtualFileSystem.rWeOwnedButtonDirective
-    .RWeOwnedButtonController;
 
 
 /**

@@ -1,6 +1,6 @@
 'use strict';
 
-goog.provide('grrUi.core.loadingIndicatorDirective.LoadingIndicatorController');
+goog.provide('grrUi.core.loadingIndicatorDirective');
 goog.provide('grrUi.core.loadingIndicatorDirective.LoadingIndicatorDirective');
 
 
@@ -20,7 +20,7 @@ var LOADING_FINISHED_EVENT_NAME = 'grrLoadingFinishedEvent';
  *
  * @ngInject
  */
-grrUi.core.loadingIndicatorDirective.LoadingIndicatorController = function(
+const LoadingIndicatorController = function(
   $rootScope, $scope) {
 
   /** @private {!angular.Scope} */
@@ -40,8 +40,6 @@ grrUi.core.loadingIndicatorDirective.LoadingIndicatorController = function(
   this.rootScope_.$on(LOADING_FINISHED_EVENT_NAME,
       this.onLoadingFinishedEvent_.bind(this));
 };
-var LoadingIndicatorController =
-  grrUi.core.loadingIndicatorDirective.LoadingIndicatorController;
 
 
 /**
@@ -78,7 +76,7 @@ LoadingIndicatorController.prototype.onLoadingFinishedEvent_ = function(event, k
 /**
  * Directive that shows a loading indicator in case loading events occur.
  *
- * @constructor
+ * @return {!angular.Directive} Directive definition object.
  * @ngInject
  * @export
  */

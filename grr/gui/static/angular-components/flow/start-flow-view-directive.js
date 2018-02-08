@@ -1,6 +1,6 @@
 'use strict';
 
-goog.provide('grrUi.flow.startFlowViewDirective.StartFlowViewController');
+goog.provide('grrUi.flow.startFlowViewDirective');
 goog.provide('grrUi.flow.startFlowViewDirective.StartFlowViewDirective');
 
 goog.scope(function() {
@@ -14,7 +14,7 @@ goog.scope(function() {
  * @constructor
  * @ngInject
  */
-grrUi.flow.startFlowViewDirective.StartFlowViewController = function(
+const StartFlowViewController = function(
     $scope, grrRoutingService) {
   /** @private {!angular.Scope} */
   this.scope_ = $scope;
@@ -31,8 +31,6 @@ grrUi.flow.startFlowViewDirective.StartFlowViewController = function(
   this.grrRoutingService_.uiOnParamsChanged(this.scope_, 'clientId',
       this.onClientIdChange_.bind(this));
 };
-var StartFlowViewController =
-    grrUi.flow.startFlowViewDirective.StartFlowViewController;
 
 
 /**

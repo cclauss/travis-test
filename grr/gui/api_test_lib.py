@@ -2,14 +2,13 @@
 """Base test classes for API handlers tests."""
 
 
-
 # This import guarantees that all API-related RDF types will get imported
 # (as they're all references by api_call_router).
 # pylint: disable=unused-import
 from grr.gui import api_call_router
 # pylint: enable=unused-import
 from grr.lib.rdfvalues import structs as rdf_structs
-from grr.proto import tests_pb2
+from grr_response_proto import tests_pb2
 from grr.test_lib import test_lib
 
 

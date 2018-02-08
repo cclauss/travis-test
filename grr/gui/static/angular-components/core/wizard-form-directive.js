@@ -1,5 +1,6 @@
 'use strict';
 
+goog.provide('grrUi.core.wizardFormDirective');
 goog.provide('grrUi.core.wizardFormDirective.WizardFormController');
 goog.provide('grrUi.core.wizardFormDirective.WizardFormDirective');
 
@@ -103,7 +104,7 @@ WizardFormController.prototype.registerPage = function(pageController) {
 /**
  * Directive for showing wizard-like forms with multiple named steps/pages.
  *
- * @constructor
+ * @return {!angular.Directive} Directive definition object.
  * @ngInject
  * @export
  */

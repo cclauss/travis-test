@@ -15,10 +15,10 @@
 
 <!-- This makes sure templates are loaded from the JS bundle. -->
 <script>
-  goog.require('grrUi.templates.module');
+  goog.require('grrUi.templates.templatesModule');
 </script>
 <script>
-  grrUi.templates.module.value('forceCachedTemplates', true);
+  grrUi.templates.templatesModule.value('forceCachedTemplates', true);
 </script>
 {% else %}
 <script src="/static/dist/grr-ui.deps.js"></script>
@@ -26,12 +26,12 @@
 <!-- This bootstraps the applications and makes sure templates are loaded
      from standalone html files. -->
 <script>
-  goog.require('grrUi.appController.module');
+  goog.require('grrUi.appController.appControllerModule');
 
-  goog.require('grrUi.templates.module');
+  goog.require('grrUi.templates.templatesModule');
 </script>
 <script>
-  grrUi.templates.module.value('forceUncachedTemplates', true);
+  grrUi.templates.templatesModule.value('forceUncachedTemplates', true);
 </script>
 {% endif %}
 
@@ -55,7 +55,7 @@
 </head>
 <body id="body">
   <div id="ACL"></div>
-  <div class="navbar navbar-default navbar-fixed-top" id="header">
+  <div class="navbar navbar-default navbar-static-top" id="header">
     <div class="navbar-inner">
       <div class="container-fluid">
         <a href="/"><img class="grr-logo" src="/static/images/grr_logo_real_sm.png" /></a>
@@ -73,7 +73,7 @@
         <div id="search_container" class="pull-right navbar-form">
           <grr-search-box></grr-search-box>
         </div>
-        <grr-live-clock></grr-live-clock>
+        <grr-live-clock class="hidden-xs"></grr-live-clock>
       </div>
     </div>
   </div>
@@ -117,6 +117,7 @@
         <li><a ui-sref="apiDocs">API</a></li>
         <li><a href="{{help_url}}" target="_blank">Help</a></li>
         <li><a href="{{report_url}}" target="_blank">Report a problem</a></li>
+        <li><span class="navbar-text">GRR Version {{grr_version}}</span></li>
       </ul>
 
     </div>

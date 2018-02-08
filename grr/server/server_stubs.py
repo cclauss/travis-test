@@ -6,7 +6,6 @@ This way we prevent loading effectively the whole client code into ours
 server parts.
 """
 
-
 from grr.client.components.chipsec_support.actions import chipsec_types
 from grr.client.components.rekall_support import rekall_types
 from grr.lib import rdfvalue
@@ -42,7 +41,8 @@ class LoadComponent(ClientActionStub):
 class GetInstallDate(ClientActionStub):
   """Estimate the install date of this system."""
 
-  out_rdfvalues = [rdf_protodict.DataBlob]
+  # DataBlob is deprecated but might still be sent by old clients.
+  out_rdfvalues = [rdf_protodict.DataBlob, rdfvalue.RDFDatetime]
 
 
 class EnumerateInterfaces(ClientActionStub):
@@ -355,10 +355,18 @@ class Grep(ClientActionStub):
 
 
 # from network.py
+# Deprecated action, kept for outdated clients.
 class Netstat(ClientActionStub):
   """Gather open network connection stats."""
 
   in_rdfvalue = None
+  out_rdfvalues = [rdf_client.NetworkConnection]
+
+
+class ListNetworkConnections(ClientActionStub):
+  """Gather open network connection stats."""
+
+  in_rdfvalue = rdf_client.ListNetworkConnectionsArgs
   out_rdfvalues = [rdf_client.NetworkConnection]
 
 
@@ -435,3 +443,7 @@ class YaraProcessDump(ClientActionStub):
 
   in_rdfvalue = rdf_yara.YaraProcessDumpArgs
   out_rdfvalues = [rdf_yara.YaraProcessDumpResponse]
+
+
+# Rekall constants as defined in rekall/constants.py.
+REKALL_PROFILE_REPOSITORY_VERSION = "v1.0"

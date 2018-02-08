@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 """These flows are designed for high performance transfers."""
 
-
 import logging
 import zlib
 
@@ -14,7 +13,7 @@ from grr.lib.rdfvalues import flows as rdf_flows
 from grr.lib.rdfvalues import paths as rdf_paths
 from grr.lib.rdfvalues import protodict as rdf_protodict
 from grr.lib.rdfvalues import structs as rdf_structs
-from grr.proto import flows_pb2
+from grr_response_proto import flows_pb2
 from grr.server import aff4
 from grr.server import data_store
 from grr.server import file_store
@@ -460,7 +459,7 @@ class MultiGetFileMixin(object):
     # First we get all the files which are present in the file store.
     files_in_filestore = {}
 
-    # TODO(user): This object never changes, could this be a class attribute?
+    # TODO(amoser): This object never changes, could this be a class attribute?
     filestore_obj = aff4.FACTORY.Open(
         filestore.FileStore.PATH,
         filestore.FileStore,

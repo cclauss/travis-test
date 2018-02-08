@@ -1,6 +1,6 @@
 'use strict';
 
-goog.provide('grrUi.hunt.huntStatusIconDirective.HuntStatusIconController');
+goog.provide('grrUi.hunt.huntStatusIconDirective');
 goog.provide('grrUi.hunt.huntStatusIconDirective.HuntStatusIconDirective');
 
 
@@ -10,7 +10,7 @@ goog.scope(function() {
 /**
  * Directive that displays hunt status icons for a given hunt.
  *
- * @constructor
+ * @return {!angular.Directive} Directive definition object.
  * @ngInject
  * @export
  */
@@ -31,6 +31,4 @@ grrUi.hunt.huntStatusIconDirective.HuntStatusIconDirective =
  */
 grrUi.hunt.huntStatusIconDirective.HuntStatusIconDirective
     .directive_name = 'grrHuntStatusIcon';
-
-
 });  // goog.scope

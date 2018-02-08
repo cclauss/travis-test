@@ -1,8 +1,7 @@
 'use strict';
 
-goog.provide('grrUi.stats.timeseriesGraphDirective.TimeseriesGraphController');
+goog.provide('grrUi.stats.timeseriesGraphDirective');
 goog.provide('grrUi.stats.timeseriesGraphDirective.TimeseriesGraphDirective');
-goog.provide('grrUi.stats.timeseriesGraphDirective.TimeseriesGraphSerieDirective');
 
 goog.scope(function() {
 
@@ -24,7 +23,7 @@ grrUi.stats.timeseriesGraphDirective.TimeserieDescriptor;
  * @param {!grrUi.core.apiService.ApiService} grrApiService
  * @ngInject
  */
-grrUi.stats.timeseriesGraphDirective.TimeseriesGraphController = function(
+const TimeseriesGraphController = function(
     $scope, $element, $interval, grrApiService) {
   /** @private {!angular.Scope} */
   this.scope_ = $scope;
@@ -60,8 +59,6 @@ grrUi.stats.timeseriesGraphDirective.TimeseriesGraphController = function(
                      true);
 };
 
-var TimeseriesGraphController =
-    grrUi.stats.timeseriesGraphDirective.TimeseriesGraphController;
 
 
 /**
@@ -235,15 +232,5 @@ grrUi.stats.timeseriesGraphDirective.TimeseriesGraphDirective = function() {
  */
 grrUi.stats.timeseriesGraphDirective.TimeseriesGraphDirective.directive_name =
     'grrTimeseriesGraph';
-
-
-/**
- * Name of the directive as registered in Angular.
- *
- * @const
- * @export
- */
-grrUi.stats.timeseriesGraphDirective.
-    TimeseriesGraphSerieDirective.directive_name = 'grrTimeseriesGraph';
 
 });  // goog.scope

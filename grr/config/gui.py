@@ -22,9 +22,6 @@ config_lib.DEFINE_string("AdminUI.template_root",
                          "%(grr/gui/templates|resource)",
                          "The main path to the templates.")
 
-config_lib.DEFINE_string("AdminUI.help_root", "%(docs|resource)",
-                         "The main path to the locally cached documentation.")
-
 config_lib.DEFINE_string(
     "AdminUI.webauth_manager", "NullWebAuthManager",
     "The web auth manager for controlling access to the UI.")
@@ -46,7 +43,7 @@ config_lib.DEFINE_string(
     "https://firebase.google.com/docs/auth/web/start). Used by "
     "FirebaseWebAuthManager.")
 
-# TODO(user): Deprecated, remove at some point.
+# TODO(amoser): Deprecated, remove at some point.
 config_lib.DEFINE_string("AdminUI.django_secret_key", "CHANGE_ME",
                          "This is deprecated. Used csrf_secret_key instead!.")
 

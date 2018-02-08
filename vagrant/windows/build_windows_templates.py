@@ -78,6 +78,18 @@ parser.add_argument(
     default=r"C:\grr_deps\protoc\bin\protoc.exe",
     help="Path to the protoc.exe binary.")
 
+parser.add_argument(
+    "--expect_service_running",
+    dest="expect_service_running",
+    action="store_true",
+    help="Triggers whether after installation the GRR service should be "
+    "running or not. Used for testing the installation.")
+parser.add_argument(
+    "--noexpect_service_running",
+    dest="expect_service_running",
+    action="store_false")
+parser.set_defaults(expect_service_running=True)
+
 args = parser.parse_args()
 
 
@@ -117,6 +129,8 @@ class WindowsTemplateBuilder(object):
     self.install_path = r"C:\Windows\System32\GRR"
     self.service_name = "GRR Monitor"
 
+    self.expect_service_running = args.expect_service_running
+
   def Clean(self):
     """Clean the build environment."""
     # os.unlink doesn't work effectively, use the shell to delete.
@@ -142,11 +156,11 @@ class WindowsTemplateBuilder(object):
     if args.wheel_dir:
       cmd += ["--no-index", r"--find-links=file:///%s" % args.wheel_dir]
 
-    subprocess.check_call([self.virtualenv_python64] + cmd +
-                          ["--upgrade", "pip>=8.1.1"])
+    subprocess.check_call(
+        [self.virtualenv_python64] + cmd + ["--upgrade", "pip>=8.1.1"])
     if args.build_32:
-      subprocess.check_call([self.virtualenv_python32] + cmd +
-                            ["--upgrade", "pip>=8.1.1"])
+      subprocess.check_call(
+          [self.virtualenv_python32] + cmd + ["--upgrade", "pip>=8.1.1"])
     os.environ["PROTOC"] = args.protoc
 
   def GitCheckoutGRR(self):
@@ -154,15 +168,24 @@ class WindowsTemplateBuilder(object):
     subprocess.check_call(
         [self.git, "clone", "https://github.com/google/grr.git"])
 
+  def MakeProtoSdist(self):
+    os.chdir(os.path.join(args.grr_src, "grr/proto"))
+    subprocess.check_call([
+        self.virtualenv_python64, "setup.py", "sdist", "--formats=zip",
+        "--dist-dir=%s" % args.build_dir
+    ])
+    return glob.glob(os.path.join(args.build_dir,
+                                  "grr-response-proto-*.zip")).pop()
+
   def MakeCoreSdist(self):
     os.chdir(args.grr_src)
     subprocess.check_call([
         self.virtualenv_python64, "setup.py", "sdist", "--formats=zip",
-        "--dist-dir=%s" % args.build_dir, "--no-make-docs",
-        "--no-make-ui-files", "--no-sync-artifacts"
+        "--dist-dir=%s" % args.build_dir, "--no-make-ui-files",
+        "--no-sync-artifacts"
     ])
-    return glob.glob(
-        os.path.join(args.build_dir, "grr-response-core-*.zip")).pop()
+    return glob.glob(os.path.join(args.build_dir,
+                                  "grr-response-core-*.zip")).pop()
 
   def MakeClientSdist(self):
     os.chdir(os.path.join(args.grr_src, "grr/config/grr-response-client/"))
@@ -170,18 +193,26 @@ class WindowsTemplateBuilder(object):
         self.virtualenv_python64, "setup.py", "sdist", "--formats=zip",
         "--dist-dir=%s" % args.build_dir
     ])
-    return glob.glob(
-        os.path.join(args.build_dir, "grr-response-client-*.zip")).pop()
+    return glob.glob(os.path.join(args.build_dir,
+                                  "grr-response-client-*.zip")).pop()
 
   def CopySdistsFromCloudStorage(self):
     """Use gsutil to copy sdists from cloud storage."""
     subprocess.check_call([
         args.gsutil, "cp",
+        "gs://%s/grr-response-proto-*.zip" % args.cloud_storage_sdist_bucket,
+        args.build_dir
+    ])
+    proto = glob.glob(os.path.join(args.build_dir,
+                                   "grr-response-proto-*.zip")).pop()
+
+    subprocess.check_call([
+        args.gsutil, "cp",
         "gs://%s/grr-response-core-*.zip" % args.cloud_storage_sdist_bucket,
         args.build_dir
     ])
-    core = glob.glob(
-        os.path.join(args.build_dir, "grr-response-core-*.zip")).pop()
+    core = glob.glob(os.path.join(args.build_dir,
+                                  "grr-response-core-*.zip")).pop()
 
     subprocess.check_call([
         args.gsutil, "cp",
@@ -190,7 +221,7 @@ class WindowsTemplateBuilder(object):
     ])
     client = glob.glob(
         os.path.join(args.build_dir, "grr-response-client-*.zip")).pop()
-    return core, client
+    return proto, core, client
 
   def InstallGRR(self, path):
     """Installs GRR."""
@@ -230,10 +261,10 @@ class WindowsTemplateBuilder(object):
     dummy_config = os.path.join(
         args.grr_src, "grr/config/grr-response-test/test_data/dummyconfig.yaml")
     if args.build_32:
-      template_i386 = glob.glob(
-          os.path.join(args.output_dir, "*_i386*.zip")).pop()
-    template_amd64 = glob.glob(
-        os.path.join(args.output_dir, "*_amd64*.zip")).pop()
+      template_i386 = glob.glob(os.path.join(args.output_dir,
+                                             "*_i386*.zip")).pop()
+    template_amd64 = glob.glob(os.path.join(args.output_dir,
+                                            "*_amd64*.zip")).pop()
 
     # We put the installers in the output dir so they get stored as build
     # artifacts and we can test the 32bit build manually.
@@ -274,10 +305,27 @@ class WindowsTemplateBuilder(object):
     if not os.path.exists(self.install_path):
       raise RuntimeError("Install failed, no files at: %s" % self.install_path)
 
-    output = subprocess.check_output(["sc", "query", self.service_name])
-    if "RUNNING" not in output:
-      raise RuntimeError(
-          "GRR service not running after install, sc query output: %s" % output)
+    try:
+      output = subprocess.check_output(["sc", "query", self.service_name])
+      service_running = "RUNNING" in output
+    except subprocess.CalledProcessError as e:
+      if e.returncode == 1060:
+        # 1060 means: The specified service does not exist as an installed
+        # service.
+        service_running = False
+      else:
+        raise
+
+    if self.expect_service_running:
+      if not service_running:
+        raise RuntimeError(
+            "GRR service not running after install, sc query output: %s" %
+            output)
+    else:
+      if service_running:
+        raise RuntimeError(
+            "GRR service running after install with expect_service_running == "
+            "False, sc query output: %s" % output)
 
   def _InstallInstallers(self):
     """Install the installer built by RepackTemplates."""
@@ -300,13 +348,15 @@ class WindowsTemplateBuilder(object):
     self.SetupVars()
     self.Clean()
     if args.cloud_storage_sdist_bucket:
-      core_sdist, client_sdist = self.CopySdistsFromCloudStorage()
+      proto_sdist, core_sdist, client_sdist = self.CopySdistsFromCloudStorage()
     else:
       if not os.path.exists(args.grr_src):
         self.GitCheckoutGRR()
+      proto_sdist = self.MakeProtoSdist()
       core_sdist = self.MakeCoreSdist()
       client_sdist = self.MakeClientSdist()
 
+    self.InstallGRR(proto_sdist)
     self.InstallGRR(core_sdist)
     self.InstallGRR(client_sdist)
     self.BuildTemplates()

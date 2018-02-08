@@ -2,8 +2,6 @@
 # -*- mode: python; encoding: utf-8 -*-
 """Test the hunt_view interface."""
 
-
-
 import os
 import traceback
 
@@ -75,7 +73,7 @@ class TestHuntView(gui_test_lib.GRRSeleniumHuntTest):
     # Check we can now see the details.
     self.WaitUntil(self.IsElementPresent, "css=dl.dl-hunt")
     self.WaitUntil(self.IsTextPresent, "Clients Scheduled")
-    self.WaitUntil(self.IsTextPresent, "Hunt URN")
+    self.WaitUntil(self.IsTextPresent, "Hunt ID")
 
     # Click the Log Tab.
     self.Click("css=li[heading=Log]")
@@ -112,7 +110,7 @@ class TestHuntView(gui_test_lib.GRRSeleniumHuntTest):
 
     # Click the Overview Tab then the Details Link.
     self.Click("css=li[heading=Overview]")
-    self.WaitUntil(self.IsTextPresent, "Hunt URN")
+    self.WaitUntil(self.IsTextPresent, "Hunt ID")
 
     # Check the Hunt Clients tab.
     self.Click("css=li[heading=Clients]")
@@ -141,8 +139,8 @@ class TestHuntView(gui_test_lib.GRRSeleniumHuntTest):
     # Open up and click on View Hunts then the first Hunt.
     self.Open("/#/hunts")
 
-    hunt_id = hunt.urn.Path().strip("/")
-    broken_hunt_id = broken_hunt.urn.Path().strip("/")
+    hunt_id = hunt.urn.Basename()
+    broken_hunt_id = broken_hunt.urn.Basename()
 
     # Both hunts are shown even though one throws an error.
     self.WaitUntil(self.IsTextPresent, hunt_id)
@@ -243,7 +241,7 @@ class TestHuntView(gui_test_lib.GRRSeleniumHuntTest):
 
     self.WaitUntil(self.IsElementPresent,
                    "css=tr.row-selected td:contains('GenericHunt')")
-    self.WaitUntil(self.IsTextPresent, str(hunt.urn))
+    self.WaitUntil(self.IsTextPresent, hunt.urn.Basename())
 
   def testLogsTabShowsLogsFromAllClients(self):
     self.SetupHuntDetailView(failrate=-1)
@@ -478,7 +476,7 @@ class TestHuntView(gui_test_lib.GRRSeleniumHuntTest):
 
     # Check for different context properties.
     self.WaitUntilContains(
-        self.hunt_urn, self.GetText,
+        self.hunt_urn.Basename(), self.GetText,
         "css=table > tbody td.proto_key:contains(\"Session id\") "
         "~ td.proto_value")
     self.WaitUntilContains(

@@ -161,7 +161,6 @@ moment.Duration;
  * Suppresses the compiler warning when multiple externs files declare the
  * ui namespace.
  * @suppress {duplicate}
- * @noalias
  */
 var ui = {};
 
@@ -284,7 +283,7 @@ ui.router.$stateParams;
 /**
  * This is the object that the ui-router passes to callback functions listening
  * on ui router events such as {@code $stateChangeStart} or
- * {@code $stateChangeError} as the {@code toState} and {@code fromState}.
+ * {@code $stateChangeError} as the `toState` and `fromState`.
  * Example:
  * $rootScope.$on('$stateChangeStart', function(
  *     event, toState, toParams, fromState, fromParams){ ... });

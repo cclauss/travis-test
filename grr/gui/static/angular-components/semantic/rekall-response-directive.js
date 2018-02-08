@@ -1,6 +1,6 @@
 'use strict';
 
-goog.provide('grrUi.semantic.rekallResponseDirective.RekallResponseController');
+goog.provide('grrUi.semantic.rekallResponseDirective');
 goog.provide('grrUi.semantic.rekallResponseDirective.RekallResponseDirective');
 
 goog.scope(function() {
@@ -10,7 +10,6 @@ goog.scope(function() {
  * Directive that displays RekallResponse values.
  *
  * @return {!angular.Directive} Directive definition object.
- * @constructor
  * @ngInject
  * @export
  */

@@ -1,18 +1,17 @@
 #!/usr/bin/env python
 """RDFValues used to communicate with the Rekall memory analysis framework."""
 
-
 import gzip
 import StringIO
 import zlib
-
-import rekall_pb2
 
 from grr.lib import rdfvalue
 from grr.lib.rdfvalues import client
 from grr.lib.rdfvalues import paths
 from grr.lib.rdfvalues import protodict
 from grr.lib.rdfvalues import structs as rdf_structs
+
+from grr_response_proto import rekall_pb2
 
 
 class RekallProfile(rdf_structs.RDFProtoStruct):

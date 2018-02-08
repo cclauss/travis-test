@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 """AFF4 object representing grr users."""
 
-
 import hashlib
 import itertools
 import time
@@ -10,8 +9,8 @@ from grr.lib import rdfvalue
 from grr.lib import utils
 from grr.lib.rdfvalues import flows as rdf_flows
 from grr.lib.rdfvalues import structs as rdf_structs
-from grr.proto import flows_pb2
-from grr.proto import jobs_pb2
+from grr_response_proto import flows_pb2
+from grr_response_proto import jobs_pb2
 from grr.server import aff4
 
 

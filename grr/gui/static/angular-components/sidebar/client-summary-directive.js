@@ -1,6 +1,6 @@
 'use strict';
 
-goog.provide('grrUi.sidebar.clientSummaryDirective.ClientSummaryController');
+goog.provide('grrUi.sidebar.clientSummaryDirective');
 goog.provide('grrUi.sidebar.clientSummaryDirective.ClientSummaryDirective');
 
 goog.scope(function() {
@@ -14,7 +14,7 @@ goog.scope(function() {
  * @param {!grrUi.core.timeService.TimeService} grrTimeService
  * @ngInject
  */
-grrUi.sidebar.clientSummaryDirective.ClientSummaryController =
+const ClientSummaryController =
     function($scope, grrApiService, grrTimeService) {
   /** @private {!angular.Scope} */
   this.scope_ = $scope;
@@ -37,8 +37,6 @@ grrUi.sidebar.clientSummaryDirective.ClientSummaryController =
   this.scope_.$watch('client', this.onClientChange_.bind(this));
 };
 
-var ClientSummaryController =
-    grrUi.sidebar.clientSummaryDirective.ClientSummaryController;
 
 
 /**
@@ -61,9 +59,7 @@ ClientSummaryController.prototype.onClientChange_ = function() {
     }
   }
 
-  var clientUrn = this.scope_['client']['value']['urn']['value'];
-  var clientId = clientUrn.split('/')[1];
-
+  var clientId = this.scope_['client']['value']['client_id']['value'];
   var lastIPUrl = 'clients/' + clientId + '/last-ip';
   this.grrApiService_.get(lastIPUrl).then(function(response) {
     this.lastIP = response.data;
@@ -84,7 +80,7 @@ ClientSummaryController.prototype.onClientChange_ = function() {
 /**
  * Directive for displaying a client summary for the navigation.
  *
- * @constructor
+ * @return {!angular.Directive} Directive definition object.
  * @ngInject
  * @export
  */

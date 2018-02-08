@@ -8,13 +8,24 @@ import os
 import platform
 
 
-from grr.client import client_utils_linux
+from grr.client import client_utils_osx_linux
 from grr.client.osx import objc
+from grr.client.osx import process
 from grr.lib import utils
 from grr.lib.rdfvalues import paths as rdf_paths
 
+# Shared functions between macOS and Linux.
+# pylint: disable=invalid-name
+AddStatEntryExtAttrs = client_utils_osx_linux.AddStatEntryExtAttrs
+CanonicalPathToLocalPath = client_utils_osx_linux.CanonicalPathToLocalPath
+LocalPathToCanonicalPath = client_utils_osx_linux.LocalPathToCanonicalPath
+NannyController = client_utils_osx_linux.NannyController
+VerifyFileOwner = client_utils_osx_linux.VerifyFileOwner
 
-def OSXFindProxies():
+# pylint: enable=invalid-name
+
+
+def FindProxies():
   """This reads the OSX system configuration and gets the proxies."""
 
   sc = objc.SystemConfiguration()
@@ -43,7 +54,7 @@ def OSXFindProxies():
                                 "kSCPropNetProxiesProxyAutoConfigURLString")
       if cfurl:
         unused_url = sc.CFStringToPystring(cfurl)
-        # TODO(user): Auto config is enabled, what is the plan here?
+        # TODO(amoser): Auto config is enabled, what is the plan here?
         # Basically, all we get is the URL of a javascript file. To get the
         # correct proxy for a given URL, browsers call a Javascript function
         # that returns the correct proxy URL. The question is now, do we really
@@ -169,41 +180,7 @@ def ParseFileSystemsStruct(struct_class, fs_count, data):
   return results
 
 
-def OSXSplitPathspec(pathspec):
-  """Splits a given path into (device, mountpoint, remaining path).
-
-  Examples:
-
-  Let's say "/dev/disk0s1" is mounted on "/", then
-
-  /mnt/data/directory/file.txt is split into
-  (device="/dev/disk0s1", mountpoint="/", path="mnt/data/directory/file.txt")
-
-  and
-
-  /dev/disk0s1/home/test/ is split into ("/dev/disk0s1", "/", "home/test/").
-
-  After the split, mountpoint and path can always be concatenated
-  to obtain a valid os file path.
-
-  Args:
-    pathspec: Path specification to be split.
-
-  Returns:
-    Pathspec split into device, mountpoint, and remaining path.
-
-  Raises:
-    IOError: Path was not found on any mounted device.
-
-  """
-
-  # Splitting the pathspec is exactly the same as on Linux, we just
-  # have use the OSX GetMountpoints function.
-
-  return client_utils_linux.LinSplitPathspec(pathspec, GetMountpoints)
-
-
-def OSXGetRawDevice(path):
+def GetRawDevice(path):
   """Resolve the raw device that contains the path."""
   device_map = GetMountpoints()
 
@@ -230,16 +207,6 @@ def OSXGetRawDevice(path):
       return result, path
     except KeyError:
       mount_point = os.path.dirname(mount_point)
-
-
-def CanonicalPathToLocalPath(path):
-  """OSX uses a normal path."""
-  return path
-
-
-def LocalPathToCanonicalPath(path):
-  """OSX uses a normal path."""
-  return path
 
 
 def InstallDriver(kext_path):
@@ -313,3 +280,15 @@ class OSXVersion(object):
 def KeepAlive():
   # Not yet supported for OSX.
   pass
+
+
+def OpenProcessForMemoryAccess(pid=None):
+  return process.Process(pid=pid)
+
+
+def MemoryRegions(proc, options):
+  for start, length in proc.Regions(
+      skip_executable_regions=options.skip_executable_regions,
+      skip_readonly_regions=options.skip_readonly_regions,
+      skip_shared_regions=options.skip_shared_regions):
+    yield start, length

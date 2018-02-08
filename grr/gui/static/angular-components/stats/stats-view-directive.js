@@ -1,6 +1,6 @@
 'use strict';
 
-goog.provide('grrUi.stats.statsViewDirective.StatsViewController');
+goog.provide('grrUi.stats.statsViewDirective');
 goog.provide('grrUi.stats.statsViewDirective.StatsViewDirective');
 
 goog.scope(function() {
@@ -13,7 +13,7 @@ goog.scope(function() {
  * @constructor
  * @ngInject
  */
-grrUi.stats.statsViewDirective.StatsViewController = function(
+const StatsViewController = function(
     $scope, grrRoutingService) {
   /** @private {!angular.Scope} */
   this.scope_ = $scope;
@@ -48,8 +48,6 @@ grrUi.stats.statsViewDirective.StatsViewController = function(
        'controller.clientLabel'],
       this.onControllerParamsChange_.bind(this));
 };
-var StatsViewController =
-    grrUi.stats.statsViewDirective.StatsViewController;
 
 
 /**

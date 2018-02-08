@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 """Implementation of various cryptographic types."""
 
-
 import hashlib
 import logging
 import os
@@ -11,6 +10,7 @@ from cryptography import exceptions
 from cryptography import x509
 from cryptography.hazmat.backends import openssl
 from cryptography.hazmat.primitives import ciphers
+from cryptography.hazmat.primitives import constant_time
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives import hmac
 from cryptography.hazmat.primitives import padding as sym_padding
@@ -19,6 +19,7 @@ from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives.ciphers import algorithms
 from cryptography.hazmat.primitives.ciphers import modes
+from cryptography.hazmat.primitives.kdf import pbkdf2
 from cryptography.x509 import oid
 
 from grr.lib import config_lib
@@ -28,7 +29,7 @@ from grr.lib import utils
 from grr.lib.rdfvalues import standard
 from grr.lib.rdfvalues import structs as rdf_structs
 
-from grr.proto import jobs_pb2
+from grr_response_proto import jobs_pb2
 
 
 class Error(Exception):
@@ -121,7 +122,7 @@ class RDFX509Cert(rdfvalue.RDFValue):
     Raises:
       VerificationError: The certificate did not verify.
     """
-    # TODO(user): We have to do this manually for now since cryptography does
+    # TODO(amoser): We have to do this manually for now since cryptography does
     # not yet support cert verification. There is PR 2460:
     # https://github.com/pyca/cryptography/pull/2460/files
     # that will add it, once it's in we should switch to using this.
@@ -155,9 +156,9 @@ class RDFX509Cert(rdfvalue.RDFValue):
     serial = int(common_name.split(".")[1], 16)
     builder = builder.serial_number(serial)
     builder = builder.subject_name(
-        x509.Name([
-            x509.NameAttribute(oid.NameOID.COMMON_NAME, unicode(common_name))
-        ]))
+        x509.Name(
+            [x509.NameAttribute(oid.NameOID.COMMON_NAME,
+                                unicode(common_name))]))
 
     now = rdfvalue.RDFDatetime.Now()
     now_plus_year = now + rdfvalue.Duration("52w")
@@ -201,8 +202,8 @@ class CertificateSigningRequest(rdfvalue.RDFValue):
       elif common_name and private_key:
         self._value = x509.CertificateSigningRequestBuilder().subject_name(
             x509.Name([
-                x509.NameAttribute(oid.NameOID.COMMON_NAME, unicode(
-                    common_name))
+                x509.NameAttribute(oid.NameOID.COMMON_NAME,
+                                   unicode(common_name))
             ])).sign(
                 private_key.GetRawPrivateKey(),
                 hashes.SHA256(),
@@ -356,7 +357,7 @@ class RSAPrivateKey(rdfvalue.RDFValue):
 
   def Sign(self, message, use_pss=False):
     """Sign a given message."""
-    # TODO(user): This should use PSS by default at some point.
+    # TODO(amoser): This should use PSS by default at some point.
     if not use_pss:
       padding_algorithm = padding.PKCS1v15()
     else:
@@ -453,7 +454,7 @@ class RSAPrivateKey(rdfvalue.RDFValue):
     return self._value.key_size
 
 
-# TODO(user): Get rid of those.
+# TODO(amoser): Get rid of those.
 # Conserve old names for backwards compatibility.
 class PEMPrivateKey(RSAPrivateKey):
   pass
@@ -583,7 +584,7 @@ class EncryptionKey(rdfvalue.RDFBytes):
     return self._value
 
 
-# TODO(user): Size is now flexible, this class makes no sense anymore.
+# TODO(amoser): Size is now flexible, this class makes no sense anymore.
 class AES128Key(EncryptionKey):
   length = 128
 
@@ -760,3 +761,27 @@ class HMAC(object):
       return True
     except exceptions.InvalidSignature as e:
       raise VerificationError(e)
+
+
+class Password(rdf_structs.RDFProtoStruct):
+  """A password stored in the database."""
+  protobuf = jobs_pb2.Password
+
+  def _CalculateHash(self, password, salt, iteration_count):
+    kdf = pbkdf2.PBKDF2HMAC(
+        algorithm=hashes.SHA256(),
+        length=32,
+        salt=salt,
+        iterations=iteration_count,
+        backend=openssl.backend)
+    return kdf.derive(password)
+
+  def SetPassword(self, password):
+    self.salt = "%08x%08x" % (utils.PRNG.GetULong(), utils.PRNG.GetULong())
+    self.iteration_count = 100000
+    self.hashed_pwd = self._CalculateHash(password, self.salt,
+                                          self.iteration_count)
+
+  def CheckPassword(self, password):
+    h = self._CalculateHash(password, self.salt, self.iteration_count)
+    return constant_time.bytes_eq(h, self.hashed_pwd)

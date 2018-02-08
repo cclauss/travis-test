@@ -1,9 +1,9 @@
 'use strict';
 
-goog.provide('grrUi.client.virtualFileSystem.fileDownloadViewDirective.FileDownloadViewController');
+goog.provide('grrUi.client.virtualFileSystem.fileDownloadViewDirective');
 goog.provide('grrUi.client.virtualFileSystem.fileDownloadViewDirective.FileDownloadViewDirective');
-goog.require('grrUi.client.virtualFileSystem.events');
-goog.require('grrUi.core.serverErrorButtonDirective.ServerErrorButtonDirective');
+goog.require('grrUi.client.virtualFileSystem.events');  // USE: REFRESH_FILE_EVENT
+goog.require('grrUi.core.serverErrorButtonDirective');  // USE: ServerErrorButtonDirective
 
 goog.scope(function() {
 
@@ -26,7 +26,7 @@ var OPERATION_POLL_INTERVAL_MS = 1000;
  * @param {!grrUi.core.apiService.ApiService} grrApiService
  * @ngInject
  */
-grrUi.client.virtualFileSystem.fileDownloadViewDirective.FileDownloadViewController = function(
+const FileDownloadViewController = function(
     $rootScope, $scope, $interval, grrApiService) {
   /** @private {!angular.Scope} */
   this.rootScope_ = $rootScope;
@@ -55,7 +55,7 @@ grrUi.client.virtualFileSystem.fileDownloadViewDirective.FileDownloadViewControl
   /** @type {string} */
   this.downloadCommand;
 
-  /** @type {Object} */
+  /** @type {Object|undefined} */
   this.fileDetails;
 
   this.scope_.$watchGroup(['controller.fileContext.clientId',
@@ -67,8 +67,6 @@ grrUi.client.virtualFileSystem.fileDownloadViewDirective.FileDownloadViewControl
       this.stopMonitorUpdateOperation_.bind(this));
 };
 
-var FileDownloadViewController =
-    grrUi.client.virtualFileSystem.fileDownloadViewDirective.FileDownloadViewController;
 
 
 /**
@@ -93,6 +91,8 @@ FileDownloadViewController.prototype.onContextChange_ = function() {
     if (fileVersion) {
       params['timestamp'] = fileVersion;
     }
+
+    this.fileDetails = undefined;
     this.grrApiService_.get(detailsUrl, params).then(function(response) {
       this.fileDetails = response.data['file'];
     }.bind(this));

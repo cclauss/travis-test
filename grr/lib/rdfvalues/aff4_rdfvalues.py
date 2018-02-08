@@ -2,7 +2,6 @@
 """AFF4-related RDFValues implementations."""
 
 
-
 import re
 
 from grr.lib import rdfvalue
@@ -11,7 +10,7 @@ from grr.lib import utils
 
 from grr.lib.rdfvalues import structs
 
-from grr.proto import jobs_pb2
+from grr_response_proto import jobs_pb2
 
 
 class AFF4ObjectLabel(structs.RDFProtoStruct):

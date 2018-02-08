@@ -1,11 +1,9 @@
 'use strict';
 
-goog.provide('grrUi.docs.apiDocsDirective.ApiCallHandlerDescriptor');
-goog.provide('grrUi.docs.apiDocsDirective.ApiDocsController');
+goog.provide('grrUi.docs.apiDocsDirective');
 goog.provide('grrUi.docs.apiDocsDirective.ApiDocsDirective');
-goog.provide('grrUi.docs.apiDocsDirective.ApiObjectRendererDescriptor');
 
-goog.require('grrUi.core.apiService.stripTypeInfo');
+goog.require('grrUi.core.apiService');  // USE: stripTypeInfo
 
 goog.scope(function() {
 
@@ -22,7 +20,7 @@ var stripTypeInfo = grrUi.core.apiService.stripTypeInfo;
  * @param {!grrUi.core.apiService.ApiService} grrApiService
  * @ngInject
  */
-grrUi.docs.apiDocsDirective.ApiDocsController = function($element, $http,
+const ApiDocsController = function($element, $http,
                                                          grrApiService) {
   /** @private {!angular.jQuery} */
   this.element_ = $element;
@@ -51,7 +49,6 @@ grrUi.docs.apiDocsDirective.ApiDocsController = function($element, $http,
       this.onExamplesFetched_.bind(this));
 };
 
-var ApiDocsController = grrUi.docs.apiDocsDirective.ApiDocsController;
 
 
 /**
@@ -173,7 +170,7 @@ ApiDocsController.prototype.onCategoryLinkClick = function(category) {
 /**
  * Directive for displaying API documentation.
  *
- * @constructor
+ * @return {!angular.Directive} Directive definition object.
  * @ngInject
  * @export
  */

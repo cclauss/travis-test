@@ -1,6 +1,6 @@
 'use strict';
 
-goog.provide('grrUi.hunt.huntCrashesDirective.HuntCrashesController');
+goog.provide('grrUi.hunt.huntCrashesDirective');
 goog.provide('grrUi.hunt.huntCrashesDirective.HuntCrashesDirective');
 
 goog.scope(function() {
@@ -17,12 +17,12 @@ grrUi.hunt.huntCrashesDirective.AUTO_REFRESH_INTERVAL_MS = 20 * 1000;
  * @param {!angular.Scope} $scope
  * @ngInject
  */
-grrUi.hunt.huntCrashesDirective.HuntCrashesController = function($scope) {
+const HuntCrashesController = function($scope) {
   /** @private {!angular.Scope} */
   this.scope_ = $scope;
 
   /** @type {string} */
-  this.scope_.huntUrn;
+  this.scope_.huntId;
 
   /** @export {string} */
   this.crashesUrl;
@@ -31,22 +31,19 @@ grrUi.hunt.huntCrashesDirective.HuntCrashesController = function($scope) {
   this.autoRefreshInterval =
       grrUi.hunt.huntCrashesDirective.AUTO_REFRESH_INTERVAL_MS;
 
-  this.scope_.$watch('huntUrn', this.onHuntUrnChange_.bind(this));
+  this.scope_.$watch('huntId', this.onHuntIdChange_.bind(this));
 };
 
-var HuntCrashesController =
-    grrUi.hunt.huntCrashesDirective.HuntCrashesController;
 
 
 /**
- * Handles huntUrn attribute changes.
+ * Handles huntId attribute changes.
  *
+ * @param {string} huntId
  * @private
  */
-HuntCrashesController.prototype.onHuntUrnChange_ = function() {
-  if (angular.isDefined(this.scope_.huntUrn)) {
-    var huntUrnComponents = this.scope_.huntUrn.split('/');
-    var huntId = huntUrnComponents[huntUrnComponents.length - 1];
+HuntCrashesController.prototype.onHuntIdChange_ = function(huntId) {
+  if (angular.isDefined(huntId)) {
     this.crashesUrl = 'hunts/' + huntId + '/crashes';
   }
 };
@@ -55,14 +52,14 @@ HuntCrashesController.prototype.onHuntUrnChange_ = function() {
 /**
  * Directive for displaying crashes of a hunt with a given URN.
  *
- * @constructor
+ * @return {!angular.Directive} Directive definition object.
  * @ngInject
  * @export
  */
 grrUi.hunt.huntCrashesDirective.HuntCrashesDirective = function() {
   return {
     scope: {
-      huntUrn: '='
+      huntId: '='
     },
     restrict: 'E',
     templateUrl: '/static/angular-components/hunt/hunt-crashes.html',

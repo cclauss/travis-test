@@ -1,6 +1,5 @@
 <div>
 
-  <b>Version:</b>
   <select ng-model="controller.version"
           ng-disabled="!controller.versions.length"
           class="form-control version-dropdown">
@@ -19,7 +18,7 @@
     </option>
 
     <option ng-if="!controller.versions.length"
-            ng-selected="!controller.versions.length"
+            ng-selected="true"
             value="">
       No versions available.
     </option>

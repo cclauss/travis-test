@@ -1,8 +1,8 @@
 'use strict';
 
-goog.provide('grrUi.core.serverErrorPreviewDirective.ServerErrorPreviewController');
+goog.provide('grrUi.core.serverErrorPreviewDirective');
 goog.provide('grrUi.core.serverErrorPreviewDirective.ServerErrorPreviewDirective');
-goog.require('grrUi.core.serverErrorButtonDirective.ServerErrorButtonDirective');
+goog.require('grrUi.core.serverErrorButtonDirective');  // USE: ServerErrorButtonDirective
 
 
 goog.scope(function() {
@@ -25,7 +25,7 @@ var ERROR_PREVIEW_INTERVAL = 5000; //ms
  * @constructor
  * @ngInject
  */
-grrUi.core.serverErrorPreviewDirective.ServerErrorPreviewController = function($rootScope, $scope, $timeout) {
+const ServerErrorPreviewController = function($rootScope, $scope, $timeout) {
 
   /** @private {!angular.Scope} */
   this.rootScope_ = $rootScope;
@@ -45,8 +45,6 @@ grrUi.core.serverErrorPreviewDirective.ServerErrorPreviewController = function($
   this.rootScope_.$on(ERROR_EVENT_NAME, this.onErrorEvent.bind(this));
 };
 
-var ServerErrorPreviewController =
-  grrUi.core.serverErrorPreviewDirective.ServerErrorPreviewController;
 
 
 /**
@@ -76,9 +74,10 @@ ServerErrorPreviewController.prototype.onErrorEvent = function(unused_event, err
 
 
 /**
- * Directive that displays a label with the error message whenever a server error occurs
+ * Directive that displays a label with the error message whenever a server
+ * error occurs
  *
- * @constructor
+ * @return {!angular.Directive} Directive definition object.
  * @ngInject
  * @export
  */

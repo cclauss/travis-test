@@ -5,14 +5,12 @@ import os
 from grr import config
 from grr.lib import flags
 from grr.lib.rdfvalues import client as rdf_client
-from grr.lib.rdfvalues import paths as rdf_paths
 from grr.server import aff4
 from grr.server import flow
 from grr.server.checks import checks
 from grr.server.checks import checks_test_lib
 from grr.server.flows.general import checks as flow_checks
 from grr.test_lib import action_mocks
-from grr.test_lib import fixture_test_lib
 from grr.test_lib import flow_test_lib
 from grr.test_lib import test_lib
 from grr.test_lib import vfs_test_lib
@@ -27,20 +25,13 @@ class TestCheckFlows(flow_test_lib.FlowTestsBaseclass,
 
   def setUp(self):
     super(TestCheckFlows, self).setUp()
+    self.client_id = self.SetupClient(0)
     # Only load the checks once.
     if self.checks_loaded is False:
       self.checks_loaded = self.LoadChecks()
     if not self.checks_loaded:
       raise RuntimeError("No checks to test.")
-    fixture_test_lib.ClientFixture(self.client_id, token=self.token)
-    self.vfs_overrider = vfs_test_lib.VFSOverrider(
-        rdf_paths.PathSpec.PathType.OS, vfs_test_lib.FakeTestDataVFSHandler)
-    self.vfs_overrider.Start()
     self.client_mock = action_mocks.FileFinderClientMock()
-
-  def tearDown(self):
-    super(TestCheckFlows, self).tearDown()
-    self.vfs_overrider.Stop()
 
   def SetLinuxKB(self):
     client = aff4.FACTORY.Open(self.client_id, token=self.token, mode="rw")
@@ -65,16 +56,18 @@ class TestCheckFlows(flow_test_lib.FlowTestsBaseclass,
   def RunFlow(self):
     session_id = None
     with test_lib.Instrument(flow.GRRFlow, "SendReply") as send_reply:
-      for session_id in flow_test_lib.TestFlowHelper(
-          flow_checks.CheckRunner.__name__,
-          client_mock=self.client_mock,
-          client_id=self.client_id,
-          token=self.token):
-        pass
+      with vfs_test_lib.FakeTestDataVFSOverrider():
+        for session_id in flow_test_lib.TestFlowHelper(
+            flow_checks.CheckRunner.__name__,
+            client_mock=self.client_mock,
+            client_id=self.client_id,
+            token=self.token):
+          pass
     session = aff4.FACTORY.Open(session_id, token=self.token)
     results = {
         r.check_id: r
-        for _, r in send_reply.args if isinstance(r, checks.CheckResult)
+        for _, r in send_reply.args
+        if isinstance(r, checks.CheckResult)
     }
     return session, results
 
@@ -108,6 +101,7 @@ class TestCheckFlows(flow_test_lib.FlowTestsBaseclass,
     """Test the flow returns parser results."""
     self.SetLinuxKB()
     _, results = self.RunFlow()
+
     # Detected by result_context: PARSER
     exp = "Found: Sshd allows protocol 1."
     self.assertCheckDetectedAnom("SSHD-CHECK", results, exp)

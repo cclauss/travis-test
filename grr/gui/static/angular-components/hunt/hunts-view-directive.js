@@ -1,6 +1,6 @@
 'use strict';
 
-goog.provide('grrUi.hunt.huntsViewDirective.HuntsViewController');
+goog.provide('grrUi.hunt.huntsViewDirective');
 goog.provide('grrUi.hunt.huntsViewDirective.HuntsViewDirective');
 
 goog.scope(function() {
@@ -14,7 +14,7 @@ goog.scope(function() {
  * @constructor
  * @ngInject
  */
-grrUi.hunt.huntsViewDirective.HuntsViewController = function(
+const HuntsViewController = function(
     $scope, grrRoutingService) {
   /** @private {!angular.Scope} */
   this.scope_ = $scope;
@@ -23,19 +23,17 @@ grrUi.hunt.huntsViewDirective.HuntsViewController = function(
   this.grrRoutingService_ = grrRoutingService;
 
   /** @type {string} */
-  this.selectedHuntUrn;
+  this.selectedHuntId;
 
   /** @type {string} */
   this.tab;
 
-  this.scope_.$watchGroup(['controller.selectedHuntUrn', 'controller.tab'],
+  this.scope_.$watchGroup(['controller.selectedHuntId', 'controller.tab'],
       this.onSelectionChange_.bind(this));
 
   this.grrRoutingService_.uiOnParamsChanged(this.scope_, ['huntId', 'tab'],
       this.onParamsChange_.bind(this));
 };
-var HuntsViewController =
-    grrUi.hunt.huntsViewDirective.HuntsViewController;
 
 
 /**
@@ -47,7 +45,7 @@ var HuntsViewController =
  */
 HuntsViewController.prototype.onParamsChange_ = function(newValues, opt_stateParams) {
   if (opt_stateParams['huntId']) {
-    this.selectedHuntUrn = 'aff4:/hunts/' + opt_stateParams['huntId'];
+    this.selectedHuntId = opt_stateParams['huntId'];
   }
   this.tab = opt_stateParams['tab'];
 };
@@ -58,9 +56,8 @@ HuntsViewController.prototype.onParamsChange_ = function(newValues, opt_statePar
  * @private
  */
 HuntsViewController.prototype.onSelectionChange_ = function() {
-  if (angular.isDefined(this.selectedHuntUrn)) {
-    var huntId = this.selectedHuntUrn.split('/')[2];
-    this.grrRoutingService_.go('hunts', {huntId: huntId, tab: this.tab});
+  if (angular.isDefined(this.selectedHuntId)) {
+    this.grrRoutingService_.go('hunts', {huntId: this.selectedHuntId, tab: this.tab});
   }
 };
 

@@ -1,6 +1,6 @@
 'use strict';
 
-goog.provide('grrUi.hunt.huntErrorsDirective.HuntErrorsController');
+goog.provide('grrUi.hunt.huntErrorsDirective');
 goog.provide('grrUi.hunt.huntErrorsDirective.HuntErrorsDirective');
 
 goog.scope(function() {
@@ -17,12 +17,12 @@ grrUi.hunt.huntErrorsDirective.AUTO_REFRESH_INTERVAL_MS = 20 * 1000;
  * @param {!angular.Scope} $scope
  * @ngInject
  */
-grrUi.hunt.huntErrorsDirective.HuntErrorsController = function($scope) {
+const HuntErrorsController = function($scope) {
   /** @private {!angular.Scope} */
   this.scope_ = $scope;
 
   /** @type {string} */
-  this.scope_.huntUrn;
+  this.scope_.huntId;
 
   /** @export {string} */
   this.errorsUrl;
@@ -31,21 +31,19 @@ grrUi.hunt.huntErrorsDirective.HuntErrorsController = function($scope) {
   this.autoRefreshInterval =
       grrUi.hunt.huntErrorsDirective.AUTO_REFRESH_INTERVAL_MS;
 
-  this.scope_.$watch('huntUrn', this.onHuntUrnChange_.bind(this));
+  this.scope_.$watch('huntId', this.onHuntIdChange_.bind(this));
 };
 
-var HuntErrorsController = grrUi.hunt.huntErrorsDirective.HuntErrorsController;
 
 
 /**
- * Handles huntUrn attribute changes.
+ * Handles huntId attribute changes.
  *
+ * @param {string} huntId
  * @private
  */
-HuntErrorsController.prototype.onHuntUrnChange_ = function() {
-  if (angular.isDefined(this.scope_.huntUrn)) {
-    var huntUrnComponents = this.scope_.huntUrn.split('/');
-    var huntId = huntUrnComponents[huntUrnComponents.length - 1];
+HuntErrorsController.prototype.onHuntIdChange_ = function(huntId) {
+  if (angular.isDefined(huntId)) {
     this.errorsUrl = 'hunts/' + huntId + '/errors';
   }
 };
@@ -54,14 +52,14 @@ HuntErrorsController.prototype.onHuntUrnChange_ = function() {
 /**
  * Directive for displaying errors of a hunt with a given URN.
  *
- * @constructor
+ * @return {!angular.Directive} Directive definition object.
  * @ngInject
  * @export
  */
 grrUi.hunt.huntErrorsDirective.HuntErrorsDirective = function() {
   return {
     scope: {
-      huntUrn: '='
+      huntId: '='
     },
     restrict: 'E',
     templateUrl: '/static/angular-components/hunt/hunt-errors.html',

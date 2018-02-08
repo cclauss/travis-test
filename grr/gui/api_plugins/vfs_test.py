@@ -2,8 +2,6 @@
 # -*- mode: python; encoding: utf-8 -*-
 """This modules contains tests for VFS API handlers."""
 
-
-
 import StringIO
 import zipfile
 
@@ -86,7 +84,7 @@ class ApiGetFileDetailsHandlerTest(api_test_lib.ApiCallHandlerTest,
   def setUp(self):
     super(ApiGetFileDetailsHandlerTest, self).setUp()
     self.handler = vfs_plugin.ApiGetFileDetailsHandler()
-    self.client_id = self.SetupClients(1)[0]
+    self.client_id = self.SetupClient(0)
     self.file_path = "fs/os/c/Downloads/a.txt"
     self.CreateFileVersions(self.client_id, self.file_path)
 
@@ -161,7 +159,7 @@ class ApiListFilesHandlerTest(api_test_lib.ApiCallHandlerTest, VfsTestMixin):
   def setUp(self):
     super(ApiListFilesHandlerTest, self).setUp()
     self.handler = vfs_plugin.ApiListFilesHandler()
-    self.client_id = self.SetupClients(1)[0]
+    self.client_id = self.SetupClient(0)
     self.file_path = "fs/os/etc"
 
   def testDoesNotRaiseIfFirstCompomentIsEmpty(self):
@@ -239,7 +237,7 @@ class ApiGetFileTextHandlerTest(api_test_lib.ApiCallHandlerTest, VfsTestMixin):
   def setUp(self):
     super(ApiGetFileTextHandlerTest, self).setUp()
     self.handler = vfs_plugin.ApiGetFileTextHandler()
-    self.client_id = self.SetupClients(1)[0]
+    self.client_id = self.SetupClient(0)
     self.file_path = "fs/os/c/Downloads/a.txt"
     self.CreateFileVersions(self.client_id, self.file_path)
 
@@ -297,7 +295,7 @@ class ApiGetFileBlobHandlerTest(api_test_lib.ApiCallHandlerTest, VfsTestMixin):
   def setUp(self):
     super(ApiGetFileBlobHandlerTest, self).setUp()
     self.handler = vfs_plugin.ApiGetFileBlobHandler()
-    self.client_id = self.SetupClients(1)[0]
+    self.client_id = self.SetupClient(0)
     self.file_path = "fs/os/c/Downloads/a.txt"
     self.CreateFileVersions(self.client_id, self.file_path)
 
@@ -374,7 +372,7 @@ class ApiGetFileVersionTimesHandlerTest(api_test_lib.ApiCallHandlerTest,
 
   def setUp(self):
     super(ApiGetFileVersionTimesHandlerTest, self).setUp()
-    self.client_id = self.SetupClients(1)[0]
+    self.client_id = self.SetupClient(0)
     self.handler = vfs_plugin.ApiGetFileVersionTimesHandler()
 
   def testRaisesOnEmptyPath(self):
@@ -401,7 +399,7 @@ class ApiGetFileDownloadCommandHandlerTest(api_test_lib.ApiCallHandlerTest,
 
   def setUp(self):
     super(ApiGetFileDownloadCommandHandlerTest, self).setUp()
-    self.client_id = self.SetupClients(1)[0]
+    self.client_id = self.SetupClient(0)
     self.handler = vfs_plugin.ApiGetFileDownloadCommandHandler()
 
   def testRaisesOnEmptyPath(self):
@@ -429,7 +427,7 @@ class ApiCreateVfsRefreshOperationHandlerTest(api_test_lib.ApiCallHandlerTest):
   def setUp(self):
     super(ApiCreateVfsRefreshOperationHandlerTest, self).setUp()
     self.handler = vfs_plugin.ApiCreateVfsRefreshOperationHandler()
-    self.client_id = self.SetupClients(1)[0]
+    self.client_id = self.SetupClient(0)
     # Choose some directory with pathspec in the ClientFixture.
     self.file_path = "fs/os/Users/Shared"
 
@@ -519,7 +517,7 @@ class ApiGetVfsRefreshOperationStateHandlerTest(api_test_lib.ApiCallHandlerTest,
   def setUp(self):
     super(ApiGetVfsRefreshOperationStateHandlerTest, self).setUp()
     self.handler = vfs_plugin.ApiGetVfsRefreshOperationStateHandler()
-    self.client_id = self.SetupClients(1)[0]
+    self.client_id = self.SetupClient(0)
 
   def testHandlerReturnsCorrectStateForFlow(self):
     # Create a mock refresh operation.
@@ -572,7 +570,7 @@ class ApiUpdateVfsFileContentHandlerTest(api_test_lib.ApiCallHandlerTest):
   def setUp(self):
     super(ApiUpdateVfsFileContentHandlerTest, self).setUp()
     self.handler = vfs_plugin.ApiUpdateVfsFileContentHandler()
-    self.client_id = self.SetupClients(1)[0]
+    self.client_id = self.SetupClient(0)
     self.file_path = "fs/os/c/bin/bash"
 
   def testRaisesOnEmptyPath(self):
@@ -613,7 +611,7 @@ class ApiGetVfsFileContentUpdateStateHandlerTest(
   def setUp(self):
     super(ApiGetVfsFileContentUpdateStateHandlerTest, self).setUp()
     self.handler = vfs_plugin.ApiGetVfsFileContentUpdateStateHandler()
-    self.client_id = self.SetupClients(1)[0]
+    self.client_id = self.SetupClient(0)
 
   def testHandlerReturnsCorrectStateForFlow(self):
     # Create a mock refresh operation.
@@ -666,7 +664,7 @@ class VfsTimelineTestMixin(object):
   """
 
   def SetupTestTimeline(self):
-    self.client_id = self.SetupClients(1)[0]
+    self.client_id = self.SetupClient(0)
     fixture_test_lib.ClientFixture(self.client_id, token=self.token)
 
     # Choose some directory with pathspec in the ClientFixture.
@@ -677,8 +675,7 @@ class VfsTimelineTestMixin(object):
     for i in range(0, 5):
       with test_lib.FakeTime(i):
         with aff4.FACTORY.Create(
-            file_urn, aff4_grr.VFSAnalysisFile, mode="w",
-            token=self.token) as fd:
+            file_urn, aff4_grr.VFSFile, mode="w", token=self.token) as fd:
           stats = rdf_client.StatEntry(
               st_mtime=rdfvalue.RDFDatetimeSeconds().Now())
           fd.Set(fd.Schema.STAT, stats)
@@ -779,7 +776,7 @@ class ApiGetVfsFilesArchiveHandlerTest(api_test_lib.ApiCallHandlerTest,
     super(ApiGetVfsFilesArchiveHandlerTest, self).setUp()
 
     self.handler = vfs_plugin.ApiGetVfsFilesArchiveHandler()
-    self.client_id = self.SetupClients(1)[0]
+    self.client_id = self.SetupClient(0)
 
     self.CreateFileVersions(self.client_id, "fs/os/c/Downloads/a.txt")
 

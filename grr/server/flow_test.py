@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 """Tests for the flow."""
 
-
 import time
 
 
@@ -16,7 +15,7 @@ from grr.lib.rdfvalues import flows as rdf_flows
 from grr.lib.rdfvalues import paths as rdf_paths
 from grr.lib.rdfvalues import protodict as rdf_protodict
 from grr.lib.rdfvalues import structs as rdf_structs
-from grr.proto import tests_pb2
+from grr_response_proto import tests_pb2
 from grr.server import access_control
 from grr.server import aff4
 from grr.server import data_store
@@ -99,7 +98,10 @@ class CallClientParentFlow(NoRequestParentFlow):
 
 
 class BasicFlowTest(flow_test_lib.FlowTestsBaseclass):
-  pass
+
+  def setUp(self):
+    super(BasicFlowTest, self).setUp()
+    self.client_id = test_lib.TEST_CLIENT_ID
 
 
 class FlowWithMultipleResultTypes(flow.GRRFlow):
@@ -342,7 +344,8 @@ class FlowCreationTest(BasicFlowTest):
         ClientMock(),
         client_id=self.client_id,
         check_flow_errors=False,
-        token=self.token,):
+        token=self.token,
+    ):
       pass
 
     self.assertEqual(ParentFlowWithoutResponses.success, True)
@@ -455,13 +458,13 @@ class FlowCreationTest(BasicFlowTest):
     self.assertEqual(c.LengthByType(rdfvalue.RDFString.__name__), 2)
     self.assertEqual(c.LengthByType(rdfvalue.RDFURN.__name__), 3)
 
-    self.assertListEqual([
-        v.payload for _, v in c.ScanByType(rdfvalue.RDFInteger.__name__)
-    ], [rdfvalue.RDFInteger(42)])
-    self.assertListEqual([
-        v.payload for _, v in c.ScanByType(rdfvalue.RDFString.__name__)
-    ], [rdfvalue.RDFString("foo bar"),
-        rdfvalue.RDFString("foo1 bar1")])
+    self.assertListEqual(
+        [v.payload for _, v in c.ScanByType(rdfvalue.RDFInteger.__name__)],
+        [rdfvalue.RDFInteger(42)])
+    self.assertListEqual(
+        [v.payload for _, v in c.ScanByType(rdfvalue.RDFString.__name__)],
+        [rdfvalue.RDFString("foo bar"),
+         rdfvalue.RDFString("foo1 bar1")])
     self.assertListEqual(
         [v.payload for _, v in c.ScanByType(rdfvalue.RDFURN.__name__)], [
             rdfvalue.RDFURN("foo/bar"),
@@ -723,8 +726,9 @@ class FlowOutputPluginsTest(BasicFlowTest):
         output_plugins=plugins)
 
     if flow_args is None:
-      flow_args = transfer.GetFileArgs(pathspec=rdf_paths.PathSpec(
-          path="/tmp/evil.txt", pathtype=rdf_paths.PathSpec.PathType.OS))
+      flow_args = transfer.GetFileArgs(
+          pathspec=rdf_paths.PathSpec(
+              path="/tmp/evil.txt", pathtype=rdf_paths.PathSpec.PathType.OS))
 
     if client_mock is None:
       client_mock = hunt_test_lib.SampleHuntMock()
@@ -755,14 +759,16 @@ class FlowOutputPluginsTest(BasicFlowTest):
     self.assertEqual(DummyFlowOutputPlugin.num_calls, 0)
 
   def testFlowWithOutputPluginProcessesResultsSuccessfully(self):
-    self.RunFlow(plugins=output_plugin.OutputPluginDescriptor(
-        plugin_name="DummyFlowOutputPlugin"))
+    self.RunFlow(
+        plugins=output_plugin.OutputPluginDescriptor(
+            plugin_name="DummyFlowOutputPlugin"))
     self.assertEqual(DummyFlowOutputPlugin.num_calls, 1)
     self.assertEqual(DummyFlowOutputPlugin.num_responses, 1)
 
   def testFlowLogsSuccessfulOutputPluginProcessing(self):
-    flow_urn = self.RunFlow(plugins=output_plugin.OutputPluginDescriptor(
-        plugin_name="DummyFlowOutputPlugin"))
+    flow_urn = self.RunFlow(
+        plugins=output_plugin.OutputPluginDescriptor(
+            plugin_name="DummyFlowOutputPlugin"))
     flow_obj = aff4.FACTORY.Open(flow_urn, token=self.token)
     log_messages = [item.log_message for item in flow_obj.GetLog()]
     self.assertTrue(
@@ -770,8 +776,9 @@ class FlowOutputPluginsTest(BasicFlowTest):
         log_messages)
 
   def testFlowLogsFailedOutputPluginProcessing(self):
-    flow_urn = self.RunFlow(plugins=output_plugin.OutputPluginDescriptor(
-        plugin_name="FailingDummyFlowOutputPlugin"))
+    flow_urn = self.RunFlow(
+        plugins=output_plugin.OutputPluginDescriptor(
+            plugin_name="FailingDummyFlowOutputPlugin"))
     flow_obj = aff4.FACTORY.Open(flow_urn, token=self.token)
     log_messages = [item.log_message for item in flow_obj.GetLog()]
     self.assertTrue(
@@ -779,8 +786,9 @@ class FlowOutputPluginsTest(BasicFlowTest):
         "due to: Oh no!" in log_messages)
 
   def testFlowDoesNotFailWhenOutputPluginFails(self):
-    flow_urn = self.RunFlow(plugins=output_plugin.OutputPluginDescriptor(
-        plugin_name="FailingDummyFlowOutputPlugin"))
+    flow_urn = self.RunFlow(
+        plugins=output_plugin.OutputPluginDescriptor(
+            plugin_name="FailingDummyFlowOutputPlugin"))
     flow_obj = aff4.FACTORY.Open(flow_urn, token=self.token)
     self.assertEqual(flow_obj.context.state, "TERMINATED")
 
@@ -882,7 +890,8 @@ class GeneralFlowsTest(BasicFlowTest):
     subflows = list(
         obj
         for obj in aff4.FACTORY.Open(session_id, token=self.token)
-        .OpenChildren() if isinstance(obj, flow.GRRFlow))
+        .OpenChildren()
+        if isinstance(obj, flow.GRRFlow))
     self.assertEqual(len(subflows), 1)
     self.assertEqual(subflows[0].GetRunner().context.creator, "original_user")
 
@@ -1075,8 +1084,9 @@ class MockVFSHandler(vfs.VFSHandler):
   """A mock VFS handler with fake files."""
   children = []
   for x in range(10):
-    child = rdf_client.StatEntry(pathspec=rdf_paths.PathSpec(
-        path="Foo%s" % x, pathtype=rdf_paths.PathSpec.PathType.OS))
+    child = rdf_client.StatEntry(
+        pathspec=rdf_paths.PathSpec(
+            path="Foo%s" % x, pathtype=rdf_paths.PathSpec.PathType.OS))
     children.append(child)
 
   supported_pathtype = rdf_paths.PathSpec.PathType.OS
@@ -1281,7 +1291,9 @@ class CallStateFlow(flow.GRRFlow):
     self.CallState(
         [rdfvalue.RDFString("Hello")],
         next_state="ReceiveHello",
-        request_data={"test_req_data": 2})
+        request_data={
+            "test_req_data": 2
+        })
 
   @flow.StateHandler()
   def ReceiveHello(self, responses):

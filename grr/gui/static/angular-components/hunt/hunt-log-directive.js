@@ -1,6 +1,6 @@
 'use strict';
 
-goog.provide('grrUi.hunt.huntLogDirective.HuntLogController');
+goog.provide('grrUi.hunt.huntLogDirective');
 goog.provide('grrUi.hunt.huntLogDirective.HuntLogDirective');
 
 goog.scope(function() {
@@ -17,32 +17,30 @@ grrUi.hunt.huntLogDirective.AUTO_REFRESH_INTERVAL_MS = 20 * 1000;
  * @param {!angular.Scope} $scope
  * @ngInject
  */
-grrUi.hunt.huntLogDirective.HuntLogController = function($scope) {
+const HuntLogController = function($scope) {
   /** @private {!angular.Scope} */
   this.scope_ = $scope;
 
   /** @type {string} */
-  this.scope_.huntUrn;
+  this.scope_.huntId;
 
   /** @type {number} */
   this.autoRefreshInterval =
       grrUi.hunt.huntLogDirective.AUTO_REFRESH_INTERVAL_MS;
 
-  this.scope_.$watch('huntUrn', this.onHuntUrnChange.bind(this));
+  this.scope_.$watch('huntId', this.onHuntIdChange_.bind(this));
 };
 
-var HuntLogController =
-    grrUi.hunt.huntLogDirective.HuntLogController;
 
 
 /**
- * Handles huntUrn attribute changes.
- * @export
+ * Handles huntId attribute changes.
+
+ * @param {string} huntId
+ * @private
  */
-HuntLogController.prototype.onHuntUrnChange = function() {
-  if (angular.isDefined(this.scope_.huntUrn)) {
-    var huntUrnComponents = this.scope_.huntUrn.split('/');
-    var huntId = huntUrnComponents[huntUrnComponents.length - 1];
+HuntLogController.prototype.onHuntIdChange_ = function(huntId) {
+  if (angular.isDefined(huntId)) {
     this.logsUrl = 'hunts/' + huntId + '/log';
   }
 };
@@ -64,14 +62,6 @@ HuntLogController.prototype.transformItems = function(items) {
   var highlighted = false;
   for (var i = 0; i < items.length; ++i) {
     var item = items[i];
-
-    // Truncate full URN to just the last component.
-    if (item.value.urn !== undefined) {
-      var components = item.value.urn.value.split('/');
-      if (components.length > 0) {
-        item.shortUrn = components[components.length - 1];
-      }
-    }
 
     // Highlight rows with a similar client id with the same
     // highlight. Also show the client id only once per group
@@ -99,14 +89,14 @@ HuntLogController.prototype.transformItems = function(items) {
 /**
  * Directive for displaying log records of a hunt with a given URN.
  *
- * @constructor
+ * @return {!angular.Directive} Directive definition object.
  * @ngInject
  * @export
  */
 grrUi.hunt.huntLogDirective.HuntLogDirective = function() {
   return {
     scope: {
-      huntUrn: '='
+      huntId: '='
     },
     restrict: 'E',
     templateUrl: '/static/angular-components/hunt/hunt-log.html',

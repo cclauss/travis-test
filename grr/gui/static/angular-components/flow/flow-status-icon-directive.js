@@ -1,6 +1,6 @@
 'use strict';
 
-goog.provide('grrUi.flow.flowStatusIconDirective.FlowStatusIconController');
+goog.provide('grrUi.flow.flowStatusIconDirective');
 goog.provide('grrUi.flow.flowStatusIconDirective.FlowStatusIconDirective');
 
 
@@ -10,7 +10,7 @@ goog.scope(function() {
 /**
  * Directive that displays flow status icons for a given flow.
  *
- * @constructor
+ * @return {!angular.Directive} Directive definition object.
  * @ngInject
  * @export
  */
@@ -31,6 +31,4 @@ grrUi.flow.flowStatusIconDirective.FlowStatusIconDirective =
  */
 grrUi.flow.flowStatusIconDirective.FlowStatusIconDirective
     .directive_name = 'grrFlowStatusIcon';
-
-
 });  // goog.scope

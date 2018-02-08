@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 """Flow to recover history files."""
 
-
 # DISABLED for now until it gets converted to artifacts.
 
 import datetime
@@ -14,7 +13,7 @@ from grr.lib.rdfvalues import standard
 from grr.lib.rdfvalues import structs as rdf_structs
 from grr.parsers import chrome_history
 from grr.parsers import firefox3_history
-from grr.proto import flows_pb2
+from grr_response_proto import flows_pb2
 from grr.server import aff4
 from grr.server import flow
 from grr.server import flow_utils
@@ -75,8 +74,7 @@ class ChromeHistory(flow.GRRFlow):
             file_finder.FileFinder.__name__,
             paths=[os.path.join(path, fname)],
             pathtype=self.args.pathtype,
-            action=rdf_file_finder.FileFinderAction(
-                action_type=rdf_file_finder.FileFinderAction.Action.DOWNLOAD),
+            action=rdf_file_finder.FileFinderAction.Download(),
             next_state="ParseFiles")
 
   @flow.StateHandler()
@@ -190,8 +188,7 @@ class FirefoxHistory(flow.GRRFlow):
           file_finder.FileFinder.__name__,
           paths=[os.path.join(path, "**2", filename)],
           pathtype=self.args.pathtype,
-          action=rdf_file_finder.FileFinderAction(
-              action_type=rdf_file_finder.FileFinderAction.Action.DOWNLOAD),
+          action=rdf_file_finder.FileFinderAction.Download(),
           next_state="ParseFiles")
 
   @flow.StateHandler()
@@ -346,8 +343,7 @@ class CacheGrep(flow.GRRFlow):
             paths=[os.path.join(full_path, "**5")],
             pathtype=self.args.pathtype,
             conditions=[condition],
-            action=rdf_file_finder.FileFinderAction(
-                action_type=rdf_file_finder.FileFinderAction.Action.DOWNLOAD),
+            action=rdf_file_finder.FileFinderAction.Download(),
             next_state="HandleResults")
 
   @flow.StateHandler()

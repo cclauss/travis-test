@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 """A library for tests."""
 
-
 import codecs
 import cProfile
 import datetime
@@ -29,7 +28,6 @@ import unittest
 
 from grr import config
 
-from grr.client import client_utils_linux
 from grr.client import comms
 from grr.lib import flags
 from grr.lib import rdfvalue
@@ -38,6 +36,7 @@ from grr.lib import utils
 
 from grr.lib.rdfvalues import client as rdf_client
 from grr.lib.rdfvalues import crypto as rdf_crypto
+from grr.lib.rdfvalues import objects
 
 from grr.server import access_control
 from grr.server import aff4
@@ -72,6 +71,7 @@ flags.DEFINE_string(
     "single test.")
 
 FIXED_TIME = rdfvalue.RDFDatetime.Now() - rdfvalue.Duration("8d")
+TEST_CLIENT_ID = rdf_client.ClientURN("C.1000000000000000")
 
 
 class Error(Exception):
@@ -85,6 +85,8 @@ class GRRBaseTest(unittest.TestCase):
 
   # The type of this test.
   type = "normal"
+
+  use_relational_reads = False
 
   def __init__(self, methodName=None):  # pylint: disable=g-bad-name
     """Hack around unittest's stupid constructor.
@@ -125,6 +127,7 @@ class GRRBaseTest(unittest.TestCase):
     self.last_start_time = time.time()
 
     data_store.DB.ClearTestDB()
+    data_store.REL_DB.ClearTestDB()
 
     aff4.FACTORY.Flush()
 
@@ -146,12 +149,6 @@ class GRRBaseTest(unittest.TestCase):
         (email.utils, "make_msgid", lambda: "<message id stub>"))
     self.mail_stubber.Start()
 
-    self.nanny_stubber = utils.Stubber(
-        client_utils_linux.NannyController,
-        "StartNanny",
-        lambda unresponsive_kill_period=None, nanny_logfile=None: True)
-    self.nanny_stubber.Start()
-
     # We don't want to send actual email in our tests
     self.smtp_patcher = mock.patch("smtplib.SMTP")
     self.mock_smtp = self.smtp_patcher.start()
@@ -163,16 +160,23 @@ class GRRBaseTest(unittest.TestCase):
     self.config_set_disable = utils.Stubber(config.CONFIG, "Set", DisabledSet)
     self.config_set_disable.Start()
 
+    if self.use_relational_reads:
+      self.relational_read_stubber = utils.Stubber(
+          data_store, "RelationalDBReadEnabled", lambda: True)
+      self.relational_read_stubber.Start()
+
   def tearDown(self):
     super(GRRBaseTest, self).tearDown()
 
     self.config_set_disable.Stop()
     self.smtp_patcher.stop()
-    self.nanny_stubber.Stop()
     self.mail_stubber.Stop()
+    if self.use_relational_reads:
+      self.relational_read_stubber.Stop()
 
     logging.info("Completed test: %s.%s (%.4fs)", self.__class__.__name__,
-                 self._testMethodName, time.time() - self.last_start_time)
+                 self._testMethodName,
+                 time.time() - self.last_start_time)
 
     # This may fail on filesystems which do not support unicode filenames.
     try:
@@ -299,9 +303,11 @@ class GRRBaseTest(unittest.TestCase):
   def _SetupClientImpl(self,
                        client_nr,
                        index=None,
-                       system=None,
-                       os_version=None,
-                       arch=None):
+                       arch="x86_64",
+                       kernel="4.0.0",
+                       os_version="buster/sid",
+                       ping=None,
+                       system="Linux"):
     client_id_urn = rdf_client.ClientURN("C.1%015x" % client_nr)
 
     with aff4.FACTORY.Create(
@@ -310,10 +316,8 @@ class GRRBaseTest(unittest.TestCase):
       cert = self.ClientCertFromPrivateKey(config.CONFIG["Client.private_key"])
       fd.Set(fd.Schema.CERT, cert)
 
-      info = fd.Schema.CLIENT_INFO()
-      info.client_name = "GRR Monitor"
-      fd.Set(fd.Schema.CLIENT_INFO, info)
-      fd.Set(fd.Schema.PING, rdfvalue.RDFDatetime.Now())
+      fd.Set(fd.Schema.CLIENT_INFO, self._TestClientInfo())
+      fd.Set(fd.Schema.PING, ping or rdfvalue.RDFDatetime.Now())
       fd.Set(fd.Schema.HOSTNAME("Host-%x" % client_nr))
       fd.Set(fd.Schema.FQDN("Host-%x.example.com" % client_nr))
       fd.Set(
@@ -329,10 +333,19 @@ class GRRBaseTest(unittest.TestCase):
         fd.Set(fd.Schema.OS_VERSION(os_version))
       if arch:
         fd.Set(fd.Schema.ARCH(arch))
+      if kernel:
+        fd.Set(fd.Schema.KERNEL(kernel))
 
       kb = rdf_client.KnowledgeBase()
+      kb.fqdn = "Host-%x.example.com" % client_nr
+      kb.users = [
+          rdf_client.User(username="user1"),
+          rdf_client.User(username="user2"),
+      ]
       artifact.SetCoreGRRKnowledgeBaseValues(kb, fd)
       fd.Set(fd.Schema.KNOWLEDGE_BASE, kb)
+
+      fd.Set(fd.Schema.INTERFACES(self._TestInterfaces(client_nr)))
 
       hardware_info = fd.Schema.HARDWARE_INFO()
       hardware_info.system_manufacturer = ("System-Manufacturer-%x" % client_nr)
@@ -347,53 +360,140 @@ class GRRBaseTest(unittest.TestCase):
 
   def SetupClient(self,
                   client_nr,
-                  index=None,
-                  system=None,
-                  os_version=None,
-                  arch=None):
+                  arch="x86_64",
+                  kernel="4.0.0",
+                  os_version="buster/sid",
+                  ping=None,
+                  system="Linux"):
     """Prepares a test client mock to be used.
 
     Args:
       client_nr: int The GRR ID to be used. 0xABCD maps to C.100000000000abcd
                      in canonical representation.
-      index: client_index.ClientIndex
-      system: string
-      os_version: string
       arch: string
+      kernel: string
+      os_version: string
+      ping: RDFDatetime
+      system: string
 
     Returns:
       rdf_client.ClientURN
     """
-    if index is not None:
-      # `with:' is expected to be used in the calling function.
-      client_id_urn = self._SetupClientImpl(client_nr, index, system,
-                                            os_version, arch)
-    else:
-      with client_index.CreateClientIndex(token=self.token) as index:
-        client_id_urn = self._SetupClientImpl(client_nr, index, system,
-                                              os_version, arch)
+    with client_index.CreateClientIndex(token=self.token) as index:
+      client_id_urn = self._SetupClientImpl(
+          client_nr,
+          index=index,
+          arch=arch,
+          kernel=kernel,
+          os_version=os_version,
+          ping=ping,
+          system=system)
 
     return client_id_urn
 
-  def SetupClients(self, nr_clients, system=None, os_version=None, arch=None):
+  def SetupClients(self,
+                   nr_clients,
+                   arch="x86_64",
+                   kernel="4.0.0",
+                   os_version="buster/sid",
+                   ping=None,
+                   system="Linux"):
     """Prepares nr_clients test client mocks to be used."""
-    with client_index.CreateClientIndex(token=self.token) as index:
-      client_ids = [
-          self.SetupClient(client_nr, index, system, os_version, arch)
-          for client_nr in xrange(nr_clients)
-      ]
+    return [
+        self.SetupClient(
+            client_nr,
+            arch=arch,
+            kernel=kernel,
+            os_version=os_version,
+            ping=ping,
+            system=system) for client_nr in xrange(nr_clients)
+    ]
 
-    return client_ids
+  def _TestClientInfo(self):
+    return rdf_client.ClientInformation(
+        client_name="GRR Monitor",
+        client_version="123",
+        build_time="1980-01-01",
+        labels=["label1", "label2"])
 
-  def DeleteClient(self, client_nr):
-    """Cleans up a test client mock."""
-    client_id = rdf_client.ClientURN("C.1%015x" % client_nr)
-    data_store.DB.DeleteSubject(client_id)
+  def _TestInterfaces(self, client_nr):
+    ip1 = rdf_client.NetworkAddress()
+    ip1.human_readable_address = "192.168.0.%d" % client_nr
 
-  def DeleteClients(self, nr_clients):
-    """Cleans up test client mocks. Analogous to .SetupClients(nr_clients) ."""
-    for client_nr in xrange(nr_clients):
-      self.DeleteClient(client_nr)
+    ip2 = rdf_client.NetworkAddress()
+    ip2.human_readable_address = "2001:abcd::%x" % client_nr
+
+    mac1 = rdf_client.MacAddress()
+    mac1.human_readable_address = "aabbccddee%02x" % client_nr
+
+    mac2 = rdf_client.MacAddress()
+    mac2.human_readable_address = "bbccddeeff%02x" % client_nr
+
+    return [
+        rdf_client.Interface(addresses=[ip1, ip2]),
+        rdf_client.Interface(mac_address=mac1),
+        rdf_client.Interface(mac_address=mac2),
+    ]
+
+  def SetupTestClientObjects(self,
+                             client_count,
+                             arch="x86_64",
+                             kernel="4.0.0",
+                             os_version="buster/sid",
+                             ping=None,
+                             system="Linux"):
+    res = {}
+    for client_nr in range(client_count):
+      client = self.SetupTestClientObject(
+          client_nr,
+          arch=arch,
+          kernel=kernel,
+          os_version=os_version,
+          ping=ping,
+          system=system)
+      res[client.client_id] = client
+    return res
+
+  def SetupTestClientObject(self,
+                            client_nr,
+                            arch="x86_64",
+                            kernel="4.0.0",
+                            os_version="buster/sid",
+                            ping=None,
+                            system="Linux"):
+    """Prepares a test client object."""
+
+    client_id = "C.1%015x" % client_nr
+
+    client = objects.Client(client_id=client_id)
+    client.startup_info.client_info = self._TestClientInfo()
+
+    client.knowledge_base.fqdn = "Host-%x.example.com" % client_nr
+    client.knowledge_base.os = system
+    client.knowledge_base.users = [
+        rdf_client.User(username="user1"),
+        rdf_client.User(username="user2"),
+    ]
+    client.os_version = os_version
+    client.arch = arch
+    client.kernel = kernel
+
+    client.interfaces = self._TestInterfaces(client_nr)
+
+    client.hardware_info = rdf_client.HardwareInfo(
+        system_manufacturer="System-Manufacturer-%x" % client_nr,
+        bios_version="Bios-Version-%x" % client_nr)
+
+    ping = ping or rdfvalue.RDFDatetime.Now()
+    cert = self.ClientCertFromPrivateKey(config.CONFIG["Client.private_key"])
+
+    data_store.REL_DB.WriteClientMetadata(
+        client_id, last_ping=ping, certificate=cert, fleetspeak_enabled=False)
+    data_store.REL_DB.WriteClient(client)
+
+    client_index.ClientIndex().AddClient(client_id, client)
+
+    return client
 
   def ClientCertFromPrivateKey(self, private_key):
     communicator = comms.ClientCommunicator(private_key=private_key)
@@ -472,7 +572,7 @@ class FakeTime(object):
 
   def __init__(self, fake_time, increment=0):
     if isinstance(fake_time, rdfvalue.RDFDatetime):
-      self.time = fake_time.AsSecondsFromEpoch()
+      self.time = fake_time / 1e6
     else:
       self.time = fake_time
     self.increment = increment
@@ -596,7 +696,8 @@ class GRRTestLoader(unittest.TestLoader):
   def loadTestsFromModule(self, _):
     """Just return all the tests as if they were in the same module."""
     test_cases = [
-        self.loadTestsFromTestCase(x) for x in self.base_class.classes.values()
+        self.loadTestsFromTestCase(x)
+        for x in self.base_class.classes.values()
         if issubclass(x, self.base_class)
     ]
 
@@ -711,7 +812,11 @@ class RemotePDB(pdb.Pdb):
 
 
 def _TempRootPath():
-  root = os.environ.get("TEST_TMPDIR") or config.CONFIG["Test.tmpdir"]
+  try:
+    root = os.environ.get("TEST_TMPDIR") or config.CONFIG["Test.tmpdir"]
+  except RuntimeError:
+    return None
+
   if platform.system() != "Windows":
     return root
   else:
@@ -809,6 +914,50 @@ class AutoTempDirPath(object):
       os.rmdir(self.path)
 
 
+class AutoTempFilePath(object):
+  """Creates a temporary file based on the environment configuration.
+
+  If no directory is specified the file will be placed in folder as specified by
+  the `TEST_TMPDIR` environment variable if available or fallback to
+  `Test.tmpdir` of the current configuration if not.
+
+  If directory is specified it must be part of the default test temporary
+  directory.
+
+  This object is a context manager and the associated file is automatically
+  removed when it goes out of scope.
+
+  Args:
+    suffix: A suffix to end the file name with.
+    prefix: A prefix to begin the file name with.
+    dir: A directory to place the file in.
+
+  Returns:
+    An absolute path to the created file.
+
+  Raises:
+    ValueError: If the specified directory is not part of the default test
+        temporary directory.
+  """
+
+  def __init__(self, suffix="", prefix="tmp", dir=None):  # pylint: disable=redefined-builtin
+    self.suffix = suffix
+    self.prefix = prefix
+    self.dir = dir
+
+  def __enter__(self):
+    self.path = TempFilePath(
+        suffix=self.suffix, prefix=self.prefix, dir=self.dir)
+    return self.path
+
+  def __exit__(self, exc_type, exc_value, traceback):
+    del exc_type  # Unused.
+    del exc_value  # Unused.
+    del traceback  # Unused.
+
+    os.remove(self.path)
+
+
 class PrivateKeyNotFoundException(Exception):
 
   def __init__(self):
@@ -819,7 +968,7 @@ class PrivateKeyNotFoundException(Exception):
 def GetClientId(writeback_file):
   """Given the path to a client's writeback file, returns its client id."""
   with open(writeback_file) as f:
-    parsed_yaml = yaml.safe_load(f.read())
+    parsed_yaml = yaml.safe_load(f.read()) or {}
   serialized_pkey = parsed_yaml.get("Client.private_key", None)
   if serialized_pkey is None:
     raise PrivateKeyNotFoundException

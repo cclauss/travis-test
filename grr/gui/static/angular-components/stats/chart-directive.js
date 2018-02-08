@@ -1,9 +1,9 @@
 'use strict';
 
-goog.provide('grrUi.stats.chartDirective.ChartController');
+goog.provide('grrUi.stats.chartDirective');
 goog.provide('grrUi.stats.chartDirective.ChartDirective');
 
-goog.require('grrUi.core.apiService.stripTypeInfo');
+goog.require('grrUi.core.apiService');  // USE: stripTypeInfo
 
 goog.scope(function() {
 
@@ -20,7 +20,7 @@ var DEFAULT_HOVER_TEXT = '';
  * @constructor
  * @ngInject
  */
-grrUi.stats.chartDirective.ChartController = function(
+const ChartController = function(
     $scope, $element) {
   /** @private {!angular.Scope} */
   this.scope_ = $scope;
@@ -53,7 +53,6 @@ grrUi.stats.chartDirective.ChartController = function(
     }
   }.bind(this));
 };
-var ChartController = grrUi.stats.chartDirective.ChartController;
 
 
 /**

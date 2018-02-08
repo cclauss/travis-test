@@ -1,13 +1,10 @@
 'use strict';
 
-goog.provide('grrUi.hunt.huntResultsDirective.HuntResultsController');
+goog.provide('grrUi.hunt.huntResultsDirective');
 goog.provide('grrUi.hunt.huntResultsDirective.HuntResultsDirective');
 
-goog.require('grrUi.core.fileDownloadUtils.downloadableVfsRoots');
-goog.require('grrUi.core.fileDownloadUtils.getPathSpecFromValue');
-goog.require('grrUi.core.fileDownloadUtils.makeValueDownloadable');
-goog.require('grrUi.core.fileDownloadUtils.pathSpecToAff4Path');
-goog.require('grrUi.core.utils.stripAff4Prefix');
+goog.require('grrUi.core.fileDownloadUtils');  // USE: downloadableVfsRoots, getPathSpecFromValue, makeValueDownloadable, pathSpecToAff4Path
+goog.require('grrUi.core.utils');              // USE: stripAff4Prefix
 
 goog.scope(function() {
 
@@ -20,7 +17,7 @@ goog.scope(function() {
  * @param {!angular.Scope} $scope
  * @ngInject
  */
-grrUi.hunt.huntResultsDirective.HuntResultsController = function(
+const HuntResultsController = function(
     $scope) {
   /** @private {!angular.Scope} */
   this.scope_ = $scope;
@@ -40,25 +37,20 @@ grrUi.hunt.huntResultsDirective.HuntResultsController = function(
   /** @export {string} */
   this.exportCommandUrl;
 
-  $scope.$watch('huntUrn', this.onHuntUrnChange.bind(this));
+  $scope.$watch('huntId', this.onHuntIdChange.bind(this));
 };
-var HuntResultsController =
-    grrUi.hunt.huntResultsDirective.HuntResultsController;
 
 
 /**
- * Handles huntUrn attribute changes.
+ * Handles huntId attribute changes.
  *
- * @param {?string} huntUrn
+ * @param {?string} huntId
  * @export
  */
-HuntResultsController.prototype.onHuntUrnChange = function(huntUrn) {
-  if (!angular.isString(huntUrn)) {
+HuntResultsController.prototype.onHuntIdChange = function(huntId) {
+  if (!angular.isString(huntId)) {
     return;
   }
-
-  var components = huntUrn.split('/');
-  var huntId = components[components.length - 1];
 
   this.resultsUrl = '/hunts/' + huntId + '/results';
   this.exportedResultsUrl = '/hunts/' + huntId + '/exported-results';
@@ -78,9 +70,7 @@ HuntResultsController.prototype.onHuntUrnChange = function(huntUrn) {
  * @export
  */
 HuntResultsController.prototype.transformItems = function(items) {
-  var components = this.scope_['huntUrn'].split('/');
-  var huntId = components[components.length - 1];
-  var urlPrefix = '/hunts/' + huntId + '/results/clients';
+  var urlPrefix = '/hunts/' + this.scope_['huntId'] + '/results/clients';
 
   var newItems = items.map(function(item) {
     var pathSpec = grrUi.core.fileDownloadUtils.getPathSpecFromValue(item);
@@ -122,16 +112,16 @@ HuntResultsController.prototype.transformItems = function(items) {
 
 
 /**
- * Directive for displaying results of a hunt with a given URN.
+ * Directive for displaying results of a hunt with a given ID.
  *
- * @constructor
+ * @return {!angular.Directive} Directive definition object.
  * @ngInject
  * @export
  */
 grrUi.hunt.huntResultsDirective.HuntResultsDirective = function() {
   return {
     scope: {
-      huntUrn: '='
+      huntId: '='
     },
     restrict: 'E',
     templateUrl: '/static/angular-components/hunt/hunt-results.html',

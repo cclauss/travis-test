@@ -1,6 +1,6 @@
 'use strict';
 
-goog.provide('grrUi.hunt.newHuntWizard.createHuntFromFlowFormDirective.CreateHuntFromFlowFormController');
+goog.provide('grrUi.hunt.newHuntWizard.createHuntFromFlowFormDirective');
 goog.provide('grrUi.hunt.newHuntWizard.createHuntFromFlowFormDirective.CreateHuntFromFlowFormDirective');
 
 goog.scope(function() {
@@ -14,7 +14,7 @@ goog.scope(function() {
  * @constructor
  * @ngInject
  */
-grrUi.hunt.newHuntWizard.createHuntFromFlowFormDirective.CreateHuntFromFlowFormController =
+const CreateHuntFromFlowFormController =
     function($scope, grrApiService, grrReflectionService) {
   /** @private {!angular.Scope} */
   this.scope_ = $scope;
@@ -43,8 +43,6 @@ grrUi.hunt.newHuntWizard.createHuntFromFlowFormDirective.CreateHuntFromFlowFormC
   }.bind(this));
 };
 
-var CreateHuntFromFlowFormController =
-    grrUi.hunt.newHuntWizard.createHuntFromFlowFormDirective.CreateHuntFromFlowFormController;
 
 
 /**

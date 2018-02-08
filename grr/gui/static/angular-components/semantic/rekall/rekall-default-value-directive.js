@@ -1,5 +1,6 @@
 'use strict';
 
+goog.provide('grrUi.semantic.rekall.rekallDefaultValueDirective');
 goog.provide('grrUi.semantic.rekall.rekallDefaultValueDirective.RekallDefaultValueDirective');
 
 goog.scope(function() {
@@ -8,7 +9,6 @@ goog.scope(function() {
  * Directive that displays JS objects containing Rekall objects as tables.
  *
  * @return {!angular.Directive} Directive definition object.
- * @constructor
  * @ngInject
  * @export
  */

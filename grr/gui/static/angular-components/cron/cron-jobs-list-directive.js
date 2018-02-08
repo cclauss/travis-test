@@ -1,9 +1,9 @@
 'use strict';
 
-goog.provide('grrUi.cron.cronJobsListDirective.CronJobsListController');
+goog.provide('grrUi.cron.cronJobsListDirective');
 goog.provide('grrUi.cron.cronJobsListDirective.CronJobsListDirective');
 
-goog.require('grrUi.core.utils.stripAff4Prefix');
+goog.require('grrUi.core.utils');  // USE: stripAff4Prefix
 
 goog.scope(function() {
 
@@ -21,7 +21,7 @@ goog.scope(function() {
  * @param {!grrUi.acl.aclDialogService.AclDialogService} grrAclDialogService
  * @ngInject
  */
-grrUi.cron.cronJobsListDirective.CronJobsListController = function(
+const CronJobsListController = function(
     $scope, $uibModal, $q, grrTimeService, grrApiService, grrDialogService,
     grrAclDialogService) {
   /** @private {!angular.Scope} */
@@ -46,10 +46,10 @@ grrUi.cron.cronJobsListDirective.CronJobsListController = function(
   this.grrAclDialogService_ = grrAclDialogService;
 
   /** @type {!Object<string, Object>} */
-  this.cronJobsByUrn = {};
+  this.cronJobsById = {};
 
   /** @type {string} */
-  this.selectedCronJobUrn;
+  this.selectedCronJobId;
 
   /**
    * This variable is bound to grr-infinite-table's trigger-update attribute
@@ -64,21 +64,19 @@ grrUi.cron.cronJobsListDirective.CronJobsListController = function(
 
   // Push the selection changes back to the scope, so that other UI components
   // can react on the change.
-  this.scope_.$watch('controller.selectedCronJobUrn', function(newValue) {
+  this.scope_.$watch('controller.selectedCronJobId', function(newValue) {
     if (angular.isDefined(newValue)) {
-      this.scope_['selectedCronJobUrn'] = newValue;
+      this.scope_['selectedCronJobId'] = newValue;
     }
   }.bind(this));
 
   // If outer binding changes, we want to update our selection.
-  this.scope_.$watch('selectedCronJobUrn', function(newValue) {
+  this.scope_.$watch('selectedCronJobId', function(newValue) {
     if (angular.isDefined(newValue)) {
-      this.selectedCronJobUrn = newValue;
+      this.selectedCronJobId = newValue;
     }
   }.bind(this));
 };
-var CronJobsListController =
-    grrUi.cron.cronJobsListDirective.CronJobsListController;
 
 
 /**
@@ -122,15 +120,14 @@ CronJobsListController.prototype.wrapApiPromise_ = function(
 
 
 /**
- * Builds URL to get/patch/delete a cron job with a given URN.
+ * Builds URL to get/patch/delete a cron job with a given ID.
  *
- * @param {string} cronJobUrn
+ * @param {string} cronJobId
  * @return {string} Corresponding URL.
  *
  * @private
  */
-CronJobsListController.prototype.buildCronJobUrl_ = function(cronJobUrn) {
-  var cronJobId = cronJobUrn.split('/')[2];
+CronJobsListController.prototype.buildCronJobUrl_ = function(cronJobId) {
   return 'cron-jobs/' + cronJobId;
 };
 
@@ -142,7 +139,7 @@ CronJobsListController.prototype.buildCronJobUrl_ = function(cronJobUrn) {
  * @export
  */
 CronJobsListController.prototype.selectItem = function(item) {
-  this.selectedCronJobUrn = item['value']['urn']['value'];
+  this.selectedCronJobId = item['value']['cron_job_id']['value'];
 };
 
 
@@ -158,11 +155,8 @@ CronJobsListController.prototype.transformItems = function(items) {
   items = angular.copy(items);
 
   angular.forEach(items, function(item, index) {
-    var urn = item['value']['urn']['value'];
-    this.cronJobsByUrn[urn] = item;
-
-    var components = urn.split('/');
-    item.shortUrn = components[components.length - 1];
+    var cronJobId = item['value']['cron_job_id']['value'];
+    this.cronJobsById[cronJobId] = item;
 
     var periodicity = item['value']['periodicity']['value'];
     var currentTime = this.timeService_.getCurrentTimeMs() / 1000;
@@ -207,8 +201,8 @@ CronJobsListController.prototype.newCronJob = function() {
 
   modalInstance.result.then(function resolve() {
     this.triggerUpdate();
-    this.selectedCronJobUrn =
-        modalScope['result']['cronJob']['value']['urn']['value'];
+    this.selectedCronJobId =
+        modalScope['result']['cronJob']['value']['cron_job_id']['value'];
   }.bind(this));
 };
 
@@ -224,7 +218,7 @@ CronJobsListController.prototype.enableCronJob = function() {
       'Are you sure you want to ENABLE this cron job?',
       function() {
         var promise = this.grrApiService_.patch(
-            this.buildCronJobUrl_(this.selectedCronJobUrn),
+            this.buildCronJobUrl_(this.selectedCronJobId),
             {state: 'ENABLED'});
         return this.wrapApiPromise_(promise,
                                     'Cron job was ENABLED successfully!');
@@ -252,7 +246,7 @@ CronJobsListController.prototype.disableCronJob = function() {
       'Are you sure you want to DISABLE this cron job?',
       function() {
         var promise = this.grrApiService_.patch(
-            this.buildCronJobUrl_(this.selectedCronJobUrn),
+            this.buildCronJobUrl_(this.selectedCronJobId),
             {state: 'DISABLED'});
         return this.wrapApiPromise_(promise,
                                     'Cron job was DISABLED successfully!');
@@ -291,7 +285,7 @@ CronJobsListController.prototype.showDeleteCronJobConfirmation = function() {
  * @private
  */
 CronJobsListController.prototype.deleteCronJob_ = function() {
-  var url = this.buildCronJobUrl_(this.selectedCronJobUrn);
+  var url = this.buildCronJobUrl_(this.selectedCronJobId);
   var deferred = this.q_.defer();
 
   this.grrApiService_.delete(url).then(
@@ -323,7 +317,7 @@ CronJobsListController.prototype.forceRunCronJob = function() {
       'Are you sure you want to FORCE-RUN this cron job?',
       function() {
         var promise = this.grrApiService_.post(
-            this.buildCronJobUrl_(this.selectedCronJobUrn) +
+            this.buildCronJobUrl_(this.selectedCronJobId) +
                 '/actions/force-run');
         return this.wrapApiPromise_(
             promise,
@@ -349,7 +343,7 @@ CronJobsListController.prototype.forceRunCronJob = function() {
 grrUi.cron.cronJobsListDirective.CronJobsListDirective = function() {
   return {
     scope: {
-      selectedCronJobUrn: '=?',
+      selectedCronJobId: '=?',
     },
     restrict: 'E',
     templateUrl: '/static/angular-components/cron/cron-jobs-list.html',

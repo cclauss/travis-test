@@ -1,6 +1,6 @@
 'use strict';
 
-goog.provide('grrUi.core.searchBoxDirective.SearchBoxController');
+goog.provide('grrUi.core.searchBoxDirective');
 goog.provide('grrUi.core.searchBoxDirective.SearchBoxDirective');
 
 
@@ -19,7 +19,7 @@ var SEARCH_KEYWORDS = ['host', 'mac', 'ip', 'user', 'label'];
  * @param {!grrUi.routing.routingService.RoutingService} grrRoutingService
  * @ngInject
  */
-grrUi.core.searchBoxDirective.SearchBoxController = function(
+const SearchBoxController = function(
     $scope, $element, $interval, grrApiService, grrRoutingService) {
 
   /** @private {!angular.Scope} */
@@ -46,8 +46,6 @@ grrUi.core.searchBoxDirective.SearchBoxController = function(
   this.grrApiService_.get('/clients/labels').then(this.onGetLabels_.bind(this));
 };
 
-var SearchBoxController =
-    grrUi.core.searchBoxDirective.SearchBoxController;
 
 
 /**
@@ -107,9 +105,7 @@ SearchBoxController.prototype.isHuntId_ = function(input) {
 SearchBoxController.prototype.checkHunt_ = function(huntId) {
   this.grrApiService_.get('hunts/' + huntId).then(
     function success(response) {
-      var huntUrn = response.data['value']['urn']['value'];
-      var components = huntUrn.split('/');
-      var huntId = components[components.length - 1];
+      var huntId = response.data['value']['hunt_id']['value'];
       this.grrRoutingService_.go('hunts', {huntId: huntId});
     }.bind(this),
     function error() {

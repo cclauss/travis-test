@@ -1,8 +1,8 @@
 'use strict';
 
-goog.provide('grrUi.semantic.semanticDiffAnnotatedProtoDirective.SemanticDiffAnnotatedProtoController');
+goog.provide('grrUi.semantic.semanticDiffAnnotatedProtoDirective');
 goog.provide('grrUi.semantic.semanticDiffAnnotatedProtoDirective.SemanticDiffAnnotatedProtoDirective');
-goog.require('grrUi.semantic.semanticProtoDirective.buildItems');
+goog.require('grrUi.semantic.semanticProtoDirective');  // USE: buildItems
 
 goog.scope(function() {
 
@@ -14,7 +14,7 @@ var buildItems = grrUi.semantic.semanticProtoDirective.buildItems;
  *
  * @param {!angular.Scope} $scope Directive's scope.
  * @param {!grrUi.core.reflectionService.ReflectionService} grrReflectionService
- * @constructor
+ * @return {!angular.Directive} Directive definition object.
  * @ngInject
  */
 var SemanticDiffAnnotatedProtoController = function(

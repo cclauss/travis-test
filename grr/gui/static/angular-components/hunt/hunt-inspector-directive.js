@@ -2,7 +2,6 @@
 
 goog.provide('grrUi.hunt.huntInspectorDirective');
 goog.provide('grrUi.hunt.huntInspectorDirective.HuntInspectorDirective');
-goog.provide('grrUi.hunt.huntInspectorDirective.huntInspectorController');
 
 goog.scope(function() {
 
@@ -14,12 +13,12 @@ goog.scope(function() {
  * @param {!angular.Scope} $scope
  * @ngInject
  */
-grrUi.hunt.huntInspectorDirective.huntInspectorController = function($scope) {
+const HuntInspectorController = function($scope) {
   /** @private {!angular.Scope} */
   this.scope_ = $scope;
 
   /** @type {string} */
-  this.shownHuntUrn;
+  this.shownHuntId;
 
   /** @type {string} */
   this.activeTab = '';
@@ -27,16 +26,14 @@ grrUi.hunt.huntInspectorDirective.huntInspectorController = function($scope) {
   /** type {Object<string, boolean>} */
   this.tabsShown = {};
 
-  this.scope_.$watchGroup(['huntUrn', 'activeTab'], this.onDirectiveArgumentsChange_.bind(this));
+  this.scope_.$watchGroup(['huntId', 'activeTab'], this.onDirectiveArgumentsChange_.bind(this));
   this.scope_.$watch('controller.activeTab', this.onTabChange_.bind(this));
 };
 
-var HuntInspectorController =
-    grrUi.hunt.huntInspectorDirective.huntInspectorController;
 
 
 /**
- * Handles huntUrn and activeTab scope attribute changes.
+ * Handles huntId and activeTab scope attribute changes.
  *
  * @private
  */
@@ -49,12 +46,12 @@ HuntInspectorController.prototype.onDirectiveArgumentsChange_ = function() {
   // triggered. This ensures that new hunt information gets properly
   // rerendered.
   this.scope_.$evalAsync(function() {
-    this.shownHuntUrn = this.scope_['huntUrn'];
+    this.shownHuntId = this.scope_['huntId'];
   }.bind(this));
 };
 
 /**
- * Handles huntUrn scope attribute changes.
+ * Handles huntId scope attribute changes.
  *
  * @param {string} newValue
  * @param {string} oldValue
@@ -76,7 +73,7 @@ HuntInspectorController.prototype.onTabChange_ = function(newValue, oldValue) {
 grrUi.hunt.huntInspectorDirective.HuntInspectorDirective = function() {
   return {
     scope: {
-      huntUrn: '=',
+      huntId: '=',
       activeTab: '=?'
     },
     restrict: 'E',

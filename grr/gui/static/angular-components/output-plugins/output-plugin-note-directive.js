@@ -1,6 +1,6 @@
 'use strict';
 
-goog.provide('grrUi.outputPlugins.outputPluginNoteDirective.OutputPluginNoteController');
+goog.provide('grrUi.outputPlugins.outputPluginNoteDirective');
 goog.provide('grrUi.outputPlugins.outputPluginNoteDirective.OutputPluginNoteDirective');
 
 
@@ -11,11 +11,11 @@ goog.scope(function() {
  *
  * @constructor
  * @param {!angular.Scope} $scope
- * @param {!grrUi.core.semanticRegistry.SemanticRegistryService}
+ * @param {!grrUi.core.semanticRegistryService.SemanticRegistryService}
  *     grrOutputPluginsDirectivesRegistryService
  * @ngInject
  */
-grrUi.outputPlugins.outputPluginNoteDirective.OutputPluginNoteController =
+const OutputPluginNoteController =
     function($scope, grrOutputPluginsDirectivesRegistryService) {
   /** @private {!angular.Scope} */
   this.scope_ = $scope;
@@ -32,15 +32,13 @@ grrUi.outputPlugins.outputPluginNoteDirective.OutputPluginNoteController =
   /** @type {string} */
   this.pluginErrorsUrl;
 
-  /** @private {!grrUi.core.semanticRegistry.SemanticRegistryService} */
+  /** @private {!grrUi.core.semanticRegistryService.SemanticRegistryService} */
   this.grrOutputPluginsDirectivesRegistryService_ =
       grrOutputPluginsDirectivesRegistryService;
 
   this.scope_.$watchGroup(['outputPlugin', 'outputPluginsUrl'],
                           this.onOutputPluginChange_.bind(this));
 };
-var OutputPluginNoteController =
-    grrUi.outputPlugins.outputPluginNoteDirective.OutputPluginNoteController;
 
 
 /**
@@ -73,7 +71,7 @@ OutputPluginNoteController.prototype.onOutputPluginChange_ = function() {
 /**
  * Directive for displaying notes for output plugins of a flow or hunt.
  *
- * @constructor
+ * @return {!angular.Directive} Directive definition object.
  * @ngInject
  * @export
  */
@@ -100,6 +98,4 @@ grrUi.outputPlugins.outputPluginNoteDirective.OutputPluginNoteDirective =
  */
 grrUi.outputPlugins.outputPluginNoteDirective.OutputPluginNoteDirective
     .directive_name = 'grrOutputPluginNote';
-
-
 });

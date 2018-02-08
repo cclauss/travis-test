@@ -1,51 +1,26 @@
 #!/usr/bin/env python
 """Client utilities."""
 
-
-
 import sys
 
-# Select the version of what we want based on the OS:
-
-# pylint: disable=g-bad-name
 # pylint: disable=g-import-not-at-top
 if sys.platform == "win32":
-  from grr.client import client_utils_windows
-  FindProxies = client_utils_windows.WinFindProxies
-  GetRawDevice = client_utils_windows.WinGetRawDevice
-  CanonicalPathToLocalPath = client_utils_windows.CanonicalPathToLocalPath
-  LocalPathToCanonicalPath = client_utils_windows.LocalPathToCanonicalPath
-  NannyController = client_utils_windows.NannyController
-
-  KeepAlive = client_utils_windows.KeepAlive
-  WinChmod = client_utils_windows.WinChmod
-  VerifyFileOwner = client_utils_windows.WinVerifyFileOwner
-
+  from grr.client import client_utils_windows as _client_utils
 elif sys.platform == "darwin":
-  from grr.client import client_utils_osx
-  from grr.client import client_utils_linux
-
-  FindProxies = client_utils_osx.OSXFindProxies
-  GetRawDevice = client_utils_osx.OSXGetRawDevice
-
-  # Should be the same as linux.
-  CanonicalPathToLocalPath = client_utils_linux.CanonicalPathToLocalPath
-  LocalPathToCanonicalPath = client_utils_linux.LocalPathToCanonicalPath
-
-  # Should be the same as linux.
-  NannyController = client_utils_linux.NannyController
-
-  KeepAlive = client_utils_osx.KeepAlive
-  VerifyFileOwner = client_utils_linux.LinVerifyFileOwner
-
+  from grr.client import client_utils_osx as _client_utils
 else:
-  from grr.client import client_utils_linux
-  # Linux platform
-  FindProxies = client_utils_linux.LinFindProxies
-  GetRawDevice = client_utils_linux.LinGetRawDevice
-  CanonicalPathToLocalPath = client_utils_linux.CanonicalPathToLocalPath
-  LocalPathToCanonicalPath = client_utils_linux.LocalPathToCanonicalPath
-  NannyController = client_utils_linux.NannyController
+  from grr.client import client_utils_linux as _client_utils
+# pylint: enable=g-import-not-at-top
 
-  KeepAlive = client_utils_linux.KeepAlive
-  VerifyFileOwner = client_utils_linux.LinVerifyFileOwner
+# pylint: disable=g-bad-name
+AddStatEntryExtAttrs = _client_utils.AddStatEntryExtAttrs
+CanonicalPathToLocalPath = _client_utils.CanonicalPathToLocalPath
+FindProxies = _client_utils.FindProxies
+GetRawDevice = _client_utils.GetRawDevice
+KeepAlive = _client_utils.KeepAlive
+LocalPathToCanonicalPath = _client_utils.LocalPathToCanonicalPath
+MemoryRegions = _client_utils.MemoryRegions
+NannyController = _client_utils.NannyController
+OpenProcessForMemoryAccess = _client_utils.OpenProcessForMemoryAccess
+VerifyFileOwner = _client_utils.VerifyFileOwner
+# pylint: enable=g-bad-name

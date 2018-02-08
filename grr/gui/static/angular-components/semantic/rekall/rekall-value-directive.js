@@ -1,9 +1,9 @@
 'use strict';
 
-goog.provide('grrUi.semantic.rekall.rekallValueDirective.RekallValueController');
+goog.provide('grrUi.semantic.rekall.rekallValueDirective');
 goog.provide('grrUi.semantic.rekall.rekallValueDirective.RekallValueDirective');
 
-goog.require('grrUi.core.utils.camelCaseToDashDelimited');
+goog.require('grrUi.core.utils');  // USE: camelCaseToDashDelimited
 
 goog.scope(function() {
 
@@ -13,12 +13,12 @@ goog.scope(function() {
  * @param {!angular.Scope} $scope
  * @param {!jQuery} $element
  * @param {!angular.$compile} $compile
- * @param {!grrUi.semantic.rekall.rekallRegistry.RekallRegistryService}
+ * @param {!grrUi.semantic.rekall.rekallRegistryService.RekallRegistryService}
  *     grrRekallDirectivesRegistryService
  * @constructor
  * @ngInject
  */
-grrUi.semantic.rekall.rekallValueDirective.RekallValueController = function(
+const RekallValueController = function(
     $scope, $element, $compile, grrRekallDirectivesRegistryService) {
   /** @private {!angular.Scope} */
   this.scope_ = $scope;
@@ -29,14 +29,14 @@ grrUi.semantic.rekall.rekallValueDirective.RekallValueController = function(
   /** @private {!angular.$compile} */
   this.compile_ = $compile;
 
-  /** @private {!grrUi.semantic.rekall.rekallRegistry.RekallRegistryService} */
+  /**
+   * @private {!grrUi.semantic.rekall.rekallRegistryService.RekallRegistryService}
+   */
   this.grrRekallDirectivesRegistryService_ = grrRekallDirectivesRegistryService;
 
   this.scope_.$watch('::value', this.onValueChange_.bind(this));
 };
 
-var RekallValueController =
-    grrUi.semantic.rekall.rekallValueDirective.RekallValueController;
 
 
 RekallValueController.prototype.onValueChange_ = function(value) {
@@ -68,7 +68,6 @@ RekallValueController.prototype.onValueChange_ = function(value) {
  * Directive that displays Rekall objects recursively in tables.
  *
  * @return {!angular.Directive} Directive definition object.
- * @constructor
  * @ngInject
  * @export
  */
@@ -92,5 +91,4 @@ grrUi.semantic.rekall.rekallValueDirective.RekallValueDirective = function() {
  */
 grrUi.semantic.rekall.rekallValueDirective.RekallValueDirective.directive_name =
     'grrRekallValue';
-
 });  // goog.scope

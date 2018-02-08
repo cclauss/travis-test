@@ -16,7 +16,7 @@ from grr_api_client import connector
 from grr_api_client import errors
 from grr_api_client import utils
 
-from grr.proto.api import reflection_pb2
+from grr_response_proto.api import reflection_pb2
 
 logger = logging.getLogger(__name__)
 
@@ -95,7 +95,8 @@ class HttpConnector(connector.Connector):
     self.handlers_map = routing.Map(routing_rules)
 
     parsed_endpoint_url = urlparse.urlparse(self.api_endpoint)
-    self.urls = self.handlers_map.bind(parsed_endpoint_url.netloc, "/")
+    self.urls = self.handlers_map.bind(
+        parsed_endpoint_url.netloc, url_scheme=parsed_endpoint_url.scheme)
 
   def _InitializeIfNeeded(self):
     if not self.csrf_token:
@@ -193,8 +194,6 @@ class HttpConnector(connector.Connector):
         "x-requested-with": "XMLHttpRequest"
     }
     cookies = {"csrftoken": self.csrf_token}
-    logger.debug("%s request: %s (query: %s, body: %s, headers %s)", method,
-                 url, query_params, body, headers)
     return requests.Request(
         method,
         url,
@@ -216,14 +215,14 @@ class HttpConnector(connector.Connector):
     prepped_request = request.prepare()
 
     session = requests.Session()
-    response = session.send(prepped_request)
+
+    options = session.merge_environment_settings(prepped_request.url, {}, None,
+                                                 None, None)
+    response = session.send(prepped_request, **options)
     self._CheckResponseStatus(response)
 
     content = response.content
     json_str = content[len(self.JSON_PREFIX):]
-
-    logger.debug("%s response (%s, %d):\n%s", request.method, request.url,
-                 response.status_code, content)
 
     if method_descriptor.result_type_descriptor.name:
       default_value = method_descriptor.result_type_descriptor.default

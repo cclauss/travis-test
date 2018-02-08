@@ -1,9 +1,9 @@
 'use strict';
 
-goog.provide('grrUi.acl.approvalInfoDirective.ApprovalInfoController');
+goog.provide('grrUi.acl.approvalInfoDirective');
 goog.provide('grrUi.acl.approvalInfoDirective.ApprovalInfoDirective');
 
-goog.require('grrUi.core.apiService.stripTypeInfo');
+goog.require('grrUi.core.apiService');  // USE: stripTypeInfo
 
 
 goog.scope(function() {
@@ -20,7 +20,7 @@ var stripTypeInfo = grrUi.core.apiService.stripTypeInfo;
  * @constructor
  * @ngInject
  */
-grrUi.acl.approvalInfoDirective.ApprovalInfoController = function(
+const ApprovalInfoController = function(
     $scope, grrApiService) {
   /** @private {!angular.Scope} */
   this.scope_ = $scope;
@@ -51,8 +51,6 @@ grrUi.acl.approvalInfoDirective.ApprovalInfoController = function(
   this.scope_.$watch('controller.fetchUrl',
                      this.onApprovalFetchUrlChanged_.bind(this));
 };
-var ApprovalInfoController =
-    grrUi.acl.approvalInfoDirective.ApprovalInfoController;
 
 
 /**

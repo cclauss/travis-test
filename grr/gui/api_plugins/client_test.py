@@ -2,8 +2,6 @@
 """This modules contains tests for clients API handlers."""
 
 
-
-
 from grr.gui import api_test_lib
 from grr.gui.api_plugins import client as client_plugin
 
@@ -12,6 +10,7 @@ from grr.lib.rdfvalues import client as rdf_client
 from grr.lib.rdfvalues import test_base as rdf_test_base
 from grr.server import aff4
 from grr.server import client_index
+from grr.server import data_store
 from grr.server import events
 from grr.server.flows.general import audit
 
@@ -65,12 +64,15 @@ class ApiAddClientsLabelsHandlerTest(api_test_lib.ApiCallHandlerTest):
     for client_id in self.client_ids:
       self.assertFalse(
           aff4.FACTORY.Open(client_id, token=self.token).GetLabels())
+      data_store.REL_DB.WriteClientMetadata(
+          client_id.Basename(), fleetspeak_enabled=False)
 
     self.handler.Handle(
         client_plugin.ApiAddClientsLabelsArgs(
             client_ids=[self.client_ids[0]], labels=["foo"]),
         token=self.token)
 
+    # AFF4 labels.
     labels = aff4.FACTORY.Open(self.client_ids[0], token=self.token).GetLabels()
     self.assertEqual(len(labels), 1)
     self.assertEqual(labels[0].name, "foo")
@@ -80,10 +82,22 @@ class ApiAddClientsLabelsHandlerTest(api_test_lib.ApiCallHandlerTest):
       self.assertFalse(
           aff4.FACTORY.Open(client_id, token=self.token).GetLabels())
 
+    # Relational DB labels.
+    cid = self.client_ids[0].Basename()
+    labels = data_store.REL_DB.GetClientLabels(cid)
+    self.assertEqual(len(labels), 1)
+    self.assertEqual(labels[0].name, "foo")
+    self.assertEqual(labels[0].owner, self.token.username)
+
+    for client_id in self.client_ids[1:]:
+      self.assertFalse(data_store.REL_DB.GetClientLabels(client_id.Basename()))
+
   def testAddsTwoLabelsToTwoClients(self):
     for client_id in self.client_ids:
       self.assertFalse(
           aff4.FACTORY.Open(client_id, token=self.token).GetLabels())
+      data_store.REL_DB.WriteClientMetadata(
+          client_id.Basename(), fleetspeak_enabled=False)
 
     self.handler.Handle(
         client_plugin.ApiAddClientsLabelsArgs(
@@ -91,6 +105,7 @@ class ApiAddClientsLabelsHandlerTest(api_test_lib.ApiCallHandlerTest):
             labels=["foo", "bar"]),
         token=self.token)
 
+    # AFF4 labels.
     for client_id in self.client_ids[:2]:
       labels = aff4.FACTORY.Open(client_id, token=self.token).GetLabels()
       self.assertEqual(len(labels), 2)
@@ -101,6 +116,17 @@ class ApiAddClientsLabelsHandlerTest(api_test_lib.ApiCallHandlerTest):
 
     self.assertFalse(
         aff4.FACTORY.Open(self.client_ids[2], token=self.token).GetLabels())
+
+    # Relational labels.
+    for client_id in self.client_ids[:2]:
+      labels = data_store.REL_DB.GetClientLabels(client_id.Basename())
+      self.assertEqual(len(labels), 2)
+      self.assertEqual(labels[0].owner, self.token.username)
+      self.assertEqual(labels[1].owner, self.token.username)
+      self.assertItemsEqual([labels[0].name, labels[1].name], ["bar", "foo"])
+
+    self.assertFalse(
+        data_store.REL_DB.GetClientLabels(self.client_ids[2].Basename()))
 
   def _FindAuditEvent(self):
     for fd in audit.AllAuditLogs(token=self.token):
@@ -141,45 +167,88 @@ class ApiRemoveClientsLabelsHandlerTest(api_test_lib.ApiCallHandlerTest):
     with aff4.FACTORY.Open(
         self.client_ids[0], mode="rw", token=self.token) as grr_client:
       grr_client.AddLabels(["foo", "bar"])
+      data_store.REL_DB.WriteClientMetadata(
+          self.client_ids[0].Basename(), fleetspeak_enabled=False)
+      data_store.REL_DB.AddClientLabels(self.client_ids[0].Basename(),
+                                        self.token.username, ["foo", "bar"])
 
     self.handler.Handle(
         client_plugin.ApiRemoveClientsLabelsArgs(
             client_ids=[self.client_ids[0]], labels=["foo"]),
         token=self.token)
 
+    # AFF4 labels.
     labels = aff4.FACTORY.Open(self.client_ids[0], token=self.token).GetLabels()
     self.assertEqual(len(labels), 1)
     self.assertEqual(labels[0].name, "bar")
     self.assertEqual(labels[0].owner, self.token.username)
 
+    # Relational labels.
+    labels = data_store.REL_DB.GetClientLabels(self.client_ids[0].Basename())
+    self.assertEqual(len(labels), 1)
+    self.assertEqual(labels[0].name, "bar")
+    self.assertEqual(labels[0].owner, self.token.username)
+
   def testDoesNotRemoveSystemLabelFromSingleClient(self):
+    idx = client_index.ClientIndex()
     with aff4.FACTORY.Open(
         self.client_ids[0], mode="rw", token=self.token) as grr_client:
       grr_client.AddLabel("foo", owner="GRR")
+      data_store.REL_DB.WriteClientMetadata(
+          self.client_ids[0].Basename(), fleetspeak_enabled=False)
+      data_store.REL_DB.AddClientLabels(self.client_ids[0].Basename(), "GRR",
+                                        ["foo"])
+      idx.AddClientLabels(self.client_ids[0].Basename(), ["foo"])
 
     self.handler.Handle(
         client_plugin.ApiRemoveClientsLabelsArgs(
             client_ids=[self.client_ids[0]], labels=["foo"]),
         token=self.token)
 
+    # AFF4 labels.
     labels = aff4.FACTORY.Open(self.client_ids[0], token=self.token).GetLabels()
     self.assertEqual(len(labels), 1)
 
+    # Relational labels.
+    labels = data_store.REL_DB.GetClientLabels(self.client_ids[0].Basename())
+    self.assertEqual(len(labels), 1)
+    # The label is still in the index.
+    self.assertEqual(
+        idx.LookupClients(["label:foo"]), [self.client_ids[0].Basename()])
+
   def testRemovesUserLabelWhenSystemLabelWithSimilarNameAlsoExists(self):
+    idx = client_index.ClientIndex()
     with aff4.FACTORY.Open(
         self.client_ids[0], mode="rw", token=self.token) as grr_client:
       grr_client.AddLabel("foo")
       grr_client.AddLabel("foo", owner="GRR")
+      data_store.REL_DB.WriteClientMetadata(
+          self.client_ids[0].Basename(), fleetspeak_enabled=False)
+      data_store.REL_DB.AddClientLabels(self.client_ids[0].Basename(),
+                                        self.token.username, ["foo"])
+      data_store.REL_DB.AddClientLabels(self.client_ids[0].Basename(), "GRR",
+                                        ["foo"])
+      idx.AddClientLabels(self.client_ids[0].Basename(), ["foo"])
 
     self.handler.Handle(
         client_plugin.ApiRemoveClientsLabelsArgs(
             client_ids=[self.client_ids[0]], labels=["foo"]),
         token=self.token)
 
+    # AFF4 labels.
     labels = aff4.FACTORY.Open(self.client_ids[0], token=self.token).GetLabels()
     self.assertEqual(len(labels), 1)
     self.assertEqual(labels[0].name, "foo")
     self.assertEqual(labels[0].owner, "GRR")
+
+    # Relational labels.
+    labels = data_store.REL_DB.GetClientLabels(self.client_ids[0].Basename())
+    self.assertEqual(len(labels), 1)
+    self.assertEqual(labels[0].name, "foo")
+    self.assertEqual(labels[0].owner, "GRR")
+    # The label is still in the index.
+    self.assertEqual(
+        idx.LookupClients(["label:foo"]), [self.client_ids[0].Basename()])
 
 
 class ApiLabelsRestrictedSearchClientsHandlerTest(
@@ -213,10 +282,10 @@ class ApiLabelsRestrictedSearchClientsHandlerTest(
         client_plugin.ApiSearchClientsArgs(), token=self.token)
 
     self.assertEqual(len(result.items), 2)
-    sorted_items = sorted(result.items, key=lambda r: r.urn)
+    sorted_items = sorted(result.items, key=lambda r: r.client_id)
 
-    self.assertEqual(sorted_items[0].urn, self.client_ids[0])
-    self.assertEqual(sorted_items[1].urn, self.client_ids[3])
+    self.assertEqual(sorted_items[0].client_id, self.client_ids[0])
+    self.assertEqual(sorted_items[1].client_id, self.client_ids[3])
 
   def testSearchWithNonWhitelistedLabelReturnsNothing(self):
     result = self.handler.Handle(
@@ -228,25 +297,25 @@ class ApiLabelsRestrictedSearchClientsHandlerTest(
     result = self.handler.Handle(
         client_plugin.ApiSearchClientsArgs(query="label:foo"), token=self.token)
     self.assertEqual(len(result.items), 1)
-    self.assertEqual(result.items[0].urn, self.client_ids[0])
+    self.assertEqual(result.items[0].client_id, self.client_ids[0])
 
     result = self.handler.Handle(
         client_plugin.ApiSearchClientsArgs(query="label:bar"), token=self.token)
     self.assertEqual(len(result.items), 1)
-    self.assertEqual(result.items[0].urn, self.client_ids[3])
+    self.assertEqual(result.items[0].client_id, self.client_ids[3])
 
   def testSearchWithWhitelistedClientIdsReturnsSubSet(self):
     result = self.handler.Handle(
         client_plugin.ApiSearchClientsArgs(query=self.client_ids[0].Basename()),
         token=self.token)
     self.assertEqual(len(result.items), 1)
-    self.assertEqual(result.items[0].urn, self.client_ids[0])
+    self.assertEqual(result.items[0].client_id, self.client_ids[0])
 
     result = self.handler.Handle(
         client_plugin.ApiSearchClientsArgs(query=self.client_ids[3].Basename()),
         token=self.token)
     self.assertEqual(len(result.items), 1)
-    self.assertEqual(result.items[0].urn, self.client_ids[3])
+    self.assertEqual(result.items[0].client_id, self.client_ids[3])
 
   def testSearchWithBlacklistedClientIdsReturnsNothing(self):
     result = self.handler.Handle(
@@ -265,7 +334,7 @@ class ApiInterrogateClientHandlerTest(api_test_lib.ApiCallHandlerTest):
 
   def setUp(self):
     super(ApiInterrogateClientHandlerTest, self).setUp()
-    self.client_id = self.SetupClients(1)[0]
+    self.client_id = self.SetupClient(0)
     self.handler = client_plugin.ApiInterrogateClientHandler()
 
   def testInterrogateFlowIsStarted(self):

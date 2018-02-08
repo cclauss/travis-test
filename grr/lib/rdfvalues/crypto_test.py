@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 """Crypto rdfvalue tests."""
 
-
 import hashlib
 import os
 
@@ -488,6 +487,23 @@ class RDFX509CertTest(CryptoTestBase):
     with test_lib.FakeTime(now_minus_a_bit):
       with self.assertRaises(rdf_crypto.VerificationError):
         client_cert.Verify(private_key.GetPublicKey())
+
+
+class PasswordTest(CryptoTestBase):
+
+  def testPassword(self):
+    sample = rdf_crypto.Password()
+
+    sample.SetPassword("foo")
+    serialized = sample.SerializeToString()
+    self.assertNotIn("foo", serialized)
+
+    read_sample = rdf_crypto.Password.FromSerializedString(serialized)
+
+    self.assertFalse(sample.CheckPassword("bar"))
+    self.assertFalse(read_sample.CheckPassword("bar"))
+    self.assertTrue(sample.CheckPassword("foo"))
+    self.assertTrue(read_sample.CheckPassword("foo"))
 
 
 def main(argv):

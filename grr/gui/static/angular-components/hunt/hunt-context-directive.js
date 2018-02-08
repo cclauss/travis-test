@@ -1,6 +1,6 @@
 'use strict';
 
-goog.provide('grrUi.hunt.huntContextDirective.HuntContextController');
+goog.provide('grrUi.hunt.huntContextDirective');
 goog.provide('grrUi.hunt.huntContextDirective.HuntContextDirective');
 
 goog.scope(function() {
@@ -14,7 +14,7 @@ goog.scope(function() {
  * @param {!grrUi.core.apiService.ApiService} grrApiService
  * @ngInject
  */
-grrUi.hunt.huntContextDirective.HuntContextController = function(
+const HuntContextController = function(
     $scope, grrApiService) {
 
   /** @private {!grrUi.core.apiService.ApiService} */
@@ -25,26 +25,22 @@ grrUi.hunt.huntContextDirective.HuntContextController = function(
   /** @export {Object} */
   this.state;
 
-  $scope.$watch('huntUrn', this.onHuntUrnChange_.bind(this));
+  $scope.$watch('huntId', this.onHuntIdChange_.bind(this));
 };
 
-var HuntContextController =
-    grrUi.hunt.huntContextDirective.HuntContextController;
 
 
 /**
- * Handles huntUrn attribute changes.
+ * Handles huntId attribute changes.
  *
- * @param {?string} huntUrn
+ * @param {?string} huntId
  * @private
  */
-HuntContextController.prototype.onHuntUrnChange_ = function(huntUrn) {
-  if (!angular.isString(huntUrn)) {
+HuntContextController.prototype.onHuntIdChange_ = function(huntId) {
+  if (!angular.isString(huntId)) {
     return;
   }
 
-  var components = huntUrn.split('/');
-  var huntId = components[components.length - 1];
   var url = '/hunts/' + huntId + '/context';
   this.grrApiService_.get(url).then(function success(response) {
     this.context = response.data['context'];
@@ -56,14 +52,14 @@ HuntContextController.prototype.onHuntUrnChange_ = function(huntUrn) {
 /**
  * Directive for displaying the hunt context of a hunt with a given URN.
  *
- * @constructor
+ * @return {!angular.Directive} Directive definition object.
  * @ngInject
  * @export
  */
 grrUi.hunt.huntContextDirective.HuntContextDirective = function() {
   return {
     scope: {
-      huntUrn: '='
+      huntId: '='
     },
     restrict: 'E',
     templateUrl: '/static/angular-components/hunt/hunt-context.html',

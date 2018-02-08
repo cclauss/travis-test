@@ -1,10 +1,8 @@
 #!/usr/bin/env python
 """Test the webhistory flows."""
-
 import os
 
-from grr.client import client_utils_linux
-from grr.client import client_utils_osx
+from grr.client import client_utils
 from grr.lib import flags
 from grr.lib import utils
 from grr.lib.rdfvalues import client as rdf_client
@@ -19,7 +17,22 @@ from grr.test_lib import test_lib
 
 
 class WebHistoryFlowTest(flow_test_lib.FlowTestsBaseclass):
-  pass
+
+  def MockClientRawDevWithImage(self):
+    """Mock the client to run off a test image.
+
+    Returns:
+        A context manager which ensures that client actions are served off the
+        test image.
+    """
+
+    def MockGetRawdevice(path):
+      return rdf_paths.PathSpec(
+          pathtype=rdf_paths.PathSpec.PathType.OS,
+          path=os.path.join(self.base_path, "test_img.dd"),
+          mount_point="/"), path
+
+    return utils.Stubber(client_utils, "GetRawDevice", MockGetRawdevice)
 
 
 class TestWebHistory(WebHistoryFlowTest):
@@ -28,6 +41,7 @@ class TestWebHistory(WebHistoryFlowTest):
   def setUp(self):
     super(TestWebHistory, self).setUp()
     # Set up client info
+    self.client_id = self.SetupClient(0)
     self.client = aff4.FACTORY.Open(self.client_id, mode="rw", token=self.token)
     self.client.Set(self.client.Schema.SYSTEM("Linux"))
 
@@ -43,33 +57,22 @@ class TestWebHistory(WebHistoryFlowTest):
 
     self.client_mock = action_mocks.FileFinderClientMock()
 
-    # Mock the client to make it look like the root partition is mounted off the
-    # test image. This will force all flow access to come off the image.
-    def MockGetMountpoints():
-      return {"/": (os.path.join(self.base_path, "test_img.dd"), "ext2")}
-
-    self.orig_linux_mp = client_utils_linux.GetMountpoints
-    self.orig_osx_mp = client_utils_osx.GetMountpoints
-    client_utils_linux.GetMountpoints = MockGetMountpoints
-    client_utils_osx.GetMountpoints = MockGetMountpoints
-
   def tearDown(self):
     super(TestWebHistory, self).tearDown()
-    client_utils_linux.GetMountpoints = self.orig_linux_mp
-    client_utils_osx.GetMountpoints = self.orig_osx_mp
 
   def testChromeHistoryFetch(self):
     """Test that downloading the Chrome history works."""
-    # Run the flow in the simulated way
-    for s in flow_test_lib.TestFlowHelper(
-        webhistory.ChromeHistory.__name__,
-        self.client_mock,
-        check_flow_errors=False,
-        client_id=self.client_id,
-        username="test",
-        token=self.token,
-        pathtype=rdf_paths.PathSpec.PathType.TSK):
-      session_id = s
+    with self.MockClientRawDevWithImage():
+      # Run the flow in the simulated way
+      for s in flow_test_lib.TestFlowHelper(
+          webhistory.ChromeHistory.__name__,
+          self.client_mock,
+          check_flow_errors=False,
+          client_id=self.client_id,
+          username="test",
+          token=self.token,
+          pathtype=rdf_paths.PathSpec.PathType.TSK):
+        session_id = s
 
     # Now check that the right files were downloaded.
     fs_path = "/home/test/.config/google-chrome/Default/History"
@@ -90,16 +93,17 @@ class TestWebHistory(WebHistoryFlowTest):
 
   def testFirefoxHistoryFetch(self):
     """Test that downloading the Firefox history works."""
-    # Run the flow in the simulated way
-    for s in flow_test_lib.TestFlowHelper(
-        webhistory.FirefoxHistory.__name__,
-        self.client_mock,
-        check_flow_errors=False,
-        client_id=self.client_id,
-        username="test",
-        token=self.token,
-        pathtype=rdf_paths.PathSpec.PathType.TSK):
-      session_id = s
+    with self.MockClientRawDevWithImage():
+      # Run the flow in the simulated way
+      for s in flow_test_lib.TestFlowHelper(
+          webhistory.FirefoxHistory.__name__,
+          self.client_mock,
+          check_flow_errors=False,
+          client_id=self.client_id,
+          username="test",
+          token=self.token,
+          pathtype=rdf_paths.PathSpec.PathType.TSK):
+        session_id = s
 
     # Now check that the right files were downloaded.
     fs_path = "/home/test/.mozilla/firefox/adts404t.default/places.sqlite"
@@ -120,17 +124,18 @@ class TestWebHistory(WebHistoryFlowTest):
 
   def testCacheGrep(self):
     """Test the Cache Grep plugin."""
-    # Run the flow in the simulated way
-    for s in flow_test_lib.TestFlowHelper(
-        webhistory.CacheGrep.__name__,
-        self.client_mock,
-        check_flow_errors=False,
-        client_id=self.client_id,
-        grep_users=["test"],
-        data_regex="ENIAC",
-        pathtype=rdf_paths.PathSpec.PathType.TSK,
-        token=self.token):
-      session_id = s
+    with self.MockClientRawDevWithImage():
+      # Run the flow in the simulated way
+      for s in flow_test_lib.TestFlowHelper(
+          webhistory.CacheGrep.__name__,
+          self.client_mock,
+          check_flow_errors=False,
+          client_id=self.client_id,
+          grep_users=["test"],
+          data_regex="ENIAC",
+          pathtype=rdf_paths.PathSpec.PathType.TSK,
+          token=self.token):
+        session_id = s
 
     # Check if the collection file was created.
     fd = flow.GRRFlow.ResultCollectionForFID(session_id)
@@ -152,7 +157,7 @@ class TestWebHistoryWithArtifacts(WebHistoryFlowTest):
 
   def setUp(self):
     super(TestWebHistoryWithArtifacts, self).setUp()
-    self.SetupClients(1, system="Linux", os_version="12.04")
+    self.client_id = self.SetupClient(0, system="Linux", os_version="12.04")
     fd = aff4.FACTORY.Open(self.client_id, token=self.token, mode="rw")
     self.kb = fd.Get(fd.Schema.KNOWLEDGE_BASE)
     self.kb.users.Append(
@@ -165,25 +170,6 @@ class TestWebHistoryWithArtifacts(WebHistoryFlowTest):
     fd.Flush()
 
     self.client_mock = action_mocks.FileFinderClientMock()
-
-  def MockClientMountPointsWithImage(self, image_path, fs_type="ext2"):
-    """Mock the client to run off a test image.
-
-    Args:
-       image_path: The path to the image file.
-       fs_type: The filesystem in the image.
-
-    Returns:
-        A context manager which ensures that client actions are served off the
-        test image.
-    """
-
-    def MockGetMountpoints():
-      return {"/": (image_path, fs_type)}
-
-    return utils.MultiStubber(
-        (client_utils_linux, "GetMountpoints", MockGetMountpoints),
-        (client_utils_osx, "GetMountpoints", MockGetMountpoints))
 
   def RunCollectorAndGetCollection(self, artifact_list, client_mock=None, **kw):
     """Helper to handle running the collector flow."""
@@ -203,8 +189,7 @@ class TestWebHistoryWithArtifacts(WebHistoryFlowTest):
 
   def testChrome(self):
     """Check we can run WMI based artifacts."""
-    with self.MockClientMountPointsWithImage(
-        os.path.join(self.base_path, "test_img.dd")):
+    with self.MockClientRawDevWithImage():
 
       fd = self.RunCollectorAndGetCollection(
           [webhistory.ChromeHistory.__name__],
@@ -221,8 +206,7 @@ class TestWebHistoryWithArtifacts(WebHistoryFlowTest):
 
   def testFirefox(self):
     """Check we can run WMI based artifacts."""
-    with self.MockClientMountPointsWithImage(
-        os.path.join(self.base_path, "test_img.dd")):
+    with self.MockClientRawDevWithImage():
       fd = self.RunCollectorAndGetCollection(
           [webhistory.FirefoxHistory.__name__],
           client_mock=self.client_mock,

@@ -1,8 +1,8 @@
 'use strict';
 
-goog.provide('grrUi.flow.flowFormDirective.FlowFormController');
+goog.provide('grrUi.flow.flowFormDirective');
 goog.provide('grrUi.flow.flowFormDirective.FlowFormDirective');
-goog.require('grrUi.forms.utils.valueHasErrors');
+goog.require('grrUi.forms.utils');  // USE: valueHasErrors
 
 goog.scope(function() {
 
@@ -16,7 +16,7 @@ var valueHasErrors = grrUi.forms.utils.valueHasErrors;
  * @constructor
  * @ngInject
  */
-grrUi.flow.flowFormDirective.FlowFormController = function(
+const FlowFormController = function(
     $scope, grrReflectionService) {
 
   /** @private {!angular.Scope} */
@@ -53,8 +53,6 @@ grrUi.flow.flowFormDirective.FlowFormController = function(
   }.bind(this), this.onArgsDeepChange_.bind(this), true);
 };
 
-var FlowFormController =
-    grrUi.flow.flowFormDirective.FlowFormController;
 
 
 FlowFormController.prototype.onArgsDeepChange_ = function() {
