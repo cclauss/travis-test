@@ -44,8 +44,6 @@ matrix:
         - >-
           sudo docker exec --user "${DOCKER_USER}" "${DOCKER_CONTAINER}"
           travis/build_templates.sh
-        # Test installing the built rpm (as root)
-        - sudo docker exec "${DOCKER_CONTAINER}" rpm -vih gcs_upload_dir/*.rpm
         - travis/deploy_to_gcs.sh
 
     # 64-bit xenial Docker container, for building server debs.
