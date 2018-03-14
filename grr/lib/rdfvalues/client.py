@@ -13,6 +13,7 @@ import socket
 import stat
 import struct
 
+import ipaddr
 import psutil
 
 from grr import config
@@ -391,6 +392,21 @@ class NetworkAddress(structs.RDFProtoStruct):
       # IPv4
       self.address_type = NetworkAddress.Family.INET
       self.packed_bytes = ipv6_utils.InetPtoN(socket.AF_INET, value)
+
+  def AsIPAddr(self):
+    """Returns the ip as an ipaddr.IPADdress object.
+
+    Raises a ValueError if the stored data does not represent a valid ip.
+    """
+    try:
+      if self.address_type == NetworkAddress.Family.INET:
+        return ipaddr.IPv4Address(self.human_readable_address)
+      elif self.address_type == NetworkAddress.Family.INET6:
+        return ipaddr.IPv6Address(self.human_readable_address)
+      else:
+        raise ValueError("Unknown address type: %d" % self.address_type)
+    except ipaddr.AddressValueError:
+      raise ValueError("Invalid IP address: %s" % self.human_readable_address)
 
 
 class DNSClientConfiguration(structs.RDFProtoStruct):
@@ -1105,10 +1121,6 @@ class UploadedFile(structs.RDFProtoStruct):
   ]
 
 
-class DumpProcessMemoryRequest(structs.RDFProtoStruct):
-  protobuf = jobs_pb2.DumpProcessMemoryRequest
-
-
 class FingerprintTuple(structs.RDFProtoStruct):
   protobuf = jobs_pb2.FingerprintTuple
 
@@ -1291,3 +1303,17 @@ class ClientComponent(structs.RDFProtoStruct):
 class ListNetworkConnectionsArgs(structs.RDFProtoStruct):
   """Args for the ListNetworkConnections client action."""
   protobuf = flows_pb2.ListNetworkConnectionsArgs
+
+
+class BlobImageChunkDescriptor(structs.RDFProtoStruct):
+  """A descriptor of a file chunk stored in VFS blob image."""
+
+  protobuf = jobs_pb2.BlobImageChunkDescriptor
+  rdf_deps = []
+
+
+class BlobImageDescriptor(structs.RDFProtoStruct):
+  """A descriptor of a file stored as VFS blob image."""
+
+  protobuf = jobs_pb2.BlobImageDescriptor
+  rdf_deps = [BlobImageChunkDescriptor]

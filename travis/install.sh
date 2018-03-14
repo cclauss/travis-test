@@ -44,7 +44,7 @@ pip install -e grr/proto/
 pip install -e .
 
 # Depends on grr-response-core
-pip install -e grr/config/grr-response-client/
+pip install -e grr/client/
 
 # Depends on grr-response-core
 pip install -e api_client/python/
@@ -53,7 +53,7 @@ pip install -e api_client/python/
 pip install -e grr/config/grr-response-server/[mysqldatastore]
 
 # Depends on grr-response-server and grr-api-client
-pip install -e grr/config/grr-response-test/
+pip install -e grr/test
 
 cd grr/proto && python makefile.py && cd -
 cd grr/artifacts && python makefile.py && cd -

@@ -1,9 +1,9 @@
 'use strict';
 
-goog.provide('grrUi.local.localModule');
-
+goog.module('grrUi.local.local');
+goog.module.declareLegacyNamespace();
 
 /**
  * Angular module for user-specific logic.
  */
-grrUi.local.localModule = angular.module('grrUi.local', []);
+exports.localModule = angular.module('grrUi.local', []);

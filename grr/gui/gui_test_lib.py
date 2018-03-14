@@ -206,13 +206,19 @@ class GRRSeleniumTest(test_lib.GRRBaseTest, acl_test_lib.AclTestMixin):
     api_auth_manager.APIACLInit.InitApiAuthManager()
 
   def CheckJavascriptErrors(self):
-    for message in self.driver.get_log("browser"):
-      logging.info("[javascript:%s]: %s",
-                   message.get("level", ""), message["message"])
-      if (message.get("source", "") == "javascript" and
-          message.get("level", "") == "SEVERE"):
-        self.fail(
-            "Javascript error ecountered during test: %s" % message["message"])
+    errors = self.driver.execute_script(
+        "return (() => {const e = window.grrInterceptedErrors_ || []; "
+        "window.grrInterceptedErrors_ = []; return e;})();")
+
+    msgs = []
+    for e in errors:
+      msg = "[javascript]: %s" % e
+      logging.error(msg)
+      msgs.append(msg)
+
+    if msgs:
+      self.fail(
+          "Javascript error encountered during test: %s" % "\n\t".join(msgs))
 
   def WaitUntil(self, condition_cb, *args):
     self.CheckJavascriptErrors()
@@ -223,6 +229,9 @@ class GRRSeleniumTest(test_lib.GRRBaseTest, acl_test_lib.AclTestMixin):
         if res:
           return res
 
+      # Raise in case of a test-related error (i.e. failing assertion).
+      except self.failureException:
+        raise
       # The element might not exist yet and selenium could raise here. (Also
       # Selenium raises Exception not StandardError).
       except Exception as e:  # pylint: disable=broad-except
@@ -231,8 +240,8 @@ class GRRSeleniumTest(test_lib.GRRBaseTest, acl_test_lib.AclTestMixin):
       self.CheckJavascriptErrors()
       time.sleep(self.sleep_time)
 
-    raise RuntimeError("condition not met, body is: %s" %
-                       self.driver.find_element_by_tag_name("body").text)
+    self.fail("condition not met, body is: %s" %
+              self.driver.find_element_by_tag_name("body").text)
 
   def _FindElement(self, selector):
     try:
@@ -273,20 +282,17 @@ class GRRSeleniumTest(test_lib.GRRBaseTest, acl_test_lib.AclTestMixin):
       else:
         return self.driver.find_element_by_id(effective_selector)
     else:
-      raise RuntimeError("unknown selector type %s" % selector_type)
+      raise ValueError("unknown selector type %s" % selector_type)
 
   @SeleniumAction
   def Open(self, url):
+    # In GRR Selenium tests calling Open() implies page refresh.
+    # We make sure that browser/webdriver is not confused by the fact that
+    # only the fragment part of the URL (after the '#' symbol) changes.
+    # It's important to not confuse WebDriver since it tends to get stuck
+    # when confused.
+    self.driver.get("data:.")
     self.driver.get(self.base_url + url)
-
-    # Sometimes page doesn't get refreshed if url's path and query haven't
-    # changed, even if fragments part (part after '#' symbol) of the url has
-    # changed. We have to explicitly call Refresh() in such cases.
-    prev_parsed_url = urlparse.urlparse(self.driver.current_url)
-    new_parsed_url = urlparse.urlparse(url)
-    if (prev_parsed_url.path == new_parsed_url.path and
-        prev_parsed_url.query == new_parsed_url.query):
-      self.Refresh()
 
   @SeleniumAction
   def Refresh(self):
@@ -464,6 +470,9 @@ $('body').injector().get('$browser').notifyWhenNoOutstandingRequests(function() 
         if condition_cb(*args) == target:
           return True
 
+      # Raise in case of a test-related error (i.e. failing assertion).
+      except self.failureException:
+        raise
       # The element might not exist yet and selenium could raise here. (Also
       # Selenium raises Exception not StandardError).
       except Exception as e:  # pylint: disable=broad-except
@@ -471,8 +480,8 @@ $('body').injector().get('$browser').notifyWhenNoOutstandingRequests(function() 
 
       time.sleep(self.sleep_time)
 
-    raise RuntimeError("condition not met, body is: %s" %
-                       self.driver.find_element_by_tag_name("body").text)
+    self.fail("condition not met, body is: %s" %
+              self.driver.find_element_by_tag_name("body").text)
 
   def WaitUntilContains(self, target, condition_cb, *args):
     data = ""
@@ -484,14 +493,17 @@ $('body').injector().get('$browser').notifyWhenNoOutstandingRequests(function() 
         if target in data:
           return True
 
+      # Raise in case of a test-related error (i.e. failing assertion).
+      except self.failureException:
+        raise
       # The element might not exist yet and selenium could raise here.
       except Exception as e:  # pylint: disable=broad-except
         logging.warn("Selenium raised %s", utils.SmartUnicode(e))
 
       time.sleep(self.sleep_time)
 
-    raise RuntimeError("condition not met. got: %r, does not contain: %s" %
-                       (data, target))
+    self.fail("condition not met. got: %r, does not contain: %s" % (data,
+                                                                    target))
 
   def _MakeFixtures(self):
     token = access_control.ACLToken(username="test", reason="Make fixtures.")
@@ -566,6 +578,14 @@ $('body').injector().get('$browser').notifyWhenNoOutstandingRequests(function() 
 class GRRSeleniumHuntTest(GRRSeleniumTest, standard_test.StandardHuntTestMixin):
   """Common functionality for hunt gui tests."""
 
+  def _CreateForemanClientRuleSet(self):
+    return rdf_foreman.ForemanClientRuleSet(rules=[
+        rdf_foreman.ForemanClientRule(
+            rule_type=rdf_foreman.ForemanClientRule.Type.REGEX,
+            regex=rdf_foreman.ForemanRegexClientRule(
+                field="CLIENT_NAME", attribute_regex="GRR"))
+    ])
+
   def _CreateHuntWithDownloadedFile(self):
     hunt = self.CreateSampleHunt(
         path=os.path.join(self.base_path, "test.plist"), client_count=1)
@@ -589,21 +609,16 @@ class GRRSeleniumHuntTest(GRRSeleniumTest, standard_test.StandardHuntTestMixin):
     token = token or self.token
     self.client_ids = self.SetupClients(client_count)
 
-    client_rule_set = rdf_foreman.ForemanClientRuleSet(rules=[
-        rdf_foreman.ForemanClientRule(
-            rule_type=rdf_foreman.ForemanClientRule.Type.REGEX,
-            regex=rdf_foreman.ForemanRegexClientRule(
-                attribute_name="GRR client", attribute_regex="GRR"))
-    ])
-
     with implementation.GRRHunt.StartHunt(
         hunt_name=standard.GenericHunt.__name__,
         flow_runner_args=rdf_flows.FlowRunnerArgs(
             flow_name=transfer.GetFile.__name__),
-        flow_args=transfer.GetFileArgs(pathspec=rdf_paths.PathSpec(
-            path=path or "/tmp/evil.txt",
-            pathtype=rdf_paths.PathSpec.PathType.OS,)),
-        client_rule_set=client_rule_set,
+        flow_args=transfer.GetFileArgs(
+            pathspec=rdf_paths.PathSpec(
+                path=path or "/tmp/evil.txt",
+                pathtype=rdf_paths.PathSpec.PathType.OS,
+            )),
+        client_rule_set=self._CreateForemanClientRuleSet(),
         output_plugins=output_plugins or [],
         client_rate=0,
         client_limit=client_limit,
@@ -614,7 +629,7 @@ class GRRSeleniumHuntTest(GRRSeleniumTest, standard_test.StandardHuntTestMixin):
     with aff4.FACTORY.Open("aff4:/foreman", mode="rw", token=token) as foreman:
 
       for client_id in self.client_ids:
-        foreman.AssignTasksToClient(client_id)
+        foreman.AssignTasksToClient(client_id.Basename())
 
     self.hunt_urn = hunt.urn
     return aff4.FACTORY.Open(
@@ -630,16 +645,9 @@ class GRRSeleniumHuntTest(GRRSeleniumTest, standard_test.StandardHuntTestMixin):
           rdfvalue.RDFURN("aff4:/sample/3")
       ]
 
-    client_rule_set = rdf_foreman.ForemanClientRuleSet(rules=[
-        rdf_foreman.ForemanClientRule(
-            rule_type=rdf_foreman.ForemanClientRule.Type.REGEX,
-            regex=rdf_foreman.ForemanRegexClientRule(
-                attribute_name="GRR client", attribute_regex="GRR"))
-    ])
-
     with implementation.GRRHunt.StartHunt(
         hunt_name=standard.GenericHunt.__name__,
-        client_rule_set=client_rule_set,
+        client_rule_set=self._CreateForemanClientRuleSet(),
         output_plugins=[],
         token=self.token) as hunt:
 
@@ -731,8 +739,10 @@ class FlowWithOneStatEntryResult(flow.GRRFlow):
   @flow.StateHandler()
   def Start(self):
     self.SendReply(
-        rdf_client.StatEntry(pathspec=rdf_paths.PathSpec(
-            path="/some/unique/path", pathtype=rdf_paths.PathSpec.PathType.OS)))
+        rdf_client.StatEntry(
+            pathspec=rdf_paths.PathSpec(
+                path="/some/unique/path",
+                pathtype=rdf_paths.PathSpec.PathType.OS)))
 
 
 class FlowWithOneNetworkConnectionResult(flow.GRRFlow):

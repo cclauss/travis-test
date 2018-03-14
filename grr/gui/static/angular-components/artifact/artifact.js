@@ -1,84 +1,63 @@
 'use strict';
 
-goog.provide('grrUi.artifact');
-goog.provide('grrUi.artifact.artifactModule');
+goog.module('grrUi.artifact.artifact');
+goog.module.declareLegacyNamespace();
 
-goog.require('grrUi.artifact.artifactDescriptorDirective');  // USE: ArtifactDescriptorDirective
-goog.require('grrUi.artifact.artifactDescriptorsService');  // USE: ArtifactDescriptorsService
-goog.require('grrUi.artifact.artifactDialogService');  // USE: ArtifactDialogService
-goog.require('grrUi.artifact.artifactManagerViewDirective');  // USE: ArtifactManagerViewDirective
-goog.require('grrUi.artifact.artifactNameDirective');  // USE: ArtifactNameDirective
-goog.require('grrUi.artifact.artifactsListFormDirective');  // USE: ArtifactsListFormDirective
-goog.require('grrUi.artifact.deleteArtifactsDialogDirective');  // USE: DeleteArtifactsDialogDirective
-goog.require('grrUi.artifact.uploadArtifactDialogDirective');  // USE: UploadArtifactDialogDirective
+const {ArtifactDescriptorDirective} = goog.require('grrUi.artifact.artifactDescriptorDirective');
+const {ArtifactDescriptorsService} = goog.require('grrUi.artifact.artifactDescriptorsService');
+const {ArtifactDialogService} = goog.require('grrUi.artifact.artifactDialogService');
+const {ArtifactManagerViewDirective} = goog.require('grrUi.artifact.artifactManagerViewDirective');
+const {ArtifactNameDirective} = goog.require('grrUi.artifact.artifactNameDirective');
+const {ArtifactsListFormDirective} = goog.require('grrUi.artifact.artifactsListFormDirective');
+const {DeleteArtifactsDialogDirective} = goog.require('grrUi.artifact.deleteArtifactsDialogDirective');
+const {UploadArtifactDialogDirective} = goog.require('grrUi.artifact.uploadArtifactDialogDirective');
+const {coreModule} = goog.require('grrUi.core.core');
+const {formsModule} = goog.require('grrUi.forms.forms');
+const {semanticModule} = goog.require('grrUi.semantic.semantic');
 
-goog.require('grrUi.core');      // USE: coreModule
-goog.require('grrUi.forms');     // USE: formsModule
-goog.require('grrUi.semantic');  // USE: semanticModule
 
 
 /**
  * Module with artifact-related directives.
  */
-grrUi.artifact.artifactModule = angular.module('grrUi.artifact',
-                                       [grrUi.core.coreModule.name,
-                                        grrUi.forms.formsModule.name,
-                                        grrUi.semantic.semanticModule.name,
-                                        'ui.bootstrap']);
+exports.artifactModule = angular.module(
+    'grrUi.artifact',
+    [coreModule.name, formsModule.name, semanticModule.name, 'ui.bootstrap']);
 
-grrUi.artifact.artifactModule.directive(
-    grrUi.artifact.artifactDescriptorDirective.ArtifactDescriptorDirective
-        .directive_name,
-    grrUi.artifact.artifactDescriptorDirective.ArtifactDescriptorDirective);
-grrUi.artifact.artifactModule.directive(
-    grrUi.artifact.artifactNameDirective.ArtifactNameDirective.directive_name,
-    grrUi.artifact.artifactNameDirective.ArtifactNameDirective);
-grrUi.artifact.artifactModule.directive(
-    grrUi.artifact.artifactManagerViewDirective.ArtifactManagerViewDirective
-        .directive_name,
-    grrUi.artifact.artifactManagerViewDirective.ArtifactManagerViewDirective);
-grrUi.artifact.artifactModule.directive(
-    grrUi.artifact.artifactsListFormDirective.ArtifactsListFormDirective
-        .directive_name,
-    grrUi.artifact.artifactsListFormDirective.ArtifactsListFormDirective);
-grrUi.artifact.artifactModule.directive(
-    grrUi.artifact.deleteArtifactsDialogDirective
-        .DeleteArtifactsDialogDirective.directive_name,
-    grrUi.artifact.deleteArtifactsDialogDirective
-        .DeleteArtifactsDialogDirective);
-grrUi.artifact.artifactModule.directive(
-    grrUi.artifact.uploadArtifactDialogDirective.UploadArtifactDialogDirective
-        .directive_name,
-    grrUi.artifact.uploadArtifactDialogDirective.UploadArtifactDialogDirective);
+exports.artifactModule.directive(
+    ArtifactDescriptorDirective.directive_name, ArtifactDescriptorDirective);
+exports.artifactModule.directive(
+    ArtifactNameDirective.directive_name, ArtifactNameDirective);
+exports.artifactModule.directive(
+    ArtifactManagerViewDirective.directive_name, ArtifactManagerViewDirective);
+exports.artifactModule.directive(
+    ArtifactsListFormDirective.directive_name, ArtifactsListFormDirective);
+exports.artifactModule.directive(
+    DeleteArtifactsDialogDirective.directive_name,
+    DeleteArtifactsDialogDirective);
+exports.artifactModule.directive(
+    UploadArtifactDialogDirective.directive_name,
+    UploadArtifactDialogDirective);
 
-grrUi.artifact.artifactModule.service(
-    grrUi.artifact.artifactDescriptorsService.ArtifactDescriptorsService
-        .service_name,
-    grrUi.artifact.artifactDescriptorsService.ArtifactDescriptorsService);
-grrUi.artifact.artifactModule.service(
-    grrUi.artifact.artifactDialogService.ArtifactDialogService.service_name,
-    grrUi.artifact.artifactDialogService.ArtifactDialogService);
+exports.artifactModule.service(
+    ArtifactDescriptorsService.service_name, ArtifactDescriptorsService);
+exports.artifactModule.service(
+    ArtifactDialogService.service_name, ArtifactDialogService);
 
-grrUi.artifact.artifactModule.run(
-    function(grrSemanticRepeatedFormDirectivesRegistryService) {
+exports.artifactModule.run(function(
+    grrSemanticRepeatedFormDirectivesRegistryService) {
   var registry = grrSemanticRepeatedFormDirectivesRegistryService;
 
   registry.registerDirective(
-      grrUi.artifact.artifactsListFormDirective.ArtifactsListFormDirective
-          .semantic_type,
-      grrUi.artifact.artifactsListFormDirective.ArtifactsListFormDirective);
+      ArtifactsListFormDirective.semantic_type, ArtifactsListFormDirective);
 });
 
 
-grrUi.artifact.artifactModule.run(function(grrSemanticValueDirectivesRegistryService) {
+exports.artifactModule.run(function(grrSemanticValueDirectivesRegistryService) {
   var registry = grrSemanticValueDirectivesRegistryService;
 
   registry.registerDirective(
-      grrUi.artifact.artifactDescriptorDirective.ArtifactDescriptorDirective
-          .semantic_type,
-      grrUi.artifact.artifactDescriptorDirective.ArtifactDescriptorDirective);
+      ArtifactDescriptorDirective.semantic_type, ArtifactDescriptorDirective);
   registry.registerDirective(
-      grrUi.artifact.artifactNameDirective.ArtifactNameDirective
-          .semantic_type,
-      grrUi.artifact.artifactNameDirective.ArtifactNameDirective);
+      ArtifactNameDirective.semantic_type, ArtifactNameDirective);
 });

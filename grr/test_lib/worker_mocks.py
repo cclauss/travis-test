@@ -3,9 +3,9 @@
 
 import threading
 
-from grr.client import client_stats
-from grr.client import client_utils
-from grr.client import comms
+from grr_response_client import client_stats
+from grr_response_client import client_utils
+from grr_response_client import comms
 from grr.lib.rdfvalues import flows as rdf_flows
 
 
@@ -33,27 +33,20 @@ class FakeMixin(object):
     return result
 
 
-class DisabledNannyThreadedWorker(comms.GRRThreadedWorker):
-
-  def StartNanny(self):
-    # Deliberatley no call to StartNanny()
-    self.nanny_controller = client_utils.NannyController()
-
-  def start(self):
-    # Don't start any threads in tests.
-    pass
-
-
 class DisabledNannyClientWorker(comms.GRRClientWorker):
 
   def StartNanny(self):
     # Deliberatley no call to StartNanny()
     self.nanny_controller = client_utils.NannyController()
 
+  def StartStatsCollector(self):
+    # Don't start any threads in tests.
+    pass
+
+  def start(self):
+    # Don't start any threads in tests.
+    pass
+
 
 class FakeClientWorker(FakeMixin, DisabledNannyClientWorker):
   """A Fake GRR client worker which just collects SendReplys."""
-
-
-class FakeThreadedWorker(FakeMixin, DisabledNannyThreadedWorker):
-  """A Fake GRR client worker based on the actual threaded worker."""

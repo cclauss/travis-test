@@ -15,15 +15,15 @@ import requests
 from google.protobuf import json_format
 
 from grr import config
-from grr.client import comms
-from grr.client.client_actions import standard
-from grr.client.components.rekall_support import rekall_types as rdf_rekall_types
+from grr_response_client import comms
+from grr_response_client.client_actions import standard
 from grr.lib import flags
 from grr.lib import rdfvalue
 from grr.lib import utils
 from grr.lib.rdfvalues import client as rdf_client
 from grr.lib.rdfvalues import file_finder as rdf_file_finder
 from grr.lib.rdfvalues import paths as rdf_paths
+from grr.lib.rdfvalues import rekall_types as rdf_rekall_types
 from grr.server import aff4
 from grr.server import file_store
 from grr.server import flow
@@ -47,7 +47,9 @@ class GRRHTTPServerTest(test_lib.GRRBaseTest):
 
     cls.config_overrider = test_lib.ConfigOverrider({
         "Rekall.profile_server":
-            rekall_test_lib.TestRekallRepositoryProfileServer.__name__
+            rekall_test_lib.TestRekallRepositoryProfileServer.__name__,
+        "FileUploadFileStore.root_dir":
+            "/tmp",
     })
     cls.config_overrider.Start()
 
@@ -201,7 +203,7 @@ class GRRHTTPServerTest(test_lib.GRRBaseTest):
           ca_cert=config.CONFIG["CA.certificate"],
           private_key=config.CONFIG.Get("Client.private_key", default=None),
           worker_cls=worker_mocks.DisabledNannyClientWorker)
-      client.client_worker = worker_mocks.FakeThreadedWorker(client=client)
+      client.client_worker = worker_mocks.FakeClientWorker(client=client)
       client.server_certificate = config.CONFIG["Frontend.certificate"]
 
       for s in flow_test_lib.TestFlowHelper(

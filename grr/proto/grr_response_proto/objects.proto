@@ -41,7 +41,7 @@ message Client {
       description: "When system was installed.",
     }]; // Called install_date in some legacy code.
   optional KnowledgeBase knowledge_base = 7 [(sem_type) = {
-      description: "Artifact Knowledge Base",
+      description: "Knowledge Base",
     }];
   repeated StringMapEntry grr_configuration = 8 [(sem_type) = {
       description: "Running configuration for the GRR client.",
@@ -96,6 +96,15 @@ message ClientMetadata {
   optional uint64 first_seen = 7 [(sem_type) = {
       type: "RDFDatetime",
       description: "First time the client registered with us",
+    }];
+  optional uint64 last_crash_timestamp = 8 [(sem_type) = {
+      type: "RDFDatetime",
+      description: "Last time this client reported a crash.",
+    }];
+  optional uint64 startup_info_timestamp = 9 [(sem_type) = {
+      type: "RDFDatetime",
+      description: "Timestamp for the latest change of startup information for "
+                   "this client.",
     }];
 }
 

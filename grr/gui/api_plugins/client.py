@@ -4,6 +4,8 @@
 import shlex
 import sys
 
+import ipaddr
+
 from grr.gui import api_call_handler_base
 from grr.gui import api_call_handler_utils
 from grr.gui.api_plugins import stats as api_stats
@@ -79,9 +81,11 @@ class ApiClient(rdf_structs.RDFProtoStruct):
       rdf_client.Volume,
   ]
 
-  def InitFromAff4Object(self, client_obj):
+  def InitFromAff4Object(self, client_obj, include_metadata=True):
+    # TODO(amoser): Deprecate all urns.
     self.urn = client_obj.urn
-    self.client_id = self.urn.Basename()
+
+    self.client_id = client_obj.urn.Basename()
 
     self.agent_info = client_obj.Get(client_obj.Schema.CLIENT_INFO)
     self.hardware_info = client_obj.Get(client_obj.Schema.HARDWARE_INFO)
@@ -102,12 +106,23 @@ class ApiClient(rdf_structs.RDFProtoStruct):
     self.memory_size = client_obj.Get(client_obj.Schema.MEMORY_SIZE)
 
     self.first_seen_at = client_obj.Get(client_obj.Schema.FIRST_SEEN)
-    self.last_seen_at = client_obj.Get(client_obj.Schema.PING)
-    self.last_booted_at = client_obj.Get(client_obj.Schema.LAST_BOOT_TIME)
-    self.last_clock = client_obj.Get(client_obj.Schema.CLOCK)
-    last_crash = client_obj.Get(client_obj.Schema.LAST_CRASH)
-    if last_crash is not None:
-      self.last_crash_at = last_crash.timestamp
+
+    if include_metadata:
+      ping = client_obj.Get(client_obj.Schema.PING)
+      if ping:
+        self.last_seen_at = ping
+
+      booted = client_obj.Get(client_obj.Schema.LAST_BOOT_TIME)
+      if booted:
+        self.last_booted_at = booted
+
+      clock = client_obj.Get(client_obj.Schema.CLOCK)
+      if clock:
+        self.last_clock = clock
+
+      last_crash = client_obj.Get(client_obj.Schema.LAST_CRASH)
+      if last_crash is not None:
+        self.last_crash_at = last_crash.timestamp
 
     self.labels = [
         objects.ClientLabel(name=l.name, owner=l.owner)
@@ -115,7 +130,8 @@ class ApiClient(rdf_structs.RDFProtoStruct):
     ]
     self.interfaces = client_obj.Get(client_obj.Schema.INTERFACES)
     kb = client_obj.Get(client_obj.Schema.KNOWLEDGE_BASE)
-    self.users = kb and kb.users or []
+    if kb and kb.users:
+      self.users = sorted(kb.users, key=lambda user: user.username)
     self.volumes = client_obj.Get(client_obj.Schema.VOLUMES)
 
     type_obj = client_obj.Get(client_obj.Schema.TYPE)
@@ -125,6 +141,80 @@ class ApiClient(rdf_structs.RDFProtoStruct):
       self.Set("age", type_obj.age)
 
     self.cloud_instance = client_obj.Get(client_obj.Schema.CLOUD_INSTANCE)
+    return self
+
+  def InitFromClientObject(self, client_obj):
+
+    # TODO(amoser): Deprecate all urns.
+    self.urn = client_obj.client_id
+
+    self.client_id = client_obj.client_id
+
+    self.agent_info = client_obj.startup_info.client_info
+    self.hardware_info = client_obj.hardware_info
+
+    os_info = rdf_client.Uname()
+    if client_obj.os_version:
+      os_info.version = client_obj.os_version
+    if client_obj.os_release:
+      os_info.release = client_obj.os_release
+    if client_obj.kernel:
+      os_info.kernel = client_obj.kernel
+    if client_obj.arch:
+      os_info.machine = client_obj.arch
+    if client_obj.install_time:
+      os_info.install_date = client_obj.install_time
+
+    kb = client_obj.knowledge_base
+    if kb:
+      self.knowledge_base = kb
+      if kb.os:
+        os_info.system = kb.os
+      if kb.fqdn:
+        os_info.fqdn = kb.fqdn
+
+      # TODO(amoser): Deprecate this field in favor of the kb.
+      if kb.users:
+        self.users = sorted(kb.users, key=lambda user: user.username)
+
+    self.os_info = os_info
+
+    if client_obj.interfaces:
+      self.interfaces = client_obj.interfaces
+    if client_obj.volumes:
+      self.volumes = client_obj.volumes
+    if client_obj.cloud_instance:
+      self.cloud_instance = client_obj.cloud_instance
+
+    # TODO(amoser): This should be removed in favor of a timestamp field.
+    # Without self.Set self.age would reference "age" attribute instead of a
+    # protobuf field.
+    self.Set("age", client_obj.timestamp)
+
+    if client_obj.memory_size:
+      self.memory_size = client_obj.memory_size
+    if client_obj.startup_info.boot_time:
+      self.last_booted_at = client_obj.startup_info.boot_time
+
+    return self
+
+  def InitFromClientInfo(self, client_info):
+
+    self.InitFromClientObject(client_info["client"])
+
+    md = client_info["metadata"]
+    if md:
+      if md.first_seen:
+        self.first_seen_at = md.first_seen
+      if md.ping:
+        self.last_seen_at = md.ping
+      if md.clock:
+        self.last_clock = md.clock
+      if md.last_crash_timestamp:
+        self.last_crash_at = md.last_crash_timestamp
+
+    self.labels = client_info["labels"]
+
     return self
 
 
@@ -159,15 +249,28 @@ class ApiSearchClientsHandler(api_call_handler_base.ApiCallHandler):
 
     keywords = shlex.split(args.query)
 
-    index = client_index.CreateClientIndex(token=token)
-    result_urns = sorted(
-        index.LookupClients(keywords))[args.offset:args.offset + end]
-
-    result_set = aff4.FACTORY.MultiOpen(result_urns, token=token)
-
     api_clients = []
-    for child in sorted(result_set):
-      api_clients.append(ApiClient().InitFromAff4Object(child))
+
+    if data_store.RelationalDBReadEnabled():
+      index = client_index.ClientIndex()
+
+      clients = sorted(
+          index.LookupClients(keywords))[args.offset:args.offset + end]
+
+      client_infos = data_store.REL_DB.ReadFullInfoClients(clients)
+      for client_info in client_infos.itervalues():
+        api_clients.append(ApiClient().InitFromClientInfo(client_info))
+
+    else:
+      index = client_index.CreateClientIndex(token=token)
+
+      result_urns = sorted(
+          index.LookupClients(keywords))[args.offset:args.offset + end]
+
+      result_set = aff4.FACTORY.MultiOpen(result_urns, token=token)
+
+      for child in sorted(result_set):
+        api_clients.append(ApiClient().InitFromAff4Object(child))
 
     return ApiSearchClientsResult(items=api_clients)
 
@@ -193,6 +296,13 @@ class ApiLabelsRestrictedSearchClientsHandler(
 
     return False
 
+  def _VerifyLabels(self, labels):
+    for label in labels:
+      if (label.name in self.labels_whitelist and
+          label.owner in self.labels_owners_whitelist):
+        return True
+    return False
+
   def Handle(self, args, token=None):
     if args.count:
       end = args.offset + args.count
@@ -200,20 +310,48 @@ class ApiLabelsRestrictedSearchClientsHandler(
       end = sys.maxint
 
     keywords = shlex.split(args.query)
-
-    index = client_index.CreateClientIndex(token=token)
-    all_urns = set()
-    for label in self.labels_whitelist:
-      label_filter = ["label:" + label] + keywords
-      all_urns.update(index.LookupClients(label_filter))
-
-    all_objs = aff4.FACTORY.MultiOpen(
-        sorted(all_urns, key=str), aff4_type=aff4_grr.VFSGRRClient, token=token)
-
     api_clients = []
-    index = 0
-    for client_obj in all_objs:
-      if self._CheckClientLabels(client_obj):
+
+    if data_store.RelationalDBReadEnabled():
+      index = client_index.ClientIndex()
+
+      # TODO(amoser): We could move the label verification into the
+      # database making this method more efficient. Label restrictions
+      # should be on small subsets though so this might not be worth
+      # it.
+      all_client_ids = set()
+      for label in self.labels_whitelist:
+        label_filter = ["label:" + label] + keywords
+        all_client_ids.update(index.LookupClients(label_filter))
+
+      client_infos = data_store.REL_DB.ReadFullInfoClients(all_client_ids)
+
+      index = 0
+      for _, client_info in sorted(client_infos.items()):
+        if not self._VerifyLabels(client_info["labels"]):
+          continue
+        if index >= args.offset and index < end:
+          api_clients.append(ApiClient().InitFromClientInfo(client_info))
+        index += 1
+        if index >= end:
+          break
+
+    else:
+      index = client_index.CreateClientIndex(token=token)
+      all_urns = set()
+      for label in self.labels_whitelist:
+        label_filter = ["label:" + label] + keywords
+        all_urns.update(index.LookupClients(label_filter))
+
+      all_objs = aff4.FACTORY.MultiOpen(
+          sorted(all_urns, key=str),
+          aff4_type=aff4_grr.VFSGRRClient,
+          token=token)
+
+      index = 0
+      for client_obj in all_objs:
+        if not self._CheckClientLabels(client_obj):
+          continue
         if index >= args.offset and index < end:
           api_clients.append(ApiClient().InitFromAff4Object(client_obj))
 
@@ -244,13 +382,16 @@ class ApiGetClientHandler(api_call_handler_base.ApiCallHandler):
     else:
       age = rdfvalue.RDFDatetime(args.timestamp)
 
-    client = aff4.FACTORY.Open(
-        args.client_id.ToClientURN(),
-        aff4_type=aff4_grr.VFSGRRClient,
-        age=age,
-        token=token)
-
-    return ApiClient().InitFromAff4Object(client)
+    if data_store.RelationalDBReadEnabled():
+      info = data_store.REL_DB.ReadFullInfoClient(str(args.client_id))
+      return ApiClient().InitFromClientInfo(info)
+    else:
+      client = aff4.FACTORY.Open(
+          args.client_id.ToClientURN(),
+          aff4_type=aff4_grr.VFSGRRClient,
+          age=age,
+          token=token)
+      return ApiClient().InitFromAff4Object(client)
 
 
 class ApiGetClientVersionsArgs(rdf_structs.RDFProtoStruct):
@@ -279,17 +420,28 @@ class ApiGetClientVersionsHandler(api_call_handler_base.ApiCallHandler):
     start_time = args.start or end_time - rdfvalue.Duration("3m")
     diffs_only = args.mode == args.Mode.DIFF
 
-    all_clients = aff4.FACTORY.OpenDiscreteVersions(
-        args.client_id.ToClientURN(),
-        mode="r",
-        age=(start_time.AsMicroSecondsFromEpoch(),
-             end_time.AsMicroSecondsFromEpoch()),
-        diffs_only=diffs_only,
-        token=token)
-
     items = []
-    for fd in all_clients:
-      items.append(ApiClient().InitFromAff4Object(fd))
+
+    if data_store.RelationalDBReadEnabled():
+      history = data_store.REL_DB.ReadClientHistory(str(args.client_id))
+
+      for client in history[::-1]:
+        # TODO(amoser): Filtering could be done at the db level and we
+        # wouldn't have to read all the versions always.
+        if client.timestamp < start_time or client.timestamp > end_time:
+          continue
+        items.append(ApiClient().InitFromClientObject(client))
+    else:
+      all_clients = aff4.FACTORY.OpenDiscreteVersions(
+          args.client_id.ToClientURN(),
+          mode="r",
+          age=(start_time.AsMicroSecondsFromEpoch(),
+               end_time.AsMicroSecondsFromEpoch()),
+          diffs_only=diffs_only,
+          token=token)
+
+      for fd in all_clients:
+        items.append(ApiClient().InitFromAff4Object(fd, include_metadata=False))
 
     return ApiGetClientVersionsResult(items=items)
 
@@ -315,11 +467,23 @@ class ApiGetClientVersionTimesHandler(api_call_handler_base.ApiCallHandler):
   result_type = ApiGetClientVersionTimesResult
 
   def Handle(self, args, token=None):
-    fd = aff4.FACTORY.Open(
-        args.client_id.ToClientURN(), mode="r", age=aff4.ALL_TIMES, token=token)
+    if data_store.RelationalDBReadEnabled():
+      # TODO(amoser): Again, this is rather inefficient,if we moved
+      # this call to the datastore we could make it much
+      # faster. However, there is a chance that this will not be
+      # needed anymore once we use the relational db everywhere, let's
+      # decide later.
+      history = data_store.REL_DB.ReadClientHistory(str(args.client_id))
+      times = [h.timestamp for h in history]
+    else:
+      fd = aff4.FACTORY.Open(
+          args.client_id.ToClientURN(),
+          mode="r",
+          age=aff4.ALL_TIMES,
+          token=token)
 
-    type_values = list(fd.GetValuesForAttribute(fd.Schema.TYPE))
-    times = sorted([t.age for t in type_values], reverse=True)
+      type_values = list(fd.GetValuesForAttribute(fd.Schema.TYPE))
+      times = sorted([t.age for t in type_values], reverse=True)
 
     return ApiGetClientVersionTimesResult(times=times)
 
@@ -402,15 +566,28 @@ class ApiGetLastClientIPAddressHandler(api_call_handler_base.ApiCallHandler):
   result_type = ApiGetLastClientIPAddressResult
 
   def Handle(self, args, token=None):
-    client = aff4.FACTORY.Open(
-        args.client_id.ToClientURN(),
-        aff4_type=aff4_grr.VFSGRRClient,
-        token=token)
+    if data_store.RelationalDBReadEnabled():
+      md = data_store.REL_DB.ReadClientMetadata(str(args.client_id))
+      try:
+        ipaddr_obj = md.ip.AsIPAddr()
+        ip_str = str(ipaddr_obj)
+      except ValueError:
+        ipaddr_obj = None
+        ip_str = ""
+    else:
+      client = aff4.FACTORY.Open(
+          args.client_id.ToClientURN(),
+          aff4_type=aff4_grr.VFSGRRClient,
+          token=token)
+      ip_str = client.Get(client.Schema.CLIENT_IP)
+      if ip_str:
+        ipaddr_obj = ipaddr.IPAddress(ip_str)
+      else:
+        ipaddr_obj = None
 
-    ip = client.Get(client.Schema.CLIENT_IP)
-    status, info = ip_resolver.IP_RESOLVER.RetrieveIPInfo(ip)
+    status, info = ip_resolver.IP_RESOLVER.RetrieveIPInfo(ipaddr_obj)
 
-    return ApiGetLastClientIPAddressResult(ip=ip, info=info, status=status)
+    return ApiGetLastClientIPAddressResult(ip=ip_str, info=info, status=status)
 
 
 class ApiListClientCrashesArgs(rdf_structs.RDFProtoStruct):
@@ -539,7 +716,7 @@ class ApiRemoveClientsLabelsHandler(api_call_handler_base.ApiCallHandler):
           cid = client_obj.urn.Basename()
           data_store.REL_DB.RemoveClientLabels(cid, token.username, args.labels)
           labels_to_remove = set(args.labels)
-          existing_labels = data_store.REL_DB.GetClientLabels(cid)
+          existing_labels = data_store.REL_DB.ReadClientLabels(cid)
           for label in existing_labels:
             labels_to_remove.discard(label.name)
           if labels_to_remove:

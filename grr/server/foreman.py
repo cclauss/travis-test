@@ -1,8 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2011 Google Inc. All Rights Reserved.
 """RDFValue instances related to the foreman implementation."""
-
-import itertools
 
 from grr.lib import rdfvalue
 from grr.lib import utils
@@ -11,30 +8,20 @@ from grr.lib.rdfvalues import standard
 from grr.lib.rdfvalues import structs as rdf_structs
 from grr_response_proto import jobs_pb2
 from grr.server import aff4
+from grr.server import data_store
 
 
+# TODO(amoser): Rename client_obj once relational db becomes standard.
 class ForemanClientRuleBase(rdf_structs.RDFProtoStruct):
   """Abstract base class of foreman client rules."""
 
-  def GetPathsToCheck(self):
-    """Returns aff4 paths to be opened as objects passed to Evaluate.
-
-    Optional overrides of this method should return an iterable filled with
-    strs representing the aff4 paths to be opened.
-
-    Returns:
-      An iterable filled with strs representing the aff4 paths to be opened.
-    """
-    return ["/"]
-
-  def Evaluate(self, objects, client_id):
+  def Evaluate(self, client_obj):
     """Evaluates the rule represented by this object.
 
     Args:
-      objects: A dict that maps fd.urn to fd for all file descriptors fd
-          corresponding to the aff4 paths returned by the GetPathsToCheck
-          method of this object.
-      client_id: An aff4 client id object.
+      client_obj: Either an aff4 client object or a client_info dict as returned
+                  by ReadFullInfoClient if the relational db is used for
+                  reading.
 
     Returns:
       A bool value of the evaluation.
@@ -49,14 +36,16 @@ class ForemanOsClientRule(ForemanClientRuleBase):
   """This rule will fire if the client OS is marked as true in the proto."""
   protobuf = jobs_pb2.ForemanOsClientRule
 
-  def Evaluate(self, objects, client_id):
-    try:
-      fd = objects[client_id]
-      attribute = aff4.Attribute.NAMES["System"]
-    except KeyError:
+  def Evaluate(self, client_obj):
+    if data_store.RelationalDBReadEnabled():
+      value = client_obj["client"].knowledge_base.os
+    else:
+      value = client_obj.Get(client_obj.Schema.SYSTEM)
+
+    if not value:
       return False
 
-    value = utils.SmartStr(fd.Get(attribute))
+    value = utils.SmartStr(value)
 
     return ((self.os_windows and value.startswith("Windows")) or
             (self.os_linux and value.startswith("Linux")) or
@@ -70,12 +59,7 @@ class ForemanLabelClientRule(ForemanClientRuleBase):
   """This rule will fire if the client has the selected label."""
   protobuf = jobs_pb2.ForemanLabelClientRule
 
-  def Evaluate(self, objects, client_id):
-    try:
-      fd = objects[client_id]
-    except KeyError:
-      return False
-
+  def Evaluate(self, client_obj):
     if self.match_mode == ForemanLabelClientRule.MatchMode.MATCH_ALL:
       quantifier = all
     elif self.match_mode == ForemanLabelClientRule.MatchMode.MATCH_ANY:
@@ -87,7 +71,10 @@ class ForemanLabelClientRule(ForemanClientRuleBase):
     else:
       raise ValueError("Unexpected match mode value: %s" % self.match_mode)
 
-    client_label_names = set(fd.GetLabelsNames())
+    if data_store.RelationalDBReadEnabled():
+      client_label_names = [label.name for label in client_obj["labels"]]
+    else:
+      client_label_names = set(client_obj.GetLabelsNames())
 
     return quantifier((name in client_label_names) for name in self.label_names)
 
@@ -103,27 +90,97 @@ class ForemanRegexClientRule(ForemanClientRuleBase):
       standard.RegularExpression,
   ]
 
-  def GetPathsToCheck(self):
-    return [self.path]
+  def _ResolveFieldAFF4(self, field, client_obj):
 
-  def Evaluate(self, objects, client_id):
-    path = client_id.Add(self.path)
-    try:
-      fd = objects[path]
-      attribute = aff4.Attribute.NAMES[self.attribute_name]
-    except KeyError:
-      return False
+    fsf = ForemanRegexClientRule.ForemanStringField
 
-    value = utils.SmartStr(fd.Get(attribute))
+    if field == fsf.UNSET:
+      raise ValueError(
+          "Received regex rule without a valid field specification.")
+    elif field == fsf.USERNAMES:
+      res = client_obj.Get(client_obj.Schema.USERNAMES)
+    elif field == fsf.UNAME:
+      res = client_obj.Get(client_obj.Schema.UNAME)
+    elif field == fsf.FQDN:
+      res = client_obj.Get(client_obj.Schema.FQDN)
+    elif field == fsf.HOST_IPS:
+      res = client_obj.Get(client_obj.Schema.HOST_IPS)
+      if res:
+        res = utils.SmartStr(res).replace("\n", " ")
+    elif field == fsf.CLIENT_NAME:
+      res = None
+      info = client_obj.Get(client_obj.Schema.CLIENT_INFO)
+      if info:
+        res = info.client_name
+    elif field == fsf.CLIENT_DESCRIPTION:
+      res = None
+      info = client_obj.Get(client_obj.Schema.CLIENT_INFO)
+      if info:
+        res = info.client_description
+    elif field == fsf.SYSTEM:
+      res = client_obj.Get(client_obj.Schema.SYSTEM)
+    elif field == fsf.MAC_ADDRESSES:
+      res = client_obj.Get(client_obj.Schema.MAC_ADDRESS)
+      if res:
+        res = utils.SmartStr(res).replace("\n", " ")
+    elif field == fsf.KERNEL_VERSION:
+      res = client_obj.Get(client_obj.Schema.KERNEL_VERSION)
+    elif field == fsf.OS_VERSION:
+      res = client_obj.Get(client_obj.Schema.OS_VERSION)
+    elif field == fsf.OS_RELEASE:
+      res = client_obj.Get(client_obj.Schema.OS_RELEASE)
+
+    if res is None:
+      return ""
+    return utils.SmartStr(res)
+
+  def _ResolveField(self, field, client_info):
+
+    fsf = ForemanRegexClientRule.ForemanStringField
+    client_obj = client_info["client"]
+    startup_info = client_info["last_startup_info"]
+
+    if field == fsf.UNSET:
+      raise ValueError(
+          "Received regex rule without a valid field specification.")
+    elif field == fsf.USERNAMES:
+      res = " ".join(user.username for user in client_obj.knowledge_base.users)
+    elif field == fsf.UNAME:
+      res = client_obj.Uname()
+    elif field == fsf.FQDN:
+      res = client_obj.knowledge_base.fqdn
+    elif field == fsf.HOST_IPS:
+      res = " ".join(client_obj.GetIPAddresses())
+    elif field == fsf.CLIENT_NAME:
+      res = startup_info and startup_info.client_info.client_name
+    elif field == fsf.CLIENT_DESCRIPTION:
+      res = startup_info and startup_info.client_info.client_description
+    elif field == fsf.SYSTEM:
+      res = client_obj.knowledge_base.os
+    elif field == fsf.MAC_ADDRESSES:
+      res = " ".join(client_obj.GetMacAddresses())
+    elif field == fsf.KERNEL_VERSION:
+      res = client_obj.kernel
+    elif field == fsf.OS_VERSION:
+      res = client_obj.os_version
+    elif field == fsf.OS_RELEASE:
+      res = client_obj.os_release
+
+    if res is None:
+      return ""
+    return utils.SmartStr(res)
+
+  def Evaluate(self, client_obj):
+    if data_store.RelationalDBReadEnabled():
+      value = self._ResolveField(self.field, client_obj)
+    else:
+      value = self._ResolveFieldAFF4(self.field, client_obj)
 
     return self.attribute_regex.Search(value)
 
   def Validate(self):
-    if not self.attribute_name:
-      raise ValueError("ForemanRegexClientRule rule invalid - "
-                       "attribute name not set.")
-
-    self.attribute_name.Validate()
+    if self.field == ForemanRegexClientRule.ForemanStringField.UNSET:
+      raise ValueError("ForemanRegexClientRule rule invalid - field not set.")
 
 
 class ForemanIntegerClientRule(ForemanClientRuleBase):
@@ -134,21 +191,56 @@ class ForemanIntegerClientRule(ForemanClientRuleBase):
       aff4.AFF4Attribute,
   ]
 
-  def GetPathsToCheck(self):
-    return [self.path]
+  def _ResolveFieldAFF4(self, field, client_obj):
+    if field == ForemanIntegerClientRule.ForemanIntegerField.UNSET:
+      raise ValueError(
+          "Received integer rule without a valid field specification.")
 
-  def Evaluate(self, objects, client_id):
-    path = client_id.Add(self.path)
-    try:
-      fd = objects[path]
-      attribute = aff4.Attribute.NAMES[self.attribute_name]
-    except KeyError:
-      return False
+    if field == ForemanIntegerClientRule.ForemanIntegerField.CLIENT_VERSION:
+      info = client_obj.Get(client_obj.Schema.CLIENT_INFO)
+      if not info:
+        return info
+      return int(info.client_version or 0)
 
-    try:
-      value = int(fd.Get(attribute))
-    except (ValueError, TypeError):
-      # Not an integer attribute.
+    elif field == ForemanIntegerClientRule.ForemanIntegerField.INSTALL_TIME:
+      res = client_obj.Get(client_obj.Schema.INSTALL_DATE)
+    elif field == ForemanIntegerClientRule.ForemanIntegerField.LAST_BOOT_TIME:
+      res = client_obj.Get(client_obj.Schema.LAST_BOOT_TIME)
+    elif field == ForemanIntegerClientRule.ForemanIntegerField.CLIENT_CLOCK:
+      res = client_obj.Get(client_obj.Schema.CLOCK)
+
+    if res is None:
+      return
+    return res.AsSecondsFromEpoch()
+
+  def _ResolveField(self, field, client_info):
+    if field == ForemanIntegerClientRule.ForemanIntegerField.UNSET:
+      raise ValueError(
+          "Received integer rule without a valid field specification.")
+
+    startup_info = client_info["last_startup_info"]
+    md = client_info["metadata"]
+    client_obj = client_info["client"]
+    if field == ForemanIntegerClientRule.ForemanIntegerField.CLIENT_VERSION:
+      return startup_info.client_info.client_version
+    elif field == ForemanIntegerClientRule.ForemanIntegerField.INSTALL_TIME:
+      res = client_obj.install_time
+    elif field == ForemanIntegerClientRule.ForemanIntegerField.LAST_BOOT_TIME:
+      res = client_obj.startup_info.boot_time
+    elif field == ForemanIntegerClientRule.ForemanIntegerField.CLIENT_CLOCK:
+      res = md.clock
+
+    if res is None:
+      return
+    return res.AsSecondsFromEpoch()
+
+  def Evaluate(self, client_obj):
+    if data_store.RelationalDBReadEnabled():
+      value = self._ResolveField(self.field, client_obj)
+    else:
+      value = self._ResolveFieldAFF4(self.field, client_obj)
+
+    if value is None:
       return False
 
     op = self.operator
@@ -160,14 +252,11 @@ class ForemanIntegerClientRule(ForemanClientRuleBase):
       return value == self.value
     else:
       # Unknown operator.
-      return False
+      raise ValueError("Unknown operator: %d" % op)
 
   def Validate(self):
-    if not self.attribute_name:
-      raise ValueError("ForemanIntegerClientRule rule invalid - "
-                       "attribute name not set.")
-
-    self.attribute_name.Validate()
+    if self.field == ForemanIntegerClientRule.ForemanIntegerField.UNSET:
+      raise ValueError("ForemanIntegerClientRule rule invalid - field not set.")
 
 
 class ForemanRuleAction(rdf_structs.RDFProtoStruct):
@@ -188,11 +277,8 @@ class ForemanClientRule(ForemanClientRuleBase):
       ForemanRegexClientRule,
   ]
 
-  def GetPathsToCheck(self):
-    return self.UnionCast().GetPathsToCheck()
-
-  def Evaluate(self, objects, client_id):
-    return self.UnionCast().Evaluate(objects, client_id)
+  def Evaluate(self, client_obj):
+    return self.UnionCast().Evaluate(client_obj)
 
   def Validate(self):
     self.UnionCast().Validate()
@@ -205,20 +291,13 @@ class ForemanClientRuleSet(rdf_structs.RDFProtoStruct):
       ForemanClientRule,
   ]
 
-  def GetPathsToCheck(self):
-    """Returns aff4 paths to be opened as objects passed to Evaluate."""
-    return set(
-        itertools.chain.from_iterable(rule.GetPathsToCheck()
-                                      for rule in self.rules))
-
-  def Evaluate(self, objects, client_id):
+  def Evaluate(self, client_obj):
     """Evaluates rules held in the rule set.
 
     Args:
-      objects: A dict that maps fd.urn to fd for all file descriptors fd
-          corresponding to the aff4 paths returned by the GetPathsToCheck
-          method of this object.
-      client_id: An aff4 client id object.
+      client_obj: Either an aff4 client object or a client_info dict as returned
+                  by ReadFullInfoClient if the relational db is used for
+                  reading.
 
     Returns:
       A bool value of the evaluation.
@@ -233,7 +312,7 @@ class ForemanClientRuleSet(rdf_structs.RDFProtoStruct):
     else:
       raise ValueError("Unexpected match mode value: %s" % self.match_mode)
 
-    return quantifier(rule.Evaluate(objects, client_id) for rule in self.rules)
+    return quantifier(rule.Evaluate(client_obj) for rule in self.rules)
 
   def Validate(self):
     for rule in self.rules:

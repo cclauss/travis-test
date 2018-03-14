@@ -38,12 +38,6 @@ config_lib.DEFINE_string(
              "%(ClientBuilder.output_extension)"),
     help="The location of the generated installer in the config directory.")
 
-config_lib.DEFINE_bool(
-    "Client.build_service",
-    True,
-    help="Used to disable service installation in the client installer. If "
-    "False, GRR will not run automatically after installation and on boot.")
-
 config_lib.DEFINE_string(
     name="ClientBuilder.output_extension",
     default=None,
@@ -58,13 +52,22 @@ config_lib.DEFINE_string(
     help="Set this to a class name that sanity checks your client "
     "config at repacking time.")
 
-config_lib.DEFINE_bool("ClientBuilder.fleetspeak_enabled", False,
+config_lib.DEFINE_bool("Client.fleetspeak_enabled", False,
                        "Whether the client uses Fleetspeak to communicate "
                        "with the server.")
 
+config_lib.DEFINE_bool("ClientBuilder.fleetspeak_enabled", False,
+                       "Whether the client will use Fleetspeak to communicate "
+                       "with the server.")
+
+config_lib.DEFINE_string(
+    "Client.fleetspeak_service_name", "FleetspeakService",
+    "Name of the Fleetspeak Windows service. Used to restart the Fleetspeak "
+    "service during GRR client installation.")
+
 config_lib.DEFINE_string(
     "ClientBuilder.client_path",
-    default="grr.client.client",
+    default="grr_response_client.client",
     help="Full module path for GRR client's main file.")
 
 config_lib.DEFINE_string(
@@ -156,9 +159,12 @@ exe = EXE\(
 LIBCAPSTONE = None
 for name in ["capstone", "libcapstone"]:
   for ext in [".so", ".dylib", ".dll"]:
-    path = os.path.join\(capstone.__path__[0], name + ext\)
-    if os.path.exists\(path\):
-      LIBCAPSTONE = path
+    for path in [
+      os.path.join\(capstone.__path__[0], name + ext\),
+      os.path.join\(os.path.dirname\(capstone.__path__[0]\), name + ext\)
+    ]:
+      if os.path.exists\(path\):
+        LIBCAPSTONE = path
 
 if not LIBCAPSTONE:
   raise RuntimeError\("Can't find libcasptone"\)
@@ -266,7 +272,8 @@ config_lib.DEFINE_option(
     PathTypeInfo(
         name="ClientBuilder.nanny_source_dir",
         must_exist=True,
-        default="%(grr.client|module_path)/nanny/",
+        default=("%(grr_response_client|"
+                 "module_path)/nanny/"),
         help="Path to the windows nanny VS solution file."))
 
 config_lib.DEFINE_option(
@@ -423,7 +430,9 @@ config_lib.DEFINE_string(
 config_lib.DEFINE_option(
     PathTypeInfo(
         name="ClientBuilder.components_source_dir",
-        default="%(grr.client.components|module_path)",
+        default=(
+            "%(grr_response_client.components"
+            "|module_path)"),
         help="The directory that contains the component source."))
 
 config_lib.DEFINE_option(

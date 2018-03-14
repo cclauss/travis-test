@@ -12,6 +12,7 @@ from grr.lib import rdfvalue
 from grr.lib import utils
 from grr.lib.rdfvalues import client as rdf_client
 from grr.server import aff4
+from grr.server import data_store
 from grr.server import flow
 from grr.server import queue_manager
 from grr.server.aff4_objects import aff4_grr
@@ -34,17 +35,16 @@ class ApiSearchClientsHandlerRegressionTest(
   def Run(self):
     # Fix the time to avoid regressions.
     with test_lib.FakeTime(42):
-      client_id = self.SetupClient(0)
-
-      # Delete the certificate as it's being regenerated every time the
-      # client is created.
-      with aff4.FACTORY.Open(
-          client_id, mode="rw", token=self.token) as grr_client:
-        grr_client.DeleteAttribute(grr_client.Schema.CERT)
+      if data_store.RelationalDBReadEnabled():
+        client_obj = self.SetupTestClientObject(0)
+        client_id = client_obj.client_id
+      else:
+        client_urn = self.SetupClient(0, add_cert=False)
+        client_id = client_urn.Basename()
 
       self.Check(
           "SearchClients",
-          args=client_plugin.ApiSearchClientsArgs(query=client_id.Basename()))
+          args=client_plugin.ApiSearchClientsArgs(query=client_id))
 
 
 class ApiGetClientHandlerRegressionTest(
@@ -56,61 +56,95 @@ class ApiGetClientHandlerRegressionTest(
   def Run(self):
     # Fix the time to avoid regressions.
     with test_lib.FakeTime(42):
-      client_id = self.SetupClient(0)
-
-      with aff4.FACTORY.Open(
-          client_id, mode="rw", token=self.token) as grr_client:
-        grr_client.Set(grr_client.Schema.MEMORY_SIZE(4294967296))
-        # Delete the certificate as it's being regenerated every time the
-        # client is created.
-        grr_client.DeleteAttribute(grr_client.Schema.CERT)
+      if data_store.RelationalDBReadEnabled():
+        client_obj = self.SetupTestClientObject(
+            0, memory_size=4294967296, add_cert=False)
+        client_id = client_obj.client_id
+      else:
+        client_urn = self.SetupClient(0, memory_size=4294967296, add_cert=False)
+        client_id = client_urn.Basename()
 
     self.Check(
-        "GetClient",
-        args=client_plugin.ApiGetClientArgs(client_id=client_id.Basename()))
+        "GetClient", args=client_plugin.ApiGetClientArgs(client_id=client_id))
 
 
-class ApiGetClientVersionsRegressionTest(
-    api_regression_test_lib.ApiRegressionTest):
+class ApiGetClientVersionsRegressionTestMixin(object):
 
   api_method = "GetClientVersions"
   handler = client_plugin.ApiGetClientVersionsHandler
 
-  def Run(self):
-    # Fix the time to avoid regressions.
-    with test_lib.FakeTime(42):
-      client_id = self.SetupClient(0)
-      with aff4.FACTORY.Open(
-          client_id, mode="rw", token=self.token) as grr_client:
-        grr_client.Set(grr_client.Schema.MEMORY_SIZE(4294967296))
-        # Delete the certificate as it's being regenerated every time the
-        # client is created.
-        grr_client.DeleteAttribute(grr_client.Schema.CERT)
+  def _SetupTestClient(self):
 
-    with test_lib.FakeTime(45):
-      with aff4.FACTORY.Open(
-          client_id, mode="rw", token=self.token) as grr_client:
-        grr_client.Set(grr_client.Schema.HOSTNAME("some-other-hostname.org"))
+    if data_store.RelationalDBReadEnabled():
+
+      with test_lib.FakeTime(42):
+        client_obj = self.SetupTestClientObject(
+            0, memory_size=4294967296, add_cert=False)
+        client_id = client_obj.client_id
+
+      with test_lib.FakeTime(45):
+        self.SetupTestClientObject(
+            0,
+            fqdn="some-other-hostname.org",
+            memory_size=4294967296,
+            add_cert=False)
+
+    else:  # We need AFF4 data.
+
+      with test_lib.FakeTime(42):
+        client_urn = self.SetupClient(0, memory_size=4294967296, add_cert=False)
+        client_id = client_urn.Basename()
+
+      with test_lib.FakeTime(45):
+        with aff4.FACTORY.Open(
+            client_urn, mode="rw", token=self.token) as grr_client:
+          grr_client.Set(grr_client.Schema.HOSTNAME("some-other-hostname.org"))
+          grr_client.Set(grr_client.Schema.FQDN("some-other-hostname.org"))
+          kb = grr_client.Get(grr_client.Schema.KNOWLEDGE_BASE)
+          kb.fqdn = "some-other-hostname.org"
+          grr_client.Set(grr_client.Schema.KNOWLEDGE_BASE(kb))
+
+    return client_id
+
+  def Run(self):
+    client_id = self._SetupTestClient()
 
     with test_lib.FakeTime(47):
-      for mode in ["FULL", "DIFF"]:
-        self.Check(
-            "GetClientVersions",
-            args=client_plugin.ApiGetClientVersionsArgs(
-                client_id=client_id.Basename(), mode=mode))
-        self.Check(
-            "GetClientVersions",
-            args=client_plugin.ApiGetClientVersionsArgs(
-                client_id=client_id.Basename(),
-                end=rdfvalue.RDFDatetime().FromSecondsFromEpoch(44),
-                mode=mode))
-        self.Check(
-            "GetClientVersions",
-            args=client_plugin.ApiGetClientVersionsArgs(
-                client_id=client_id.Basename(),
-                start=rdfvalue.RDFDatetime().FromSecondsFromEpoch(44),
-                end=rdfvalue.RDFDatetime().FromSecondsFromEpoch(46),
-                mode=mode))
+      self.Check(
+          "GetClientVersions",
+          args=client_plugin.ApiGetClientVersionsArgs(
+              client_id=client_id, mode=self.mode))
+      self.Check(
+          "GetClientVersions",
+          args=client_plugin.ApiGetClientVersionsArgs(
+              client_id=client_id,
+              end=rdfvalue.RDFDatetime().FromSecondsFromEpoch(44),
+              mode=self.mode))
+      self.Check(
+          "GetClientVersions",
+          args=client_plugin.ApiGetClientVersionsArgs(
+              client_id=client_id,
+              start=rdfvalue.RDFDatetime().FromSecondsFromEpoch(44),
+              end=rdfvalue.RDFDatetime().FromSecondsFromEpoch(46),
+              mode=self.mode))
+
+
+class ApiGetClientVersionsRegressionTest(
+    ApiGetClientVersionsRegressionTestMixin,
+    api_regression_test_lib.ApiRegressionTest,
+):
+
+  mode = "FULL"
+
+
+class ApiGetClientVersionsRegressionTestAFF4(
+    ApiGetClientVersionsRegressionTestMixin,
+    api_regression_test_lib.ApiRegressionTest,
+):
+  mode = "DIFF"
+
+  # Disable the relational DB for this class, the functionality is not needed.
+  aff4_only_test = True
 
 
 class ApiGetLastClientIPAddressHandlerRegressionTest(
@@ -122,16 +156,25 @@ class ApiGetLastClientIPAddressHandlerRegressionTest(
   def Run(self):
     # Fix the time to avoid regressions.
     with test_lib.FakeTime(42):
-      client_id = self.SetupClient(0)
+      if data_store.RelationalDBReadEnabled():
+        client_obj = self.SetupTestClientObject(0)
+        client_id = client_obj.client_id
 
-      with aff4.FACTORY.Open(
-          client_id, mode="rw", token=self.token) as grr_client:
-        grr_client.Set(grr_client.Schema.CLIENT_IP("192.168.100.42"))
+        ip = rdf_client.NetworkAddress(
+            human_readable_address="192.168.100.42",
+            address_type=rdf_client.NetworkAddress.Family.INET)
+        data_store.REL_DB.WriteClientMetadata(client_id, last_ip=ip)
+      else:
+        client_urn = self.SetupClient(0)
+        client_id = client_urn.Basename()
+
+        with aff4.FACTORY.Open(
+            client_id, mode="rw", token=self.token) as grr_client:
+          grr_client.Set(grr_client.Schema.CLIENT_IP("192.168.100.42"))
 
     self.Check(
         "GetLastClientIPAddress",
-        args=client_plugin.ApiGetLastClientIPAddressArgs(
-            client_id=client_id.Basename()))
+        args=client_plugin.ApiGetLastClientIPAddressArgs(client_id=client_id))
 
 
 class ApiListClientsLabelsHandlerRegressionTest(
@@ -173,9 +216,15 @@ class ApiListClientCrashesHandlerRegressionTest(
   handler = client_plugin.ApiListClientCrashesHandler
 
   def Run(self):
-    client_ids = self.SetupClients(1)
-    client_id = client_ids[0]
-    client_mock = flow_test_lib.CrashClientMock(client_id, self.token)
+    if data_store.RelationalDBReadEnabled():
+      client = self.SetupTestClientObject(0)
+      client_id = client.client_id
+      client_ids = [rdf_client.ClientURN(client_id)]
+    else:
+      client_ids = self.SetupClients(1)
+      client_id = client_ids[0].Basename()
+    client_mock = flow_test_lib.CrashClientMock(
+        rdf_client.ClientURN(client_id), self.token)
 
     with test_lib.FakeTime(42):
       with self.CreateHunt(description="the hunt") as hunt_obj:
@@ -187,25 +236,25 @@ class ApiListClientCrashesHandlerRegressionTest(
           client_id: client_mock
       }, False, self.token)
 
-    crashes = aff4_grr.VFSGRRClient.CrashCollectionForCID(client_id)
+    crashes = aff4_grr.VFSGRRClient.CrashCollectionForCID(
+        rdf_client.ClientURN(client_id))
     crash = list(crashes)[0]
     session_id = crash.session_id.Basename()
     replace = {hunt_obj.urn.Basename(): "H:123456", session_id: "H:11223344"}
 
     self.Check(
         "ListClientCrashes",
-        args=client_plugin.ApiListClientCrashesArgs(
-            client_id=client_id.Basename()),
+        args=client_plugin.ApiListClientCrashesArgs(client_id=client_id),
         replace=replace)
     self.Check(
         "ListClientCrashes",
         args=client_plugin.ApiListClientCrashesArgs(
-            client_id=client_id.Basename(), count=1),
+            client_id=client_id, count=1),
         replace=replace)
     self.Check(
         "ListClientCrashes",
         args=client_plugin.ApiListClientCrashesArgs(
-            client_id=client_id.Basename(), offset=1, count=1),
+            client_id=client_id, offset=1, count=1),
         replace=replace)
 
 

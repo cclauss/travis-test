@@ -1,12 +1,9 @@
 'use strict';
 
-goog.provide('grrUi.core.apiService');
-goog.provide('grrUi.core.apiService.ApiService');
-goog.provide('grrUi.core.apiService.UNAUTHORIZED_API_RESPONSE_EVENT');
-goog.provide('grrUi.core.apiService.encodeUrlPath');
-goog.provide('grrUi.core.apiService.stripTypeInfo');
+goog.module('grrUi.core.apiService');
+goog.module.declareLegacyNamespace();
 
-goog.scope(function() {
+
 
 var UNAUTHORIZED_API_RESPONSE_EVENT = 'UnauthorizedApiResponse';
 
@@ -14,8 +11,7 @@ var UNAUTHORIZED_API_RESPONSE_EVENT = 'UnauthorizedApiResponse';
  * "Refresh folder" event name.
  * @const
  */
-grrUi.core.apiService.UNAUTHORIZED_API_RESPONSE_EVENT =
-    UNAUTHORIZED_API_RESPONSE_EVENT;
+exports.UNAUTHORIZED_API_RESPONSE_EVENT = UNAUTHORIZED_API_RESPONSE_EVENT;
 
 /**
  * URL-encodes url path (URL-encodes all non-allowed characters except
@@ -26,12 +22,12 @@ grrUi.core.apiService.UNAUTHORIZED_API_RESPONSE_EVENT =
  * @param {string} urlPath Source url path.
  * @return {string} Encoded url path.
  */
-grrUi.core.apiService.encodeUrlPath = function(urlPath) {
+exports.encodeUrlPath = function(urlPath) {
   var components = urlPath.split('/');
   var encodedComponents = components.map(encodeURIComponent);
   return encodedComponents.join('/');
 };
-var encodeUrlPath = grrUi.core.apiService.encodeUrlPath;
+var encodeUrlPath = exports.encodeUrlPath;
 
 /**
  * Strips type information from a JSON-encoded RDFValue.
@@ -72,7 +68,7 @@ var encodeUrlPath = grrUi.core.apiService.encodeUrlPath;
  * @param {*} richlyTypedValue JSON-encoded RDFValue with rich type information.
  * @return {*} Same RDFValue but with all type information stripped.
  */
-grrUi.core.apiService.stripTypeInfo = function(richlyTypedValue) {
+exports.stripTypeInfo = function(richlyTypedValue) {
   var recursiveStrip = function(value) {
     if (angular.isArray(value)) {
       value = value.map(recursiveStrip);
@@ -89,7 +85,7 @@ grrUi.core.apiService.stripTypeInfo = function(richlyTypedValue) {
 
   return recursiveStrip(angular.copy(richlyTypedValue));
 };
-var stripTypeInfo = grrUi.core.apiService.stripTypeInfo;
+var stripTypeInfo = exports.stripTypeInfo;
 
 
 /**
@@ -148,7 +144,7 @@ var wrapCancellablePromise_ = function(promise) {
  * @ngInject
  * @export
  */
-grrUi.core.apiService.ApiService = function(
+exports.ApiService = function(
     $http, $q, $interval, $rootScope, grrLoadingIndicatorService) {
   /** @private {angular.$http} */
   this.http_ = $http;
@@ -168,7 +164,7 @@ grrUi.core.apiService.ApiService = function(
   /** @private {!angular.$q.Deferred} */
   this.authDeferred_ = this.q_.defer();
 };
-var ApiService = grrUi.core.apiService.ApiService;
+var ApiService = exports.ApiService;
 
 
 /**
@@ -287,6 +283,22 @@ ApiService.prototype.getCached = function(apiPath, opt_params) {
   return this.sendRequestWithoutPayload_("GET", apiPath, opt_params,
                                          {cache: true});
 };
+
+
+/**
+ * Fetches data for a given API url via HTTP GET method and caches the response.
+ * Returns cached response immediately (without querying the server),
+ * if available.
+ *
+ * @param {string} apiPath API path to trigger.
+ * @param {Object<string, string>=} opt_params Query parameters.
+ * @return {!angular.$q.Promise} Promise that resolves to the result.
+ */
+ApiService.prototype.getV2Cached = function(apiPath, opt_params) {
+  return this.sendRequestWithoutPayload_("GET", apiPath, opt_params,
+                                         {cache: true, useV2: true});
+};
+
 
 /**
  * Polls a given URL every second until the given condition is satisfied
@@ -575,6 +587,3 @@ ApiService.prototype.patch = function(apiPath, opt_params, opt_stripTypeInfo) {
   return this.sendRequestWithPayload_(
       'PATCH', apiPath, opt_params, opt_stripTypeInfo);
 };
-
-
-});  // goog.scope

@@ -62,12 +62,13 @@ config_lib.DEFINE_string("Worker.smtp_password", None,
                          "Password for the smtp connection.")
 
 # Server Cryptographic settings.
-config_lib.DEFINE_semantic(
+config_lib.DEFINE_semantic_value(
     rdf_crypto.RSAPrivateKey,
     "PrivateKeys.ca_key",
-    description="CA private key. Used to sign for client enrollment.",)
+    description="CA private key. Used to sign for client enrollment.",
+)
 
-config_lib.DEFINE_semantic(
+config_lib.DEFINE_semantic_value(
     rdf_crypto.RSAPrivateKey,
     "PrivateKeys.server_key",
     description="Private key for the front end server.")
@@ -75,7 +76,7 @@ config_lib.DEFINE_semantic(
 config_lib.DEFINE_integer("Server.rsa_key_length", 2048,
                           "The length of the server rsa key in bits.")
 
-config_lib.DEFINE_semantic(
+config_lib.DEFINE_semantic_value(
     rdf_crypto.RDFX509Cert,
     "Frontend.certificate",
     description="An X509 certificate for the frontend server.")
@@ -114,7 +115,8 @@ config_lib.DEFINE_integer("Frontend.message_expiry_time", 600,
 config_lib.DEFINE_string("Frontend.upload_store", "FileUploadFileStore",
                          "The implementation of the upload file store.")
 
-config_lib.DEFINE_string("FileUploadFileStore.root_dir", "/tmp/",
+config_lib.DEFINE_string("FileUploadFileStore.root_dir",
+                         "%(Config.prefix)/var/grr-filestore",
                          "Where to store files uploaded.")
 
 config_lib.DEFINE_bool("Server.initialized", False,
@@ -205,7 +207,7 @@ config_lib.DEFINE_integer(
     "reads from a file object")
 
 # Data retention policies.
-config_lib.DEFINE_semantic(
+config_lib.DEFINE_semantic_value(
     rdfvalue.Duration,
     "DataRetention.cron_jobs_flows_ttl",
     default=None,
@@ -213,7 +215,7 @@ config_lib.DEFINE_semantic(
     "Examples: 90d, 180d, 1y. If not set, cron jobs flows will be retained "
     "forever.")
 
-config_lib.DEFINE_semantic(
+config_lib.DEFINE_semantic_value(
     rdfvalue.Duration,
     "DataRetention.hunts_ttl",
     default=None,
@@ -226,7 +228,7 @@ config_lib.DEFINE_string(
     help="Hunts marked with this label "
     "will be retained forever.")
 
-config_lib.DEFINE_semantic(
+config_lib.DEFINE_semantic_value(
     rdfvalue.Duration,
     "DataRetention.tmp_ttl",
     default=None,
@@ -239,7 +241,7 @@ config_lib.DEFINE_string(
     help="Temp objects marked with this "
     "label will be retained forever.")
 
-config_lib.DEFINE_semantic(
+config_lib.DEFINE_semantic_value(
     rdfvalue.Duration,
     "DataRetention.inactive_client_ttl",
     default=None,

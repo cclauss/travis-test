@@ -9,15 +9,15 @@ import json
 import os
 
 from grr import config
-from grr.client.client_actions import file_fingerprint
-from grr.client.client_actions import searching
-from grr.client.client_actions import standard
-from grr.client.client_actions import tempfiles
-from grr.client.components.rekall_support import rekall_types as rdf_rekall_types
+from grr_response_client.client_actions import file_fingerprint
+from grr_response_client.client_actions import searching
+from grr_response_client.client_actions import standard
+from grr_response_client.client_actions import tempfiles
 from grr.lib import flags
 from grr.lib.rdfvalues import client as rdf_client
 from grr.lib.rdfvalues import crypto as rdf_crypto
 from grr.lib.rdfvalues import paths as rdf_paths
+from grr.lib.rdfvalues import rekall_types as rdf_rekall_types
 from grr.server import aff4
 from grr.server import flow
 from grr.server import server_stubs

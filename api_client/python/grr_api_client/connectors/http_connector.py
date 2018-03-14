@@ -76,7 +76,7 @@ class HttpConnector(connector.Connector):
     utils.RegisterProtoDescriptors(symbol_database.Default())
 
     proto = reflection_pb2.ApiListApiMethodsResult()
-    json_format.Parse(json_str, proto)
+    json_format.Parse(json_str, proto, ignore_unknown_fields=True)
 
     routing_rules = []
 
@@ -227,7 +227,7 @@ class HttpConnector(connector.Connector):
     if method_descriptor.result_type_descriptor.name:
       default_value = method_descriptor.result_type_descriptor.default
       result = utils.TypeUrlToMessage(default_value.type_url)
-      json_format.Parse(json_str, result)
+      json_format.Parse(json_str, result, ignore_unknown_fields=True)
       return result
 
   def SendStreamingRequest(self, handler_name, args):
@@ -238,7 +238,11 @@ class HttpConnector(connector.Connector):
     prepped_request = request.prepare()
 
     session = requests.Session()
-    response = session.send(prepped_request, stream=True)
+
+    options = session.merge_environment_settings(prepped_request.url, {}, None,
+                                                 None, None)
+    options["stream"] = True
+    response = session.send(prepped_request, **options)
     self._CheckResponseStatus(response)
 
     def GenerateChunks():

@@ -6,7 +6,7 @@ import logging
 import pdb
 import traceback
 
-from grr.client.client_actions import standard
+from grr_response_client.client_actions import standard
 
 from grr.lib import flags
 from grr.lib import rdfvalue
@@ -256,7 +256,7 @@ class MockClient(object):
 
   def __init__(self, client_id, client_mock, token=None):
     if not isinstance(client_id, rdf_client.ClientURN):
-      raise RuntimeError("Client id must be an instance of ClientURN")
+      client_id = rdf_client.ClientURN(client_id)
 
     if client_mock is None:
       client_mock = action_mocks.InvalidActionMock()

@@ -22,7 +22,7 @@ from grr.server.hunts import standard
 from grr.test_lib import test_lib
 
 
-class TestNewHuntWizard(gui_test_lib.GRRSeleniumTest):
+class TestNewHuntWizard(gui_test_lib.GRRSeleniumHuntTest):
   """Test the "new hunt wizard" GUI."""
 
   @staticmethod
@@ -183,16 +183,21 @@ class TestNewHuntWizard(gui_test_lib.GRRSeleniumTest):
     # to the beginning of a list. So we always use :nth(0) selector.
     self.Click("css=grr-configure-rules-page button[name=Add]")
     self.Select("css=grr-configure-rules-page div.well:nth(0) select", "Regex")
+    rule = rdf_foreman.ForemanRegexClientRule
+    label = rule.ForemanStringField.SYSTEM.description
     self.Select("css=grr-configure-rules-page div.well:nth(0) "
-                "label:contains('Attribute name') ~ * select", "System")
+                "label:contains('Field') ~ * select", label)
     self.Type("css=grr-configure-rules-page div.well:nth(0) "
               "label:contains('Attribute regex') ~ * input", "Linux")
 
     self.Click("css=grr-configure-rules-page button[name=Add]")
     self.Select("css=grr-configure-rules-page div.well:nth(0) select",
                 "Integer")
+
+    rule = rdf_foreman.ForemanIntegerClientRule
+    label = rule.ForemanIntegerField.CLIENT_CLOCK.description
     self.Select("css=grr-configure-rules-page div.well:nth(0) "
-                "label:contains('Attribute name') ~ * select", "Clock")
+                "label:contains('Field') ~ * select", label)
     self.Select("css=grr-configure-rules-page div.well:nth(0) "
                 "label:contains('Operator') ~ * select", "GREATER_THAN")
     self.Type("css=grr-configure-rules-page div.well:nth(0) "
@@ -333,16 +338,14 @@ class TestNewHuntWizard(gui_test_lib.GRRSeleniumTest):
 
     self.assertEqual(r.rules[1].rule_type,
                      rdf_foreman.ForemanClientRule.Type.INTEGER)
-    self.assertEqual(r.rules[1].integer.path, "/")
-    self.assertEqual(r.rules[1].integer.attribute_name, "Clock")
+    self.assertEqual(r.rules[1].integer.field, "CLIENT_CLOCK")
     self.assertEqual(r.rules[1].integer.operator,
                      rdf_foreman.ForemanIntegerClientRule.Operator.GREATER_THAN)
     self.assertEqual(r.rules[1].integer.value, 1336650631137737)
 
     self.assertEqual(r.rules[2].rule_type,
                      rdf_foreman.ForemanClientRule.Type.REGEX)
-    self.assertEqual(r.rules[2].regex.path, "/")
-    self.assertEqual(r.rules[2].regex.attribute_name, "System")
+    self.assertEqual(r.rules[2].regex.field, "SYSTEM")
     self.assertEqual(r.rules[2].regex.attribute_regex, "Linux")
 
   def testWizardStepCounterIsShownCorrectly(self):
@@ -579,29 +582,24 @@ class TestNewHuntWizard(gui_test_lib.GRRSeleniumTest):
 
     foreman = aff4.FACTORY.Open("aff4:/foreman", mode="rw", token=self.token)
     for client_id in client_ids:
-      tasks_assigned = foreman.AssignTasksToClient(client_id)
+      tasks_assigned = foreman.AssignTasksToClient(client_id.Basename())
       if client_id in [client_ids[1], client_ids[7]]:
         self.assertTrue(tasks_assigned)
       else:
         self.assertFalse(tasks_assigned)
 
-  @staticmethod
-  def CreateSampleHunt(description, token=None):
+  def CreateSampleHunt(self, description, token=None):
     implementation.GRRHunt.StartHunt(
         hunt_name=standard.GenericHunt.__name__,
         description=description,
         flow_runner_args=rdf_flows.FlowRunnerArgs(
             flow_name=transfer.GetFile.__name__),
-        flow_args=transfer.GetFileArgs(pathspec=rdf_paths.PathSpec(
-            path="/tmp/evil.txt",
-            pathtype=rdf_paths.PathSpec.PathType.TSK,)),
-        client_rule_set=rdf_foreman.ForemanClientRuleSet(
-            rules=[
-                rdf_foreman.ForemanClientRule(
-                    rule_type=rdf_foreman.ForemanClientRule.Type.REGEX,
-                    regex=rdf_foreman.ForemanRegexClientRule(
-                        attribute_name="GRR client", attribute_regex="GRR"))
-            ]),
+        flow_args=transfer.GetFileArgs(
+            pathspec=rdf_paths.PathSpec(
+                path="/tmp/evil.txt",
+                pathtype=rdf_paths.PathSpec.PathType.TSK,
+            )),
+        client_rule_set=self._CreateForemanClientRuleSet(),
         output_plugins=[
             output_plugin.OutputPluginDescriptor(
                 plugin_name="DummyOutputPlugin",
@@ -667,10 +665,10 @@ class TestNewHuntWizard(gui_test_lib.GRRSeleniumTest):
     self.WaitUntilEqual("Regex", self.GetText, "css=grr-new-hunt-wizard-form "
                         "label:contains('Rule type') "
                         "~ * select option:selected")
-
-    self.WaitUntilEqual("GRR client", self.GetText,
-                        "css=grr-new-hunt-wizard-form "
-                        "label:contains('Attribute name') "
+    rule = rdf_foreman.ForemanRegexClientRule
+    label = rule.ForemanStringField.CLIENT_NAME.description
+    self.WaitUntilEqual(label, self.GetText, "css=grr-new-hunt-wizard-form "
+                        "label:contains('Field') "
                         "~ * select option:selected")
 
     self.WaitUntilEqual("GRR", self.GetValue, "css=grr-new-hunt-wizard-form "
@@ -876,8 +874,8 @@ class TestNewHuntWizard(gui_test_lib.GRRSeleniumTest):
     self.assertEqual(
         runner_args.client_rule_set,
         rdf_foreman.ForemanClientRuleSet(rules=[
-            rdf_foreman.ForemanClientRule(os=rdf_foreman.ForemanOsClientRule(
-                os_darwin=True))
+            rdf_foreman.ForemanClientRule(
+                os=rdf_foreman.ForemanOsClientRule(os_darwin=True))
         ]))
 
   def testCopyHuntHandlesLiteralExpressionCorrectly(self):
@@ -960,9 +958,11 @@ class TestNewHuntWizard(gui_test_lib.GRRSeleniumTest):
         description="model hunt",
         flow_runner_args=rdf_flows.FlowRunnerArgs(
             flow_name=transfer.GetFile.__name__),
-        flow_args=transfer.GetFileArgs(pathspec=rdf_paths.PathSpec(
-            path="/tmp/evil.txt",
-            pathtype=rdf_paths.PathSpec.PathType.TSK,)),
+        flow_args=transfer.GetFileArgs(
+            pathspec=rdf_paths.PathSpec(
+                path="/tmp/evil.txt",
+                pathtype=rdf_paths.PathSpec.PathType.TSK,
+            )),
         client_rule_set=rdf_foreman.ForemanClientRuleSet(
             rules=[
                 rdf_foreman.ForemanClientRule(
@@ -1028,9 +1028,11 @@ class TestNewHuntWizard(gui_test_lib.GRRSeleniumTest):
                "label:contains('Os windows') ~ * input[type=checkbox]")
     self.Select("css=grr-configure-rules-page div.well:nth(0) select",
                 "Integer")
-    self.Type("css=grr-new-hunt-wizard-form "
-              "grr-form-proto-repeated-field:has(label:contains('Path')) "
-              "input", "/tmp")
+
+    rule = rdf_foreman.ForemanIntegerClientRule
+    label = rule.ForemanIntegerField.CLIENT_CLOCK.description
+    self.Select("css=grr-configure-rules-page div.well:nth(0) "
+                "label:contains('Field') ~ * select", label)
 
     # Click on "Next" button
     self.Click("css=grr-new-hunt-wizard-form button.Next")
@@ -1058,7 +1060,7 @@ class TestNewHuntWizard(gui_test_lib.GRRSeleniumTest):
     rule = rules[0]
 
     self.assertEqual(rule.rule_type, rdf_foreman.ForemanClientRule.Type.INTEGER)
-    self.assertEqual(rule.integer.path, "/tmp")
+    self.assertEqual(rule.integer.field, "CLIENT_CLOCK")
 
     # Assert that the deselected union field is cleared
     self.assertFalse(rule.os.os_windows)
