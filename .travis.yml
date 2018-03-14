@@ -16,7 +16,7 @@ matrix:
         chrome: stable
       env:
         - GCS_TAG=ubuntu_64bit
-        - GCS_BUCKET=autobuilds.grr-response.com
+        - GCS_BUCKET=ogaro-travis-test
         - PROTOC="${HOME}/protobuf/bin/protoc"
         - PATH=$PATH:${HOME}/google-cloud-sdk/bin
         - CLOUDSDK_CORE_DISABLE_PROMPTS=1
@@ -42,7 +42,7 @@ matrix:
       sudo: required
       env:
         - GCS_TAG=osx
-        - GCS_BUCKET=autobuilds.grr-response.com
+        - GCS_BUCKET=ogaro-travis-test
         - PROTOC="${HOME}/protobuf/bin/protoc"
         - PATH=$PATH:${HOME}/google-cloud-sdk/bin
         - CLOUDSDK_CORE_DISABLE_PROMPTS=1
@@ -72,7 +72,7 @@ matrix:
         - docker
       env:
         - GCS_TAG=centos_64bit
-        - GCS_BUCKET=autobuilds.grr-response.com
+        - GCS_BUCKET=ogaro-travis-test
         - DOCKER_IMG=centos:7
         - DOCKER_CONTAINER=centos_64bit_container
         - DOCKER_USER=grrbot
@@ -126,7 +126,7 @@ matrix:
         - docker
       env:
         - GCS_TAG=ubuntu_32bit
-        - GCS_BUCKET=autobuilds.grr-response.com
+        - GCS_BUCKET=ogaro-travis-test
         - DOCKER_IMG=grrdocker/ubuntu_i386:xenial
         - DOCKER_CONTAINER=ubuntu_32bit_container
         - DOCKER_USER=grrbot
@@ -173,7 +173,7 @@ matrix:
         - docker
       env:
         - GCS_TAG=centos_32bit
-        - GCS_BUCKET=autobuilds.grr-response.com
+        - GCS_BUCKET=ogaro-travis-test
         - DOCKER_IMG=grrdocker/centos_i686:7
         - DOCKER_CONTAINER=centos_32bit_container
         - DOCKER_USER=grrbot
@@ -223,7 +223,7 @@ matrix:
       sudo: required
       env:
         - GCS_TAG=server_deb
-        - GCS_BUCKET=autobuilds.grr-response.com
+        - GCS_BUCKET=ogaro-travis-test
         - DOCKER_IMG=ubuntu:xenial
         - DOCKER_CONTAINER=xenial_64bit_container
         - DOCKER_USER=grrbot
