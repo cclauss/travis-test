@@ -23,6 +23,6 @@ install:
 
 artifacts:
 - path: /usr/share/grr-server/lib/python2.7/site-packages/grr/var/log/*.log
-- name: Server Logs
+  name: Server Logs
 
 build: off
