@@ -2,7 +2,6 @@ image: ubuntu
 
 environment:
   CLOUD_SDK_REPO: "cloud-sdk-$(lsb_release -c -s)"
-  #DEBIAN_FRONTEND: 'noninteractive'
   GRR_ADMIN_PASS: 'e2e_tests'
 
 install:
@@ -12,10 +11,11 @@ install:
 - sudo apt-get update && sudo apt-get install -y google-cloud-sdk
 - gsutil cp gs://autobuilds.grr-response.com/_latest_server_deb/* .
 - cat grr-server_*_amd64.changes
-- sudo DEBIAN_FRONTEND=noninteractive apt install -y ./grr-server_*_amd64.deb
+- sudo su
+- DEBIAN_FRONTEND=noninteractive apt install -y ./grr-server_*_amd64.deb
 - grr_config_updater initialize --noprompt --external_hostname=localhost --admin_password="${GRR_ADMIN_PASS}"
-- sudo echo "Logging.verbose: True" >> /etc/grr/server.local.yaml
-- sudo systemctl restart grr-server
+- echo 'Logging.verbose: True' >> /etc/grr/server.local.yaml
+- systemctl restart grr-server
 - tar xzf grr-server_*.tar.gz
 - source /usr/share/grr-server/bin/activate
 - pip install --no-index --find-links=grr/local_pypi grr/local_pypi/grr-response-test-*.zip
