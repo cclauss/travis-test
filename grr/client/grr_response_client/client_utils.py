@@ -32,7 +32,7 @@ VerifyFileOwner = _client_utils.VerifyFileOwner
 # pylint: enable=g-bad-name
 
 
-def StatEntryFromPath(path, pathspec, ext_attrs=False):
+def StatEntryFromPath(path, pathspec, ext_attrs=True):
   """Builds a stat entry object from a given path.
 
   Args:
@@ -52,7 +52,7 @@ def StatEntryFromPath(path, pathspec, ext_attrs=False):
   return StatEntryFromStat(stat, pathspec, ext_attrs=ext_attrs)
 
 
-def StatEntryFromStat(stat, pathspec, ext_attrs=False):
+def StatEntryFromStat(stat, pathspec, ext_attrs=True):
   """Build a stat entry object from a given stat object.
 
   Args:
@@ -83,7 +83,7 @@ def StatEntryFromStat(stat, pathspec, ext_attrs=False):
     # TODO(hanuszczak): Can we somehow incorporate extended attribute getter to
     # the `Stat` class? That would make the code a lot prettier but would force
     # `utils` to depend on `xattrs`.
-    result.ext_atrs = list(GetExtAttrs(stat.GetPath()))
+    result.ext_attrs = list(GetExtAttrs(stat.GetPath()))
 
   return result
 

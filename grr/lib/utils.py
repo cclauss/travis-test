@@ -27,6 +27,8 @@ import weakref
 import zipfile
 import zlib
 
+import psutil
+
 
 class Error(Exception):
   pass
@@ -813,11 +815,11 @@ class PRNG(object):
   random_list = []
 
   @classmethod
-  def GetUShort(cls):
-    return cls.GetULong() & 0xFFFF
+  def GetUInt16(cls):
+    return cls.GetUInt32() & 0xFFFF
 
   @classmethod
-  def GetULong(cls):
+  def GetUInt32(cls):
     while True:
       try:
         return cls.random_list.pop()
@@ -825,6 +827,10 @@ class PRNG(object):
         PRNG.random_list = list(
             struct.unpack("=" + "L" * 1000,
                           os.urandom(struct.calcsize("=L") * 1000)))
+
+  @classmethod
+  def GetUInt64(cls):
+    return (cls.GetUInt32() << 32) + cls.GetUInt32()
 
 
 def FormatNumberAsString(num):
@@ -1672,3 +1678,8 @@ class StatCache(object):
         self._cache[self._Key(path=path, follow_symlink=True)] = value
 
       return value
+
+
+def ProcessIdString():
+  return "%s@%s:%d" % (psutil.Process().name(), socket.gethostname(),
+                       os.getpid())

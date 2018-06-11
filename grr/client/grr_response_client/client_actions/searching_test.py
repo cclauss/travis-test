@@ -101,8 +101,10 @@ class MockVFSHandlerFind(vfs.VFSHandler):
 
     return result
 
-  def ListFiles(self):
+  def ListFiles(self, ext_attrs=None):
     """Mock the filesystem."""
+    del ext_attrs  # Unused.
+
     for child in self.content:
       # We have a mock FS here that only uses "/".
       path = "/".join([self.path, child])
@@ -115,7 +117,9 @@ class MockVFSHandlerFind(vfs.VFSHandler):
   def IsDirectory(self):
     return bool(self.content)
 
-  def Stat(self):
+  def Stat(self, path=None, ext_attrs=None):
+    del path, ext_attrs  # Unused.
+
     result = self.DoStat(self.path)
     result.pathspec = self.pathspec
     return result
@@ -448,6 +452,41 @@ class FindTest(client_test_lib.EmptyActionTest):
     self.assertEqual(all_files[0].pathspec.Basename(), "file.jpg")
     self.assertEqual(all_files[1].pathspec.Dirname().Basename(), "directory2")
     self.assertEqual(all_files[1].pathspec.Basename(), "file.mp3")
+
+
+class FindExtAttrsTest(client_test_lib.EmptyActionTest):
+
+  def testExtAttrsCollection(self):
+    with test_lib.AutoTempDirPath(remove_non_empty=True) as temp_dirpath:
+      foo_filepath = test_lib.TempFilePath(dir=temp_dirpath)
+      client_test_lib.SetExtAttr(foo_filepath, name="user.quux", value="foo")
+
+      bar_filepath = test_lib.TempFilePath(dir=temp_dirpath)
+      client_test_lib.SetExtAttr(bar_filepath, name="user.quux", value="bar")
+
+      baz_filepath = test_lib.TempFilePath(dir=temp_dirpath)
+      client_test_lib.SetExtAttr(baz_filepath, name="user.quux", value="baz")
+
+      request = rdf_client.FindSpec(
+          pathspec=rdf_paths.PathSpec(
+              path=temp_dirpath, pathtype=rdf_paths.PathSpec.PathType.OS),
+          path_glob="*",
+          collect_ext_attrs=True)
+      request.iterator.number = 100
+
+      hits = []
+      for response in self.RunAction(searching.Find, request):
+        if isinstance(response, rdf_client.FindSpec):
+          hits.append(response.hit)
+
+      self.assertEqual(len(hits), 3)
+
+      values = []
+      for hit in hits:
+        self.assertEqual(len(hit.ext_attrs), 1)
+        values.append(hit.ext_attrs[0].value)
+
+      self.assertItemsEqual(values, ["foo", "bar", "baz"])
 
 
 class GrepTest(client_test_lib.EmptyActionTest):

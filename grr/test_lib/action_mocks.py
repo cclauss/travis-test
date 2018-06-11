@@ -5,7 +5,6 @@ import socket
 
 from grr import config
 from grr_response_client.client_actions import admin
-from grr_response_client.client_actions import components
 from grr_response_client.client_actions import file_finder
 from grr_response_client.client_actions import file_fingerprint
 from grr_response_client.client_actions import searching
@@ -15,8 +14,8 @@ from grr.lib.rdfvalues import client as rdf_client
 from grr.lib.rdfvalues import cloud
 from grr.lib.rdfvalues import flows as rdf_flows
 from grr.lib.rdfvalues import protodict as rdf_protodict
-from grr.server import client_fixture
-from grr.server import server_stubs
+from grr.server.grr_response_server import client_fixture
+from grr.server.grr_response_server import server_stubs
 from grr.test_lib import client_test_lib
 from grr.test_lib import worker_mocks
 
@@ -101,15 +100,15 @@ class MemoryClientMock(ActionMock):
 
   def __init__(self, *args, **kwargs):
     super(MemoryClientMock, self).__init__(
-        components.LoadComponent, standard.HashBuffer, standard.HashFile,
-        standard.StatFile, standard.TransferBuffer, *args, **kwargs)
+        standard.HashBuffer, standard.HashFile, standard.GetFileStat,
+        standard.TransferBuffer, *args, **kwargs)
 
 
 class GetFileClientMock(ActionMock):
 
   def __init__(self, *args, **kwargs):
     super(GetFileClientMock,
-          self).__init__(standard.HashBuffer, standard.StatFile,
+          self).__init__(standard.HashBuffer, standard.GetFileStat,
                          standard.TransferBuffer, *args, **kwargs)
 
 
@@ -118,8 +117,19 @@ class FileFinderClientMock(ActionMock):
   def __init__(self, *args, **kwargs):
     super(FileFinderClientMock, self).__init__(
         file_fingerprint.FingerprintFile, searching.Find, searching.Grep,
-        standard.HashBuffer, standard.HashFile, standard.StatFile,
+        standard.HashBuffer, standard.HashFile, standard.GetFileStat,
         standard.TransferBuffer, *args, **kwargs)
+
+
+class ListProcessesMock(FileFinderClientMock):
+  """Client with real file actions and mocked-out ListProcesses."""
+
+  def __init__(self, processes_list):
+    super(ListProcessesMock, self).__init__()
+    self.processes_list = processes_list
+
+  def ListProcesses(self, _):
+    return self.processes_list
 
 
 class ClientFileFinderClientMock(ActionMock):
@@ -132,33 +142,33 @@ class ClientFileFinderClientMock(ActionMock):
 class MultiGetFileClientMock(ActionMock):
 
   def __init__(self, *args, **kwargs):
-    super(MultiGetFileClientMock,
-          self).__init__(standard.HashFile, standard.StatFile,
-                         standard.HashBuffer, standard.TransferBuffer,
-                         file_fingerprint.FingerprintFile, *args, **kwargs)
+    super(MultiGetFileClientMock, self).__init__(
+        standard.HashFile, standard.GetFileStat, standard.HashBuffer,
+        standard.TransferBuffer, file_fingerprint.FingerprintFile, *args,
+        **kwargs)
 
 
 class ListDirectoryClientMock(ActionMock):
 
   def __init__(self, *args, **kwargs):
     super(ListDirectoryClientMock, self).__init__(
-        standard.ListDirectory, standard.StatFile, *args, **kwargs)
+        standard.ListDirectory, standard.GetFileStat, *args, **kwargs)
 
 
 class GlobClientMock(ActionMock):
 
   def __init__(self, *args, **kwargs):
-    super(GlobClientMock, self).__init__(searching.Find, standard.StatFile,
+    super(GlobClientMock, self).__init__(searching.Find, standard.GetFileStat,
                                          *args, **kwargs)
 
 
 class GrepClientMock(ActionMock):
 
   def __init__(self, *args, **kwargs):
-    super(GrepClientMock,
-          self).__init__(file_fingerprint.FingerprintFile, searching.Find,
-                         searching.Grep, standard.HashBuffer, standard.StatFile,
-                         standard.TransferBuffer, *args, **kwargs)
+    super(GrepClientMock, self).__init__(
+        file_fingerprint.FingerprintFile, searching.Find, searching.Grep,
+        standard.HashBuffer, standard.GetFileStat, standard.TransferBuffer,
+        *args, **kwargs)
 
 
 class InterrogatedClient(ActionMock):
@@ -168,7 +178,7 @@ class InterrogatedClient(ActionMock):
     super(InterrogatedClient, self).__init__(
         admin.GetLibraryVersions, file_fingerprint.FingerprintFile,
         searching.Find, standard.GetMemorySize, standard.HashBuffer,
-        standard.HashFile, standard.ListDirectory, standard.StatFile,
+        standard.HashFile, standard.ListDirectory, standard.GetFileStat,
         standard.TransferBuffer, *args, **kwargs)
 
   def InitializeClient(self,
@@ -202,7 +212,7 @@ class InterrogatedClient(ActionMock):
 
   def GetInstallDate(self, _):
     self.response_count += 1
-    return [rdfvalue.RDFDatetime().FromSecondsFromEpoch(100)]
+    return [rdfvalue.RDFDatetime.FromSecondsSinceEpoch(100)]
 
   def EnumerateInterfaces(self, _):
     self.response_count += 1

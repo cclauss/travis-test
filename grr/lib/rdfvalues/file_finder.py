@@ -39,6 +39,13 @@ class FileFinderExtFlagsCondition(rdf_structs.RDFProtoStruct):
 
   protobuf = flows_pb2.FileFinderExtFlagsCondition
 
+  def __init__(self, *args, **kwargs):
+    super(FileFinderExtFlagsCondition, self).__init__(*args, **kwargs)
+    self.linux_bits_set = self.linux_bits_set or 0
+    self.linux_bits_unset = self.linux_bits_unset or 0
+    self.osx_bits_set = self.osx_bits_set or 0
+    self.osx_bits_unset = self.osx_bits_unset or 0
+
 
 class FileFinderContentsRegexMatchCondition(rdf_structs.RDFProtoStruct):
   protobuf = flows_pb2.FileFinderContentsRegexMatchCondition
@@ -126,7 +133,6 @@ class FileFinderDownloadActionOptions(rdf_structs.RDFProtoStruct):
   protobuf = flows_pb2.FileFinderDownloadActionOptions
   rdf_deps = [
       rdfvalue.ByteSize,
-      client.UploadToken,
   ]
 
 
@@ -174,5 +180,5 @@ class FileFinderResult(rdf_structs.RDFProtoStruct):
       client.BufferReference,
       crypto.Hash,
       client.StatEntry,
-      client.UploadedFile,
+      client.BlobImageDescriptor,
   ]

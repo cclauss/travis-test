@@ -362,9 +362,7 @@ message ClientCrash {
       type: "RDFDatetime",
       description: "When the client crashed."
     }];
-  optional string crash_type = 5 [(sem_type) = {
-      type: "SessionID"
-    }];
+  optional string crash_type = 5;
   optional string crash_message = 6;
   optional string backtrace = 7;
   optional string nanny_status = 8;
@@ -640,7 +638,7 @@ message PathSpec {
     OS = 0;
     TSK = 1;
     REGISTRY = 2;
-    MEMORY = 3 [(label) = HIDDEN];
+    // DEPRECATED: MEMORY = 3 [(label) = HIDDEN];
     TMPFILE = 4 [(label) = HIDDEN];
   };
   optional PathType pathtype = 1 [default = UNSET];
@@ -736,41 +734,10 @@ message ListDirRequest {
   optional Iterator iterator = 2;
 };
 
-message UploadPolicy {
-  optional string client_id = 1 [(sem_type) = {type: "ClientURN"}];
-
-  optional uint64 expires = 2 [(sem_type) = {
-    type: "RDFDatetime",
-    description: "When this upload expires."
-  }];
-};
-
-message UploadToken {
-  // Note: This must remain encoded because the hmac below must use the same
-  // message.
-  optional bytes encrypted_policy = 1
-      [(sem_type) = {description: "An encoded and encrypted UploadPolicy "
-                     "message."}];
-  optional bytes hmac = 2
-      [(sem_type) = {description: "The HMAC for the encoded policy message."}];
-
-  optional bytes iv = 3 [(sem_type) = {
-      type: "EncryptionKey",
-    }];
-}
-
-message UploadFileRequest {
+message GetFileStatRequest {
   optional PathSpec pathspec = 1;
-
-  optional UploadToken upload_token = 2;
+  optional bool collect_ext_attrs = 2 [default = false];
 };
-
-message UploadedFile {
-  optional StatEntry stat_entry = 1;
-  optional string file_id = 2;
-  optional uint64 bytes_uploaded = 3;
-  optional Hash hash = 4;
-}
 
 // StatFS client action request
 message StatFSRequest {
@@ -1206,59 +1173,6 @@ message ExecutePythonResponse {
   optional int32 time_used = 2;
 }
 
-
-// The summary describes important information about the component.
-message ClientComponentSummary {
-  optional string name = 1 [(sem_type) = {
-      description: "The name of the component."
-    }];
-
-  optional string version = 2 [(sem_type) = {
-      description: "The version string of the component."
-    }];
-
-  optional string seed = 4 [(sem_type) = {
-      description: "A ramdom seed for this component."
-    }];
-
-  repeated string modules = 5 [(sem_type) = {
-      description: "The modules which will be imported."
-    }];
-
-  optional string url = 6 [(sem_type) = {
-      description: "The URL that a signed blob of this component can be "
-      "downloaded from."
-    }];
-
-  optional SymmetricCipher cipher = 7 [(sem_type) = {
-      description: "This cipher will be used to encrypt the ClientComponent."
-    }];
-}
-
-// This is the actual component data. It is stored inside a SignedBlob which is
-// encrypted using the cipher in the summary.
-message ClientComponent {
-  optional ClientComponentSummary summary = 1 [(sem_type) = {
-      description: "Information about the component."
-    }];
-
-  optional bytes raw_data = 2 [(sem_type) = {
-      description: "The raw ZIP file which will be installed. "
-    }];
-
-  optional Uname build_system = 3 [(sem_type) = {
-      // This should ideally be the same as the client.
-      description: "The platform this component was built on."
-    }];
-};
-
-// Used to launch a client action from a component.
-message LoadComponent {
-  optional ClientComponentSummary summary = 1 [(sem_type) = {
-      description: "The component to load."
-    }];
-}
-
 // Requests and responses to allow for executing an arbitrary binary.
 // This differs from ExecuteRequest as it includes sending the binary.
 message ExecuteBinaryRequest {
@@ -1473,6 +1387,8 @@ message FindSpec {
   optional uint64 gid = 17 [(sem_type) = {
       description: "Group ID to match against a file's GID."
     }];
+
+  optional bool collect_ext_attrs = 18 [default = false];
 }
 
 message PlistRequest {
@@ -1565,11 +1481,8 @@ message ForemanRegexClientRule {
   // DEPRECATED
   // optional string path = 1;
 
-  optional string deprecated_attribute_name = 2 [(sem_type) = {
-      type: "AFF4Attribute",
-      description: "An AFF4 attribute name",
-      label: HIDDEN,
-    }];
+  // DEPRECATED
+  // optional string attribute_name = 2;
 
   optional string attribute_regex = 3 [(sem_type) = {
       type: "RegularExpression",
@@ -1589,6 +1502,7 @@ message ForemanRegexClientRule {
     KERNEL_VERSION = 9 [(description) = "Kernel version the machine is running (\"10.0.14393\" or \"4.9.0-5-amd64\")"];
     OS_VERSION = 10 [(description) = "OS version the machine is running (\"10.0.14393SP0\" or \"buster/sid\")"];
     OS_RELEASE = 11 [(description) = "OS release the machine is running (\"10\" or \"debian\")"];
+    CLIENT_LABELS = 12[(description) = "Space separated list of client labels (\"label1 label2\")"];
   }
   optional ForemanStringField field = 5;
 }
@@ -1598,11 +1512,8 @@ message ForemanIntegerClientRule {
   // DEPRECATED
   // optional string path = 1;
 
-  optional string deprecated_attribute_name = 2 [(sem_type) = {
-      type: "AFF4Attribute",
-      description: "An AFF4 attribute name"
-      label: HIDDEN,
-    }];
+  // DEPRECATED
+  // optional string attribute_name = 2;
 
   enum Operator {
     EQUAL = 0;
@@ -1655,6 +1566,29 @@ message ForemanRule {
 
   // A Human readable description of what this is supposed to do
   optional string description = 6;
+}
+
+message ForemanCondition {
+  optional uint64 creation_time = 1 [(sem_type) = {
+      type: "RDFDatetime",
+      description: "When this rule was created."
+    }];
+  optional uint64 expiration_time = 2 [(sem_type) = {
+      type: "RDFDatetime",
+      description: "When this rule will expire."
+    }];
+
+  // We fire when all these rules match
+  optional ForemanClientRuleSet client_rule_set = 3;
+
+  // A Human readable description of what this is supposed to do
+  optional string description = 4;
+
+  optional string hunt_name = 5;
+
+  optional string hunt_id = 6 [(sem_type) = {
+      description: "The id of the hunt to start."
+    }];
 }
 
 message HuntError {
@@ -2178,16 +2112,6 @@ message PendingFlowTermination {
   optional string reason = 1;
 }
 
-message SignaturePart {
-  optional bytes signature = 1 [(sem_type) = {
-    description: "The signature covers the plain text of the encrypted "
-                 "cipher field."
-  }];
-
-  optional bytes encrypted_cipher = 2
-      [(sem_type) = {description: "The encrypted CipherProperties object."}];
-}
-
 message BlobImageChunkDescriptor {
   optional uint64 offset = 1;
   optional uint64 length = 2;
@@ -2196,4 +2120,5 @@ message BlobImageChunkDescriptor {
 
 message BlobImageDescriptor {
   repeated BlobImageChunkDescriptor chunks = 1;
+  optional uint64 chunk_size = 2;
 }

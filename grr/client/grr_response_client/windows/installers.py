@@ -12,6 +12,8 @@ https://launchpadlibrarian.net/134750748/pyqtgraph_subprocess.patch
 We also set shell=True because that seems to avoid having an extra cmd.exe
 window pop up.
 """
+import errno
+import exceptions
 import logging
 import os
 import shutil
@@ -23,12 +25,7 @@ import pywintypes
 import win32process
 import win32service
 import win32serviceutil
-
-from google.protobuf import text_format
-
-from fleetspeak.src.client.daemonservice.proto.fleetspeak_daemonservice import config_pb2 as fs_config_pb2
-from fleetspeak.src.common.proto.fleetspeak import common_pb2 as fs_common_pb2
-from fleetspeak.src.common.proto.fleetspeak import system_pb2 as fs_system_pb2
+import winerror
 
 from grr import config
 from grr_response_client import installer
@@ -38,14 +35,17 @@ def StartService(service_name):
   """Start a Windows service with the given name.
 
   Args:
-    service_name: string The name of the service to be stopped.
+    service_name: string The name of the service to be started.
   """
-  logging.info("Starting Windows service %s", service_name)
-
   try:
     win32serviceutil.StartService(service_name)
+    logging.info("Service '%s' started.", service_name)
   except pywintypes.error as e:
-    logging.info("Unable to stop service: %s with error: %s", service_name, e)
+    if getattr(e, "winerror", None) == winerror.ERROR_SERVICE_DOES_NOT_EXIST:
+      logging.debug("Tried to start '%s', but the service is not installed.",
+                    service_name)
+    else:
+      logging.exception("Encountered error trying to start '%s':", service_name)
 
 
 def StopService(service_name, service_binary_name=None):
@@ -56,45 +56,67 @@ def StopService(service_name, service_binary_name=None):
     service_binary_name: string If given, also kill this binary as a best effort
         fallback solution.
   """
-  logging.info("Stopping Windows service %s; Binary name: %s", service_name,
-               service_binary_name)
-
   # QueryServiceStatus returns: scvType, svcState, svcControls, err,
   # svcErr, svcCP, svcWH
   try:
     status = win32serviceutil.QueryServiceStatus(service_name)[1]
   except pywintypes.error as e:
-    logging.info("Unable to query status of service: %s with error: %s",
-                 service_name, e)
+    if getattr(e, "winerror", None) == winerror.ERROR_SERVICE_DOES_NOT_EXIST:
+      logging.debug("Tried to stop '%s', but the service is not installed.",
+                    service_name)
+    else:
+      logging.exception("Unable to query status of service '%s':", service_name)
     return
 
   for _ in range(20):
     if status == win32service.SERVICE_STOPPED:
       break
     elif status != win32service.SERVICE_STOP_PENDING:
-      logging.info("Attempting to stop service %s", service_name)
       try:
         win32serviceutil.StopService(service_name)
-      except pywintypes.error as e:
-        logging.info("Unable to stop service: %s with error: %s", service_name,
-                     e)
+      except pywintypes.error:
+        logging.exception("Unable to stop service '%s':", service_name)
     time.sleep(1)
     status = win32serviceutil.QueryServiceStatus(service_name)[1]
 
-  if status != win32service.SERVICE_STOPPED and service_binary_name is not None:
-    # Taskkill will fail on systems predating Windows XP, this is a best
-    # effort fallback solution.
-    output = subprocess.check_output(
-        ["taskkill", "/im",
-         "%s*" % service_binary_name, "/f"],
-        shell=True,
-        stdin=subprocess.PIPE,
-        stderr=subprocess.PIPE)
+  if status == win32service.SERVICE_STOPPED:
+    logging.info("Service '%s' stopped.", service_name)
+    return
+  elif not service_binary_name:
+    return
 
-    logging.debug("%s", output)
+  # Taskkill will fail on systems predating Windows XP, this is a best
+  # effort fallback solution.
+  output = subprocess.check_output(
+      ["taskkill", "/im", "%s*" % service_binary_name, "/f"],
+      shell=True,
+      stdin=subprocess.PIPE,
+      stderr=subprocess.PIPE)
 
-    # Sleep a bit to ensure that process really quits.
-    time.sleep(2)
+  logging.debug("%s", output)
+
+  # Sleep a bit to ensure that process really quits.
+  time.sleep(2)
+
+
+def RemoveService(service_name):
+  try:
+    win32serviceutil.RemoveService(service_name)
+    logging.info("Service '%s' removed.", service_name)
+  except pywintypes.error as e:
+    if getattr(e, "winerror", None) == winerror.ERROR_SERVICE_DOES_NOT_EXIST:
+      logging.debug("Tried to remove '%s', but the service is not installed.",
+                    service_name)
+    else:
+      logging.exception("Unable to remove service '%s':", service_name)
+
+
+def OpenRegkey(key_path):
+  # Note that this function will create the specified registry key,
+  # along with all its ancestors if they do not exist.
+  hive_name, subpath = key_path.split("\\", 1)
+  hive = getattr(_winreg, hive_name)
+  return _winreg.CreateKey(hive, subpath)
 
 
 class CheckForWow64(installer.Installer):
@@ -112,10 +134,30 @@ class CopyToSystemDir(installer.Installer):
   pre = [CheckForWow64]
 
   def StopPreviousService(self):
-    """Wait until the service can be stopped."""
+    """Stops the Windows service hosting the GRR process."""
     StopService(
         service_name=config.CONFIG["Nanny.service_name"],
         service_binary_name=config.CONFIG["Nanny.service_binary_name"])
+
+    if not config.CONFIG["Client.fleetspeak_enabled"]:
+      return
+
+    StopService(service_name=config.CONFIG["Client.fleetspeak_service_name"])
+
+    # Delete GRR's Fleetspeak config from the registry so Fleetspeak
+    # doesn't try to restart GRR unless/until installation completes
+    # successfully.
+    key_path = config.CONFIG["Client.fleetspeak_unsigned_services_regkey"]
+    regkey = OpenRegkey(key_path)
+    try:
+      _winreg.DeleteValue(regkey, config.CONFIG["Client.name"])
+      logging.info("Deleted value '%s' of key '%s'.",
+                   config.CONFIG["Client.name"], key_path)
+    except exceptions.WindowsError as e:
+      # Windows will raise a no-such-file-or-directory error if
+      # GRR's config hasn't been written to the registry yet.
+      if e.errno != errno.ENOENT:
+        raise
 
   def RunOnce(self):
     """Copy the binaries from the temporary unpack location.
@@ -130,17 +172,25 @@ class CopyToSystemDir(installer.Installer):
     install_path = config.CONFIG["Client.install_path"]
     logging.info("Installing binaries %s -> %s", executable_directory,
                  config.CONFIG["Client.install_path"])
-
-    try:
-      shutil.rmtree(install_path)
-    except OSError:
-      pass
-
-    # Create the installation directory.
-    try:
-      os.makedirs(install_path)
-    except OSError:
-      pass
+    if os.path.exists(install_path):
+      attempts = 0
+      while True:
+        try:
+          shutil.rmtree(install_path)
+          break
+        except OSError as e:
+          attempts += 1
+          if e.errno == errno.EACCES and attempts < 10:
+            # The currently installed GRR process may stick around for a few
+            # seconds after the service is terminated (keeping the contents of
+            # the installation directory locked).
+            logging.warn(
+                "Encountered permission-denied error while trying to empty out "
+                "'%s'. Retrying...", install_path)
+            time.sleep(3)
+          else:
+            raise e
+    os.makedirs(install_path)
 
     # Recursively copy the temp directory to the installation directory.
     for root, dirs, files in os.walk(executable_directory):
@@ -151,8 +201,10 @@ class CopyToSystemDir(installer.Installer):
 
         try:
           os.mkdir(dest_path)
-        except OSError:
-          pass
+        except OSError as e:
+          # Ignore already-exists exceptions.
+          if e.errno != errno.EEXIST:
+            raise
 
       for name in files:
         src_path = os.path.join(root, name)
@@ -197,69 +249,24 @@ class WindowsInstaller(installer.Installer):
         args, shell=True, stdin=subprocess.PIPE, stderr=subprocess.PIPE)
     logging.debug("%s", output)
 
-  def GenerateFleetspeakServiceConfig(self):
-    """Generate a service config, used to register the GRR client with FS."""
-    logging.info("Generating Fleetspeak service config.")
-
-    fs_service_config = fs_system_pb2.ClientServiceConfig(
-        name="GRR",
-        factory="Daemon",
-        required_labels=[
-            fs_common_pb2.Label(
-                service_name="client",
-                label="windows",
-            ),
-        ],
-    )
-    daemonservice_config = fs_config_pb2.Config(
-        argv=[
-            # Note this is an argv list, so we can't use
-            # config.CONFIG["Nanny.child_command_line"] directly.
-            config.CONFIG["Nanny.child_binary"],
-            "--config=%s.yaml" % config.CONFIG["Nanny.child_binary"],
-        ],
-        memory_limit=2147483648,  # 2GB
-        monitor_heartbeats=True,
-        heartbeat_unresponsive_grace_period_seconds=600,
-        heartbeat_unresponsive_kill_period_seconds=300,
-    )
-    fs_service_config.config.Pack(daemonservice_config)
-
-    str_fs_service_config = text_format.MessageToString(
-        fs_service_config, as_one_line=True)
-
-    return str_fs_service_config
-
-  def WriteFleetspeakServiceConfigToRegistry(self, str_fs_service_config):
-    """Register the GRR client to be run by Fleetspeak."""
-    logging.info("Writing Fleetspeak service config to registry.")
-
-    regkey = _winreg.CreateKey(
-        _winreg.HKEY_LOCAL_MACHINE,
-        r"SOFTWARE\Fleetspeak\textservices",
-    )
-
-    _winreg.SetValueEx(
-        regkey,
-        config.CONFIG["Client.name"],
-        0,
-        _winreg.REG_SZ,
-        str_fs_service_config,
-    )
-
-  def RestartFleetspeakService(self):
-    """Restart the Fleetspeak service so that config changes are applied."""
-    StopService(service_name=config.CONFIG["Client.fleetspeak_service_name"])
-    StartService(service_name=config.CONFIG["Client.fleetspeak_service_name"])
-
   def Run(self):
-    if config.CONFIG["Client.fleetspeak_enabled"]:
-      str_fs_service_config = self.GenerateFleetspeakServiceConfig()
-      self.WriteFleetspeakServiceConfigToRegistry(str_fs_service_config)
-
-      logging.info(
-          "Restarting Fleetspeak service. Note it is OK that this step fails "
-          "if Fleetspeak has not been installed yet.")
-      self.RestartFleetspeakService()
-    else:
+    if not config.CONFIG["Client.fleetspeak_enabled"]:
       self.InstallNanny()
+      return
+
+    # Remove the Nanny service for the legacy GRR since it will
+    # not be needed any more.
+    RemoveService(config.CONFIG["Nanny.service_name"])
+
+    # Write the Fleetspeak config to the registry.
+    key_path = config.CONFIG["Client.fleetspeak_unsigned_services_regkey"]
+    regkey = OpenRegkey(key_path)
+    fleetspeak_unsigned_config_path = os.path.join(
+        config.CONFIG["Client.install_path"],
+        config.CONFIG["Client.fleetspeak_unsigned_config_fname"])
+    _winreg.SetValueEx(regkey, config.CONFIG["Client.name"], 0, _winreg.REG_SZ,
+                       fleetspeak_unsigned_config_path)
+
+    fs_service = config.CONFIG["Client.fleetspeak_service_name"]
+    StopService(service_name=fs_service)
+    StartService(service_name=fs_service)

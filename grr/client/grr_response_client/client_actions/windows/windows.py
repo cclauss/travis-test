@@ -60,7 +60,7 @@ class GetInstallDate(actions.ActionPlugin):
                              "Software\\Microsoft\\Windows NT\\CurrentVersion",
                              0, _winreg.KEY_READ)
     install_date = _winreg.QueryValueEx(subkey, "InstallDate")
-    self.SendReply(rdfvalue.RDFDatetime().FromSecondsFromEpoch(install_date[0]))
+    self.SendReply(rdfvalue.RDFDatetime.FromSecondsSinceEpoch(install_date[0]))
 
 
 class EnumerateInterfaces(actions.ActionPlugin):
@@ -71,26 +71,24 @@ class EnumerateInterfaces(actions.ActionPlugin):
   """
   out_rdfvalues = [rdf_client.Interface]
 
-  def RunNetAdapterWMIQuery(self):
+  def Run(self, args):
+    del args  # Unused.
+
     pythoncom.CoInitialize()
-    for interface in wmi.WMI().Win32_NetworkAdapterConfiguration(IPEnabled=1):
+    for interface in wmi.WMI().Win32_NetworkAdapterConfiguration():
       addresses = []
-      for ip_address in interface.IPAddress:
+      for ip_address in interface.IPAddress or []:
         addresses.append(
             rdf_client.NetworkAddress(human_readable_address=ip_address))
 
-      args = {"ifname": interface.Description}
-      args["mac_address"] = binascii.unhexlify(
-          interface.MACAddress.replace(":", ""))
+      response = rdf_client.Interface(ifname=interface.Description)
+      if interface.MACAddress:
+        response.mac_address = binascii.unhexlify(
+            interface.MACAddress.replace(":", ""))
       if addresses:
-        args["addresses"] = addresses
+        response.addresses = addresses
 
-      yield args
-
-  def Run(self, unused_args):
-    """Enumerate all MAC addresses."""
-    for interface_dict in self.RunNetAdapterWMIQuery():
-      self.SendReply(rdf_client.Interface(**interface_dict))
+      self.SendReply(response)
 
 
 class EnumerateFilesystems(actions.ActionPlugin):

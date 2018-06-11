@@ -5,6 +5,7 @@ import logging
 import time
 import grpc
 
+
 # pylint: disable=unused-import,g-bad-import-order
 from grr.lib import server_plugins
 # pylint: enable=unused-import, g-bad-import-order
@@ -13,12 +14,11 @@ from grr import config
 from grr.lib import communicator
 from grr.lib import flags
 from grr.lib import stats
-from grr.lib.rdfvalues import client as rdf_client
 from grr.lib.rdfvalues import flows as rdf_flows
-from grr.server import fleetspeak_connector
-from grr.server import fleetspeak_utils
-from grr.server import front_end
-from grr.server import server_startup
+from grr.server.grr_response_server import fleetspeak_connector
+from grr.server.grr_response_server import fleetspeak_utils
+from grr.server.grr_response_server import front_end
+from grr.server.grr_response_server import server_startup
 
 
 class GRRFSServer(object):
@@ -73,8 +73,7 @@ class GRRFSServer(object):
 
   def _ProcessMessageList(self, fs_msg):
     """Process a FS message when message_type is MessageList."""
-    grr_id = rdf_client.ClientURN(
-        fleetspeak_utils.FleetspeakIDToGRRID(fs_msg.source.client_id))
+    grr_id = fleetspeak_utils.FleetspeakIDToGRRID(fs_msg.source.client_id)
 
     msg_list = rdf_flows.PackedMessageList.FromSerializedString(
         fs_msg.data.value)
@@ -98,6 +97,7 @@ def main(argv):
   server_startup.DropPrivileges()
 
   fleetspeak_connector.Init()
+
   fsd = GRRFSServer()
   fleetspeak_connector.CONN.Listen(fsd.Process)
 

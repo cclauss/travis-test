@@ -8,6 +8,7 @@ from grr.lib import rdfvalue
 from grr.lib import utils
 from grr.lib.rdfvalues import client
 from grr.lib.rdfvalues import crypto as rdf_crypto
+from grr.lib.rdfvalues import objects as rdf_objects
 from grr.lib.rdfvalues import protodict as rdf_protodict
 from grr.lib.rdfvalues import structs as rdf_structs
 from grr_response_proto import flows_pb2
@@ -56,7 +57,7 @@ class GrrMessage(rdf_structs.RDFProtoStruct):
   def GenerateTaskID(self):
     """Generates a new, unique task_id."""
     # Random number can not be zero since next_id_base must increment.
-    random_number = utils.PRNG.GetUShort() + 1
+    random_number = utils.PRNG.GetUInt16() + 1
 
     # 16 bit random numbers
     with GrrMessage.lock:
@@ -294,16 +295,6 @@ class ClientCommunication(rdf_structs.RDFProtoStruct):
   num_messages = 0
 
 
-class FlowReference(rdf_structs.RDFProtoStruct):
-  protobuf = flows_pb2.FlowReference
-  rdf_deps = [
-      client.ClientURN,
-  ]
-
-  def ToFlowURN(self):
-    return self.client_id.Add("flows").Add(self.flow_id)
-
-
 class FlowRunnerArgs(rdf_structs.RDFProtoStruct):
   """The argument to the flow runner.
 
@@ -313,10 +304,9 @@ class FlowRunnerArgs(rdf_structs.RDFProtoStruct):
   protobuf = flows_pb2.FlowRunnerArgs
   rdf_deps = [
       client.ClientURN,
-      FlowReference,
+      rdf_objects.FlowReference,
       "OutputPluginDescriptor",  # TODO(user): dependency loop.
       rdfvalue.RDFDatetime,
       rdfvalue.RDFURN,
       RequestState,
-      rdfvalue.SessionID,
   ]

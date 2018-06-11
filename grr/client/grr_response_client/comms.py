@@ -68,7 +68,6 @@ Examples:
 
 """
 
-import base64
 import collections
 import itertools
 import logging
@@ -92,6 +91,7 @@ from grr import config
 from grr_response_client import actions
 from grr_response_client import client_stats
 from grr_response_client import client_utils
+from grr_response_client.client_actions import admin
 from grr.lib import communicator
 from grr.lib import flags
 from grr.lib import queues
@@ -99,7 +99,6 @@ from grr.lib import rdfvalue
 from grr.lib import registry
 from grr.lib import stats
 from grr.lib import type_info
-from grr.lib import uploads
 from grr.lib import utils
 from grr.lib.rdfvalues import client as rdf_client
 from grr.lib.rdfvalues import crypto as rdf_crypto
@@ -252,8 +251,9 @@ class HTTPManager(object):
       return result
 
     # No connection is possible at all.
-    logging.info("Could not connect to GRR servers %s, directly or through "
-                 "these proxies: %s.", self.base_urls, self.proxies)
+    logging.info(
+        "Could not connect to GRR servers %s, directly or through "
+        "these proxies: %s.", self.base_urls, self.proxies)
 
     return last_error
 
@@ -496,8 +496,6 @@ class GRRClientWorker(threading.Thread):
 
   stats_collector = None
 
-  IDLE_THRESHOLD = 0.3
-
   sent_bytes_per_flow = {}
 
   # Client sends stats notifications at least every 50 minutes.
@@ -506,10 +504,7 @@ class GRRClientWorker(threading.Thread):
   # Client sends stats notifications at most every 60 seconds.
   STATS_MIN_SEND_INTERVAL = rdfvalue.Duration("60s")
 
-  UPLOAD_BUFFER_SIZE = 1024 * 1024
-
   def __init__(self,
-               start_worker_thread=True,
                client=None,
                out_queue=None,
                internal_nanny_monitoring=True,
@@ -521,15 +516,9 @@ class GRRClientWorker(threading.Thread):
 
     self._is_active = False
 
-    # If True, ClientStats will be forcibly sent to server during next
-    # CheckStats() call, if less than STATS_MIN_SEND_INTERVAL time has passed
-    # since last stats notification was sent.
-    self._send_stats_on_check = False
-
-    # Last time when we've sent stats back to the server.
-    self.last_stats_sent_time = None
-
     self.proc = psutil.Process()
+
+    self.nanny_controller = None
 
     self.transaction_log = client_utils.TransactionLog()
 
@@ -565,10 +554,6 @@ class GRRClientWorker(threading.Thread):
           heart_beat_cb=heart_beat_cb)
 
     self.daemon = True
-
-    # Start our working thread.
-    if start_worker_thread:
-      self.start()
 
   def QueueResponse(self,
                     message,
@@ -628,9 +613,6 @@ class GRRClientWorker(threading.Thread):
     if not GRRClientWorker.stats_collector:
       GRRClientWorker.stats_collector = client_stats.ClientStatsCollector(self)
       GRRClientWorker.stats_collector.start()
-
-  def ClientMachineIsIdle(self):
-    return psutil.cpu_percent(0.05) <= 100 * self.IDLE_THRESHOLD
 
   def SendReply(self,
                 rdf_value=None,
@@ -702,61 +684,9 @@ class GRRClientWorker(threading.Thread):
       # keep going.
       logging.info("Queue is full, dropping messages.")
 
-  def UploadFile(self,
-                 file_fd,
-                 upload_token,
-                 max_bytes=None,
-                 network_bytes_limit=None,
-                 session_id=None,
-                 progress_callback=None):
-    """Uploads a file to the GRR server using a direct HTTP transfer."""
-
-    def FileGenerator(fd):
-      """A Generator of file content."""
-      while 1:
-        data = fd.Read(self.UPLOAD_BUFFER_SIZE)
-        if not data:
-          break
-
-        # Ensure we heartbeat while the upload is happening.
-        if progress_callback:
-          progress_callback()
-
-        yield data
-
-        # Keep track of how much data we sent.
-        l = len(data)
-
-        if session_id:
-          self.ChargeBytesToSession(session_id, l, limit=network_bytes_limit)
-
-    # Gzip the original file.
-    gzip_fd = uploads.GzipWrapper(file_fd, byte_limit=max_bytes)
-    # And then encrypt it.
-    server_certificate = rdf_crypto.RDFX509Cert(self.client.server_certificate)
-    fd = uploads.EncryptStream(server_certificate.GetPublicKey(),
-                               config.CONFIG["Client.private_key"], gzip_fd)
-    response = self.http_manager.OpenServerEndpoint(
-        u"/upload",
-        data=FileGenerator(fd),
-        headers={
-            "x-grr-upload-token":
-                base64.b64encode(upload_token.SerializeToString()),
-        },
-        method="POST")
-
-    if response.code != 200:
-      raise IOError("Unable to upload file (http code %d)" % response.code)
-
-    return rdf_client.UploadedFile(
-        bytes_uploaded=gzip_fd.total_read,
-        file_id=response.data,
-        hash=gzip_fd.HashObject(),
-    )
-
   def GetRekallProfile(self, profile_name, version="v1.0"):
-    response = self.http_manager.OpenServerEndpoint(u"/rekall_profiles/%s/%s" %
-                                                    (version, profile_name))
+    response = self.http_manager.OpenServerEndpoint(
+        u"/rekall_profiles/%s/%s" % (version, profile_name))
 
     if response.code != 200:
       return None
@@ -807,7 +737,7 @@ class GRRClientWorker(threading.Thread):
     finally:
       self._is_active = False
       # We want to send ClientStats when client action is complete.
-      self._send_stats_on_check = True
+      self.stats_collector.RequestSend()
 
   def MemoryExceeded(self):
     """Returns True if our memory footprint is too large."""
@@ -817,39 +747,6 @@ class GRRClientWorker(threading.Thread):
   def IsActive(self):
     """Returns True if worker is currently handling a message."""
     return self._is_active
-
-  def CheckStats(self):
-    """Checks if the last transmission of client stats is too long ago."""
-    if self.last_stats_sent_time is None:
-      self.last_stats_sent_time = rdfvalue.RDFDatetime.Now()
-      stats.STATS.SetGaugeValue("grr_client_last_stats_sent_time",
-                                self.last_stats_sent_time.AsSecondsFromEpoch())
-
-    time_since_last_check = (
-        rdfvalue.RDFDatetime.Now() - self.last_stats_sent_time)
-
-    # No matter what, we don't want to send stats more often than
-    # once per STATS_MIN_SEND_INTERVAL.
-    if time_since_last_check < self.STATS_MIN_SEND_INTERVAL:
-      return
-
-    if (time_since_last_check > self.STATS_MAX_SEND_INTERVAL or
-        self._is_active or self._send_stats_on_check):
-
-      self._send_stats_on_check = False
-
-      logging.info("Sending back client statistics to the server.")
-
-      action_cls = actions.ActionPlugin.classes.get("GetClientStatsAuto",
-                                                    actions.ActionPlugin)
-      action = action_cls(grr_worker=self)
-      action.Run(
-          rdf_client.GetClientStatsRequest(
-              start_time=self.last_stats_sent_time))
-
-      self.last_stats_sent_time = rdfvalue.RDFDatetime.Now()
-      stats.STATS.SetGaugeValue("grr_client_last_stats_sent_time",
-                                self.last_stats_sent_time.AsSecondsFromEpoch())
 
   def SendNannyMessage(self):
     # We might be monitored by Fleetspeak.
@@ -874,7 +771,8 @@ class GRRClientWorker(threading.Thread):
 
   def Sleep(self, timeout):
     """Sleeps the calling thread with heartbeat."""
-    self.nanny_controller.Heartbeat()
+    if self.nanny_controller:
+      self.nanny_controller.Heartbeat()
 
     # Split a long sleep interval into 1 second intervals so we can heartbeat.
     while timeout > 0:
@@ -885,7 +783,8 @@ class GRRClientWorker(threading.Thread):
       if self._out_queue.Full():
         return
 
-      self.nanny_controller.Heartbeat()
+      if self.nanny_controller:
+        self.nanny_controller.Heartbeat()
 
   def OnStartup(self):
     """A handler that is called on client startup."""
@@ -898,9 +797,10 @@ class GRRClientWorker(threading.Thread):
       status = rdf_flows.GrrStatus(
           status=rdf_flows.GrrStatus.ReturnedStatus.CLIENT_KILLED,
           error_message="Client killed during transaction")
-      nanny_status = self.nanny_controller.GetNannyStatus()
-      if nanny_status:
-        status.nanny_status = nanny_status
+      if self.nanny_controller:
+        nanny_status = self.nanny_controller.GetNannyStatus()
+        if nanny_status:
+          status.nanny_status = nanny_status
 
       self.SendReply(
           status,
@@ -912,9 +812,7 @@ class GRRClientWorker(threading.Thread):
     self.transaction_log.Clear()
 
     # Inform the server that we started.
-    action_cls = actions.ActionPlugin.classes.get("SendStartupInfo",
-                                                  actions.ActionPlugin)
-    action = action_cls(grr_worker=self)
+    action = admin.SendStartupInfo(grr_worker=self)
     action.Run(None, ttl=1)
 
   def run(self):
@@ -1157,6 +1055,10 @@ class GRRHTTPClient(object):
       self.client_worker = worker_cls(client=self)
     else:
       self.client_worker = GRRClientWorker(client=self)
+    # TODO(hanuszczak): Maybe we should start the thread in `GRRHTTPClient::Run`
+    # method instead? Starting threads in constructor is rarely a good idea, is
+    # it guaranteed that we call `GRRHTTPClient::Run` only once?
+    self.client_worker.start()
 
   def FleetspeakEnabled(self):
     return False
@@ -1566,5 +1468,5 @@ class ClientCommunicator(communicator.Communicator):
     if common_name == self.server_name:
       return self.server_public_key
 
-    raise communicator.UnknownClientCert("Client wants to talk to %s, not %s",
-                                         common_name, self.server_name)
+    raise communicator.UnknownClientCert(
+        "Client wants to talk to %s, not %s" % (common_name, self.server_name))

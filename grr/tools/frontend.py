@@ -27,11 +27,11 @@ from grr.lib import rdfvalue
 from grr.lib import stats
 from grr.lib import utils
 from grr.lib.rdfvalues import flows as rdf_flows
-from grr.server import aff4
-from grr.server import front_end
-from grr.server import master
-from grr.server import server_logging
-from grr.server import server_startup
+from grr.server.grr_response_server import aff4
+from grr.server.grr_response_server import front_end
+from grr.server.grr_response_server import master
+from grr.server.grr_response_server import server_logging
+from grr.server.grr_response_server import server_startup
 
 
 class GRRHTTPServerHandler(BaseHTTPServer.BaseHTTPRequestHandler):
@@ -209,13 +209,6 @@ class GRRHTTPServerHandler(BaseHTTPServer.BaseHTTPRequestHandler):
       if not header:
         break
 
-  def HandleUploads(self):
-    """Receive file uploads from the client."""
-    file_id = self.server.frontend.HandleUpload(
-        self.headers.get("Transfer-Encoding"),
-        self.headers.get("x-grr-upload-token"), self.GenerateFileData())
-    self.Send(file_id)
-
   def do_POST(self):  # pylint: disable=g-bad-name
     """Process encrypted message bundles."""
 
@@ -223,7 +216,9 @@ class GRRHTTPServerHandler(BaseHTTPServer.BaseHTTPRequestHandler):
       if self.path.startswith("/upload"):
         stats.STATS.IncrementCounter(
             "frontend_http_requests", fields=["upload", "http"])
-        self.HandleUploads()
+
+        logging.error("Requested no longer supported file upload through HTTP.")
+        self.Send("File upload though HTTP is no longer supported", status=404)
       else:
         stats.STATS.IncrementCounter(
             "frontend_http_requests", fields=["control", "http"])
@@ -285,7 +280,7 @@ class GRRHTTPServerHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         source_ip = source_ip.ipv4_mapped or source_ip
 
       request_comms.orig_request = rdf_flows.HttpRequest(
-          timestamp=rdfvalue.RDFDatetime.Now().AsMicroSecondsFromEpoch(),
+          timestamp=rdfvalue.RDFDatetime.Now().AsMicrosecondsSinceEpoch(),
           raw_headers=utils.SmartStr(self.headers),
           source_ip=utils.SmartStr(source_ip))
 

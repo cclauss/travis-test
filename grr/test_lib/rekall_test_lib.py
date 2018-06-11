@@ -11,10 +11,10 @@ from grr_response_client.client_actions import tempfiles
 from grr_response_client.components.rekall_support import grr_rekall
 from grr.lib import utils
 from grr.lib.rdfvalues import rekall_types as rdf_rekall_types
-from grr.server import aff4
-from grr.server import rekall_profile_server
-from grr.server.aff4_objects import aff4_grr
-from grr.server.flows.general import memory
+from grr.server.grr_response_server import aff4
+from grr.server.grr_response_server import rekall_profile_server
+from grr.server.grr_response_server.aff4_objects import aff4_grr
+from grr.server.grr_response_server.flows.general import memory
 from grr.test_lib import action_mocks
 from grr.test_lib import flow_test_lib
 from grr.test_lib import test_lib
@@ -81,14 +81,13 @@ class RekallTestBase(test_lib.GRRBaseTest):
       self.CreateClient()
 
       # Allow the real RekallAction to run against the image.
-      for s in flow_test_lib.TestFlowHelper(
+      session_id = flow_test_lib.TestFlowHelper(
           memory.AnalyzeClientMemory.__name__,
           action_mocks.MemoryClientMock(grr_rekall.RekallAction,
                                         tempfiles.DeleteGRRTempFiles),
           token=self.token,
           client_id=self.client_id,
-          request=request):
-        session_id = s
+          request=request)
 
       # Check that the profiles are also cached locally.
       test_profile_dir = os.path.join(config.CONFIG["Test.data_dir"],

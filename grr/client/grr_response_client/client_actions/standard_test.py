@@ -256,6 +256,53 @@ class TestCopyPathToFile(client_test_lib.EmptyActionTest):
     self.assertFalse(os.path.exists(result.dest_path.path))
 
 
+class GetFileStatTest(client_test_lib.EmptyActionTest):
+
+  def testStatSize(self):
+    with test_lib.AutoTempFilePath() as temp_filepath:
+      with open(temp_filepath, "wb") as temp_file:
+        temp_file.write("123456")
+
+      pathspec = rdf_paths.PathSpec(
+          path=temp_filepath, pathtype=rdf_paths.PathSpec.PathType.OS)
+
+      request = rdf_client.GetFileStatRequest(pathspec=pathspec)
+      results = self.RunAction(standard.GetFileStat, request)
+
+      self.assertEqual(len(results), 1)
+      self.assertEqual(results[0].st_size, 6)
+
+  def testStatExtAttrsEnabled(self):
+    with test_lib.AutoTempFilePath() as temp_filepath:
+      client_test_lib.SetExtAttr(temp_filepath, name="user.foo", value="bar")
+
+      pathspec = rdf_paths.PathSpec(
+          path=temp_filepath, pathtype=rdf_paths.PathSpec.PathType.OS)
+
+      request = rdf_client.GetFileStatRequest(
+          pathspec=pathspec, collect_ext_attrs=True)
+      results = self.RunAction(standard.GetFileStat, request)
+
+      self.assertEqual(len(results), 1)
+      self.assertEqual(len(results[0].ext_attrs), 1)
+      self.assertEqual(results[0].ext_attrs[0].name, "user.foo")
+      self.assertEqual(results[0].ext_attrs[0].value, "bar")
+
+  def testStatExtAttrsDisabled(self):
+    with test_lib.AutoTempFilePath() as temp_filepath:
+      client_test_lib.SetExtAttr(temp_filepath, name="user.foo", value="bar")
+
+      pathspec = rdf_paths.PathSpec(
+          path=temp_filepath, pathtype=rdf_paths.PathSpec.PathType.OS)
+
+      request = rdf_client.GetFileStatRequest(
+          pathspec=pathspec, collect_ext_attrs=False)
+      results = self.RunAction(standard.GetFileStat, request)
+
+      self.assertEqual(len(results), 1)
+      self.assertEqual(len(results[0].ext_attrs), 0)
+
+
 class TestNetworkByteLimits(client_test_lib.EmptyActionTest):
   """Test CopyPathToFile client actions."""
 

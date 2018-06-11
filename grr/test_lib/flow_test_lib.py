@@ -13,18 +13,38 @@ from grr.lib import rdfvalue
 from grr.lib import registry
 from grr.lib.rdfvalues import client as rdf_client
 from grr.lib.rdfvalues import flows as rdf_flows
+from grr.lib.rdfvalues import objects as rdf_objects
+from grr.lib.rdfvalues import protodict as rdf_protodict
 from grr.lib.rdfvalues import structs as rdf_structs
 from grr_response_proto import tests_pb2
-from grr.server import aff4
-from grr.server import events
-from grr.server import flow
-from grr.server import queue_manager
-from grr.server import server_stubs
+from grr.server.grr_response_server import aff4
+from grr.server.grr_response_server import events
+from grr.server.grr_response_server import flow
+from grr.server.grr_response_server import handler_registry
+from grr.server.grr_response_server import queue_manager
+from grr.server.grr_response_server import server_stubs
 from grr.test_lib import action_mocks
 from grr.test_lib import client_test_lib
 
 from grr.test_lib import test_lib
 from grr.test_lib import worker_test_lib
+
+
+class AdminOnlyFlow(flow.GRRFlow):
+  AUTHORIZED_LABELS = ["admin"]
+
+  # Flow has to have a category otherwise FullAccessControlManager won't
+  # let non-supervisor users to run it at all (it will be considered
+  # externally inaccessible).
+  category = "/Test/"
+
+
+class ClientFlowWithoutCategory(flow.GRRFlow):
+  pass
+
+
+class ClientFlowWithCategory(flow.GRRFlow):
+  category = "/Test/"
 
 
 class CPULimitFlow(flow.GRRFlow):
@@ -75,7 +95,7 @@ class FlowOrderTest(flow.GRRFlow):
   def Start(self, unused_message=None):
     self.CallClient(client_test_lib.Test, data="test", next_state="Incoming")
 
-  @flow.StateHandler(auth_required=True)
+  @flow.StateHandler()
   def Incoming(self, responses):
     """Record the message id for testing."""
     self.messages = []
@@ -217,6 +237,46 @@ class FlowTestsBaseclass(test_lib.GRRBaseTest):
 
     return aff4.FACTORY.Open(session_id, mode="rw", token=self.token)
 
+  def SendResponse(self,
+                   session_id,
+                   data,
+                   client_id=None,
+                   well_known=False,
+                   request_id=None):
+    if not isinstance(data, rdfvalue.RDFValue):
+      data = rdf_protodict.DataBlob(string=data)
+    if well_known:
+      request_id, response_id = 0, 12345
+    else:
+      request_id, response_id = request_id or 1, 1
+    with queue_manager.QueueManager(token=self.token) as flow_manager:
+      flow_manager.QueueResponse(
+          rdf_flows.GrrMessage(
+              source=client_id,
+              session_id=session_id,
+              payload=data,
+              request_id=request_id,
+              auth_state="AUTHENTICATED",
+              response_id=response_id))
+      if not well_known:
+        # For normal flows we have to send a status as well.
+        flow_manager.QueueResponse(
+            rdf_flows.GrrMessage(
+                source=client_id,
+                session_id=session_id,
+                payload=rdf_flows.GrrStatus(
+                    status=rdf_flows.GrrStatus.ReturnedStatus.OK),
+                request_id=request_id,
+                response_id=response_id + 1,
+                auth_state="AUTHENTICATED",
+                type=rdf_flows.GrrMessage.Type.STATUS))
+
+      flow_manager.QueueNotification(
+          session_id=session_id, last_status=request_id)
+      timestamp = flow_manager.frozen_timestamp
+
+    return timestamp
+
 
 class CrashClientMock(object):
 
@@ -235,15 +295,10 @@ class CrashClientMock(object):
         crash_message="Client killed during transaction",
         timestamp=rdfvalue.RDFDatetime.Now())
 
-    msg = rdf_flows.GrrMessage(
-        payload=crash_details,
-        source=self.client_id,
-        auth_state=rdf_flows.GrrMessage.AuthorizationState.AUTHENTICATED)
-
     self.flow_id = message.session_id
     # This is normally done by the FrontEnd when a CLIENT_KILLED message is
     # received.
-    events.Events.PublishEvent("ClientCrash", msg, token=self.token)
+    events.Events.PublishEvent("ClientCrash", crash_details, token=self.token)
 
 
 class MockClient(object):
@@ -317,15 +372,27 @@ class MockClient(object):
 
         session_id = message.session_id
         if session_id:
-          logging.info("Running well known flow: %s", session_id)
-          self.well_known_flows[session_id.FlowName()].ProcessMessage(message)
+          handler_name = queue_manager.session_id_map.get(session_id)
+          if handler_name:
+            logging.info("Running message handler: %s", handler_name)
+            handler_cls = handler_registry.handler_name_map.get(handler_name)
+            handler_request = rdf_objects.MessageHandlerRequest(
+                client_id=self.client_id.Basename(),
+                handler_name=handler_name,
+                request_id=message.response_id,
+                request=message.payload)
+
+            handler_cls(token=self.token).ProcessMessages(handler_request)
+          else:
+            logging.info("Running well known flow: %s", session_id)
+            self.well_known_flows[session_id.FlowName()].ProcessMessage(message)
 
       return
 
     manager.QueueResponse(message)
 
   def Next(self):
-    # Grab tasks for us from the server's queue.
+    """Grab tasks for us from the server's queue."""
     with queue_manager.QueueManager(token=self.token) as manager:
       request_tasks = manager.QueryAndOwn(
           self.client_id.Queue(), limit=1, lease_seconds=10000)
@@ -437,9 +504,9 @@ def CheckFlowErrors(total_flows, token=None):
     if flow_obj.context.state != rdf_flows.FlowContext.State.TERMINATED:
       if flags.FLAGS.debug:
         pdb.set_trace()
-      raise RuntimeError("Flow %s completed in state %s" %
-                         (flow_obj.runner_args.flow_name,
-                          flow_obj.context.state))
+      raise RuntimeError(
+          "Flow %s completed in state %s" % (flow_obj.runner_args.flow_name,
+                                             flow_obj.context.state))
 
 
 def TestFlowHelper(flow_urn_or_cls_name,
@@ -447,7 +514,6 @@ def TestFlowHelper(flow_urn_or_cls_name,
                    client_id=None,
                    check_flow_errors=True,
                    token=None,
-                   notification_event=None,
                    sync=True,
                    **kwargs):
   """Build a full test harness: client - worker + start flow.
@@ -461,13 +527,10 @@ def TestFlowHelper(flow_urn_or_cls_name,
     check_flow_errors: If True, TestFlowHelper will raise on errors during flow
                        execution.
     token: Security token.
-    notification_event: A well known flow session_id of an event listener. Event
-                        will be published once the flow finishes.
     sync: Whether StartFlow call should be synchronous or not.
     **kwargs: Arbitrary args that will be passed to flow.GRRFlow.StartFlow().
-  Yields:
-    The caller should iterate over the generator to get all the flows
-    and subflows executed.
+  Returns:
+    The session id of the flow that was run.
   """
   if client_id or client_mock:
     client_mock = MockClient(client_id, client_mock, token=token)
@@ -482,7 +545,6 @@ def TestFlowHelper(flow_urn_or_cls_name,
     session_id = flow.GRRFlow.StartFlow(
         client_id=client_id,
         flow_name=flow_urn_or_cls_name,
-        notification_event=notification_event,
         sync=sync,
         token=token,
         **kwargs)
@@ -505,8 +567,8 @@ def TestFlowHelper(flow_urn_or_cls_name,
     if client_processed == 0 and not flows_run:
       break
 
-    yield session_id
-
   # We should check for flow errors:
   if check_flow_errors:
     CheckFlowErrors(total_flows, token=token)
+
+  return session_id

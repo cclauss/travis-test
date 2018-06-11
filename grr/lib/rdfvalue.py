@@ -473,18 +473,17 @@ class RDFDatetime(RDFInteger):
     """Return the time as a python datetime object."""
     return datetime.datetime.utcfromtimestamp(self._value / self.converter)
 
-  def AsSecondsFromEpoch(self):
+  def AsSecondsSinceEpoch(self):
     return self._value / self.converter
 
-  def AsMicroSecondsFromEpoch(self):
+  def AsMicrosecondsSinceEpoch(self):
     return self._value
 
-  def FromSecondsFromEpoch(self, value):
+  @classmethod
+  def FromSecondsSinceEpoch(cls, value):
     # Convert to int in case we get fractional seconds with higher
     # resolution than what this class supports.
-    self._value = int(value * self.converter)
-
-    return self
+    return cls(int(value * cls.converter))
 
   @classmethod
   def FromDatetime(cls, value):
@@ -498,6 +497,31 @@ class RDFDatetime(RDFInteger):
     res = cls()
     res.SetRaw(cls._ParseFromHumanReadable(value, eoy=eoy))
     return res
+
+  @classmethod
+  def Lerp(cls, t, start_time, end_time):
+    """Interpolates linearly between two datetime values.
+
+    Args:
+      t: An interpolation "progress" value.
+      start_time: A value for t = 0.
+      end_time: A value for t = 1.
+
+    Returns:
+      An interpolated `RDFDatetime` instance.
+
+    Raises:
+      TypeError: If given time values are not instances of `RDFDatetime`.
+      ValueError: If `t` parameter is not between 0 and 1.
+    """
+    if not (isinstance(start_time, RDFDatetime) and
+            isinstance(end_time, RDFDatetime)):
+      raise TypeError("Interpolation of non-datetime values")
+
+    if not 0.0 <= t <= 1.0:
+      raise ValueError("Interpolation progress does not belong to [0.0, 1.0]")
+
+    return RDFDatetime(round((1 - t) * start_time._value + t * end_time._value))  # pylint: disable=protected-access
 
   def ParseFromHumanReadable(self, string, eoy=False):
     self._value = self._ParseFromHumanReadable(string, eoy=eoy)
@@ -533,7 +557,7 @@ class RDFDatetime(RDFInteger):
       return self.__class__(self._value - other * self.converter)
 
     if isinstance(other, RDFDatetime):
-      return Duration(self.AsSecondsFromEpoch() - other.AsSecondsFromEpoch())
+      return Duration(self.AsSecondsSinceEpoch() - other.AsSecondsSinceEpoch())
 
     return NotImplemented
 
@@ -575,6 +599,13 @@ class RDFDatetime(RDFInteger):
     timestamp = parser.parse(string, default=default)
 
     return calendar.timegm(timestamp.utctimetuple()) * cls.converter
+
+  def Floor(self, interval):
+    if not isinstance(interval, Duration):
+      raise TypeError("Expected `Duration`, got `%s`" % interval.__class__)
+
+    seconds = self.AsSecondsSinceEpoch() // interval.seconds * interval.seconds
+    return self.FromSecondsSinceEpoch(seconds)
 
 
 class RDFDatetimeSeconds(RDFDatetime):
@@ -689,9 +720,9 @@ class Duration(RDFInteger):
     else:
       base_time = base_time.Copy()
 
-    base_time_sec = base_time.AsSecondsFromEpoch()
+    base_time_sec = base_time.AsSecondsSinceEpoch()
 
-    return base_time.FromSecondsFromEpoch(base_time_sec + self._value)
+    return RDFDatetime.FromSecondsSinceEpoch(base_time_sec + self._value)
 
   def ParseFromHumanReadable(self, timestring):
     """Parse a human readable string of a duration.
@@ -1015,7 +1046,7 @@ class SessionID(RDFURN):
     if initializer is None:
       # This SessionID is being constructed from scratch.
       if flow_name is None:
-        flow_name = utils.PRNG.GetULong()
+        flow_name = utils.PRNG.GetUInt32()
 
       if isinstance(flow_name, int):
         initializer = RDFURN(base).Add("%s:%X" % (queue.Basename(), flow_name))
