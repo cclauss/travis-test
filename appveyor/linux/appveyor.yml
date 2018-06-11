@@ -1,0 +1,6 @@
+image: ubuntu
+
+install:
+- lsb_release -a
+
+build: off
