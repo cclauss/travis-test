@@ -24,11 +24,11 @@ if __name__ == "__main__":
       _ = list(grr_api.SearchClients())
       break
     except Exception as e:
+      tries_left -= 1
       # TODO(ogaro): Try logging library.
       print(
         "Encountered error trying to connect to GRR API (%d tries left): %s" % (
         tries_left, e.message))
-      tries_left -= 1
       if tries_left <= 0:
         raise e
     time.sleep(1)
