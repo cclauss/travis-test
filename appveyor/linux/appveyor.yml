@@ -6,6 +6,7 @@ environment:
 
 install:
 - lsb_release -a
+- echo "${PATH}"
 - sudo -H GRR_ADMIN_PASS="${GRR_ADMIN_PASS}" ./appveyor/linux/install_latest_server_deb.sh
 
 # Appveyor will try to build any Visual Studio projects it finds if we do not disable this.
