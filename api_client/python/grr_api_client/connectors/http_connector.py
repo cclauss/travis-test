@@ -67,6 +67,9 @@ class HttpConnector(connector.Connector):
                      "api/v2/reflection/api-methods")
     response = requests.get(
         url, headers=headers, cookies=cookies, auth=self.auth)
+    errormsg = "GET response (%s, %s, %d):\n%s" % (url, headers, response.status_code, response.content)
+    logger.info(errormsg)
+    raise Exception(errormsg)
     self._CheckResponseStatus(response)
 
     json_str = response.content[len(self.JSON_PREFIX):]
