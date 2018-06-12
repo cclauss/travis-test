@@ -4,7 +4,10 @@
 import getpass
 import logging
 import os
+import requests
+import time
 import unittest
+import urlparse
 
 # We need to import the server_plugins module before other server init modules.
 # pylint: disable=unused-import,g-bad-import-order
@@ -82,9 +85,15 @@ def RunEndToEndTests():
   results_by_client = {}
   max_test_name_len = 0
 
+  appveyor_tests_endpoint = None
+  appveyor_api_url = os.environ.get("APPVEYOR_API_URL", None)
+  if appveyor_api_url:
+    appveyor_tests_endpoint = urlparse.urljoin(appveyor_api_url, "api/tests")
+
   logging.info("Running tests against %d clients...", len(target_clients))
   for client in target_clients:
-    results_by_client[client.client_id] = RunTestsAgainstClient(grr_api, client)
+    results_by_client[client.client_id] = RunTestsAgainstClient(
+        grr_api, client, appveyor_tests_endpoint=appveyor_tests_endpoint)
     for test_name in results_by_client[client.client_id]:
       max_test_name_len = max(max_test_name_len, len(test_name))
 
@@ -124,7 +133,7 @@ def UploadBinaryIfAbsent(server_paths, bin_name, server_path):
         f.read(), "aff4:/config/executables/%s" % server_path)
 
 
-def RunTestsAgainstClient(grr_api, client):
+def RunTestsAgainstClient(grr_api, client, appveyor_tests_endpoint=None):
   """Runs all applicable end-to-end tests against a given client.
 
   Args:
@@ -149,6 +158,7 @@ def RunTestsAgainstClient(grr_api, client):
       continue
 
     test_suite = unittest.TestLoader().loadTestsFromTestCase(test_case)
+    tests_to_run = {}
     for test in test_suite:
       test_name = "%s.%s" % (test.__class__.__name__, test._testMethodName)
       if (flags.FLAGS.testnames and
@@ -160,7 +170,55 @@ def RunTestsAgainstClient(grr_api, client):
                    client.client_id, client.data.os_info.fqdn,
                    client.data.os_info.system, client.data.os_info.version,
                    client.data.os_info.machine)
-      results[test_name] = test_runner.run(test)
+      tests_to_run[test_name] = test
+      if appveyor_tests_endpoint:
+        resp = requests.post(appveyor_tests_endpoint, json={
+          "testName": test_name,
+          "testFramework": "JUnit",
+          "fileName": os.path.relpath(__file__),
+          #"outcome": "None",
+          #"durationMilliseconds": "1200",
+          #"ErrorMessage": "",
+          #"ErrorStackTrace": "",
+          #"StdOut": "",
+          #"StdErr": ""
+        })
+        logging.debug("Added %s to Appveyor Tests API. Response: %s",
+                      test_name, resp)
+
+    for test_name, test in tests_to_run.iteritems():
+      resp = requests.put(appveyor_tests_endpoint, json={
+        "testName": test_name,
+        #"testFramework": "JUnit",
+        #"fileName": os.path.relpath(__file__),
+        "outcome": "Running",
+        #"ErrorMessage": "",
+        #"ErrorStackTrace": "",
+        #"StdOut": "",
+        #"StdErr": ""
+      })
+      logging.debug("Changed status of %s to RUNNING. Response: %s",
+                    test_name, resp)
+      start_time = time.time()
+      result = test_runner.run(test)
+      millis_elapsed = int((time.time() - start_time) * 1000)
+      if result.errors or result.failures:
+        text_result = "Failed"
+      else:
+        text_result = "Passed"
+      resp = requests.post(appveyor_tests_endpoint, json={
+          "testName": test_name,
+          #"testFramework": "JUnit",
+          #"fileName": os.path.relpath(__file__),
+          "outcome": text_result,
+          "durationMilliseconds": str(millis_elapsed),
+          #"ErrorMessage": "",
+          #"ErrorStackTrace": "",
+          #"StdOut": "",
+          #"StdErr": ""
+        })
+      logging.debug("Set final status of %s. Response: %s", test_name, resp)
+      results[test_name] = result
   return results
 
 
