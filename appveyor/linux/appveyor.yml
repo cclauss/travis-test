@@ -10,10 +10,10 @@ build: off
 # Make configs and log files available as artifacts after an Appveyor run.
 # Artifact paths need to be relative to the root of the checked out repo.
 after_test:
-- cp -r /usr/share/grr-server/lib/python2.7/site-packages/grr/var/log/ server-logs
+- sudo cp -r /usr/share/grr-server/lib/python2.7/site-packages/grr/var/log/ server-logs
 - mkdir server-configs
-- cp /usr/share/grr-server/install_data/etc/grr-server.yaml server-configs # (Default) primary server config.
-- cp /etc/grr/server.local.yaml server-configs # Server writeback.
+- sudo cp /usr/share/grr-server/install_data/etc/grr-server.yaml server-configs # (Default) primary server config.
+- sudo cp /etc/grr/server.local.yaml server-configs # Server writeback.
 
 artifacts:
 - path: server-logs/*
