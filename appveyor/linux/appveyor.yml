@@ -5,7 +5,7 @@ environment:
 
 install:
 - lsb_release -a
-- sudo ./appveyor/linux/install_latest_server_deb.sh
+- sudo -H ./appveyor/linux/install_latest_server_deb.sh
 
 artifacts:
 - path: /usr/share/grr-server/lib/python2.7/site-packages/grr/var/log/*.log
