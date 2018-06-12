@@ -1,12 +1,11 @@
 image: ubuntu
 
 environment:
-  CLOUD_SDK_REPO: "cloud-sdk-$(lsb_release -c -s)"
   GRR_ADMIN_PASS: 'e2e_tests'
 
 install:
 - lsb_release -a
-- sudo ./install_latest_grr_deb.sh
+- sudo appveyor/linux/install_latest_server_deb.sh
 
 artifacts:
 - path: /usr/share/grr-server/lib/python2.7/site-packages/grr/var/log/*.log
