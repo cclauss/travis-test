@@ -1,8 +1,11 @@
 image: ubuntu
 
+environment:
+  GRR_ADMIN_PASS: 'e2e_tests'
+
 install:
 - lsb_release -a
-- sudo -H ./appveyor/linux/install_latest_server_deb.sh
+- sudo -H GRR_ADMIN_PASS="${GRR_ADMIN_PASS}" ./appveyor/linux/install_latest_server_deb.sh
 
 # Appveyor will try to build any Visual Studio projects it finds if we do not disable this.
 build: off
@@ -14,6 +17,7 @@ after_test:
 - mkdir server-configs
 - sudo cp /usr/share/grr-server/install_data/etc/grr-server.yaml server-configs # (Default) primary server config.
 - sudo cp /etc/grr/server.local.yaml server-configs # Server writeback.
+- sudo chown -R "$(whoami)" server-logs server-configs
 
 artifacts:
 - path: server-logs/*
