@@ -18,3 +18,4 @@ if api_url:
     "StdOut": "",
     "StdErr": ""
   })
+  print("Received response: %s" % resp)
