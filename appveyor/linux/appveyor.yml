@@ -1,8 +1,5 @@
 image: ubuntu
 
-environment:
-  GRR_ADMIN_PASS: 'e2e_tests'
-
 install:
 - lsb_release -a
 - sudo -H ./appveyor/linux/install_latest_server_deb.sh
