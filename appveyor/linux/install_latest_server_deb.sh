@@ -40,5 +40,3 @@ tar xzf grr-server_*.tar.gz
 source /usr/share/grr-server/bin/activate
 pip install --no-index --find-links=grr/local_pypi grr/local_pypi/grr-response-test-*.zip
 deactivate
-
-ls /usr/share/grr-server/lib/python2.7/site-packages/grr/var/log/
