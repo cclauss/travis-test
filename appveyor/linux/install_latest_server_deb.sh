@@ -6,7 +6,7 @@
 set -ex
 
 readonly CLOUD_SDK_REPO="cloud-sdk-$(lsb_release -c -s)"
-
+readonly INITIAL_DIR="${PWD}"
 readonly DEB_TEMPDIR=/tmp/grr_deb_install
 
 if [[ -e "${DEB_TEMPDIR}" ]]; then
@@ -32,9 +32,9 @@ systemctl restart grr-server
 
 echo "Installation of server deb completed."
 
-#tar xzf grr-server_*.tar.gz
-#source /usr/share/grr-server/bin/activate
-#pip install --no-index --find-links=grr/local_pypi grr/local_pypi/grr-response-test-*.zip
-#deactivate
+tar xzf grr-server_*.tar.gz
+source /usr/share/grr-server/bin/activate
+pip install --no-index --find-links=grr/local_pypi grr/local_pypi/grr-response-test-*.zip
+deactivate
 
-cd -
+cd "${INITIAL_DIR}"
