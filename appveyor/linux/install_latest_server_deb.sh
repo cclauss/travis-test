@@ -9,7 +9,7 @@ readonly CLOUD_SDK_REPO="cloud-sdk-$(lsb_release -c -s)"
 
 # Environment vars set in the appveyor config only apply
 # for the default non-root user, so we define this here instead.
-readonly GRR_ADMIN_PASS='e2e_tests'
+# readonly GRR_ADMIN_PASS='e2e_tests'
 
 readonly DEB_TEMPDIR=/tmp/grr_deb_install
 
