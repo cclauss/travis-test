@@ -13,4 +13,6 @@ echo -e "Logging.engines: stderr,file\nLogging.verbose: True\nClient.poll_max: 5
 
 systemctl restart grr
 
-grr_end_to_end_tests --client_ids "${CLIENT_ID}" --verbose 2>&1 | tee e2e.log
+grr_end_to_end_tests --api_password "{GRR_ADMIN_PASS}" --client_ids "${CLIENT_ID}" --verbose 2>&1 | tee e2e.log
+
+# TODO(ogaro): Make sure tests actually ran.
