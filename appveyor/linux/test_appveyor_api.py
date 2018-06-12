@@ -7,7 +7,7 @@ print("Using Appveyor API url %s" % api_url)
 
 if api_url:
   tests_endpoint = urlparse.urljoin(api_url, "api/tests")
-  resp = requests.post(tests_endpoint, data={
+  resp = requests.post(tests_endpoint, json={
     "testName": "Dummy Test",
     "testFramework": "JUnit",
     "fileName": os.path.relpath(__file__),
@@ -18,4 +18,4 @@ if api_url:
     "StdOut": "",
     "StdErr": ""
   })
-  print("Received response: %s" % resp)
+  print("Received response: %s" % resp.text)
