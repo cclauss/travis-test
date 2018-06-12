@@ -30,5 +30,5 @@ if __name__ == "__main__":
         "Encountered error trying to connect to GRR API (%d tries left): %s" % (
         tries_left, e.message))
       if tries_left <= 0:
-        raise e
+        raise
     time.sleep(1)
