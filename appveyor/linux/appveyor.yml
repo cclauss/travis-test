@@ -7,3 +7,6 @@ install:
 artifacts:
 - path: /usr/share/grr-server/lib/python2.7/site-packages/grr/var/log/grr-ui.log
   name: Server Logs
+
+# Appveyor will try to build any C++ projects it finds if we do not disable this.
+build: off
