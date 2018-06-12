@@ -28,6 +28,8 @@ after_test:
 - sudo chown -R "$(whoami)" server-configs server-logs client-configs client-logs
 
 artifacts:
+- path: e2e.log
+  name: End-to-End Test Output
 - path: server-configs/*
   name: Server Configs
 - path: server-logs/*

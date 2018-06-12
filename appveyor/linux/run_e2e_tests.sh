@@ -12,3 +12,5 @@ echo "Installed GRR client [Id ${CLIENT_ID}]"
 echo -e "Logging.engines: stderr,file\nLogging.verbose: True\nClient.poll_max: 5" >> /etc/grr.local.yaml
 
 systemctl restart grr
+
+grr_end_to_end_tests --client_ids "${CLIENT_ID}" --verbose 2>&1 | tee e2e.log
