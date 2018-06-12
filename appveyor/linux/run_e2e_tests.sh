@@ -12,3 +12,5 @@ echo "Installed GRR client [Id ${CLIENT_ID}]"
 echo -e "Logging.engines: stderr,file\nLogging.verbose: True\nClient.poll_max: 5" >> /etc/grr.local.yaml
 
 systemctl restart grr
+
+appveyor AddTest "Dummy Test" -Framework JUnit -Filename test/grr_response_test/run_end_to_end_tests.py -Outcome Passed -Duration 1000 # in milliseconds
