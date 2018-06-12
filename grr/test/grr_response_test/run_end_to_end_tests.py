@@ -206,7 +206,7 @@ def RunTestsAgainstClient(grr_api, client, appveyor_tests_endpoint=None):
         text_result = "Failed"
       else:
         text_result = "Passed"
-      resp = requests.post(appveyor_tests_endpoint, json={
+      resp = requests.put(appveyor_tests_endpoint, json={
           "testName": test_name,
           #"testFramework": "JUnit",
           #"fileName": os.path.relpath(__file__),
