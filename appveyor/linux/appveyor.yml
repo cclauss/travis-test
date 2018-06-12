@@ -5,7 +5,5 @@ install:
 - sudo -H ./appveyor/linux/install_latest_server_deb.sh
 
 artifacts:
-- path: /usr/share/grr-server/lib/python2.7/site-packages/grr/var/log/*.log
+- path: /usr/share/grr-server/lib/python2.7/site-packages/grr/var/log/grr-ui.log
   name: Server Logs
-
-build: off
