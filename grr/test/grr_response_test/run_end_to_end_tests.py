@@ -129,7 +129,7 @@ def GetClients(grr_api):
           "(%d tries left): %s" % (tries_left, e.args))
       if tries_left <= 0:
         raise
-    time.sleep(5)
+    time.sleep(30)
 
 
 def ValidateAllTests():
