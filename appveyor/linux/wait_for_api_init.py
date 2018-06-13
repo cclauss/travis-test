@@ -23,12 +23,15 @@ if __name__ == "__main__":
       # Try loading all clients in the datastore.
       _ = list(grr_api.SearchClients())
       break
-    except Exception as e:
+    except requests.ConnectionError as e:
       tries_left -= 1
       # TODO(ogaro): Try logging library.
       print(
         "Encountered error trying to connect to GRR API (%d tries left): %s" % (
-        tries_left, e.message))
+        tries_left, e.args))
+      if e.args:
+        for arg in e.args:
+          print("Exception arg: %s" % arg.__class__)
       if tries_left <= 0:
         raise
     time.sleep(1)

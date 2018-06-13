@@ -40,6 +40,7 @@ class HttpConnector(connector.Connector):
     self._page_size = page_size or self.DEFAULT_PAGE_SIZE
 
     self.csrf_token = None
+    self.api_methods = {}
 
   def _GetCSRFToken(self):
     logger.debug("Fetching CSRF token from %s...", self.api_endpoint)
@@ -65,9 +66,6 @@ class HttpConnector(connector.Connector):
 
     url = "%s/%s" % (self.api_endpoint.strip("/"),
                      "api/v2/reflection/api-methods")
-    errormsg = "GET request (%s, %s, %s, %s)" % (url, headers, cookies, self.auth)
-    logger.info(errormsg)
-    raise Exception(errormsg)
     response = requests.get(
         url, headers=headers, cookies=cookies, auth=self.auth)
 
@@ -103,7 +101,7 @@ class HttpConnector(connector.Connector):
         parsed_endpoint_url.netloc, url_scheme=parsed_endpoint_url.scheme)
 
   def _InitializeIfNeeded(self):
-    if not self.csrf_token:
+    if not self.csrf_token or not self.api_methods:
       self.csrf_token = self._GetCSRFToken()
       self._FetchRoutingMap()
 
