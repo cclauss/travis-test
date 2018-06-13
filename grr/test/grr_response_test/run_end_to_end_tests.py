@@ -51,6 +51,10 @@ flags.DEFINE_bool("upload_test_binaries", True,
                   "Whether to upload executables needed by some e2e tests.")
 
 
+class E2ETestError(Exception):
+  pass
+
+
 def RunEndToEndTests():
   """Runs end-to-end tests against clients using the GRR API."""
 
@@ -107,7 +111,7 @@ def RunEndToEndTests():
 
 
 def GetClients(grr_api):
-  tries_left = 30
+  tries_left = 10
   while tries_left > 0:
     tries_left -= 1
     try:
@@ -121,15 +125,19 @@ def GetClients(grr_api):
       if not unfinished_clients:
         return target_clients
       logging.warning(
-          "Platform is unknown for the following clients: %s. Retrying...",
+          "Platform is unknown for the following clients: %s. %d tries left...",
           unfinished_clients)
+      # TODO(ogaro): Remove.
+      logging.warning("Client Data: %s", target_clients[0].data)
+      if tries_left <= 0:
+        raise E2ETestError("Timed out waiting for clients.")
     except requests.ConnectionError as e:
       logging.error(
           "Encountered error trying to connect to GRR API "
           "(%d tries left): %s" % (tries_left, e.args))
       if tries_left <= 0:
         raise
-    time.sleep(30)
+    time.sleep(5)
 
 
 def ValidateAllTests():
