@@ -11,8 +11,6 @@ MAX_RETRIES = 30
 
 
 if __name__ == "__main__":
-  time.sleep(10)
-
   # TODO(ogaro): Use pre-assigned port.
   grr_api = api.InitHttp(
       api_endpoint='http://localhost:8000',
