@@ -101,7 +101,7 @@ class HttpConnector(connector.Connector):
         parsed_endpoint_url.netloc, url_scheme=parsed_endpoint_url.scheme)
 
   def _InitializeIfNeeded(self):
-    if not self.csrf_token or not self.api_methods:
+    if not self.csrf_token:
       self.csrf_token = self._GetCSRFToken()
       self._FetchRoutingMap()
 
