@@ -15,9 +15,4 @@ systemctl restart grr
 
 grr_end_to_end_tests --api_password "${GRR_ADMIN_PASS}" --client_ids "${CLIENT_ID}" --verbose 2>&1 | tee e2e.log
 
-if [[ ! -z "$(cat e2e.log | grep requests.exceptions.ConnectionError)" ]]; then
-  echo "Transient connection error encountered while attempting to run e2e tests. Retrying..."
-  grr_end_to_end_tests --api_password "${GRR_ADMIN_PASS}" --client_ids "${CLIENT_ID}" --verbose 2>&1 | tee e2e.log
-fi
-
 # TODO(ogaro): Make sure tests actually ran.
