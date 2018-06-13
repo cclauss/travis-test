@@ -65,11 +65,12 @@ class HttpConnector(connector.Connector):
 
     url = "%s/%s" % (self.api_endpoint.strip("/"),
                      "api/v2/reflection/api-methods")
-    response = requests.get(
-        url, headers=headers, cookies=cookies, auth=self.auth)
-    errormsg = "GET response (%s, %s, %d):\n%s" % (url, headers, response.status_code, response.content)
+    errormsg = "GET request (%s, %s, %s, %s)" % (url, headers, cookies, self.auth)
     logger.info(errormsg)
     raise Exception(errormsg)
+    response = requests.get(
+        url, headers=headers, cookies=cookies, auth=self.auth)
+
     self._CheckResponseStatus(response)
 
     json_str = response.content[len(self.JSON_PREFIX):]
