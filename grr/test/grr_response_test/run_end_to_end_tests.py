@@ -61,15 +61,30 @@ def RunEndToEndTests():
   if not password:
     password = getpass.getpass(prompt="Please enter the API password for "
                                "user '%s': " % flags.FLAGS.api_user)
+
   grr_api = api.InitHttp(
       api_endpoint=flags.FLAGS.api_endpoint,
       auth=(flags.FLAGS.api_user, password))
 
   logging.info("Fetching client data from the API.")
-  target_clients = test_base.GetClientTestTargets(
-      grr_api=grr_api,
-      client_ids=flags.FLAGS.client_ids,
-      hostnames=flags.FLAGS.hostnames)
+
+  target_clients = []
+  tries_left = 30
+  while tries_left > 0:
+    try:
+      target_clients = test_base.GetClientTestTargets(
+          grr_api=grr_api,
+          client_ids=flags.FLAGS.client_ids,
+          hostnames=flags.FLAGS.hostnames)
+      break
+    except requests.ConnectionError as e:
+      tries_left -= 1
+      logging.error(
+          "Encountered error trying to connect to GRR API "
+          "(%d tries left): %s" % (tries_left, e.args))
+      if tries_left <= 0:
+        raise
+    time.sleep(1)
   if not target_clients:
     raise RuntimeError(
         "No clients to test on. Either pass --client_ids or --hostnames "

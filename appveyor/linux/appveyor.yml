@@ -13,14 +13,14 @@ install:
 build: off
 
 test_script:
-#- sudo cp grr/test/grr_response_test/run_end_to_end_tests.py /usr/share/grr-server/lib/python2.7/site-packages/grr_response_test/
+- sudo cp grr/test/grr_response_test/run_end_to_end_tests.py /usr/share/grr-server/lib/python2.7/site-packages/grr_response_test/
 #- sudo rm -f /usr/share/grr-server/lib/python2.7/site-packages/grr_api_client/connectors/http_connector.pyc
 #- sudo cp api_client/python/grr_api_client/connectors/http_connector.py /usr/share/grr-server/lib/python2.7/site-packages/grr_api_client/connectors/
 #- source /usr/share/grr-server/bin/activate
 #- python ./appveyor/linux/wait_for_api_init.py
 #- deactivate
-#- sudo -H GRR_ADMIN_PASS="${GRR_ADMIN_PASS}" ./appveyor/linux/run_e2e_tests.sh
-- ./appveyor/linux/retry_api.sh
+- sudo -H GRR_ADMIN_PASS="${GRR_ADMIN_PASS}" ./appveyor/linux/run_e2e_tests.sh
+#- ./appveyor/linux/retry_api.sh
 
 # Make configs and log files available as artifacts after an Appveyor run.
 # Artifact paths need to be relative to the root of the checked out repo.
