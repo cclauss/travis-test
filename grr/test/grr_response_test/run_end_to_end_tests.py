@@ -66,25 +66,7 @@ def RunEndToEndTests():
       api_endpoint=flags.FLAGS.api_endpoint,
       auth=(flags.FLAGS.api_user, password))
 
-  logging.info("Fetching client data from the API.")
-
-  target_clients = []
-  tries_left = 30
-  while tries_left > 0:
-    try:
-      target_clients = test_base.GetClientTestTargets(
-          grr_api=grr_api,
-          client_ids=flags.FLAGS.client_ids,
-          hostnames=flags.FLAGS.hostnames)
-      break
-    except requests.ConnectionError as e:
-      tries_left -= 1
-      logging.error(
-          "Encountered error trying to connect to GRR API "
-          "(%d tries left): %s" % (tries_left, e.args))
-      if tries_left <= 0:
-        raise
-    time.sleep(1)
+  target_clients = GetClients(grr_api)
   if not target_clients:
     raise RuntimeError(
         "No clients to test on. Either pass --client_ids or --hostnames "
@@ -122,6 +104,32 @@ def RunEndToEndTests():
       # name and right alignment for the result.
       logging.info("\t%s %s", (test_name + ":").ljust(max_test_name_len + 1),
                    res.rjust(10))
+
+
+def GetClients(grr_api):
+  tries_left = 30
+  while tries_left > 0:
+    tries_left -= 1
+    try:
+      target_clients = test_base.GetClientTestTargets(
+          grr_api=grr_api,
+          client_ids=flags.FLAGS.client_ids,
+          hostnames=flags.FLAGS.hostnames)
+      unfinished_clients = [
+        client.client_id for client in target_clients
+          if not client.data.os_info.system]
+      if not unfinished_clients:
+        return target_clients
+      logging.warning(
+          "Platform is unknown for the following clients: %s. Retrying...",
+          unfinished_clients)
+    except requests.ConnectionError as e:
+      logging.error(
+          "Encountered error trying to connect to GRR API "
+          "(%d tries left): %s" % (tries_left, e.args))
+      if tries_left <= 0:
+        raise
+    time.sleep(5)
 
 
 def ValidateAllTests():
