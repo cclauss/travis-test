@@ -103,6 +103,7 @@ class HttpConnector(connector.Connector):
   def _InitializeIfNeeded(self):
     if not self.csrf_token:
       self.csrf_token = self._GetCSRFToken()
+    if not self.api_methods:
       self._FetchRoutingMap()
 
   def _CoerceValueToQueryStringType(self, field, value):

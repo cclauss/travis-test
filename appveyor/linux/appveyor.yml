@@ -14,8 +14,7 @@ build: off
 
 test_script:
 - sudo cp grr/test/grr_response_test/run_end_to_end_tests.py /usr/share/grr-server/lib/python2.7/site-packages/grr_response_test/
-#- sudo rm -f /usr/share/grr-server/lib/python2.7/site-packages/grr_api_client/connectors/http_connector.pyc
-#- sudo cp api_client/python/grr_api_client/connectors/http_connector.py /usr/share/grr-server/lib/python2.7/site-packages/grr_api_client/connectors/
+- sudo cp api_client/python/grr_api_client/connectors/http_connector.py /usr/share/grr-server/lib/python2.7/site-packages/grr_api_client/connectors/
 #- source /usr/share/grr-server/bin/activate
 #- python ./appveyor/linux/wait_for_api_init.py
 #- deactivate

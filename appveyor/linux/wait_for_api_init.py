@@ -21,7 +21,7 @@ if __name__ == "__main__":
   while tries_left > 0:
     try:
       # Try loading all clients in the datastore.
-      _ = list(grr_api.SearchClients())
+      _ = grr_api.Client("C.f1a00f4b4fbab77d").Get()
       break
     except requests.ConnectionError as e:
       tries_left -= 1
