@@ -200,7 +200,7 @@ def RunTestsAgainstClient(grr_api, client, appveyor_tests_endpoint=None):
         "testName": test_name,
         "testFramework": "JUnit",
         "fileName": os.path.basename(inspect.getsourcefile(test.__class__)),
-        "outcome": "None",
+        "outcome": "Running",
       }
       tests_to_run[test_name] = (test, appveyor_metadata)
 
@@ -223,7 +223,7 @@ def RunTestsAgainstClient(grr_api, client, appveyor_tests_endpoint=None):
                       test_name, resp)
     """
 
-    for test_name, test, _ in tests_to_run:
+    for test_name, (test, _) in tests_to_run:
       """
       if appveyor_tests_endpoint:
         resp = requests.put(appveyor_tests_endpoint, json={
