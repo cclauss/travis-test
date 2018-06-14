@@ -43,6 +43,9 @@ flags.DEFINE_list(
     "testnames", [], "List of test cases to run. If unset we run all "
     "tests for a client's platform.")
 
+flags.DEFINE_string("default_platform", ""
+                    "Default client platform if it isn't known yet.")
+
 # We use a logging Filter to exclude noisy unwanted log output.
 flags.DEFINE_list("filenames_excluded_from_log", ["connectionpool.py"],
                   "Files whose log messages won't get printed.")
@@ -115,22 +118,10 @@ def GetClients(grr_api):
   while tries_left > 0:
     tries_left -= 1
     try:
-      target_clients = test_base.GetClientTestTargets(
+      return test_base.GetClientTestTargets(
           grr_api=grr_api,
           client_ids=flags.FLAGS.client_ids,
           hostnames=flags.FLAGS.hostnames)
-      unfinished_clients = [
-        client.client_id for client in target_clients
-          if not client.data.os_info.system]
-      if not unfinished_clients:
-        return target_clients
-      logging.warning(
-          "Platform is unknown for the following clients: %s. %d tries left...",
-          unfinished_clients, tries_left)
-      # TODO(ogaro): Remove.
-      logging.warning("Client Data: %s", target_clients[0].data)
-      if tries_left <= 0:
-        raise E2ETestError("Timed out waiting for clients.")
     except requests.ConnectionError as e:
       logging.error(
           "Encountered error trying to connect to GRR API "
@@ -170,6 +161,7 @@ def RunTestsAgainstClient(grr_api, client, appveyor_tests_endpoint=None):
   Args:
       grr_api: GRR API connection.
       client: grr_api_client.Client
+      appveyor_tests_endpoint: Appveyor API url (if running on Appveyor).
 
   Returns:
       A dict mapping test-methods to their results.
@@ -177,15 +169,21 @@ def RunTestsAgainstClient(grr_api, client, appveyor_tests_endpoint=None):
   Raises:
       RuntimeError: The client's platform isn't known to the GRR server.
   """
-  if not client.data.os_info.system:
-    raise RuntimeError("Unknown system type for client %s. Likely waiting "
-                       "on interrogate to complete." % client.client_id)
+  client_platform = client.data.os_info.system
+  if not client_platform:
+    unknown_platform_msg = ("Unknown system type for client %s. Likely waiting "
+        "on interrogate to complete." % client.client_id)
+    if flags.FLAGS.default_platform:
+      logging.warning(unknown_platform_msg)
+      client_platform = flags.FLAGS.default_platform
+    else:
+      raise E2ETestError(unknown_platform_msg)
 
   results = {}
   test_base.init_fn = lambda: (grr_api, client)
   test_runner = unittest.TextTestRunner()
   for test_case in test_base.REGISTRY.values():
-    if client.data.os_info.system not in test_case.platforms:
+    if client_platform not in test_case.platforms:
       continue
 
     test_suite = unittest.TestLoader().loadTestsFromTestCase(test_case)
@@ -197,10 +195,8 @@ def RunTestsAgainstClient(grr_api, client, appveyor_tests_endpoint=None):
           test_name not in flags.FLAGS.testnames):
         logging.debug("Skipping test: %s", test_name)
         continue
-      logging.info("Running %s on %s (%s: %s, %s, %s)", test_name,
-                   client.client_id, client.data.os_info.fqdn,
-                   client.data.os_info.system, client.data.os_info.version,
-                   client.data.os_info.machine)
+      logging.info("Running %s on %s (%s)", test_name, client.client_id,
+                   client_platform)
       tests_to_run[test_name] = test
       if appveyor_tests_endpoint:
         resp = requests.post(appveyor_tests_endpoint, json={
