@@ -204,15 +204,17 @@ def RunTestsAgainstClient(grr_api, client, appveyor_tests_endpoint=None):
         "testName": test_name,
         "testFramework": "JUnit",
         "fileName": os.path.basename(inspect.getsourcefile(test.__class__)),
-        "outcome": "Running",
+        "outcome": "None",
       }
       tests_to_run[test_name] = (test, appveyor_metadata)
 
     tests_to_run = sorted(tests_to_run.iteritems())
     if appveyor_tests_endpoint:
       test_metadata = [metadata for _, (_, metadata) in tests_to_run]
-      requests.post(urlparse.urljoin(appveyor_tests_endpoint, "batch"),
+      resp = requests.post(urlparse.urljoin(appveyor_tests_endpoint, "batch"),
                     json=test_metadata)
+      logging.debug("Added all tests to Appveyor Tests API. Response: %s",
+                    resp)
 
     """
     if appveyor_tests_endpoint:
