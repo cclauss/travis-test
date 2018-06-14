@@ -2,6 +2,7 @@
 """Helper script for running end-to-end tests."""
 
 import getpass
+import inspect
 import logging
 import os
 import requests
@@ -195,38 +196,30 @@ def RunTestsAgainstClient(grr_api, client, appveyor_tests_endpoint=None):
           test_name not in flags.FLAGS.testnames):
         logging.debug("Skipping test: %s", test_name)
         continue
-      logging.info("Running %s on %s (%s)", test_name, client.client_id,
-                   client_platform)
       tests_to_run[test_name] = test
-      if appveyor_tests_endpoint:
+
+    tests_to_run = sorted(tests_to_run.iteritems())
+    if appveyor_tests_endpoint:
+      for test_name, test in tests_to_run:
         resp = requests.post(appveyor_tests_endpoint, json={
           "testName": test_name,
           "testFramework": "JUnit",
-          "fileName": os.path.relpath(__file__),
-          #"outcome": "None",
-          #"durationMilliseconds": "1200",
-          #"ErrorMessage": "",
-          #"ErrorStackTrace": "",
-          #"StdOut": "",
-          #"StdErr": ""
+          "fileName": os.path.basename(inspect.getsourcefile(test.__class__)),
+          "outcome": "None",
         })
         logging.debug("Added %s to Appveyor Tests API. Response: %s",
                       test_name, resp)
 
-    for test_name, test in tests_to_run.iteritems():
+    for test_name, test in tests_to_run:
       if appveyor_tests_endpoint:
         resp = requests.put(appveyor_tests_endpoint, json={
           "testName": test_name,
-          #"testFramework": "JUnit",
-          #"fileName": os.path.relpath(__file__),
           "outcome": "Running",
-          #"ErrorMessage": "",
-          #"ErrorStackTrace": "",
-          #"StdOut": "",
-          #"StdErr": ""
         })
         logging.debug("Changed status of %s to RUNNING. Response: %s",
                       test_name, resp)
+      logging.info("Running %s on %s (%s)", test_name, client.client_id,
+                   client_platform)
       start_time = time.time()
       result = test_runner.run(test)
       millis_elapsed = int((time.time() - start_time) * 1000)
@@ -238,14 +231,8 @@ def RunTestsAgainstClient(grr_api, client, appveyor_tests_endpoint=None):
           text_result = "Passed"
         resp = requests.put(appveyor_tests_endpoint, json={
             "testName": test_name,
-            #"testFramework": "JUnit",
-            #"fileName": os.path.relpath(__file__),
             "outcome": text_result,
             "durationMilliseconds": str(millis_elapsed),
-            #"ErrorMessage": "",
-            #"ErrorStackTrace": "",
-            #"StdOut": "",
-            #"StdErr": ""
           })
         logging.debug("Set final status of %s. Response: %s", test_name, resp)
       results[test_name] = result
