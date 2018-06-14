@@ -214,37 +214,40 @@ def RunTestsAgainstClient(grr_api, client, appveyor_tests_endpoint=None):
                       test_name, resp)
 
     for test_name, test in tests_to_run.iteritems():
-      resp = requests.put(appveyor_tests_endpoint, json={
-        "testName": test_name,
-        #"testFramework": "JUnit",
-        #"fileName": os.path.relpath(__file__),
-        "outcome": "Running",
-        #"ErrorMessage": "",
-        #"ErrorStackTrace": "",
-        #"StdOut": "",
-        #"StdErr": ""
-      })
-      logging.debug("Changed status of %s to RUNNING. Response: %s",
-                    test_name, resp)
-      start_time = time.time()
-      result = test_runner.run(test)
-      millis_elapsed = int((time.time() - start_time) * 1000)
-      if result.errors or result.failures:
-        text_result = "Failed"
-      else:
-        text_result = "Passed"
-      resp = requests.put(appveyor_tests_endpoint, json={
+      if appveyor_tests_endpoint:
+        resp = requests.put(appveyor_tests_endpoint, json={
           "testName": test_name,
           #"testFramework": "JUnit",
           #"fileName": os.path.relpath(__file__),
-          "outcome": text_result,
-          "durationMilliseconds": str(millis_elapsed),
+          "outcome": "Running",
           #"ErrorMessage": "",
           #"ErrorStackTrace": "",
           #"StdOut": "",
           #"StdErr": ""
         })
-      logging.debug("Set final status of %s. Response: %s", test_name, resp)
+        logging.debug("Changed status of %s to RUNNING. Response: %s",
+                      test_name, resp)
+      start_time = time.time()
+      result = test_runner.run(test)
+      millis_elapsed = int((time.time() - start_time) * 1000)
+
+      if appveyor_tests_endpoint:
+        if result.errors or result.failures:
+          text_result = "Failed"
+        else:
+          text_result = "Passed"
+        resp = requests.put(appveyor_tests_endpoint, json={
+            "testName": test_name,
+            #"testFramework": "JUnit",
+            #"fileName": os.path.relpath(__file__),
+            "outcome": text_result,
+            "durationMilliseconds": str(millis_elapsed),
+            #"ErrorMessage": "",
+            #"ErrorStackTrace": "",
+            #"StdOut": "",
+            #"StdErr": ""
+          })
+        logging.debug("Set final status of %s. Response: %s", test_name, resp)
       results[test_name] = result
   return results
 

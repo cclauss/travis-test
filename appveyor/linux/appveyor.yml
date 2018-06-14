@@ -19,7 +19,7 @@ test_script:
 #- source /usr/share/grr-server/bin/activate
 #- python ./appveyor/linux/wait_for_api_init.py
 #- deactivate
-- sudo -H GRR_ADMIN_PASS="${GRR_ADMIN_PASS}" ./appveyor/linux/run_e2e_tests.sh
+- sudo -H GRR_ADMIN_PASS="${GRR_ADMIN_PASS}" APPVEYOR_API_URL="${APPVEYOR_API_URL}" ./appveyor/linux/run_e2e_tests.sh
 #- ./appveyor/linux/retry_api.sh
 
 # Make configs and log files available as artifacts after an Appveyor run.
