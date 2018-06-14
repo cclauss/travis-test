@@ -196,9 +196,21 @@ def RunTestsAgainstClient(grr_api, client, appveyor_tests_endpoint=None):
           test_name not in flags.FLAGS.testnames):
         logging.debug("Skipping test: %s", test_name)
         continue
-      tests_to_run[test_name] = test
+      appveyor_metadata = {
+        "testName": test_name,
+        "testFramework": "JUnit",
+        "fileName": os.path.basename(inspect.getsourcefile(test.__class__)),
+        "outcome": "None",
+      }
+      tests_to_run[test_name] = (test, appveyor_metadata)
 
     tests_to_run = sorted(tests_to_run.iteritems())
+    if appveyor_tests_endpoint:
+      test_metadata = [x[1] for _, x in tests_to_run]
+      requests.post(urlparse.urljoin(appveyor_tests_endpoint, "batch"),
+                    json=test_metadata)
+
+    """
     if appveyor_tests_endpoint:
       for test_name, test in tests_to_run:
         resp = requests.post(appveyor_tests_endpoint, json={
@@ -209,12 +221,9 @@ def RunTestsAgainstClient(grr_api, client, appveyor_tests_endpoint=None):
         })
         logging.debug("Added %s to Appveyor Tests API. Response: %s",
                       test_name, resp)
-        requests.put(appveyor_tests_endpoint, json={
-          "testName": test_name,
-          "outcome": "Running",
-        })
+    """
 
-    for test_name, test in tests_to_run:
+    for test_name, test, _ in tests_to_run:
       """
       if appveyor_tests_endpoint:
         resp = requests.put(appveyor_tests_endpoint, json={
