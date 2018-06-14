@@ -241,7 +241,7 @@ def RunTestsAgainstClient(grr_api, client, appveyor_tests_endpoint=None):
           text_result = "Failed"
           # Unexpected errors.
           errors = "\n".join([msg for _, msg in result.errors])
-        if result.falures:
+        if result.failures:
           text_result = "Failed"
           # Assert failures.
           failures = "\n".join([msg for _, msg in result.failures])
