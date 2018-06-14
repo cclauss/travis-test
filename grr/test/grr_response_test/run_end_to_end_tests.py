@@ -204,6 +204,7 @@ def RunTestsAgainstClient(grr_api, client, appveyor_tests_endpoint=None):
 
     tests_to_run = sorted(tests_to_run.iteritems())
 
+    """
     if appveyor_tests_endpoint:
       for test_name, test in tests_to_run:
         resp = requests.post(appveyor_tests_endpoint, json={
@@ -214,6 +215,7 @@ def RunTestsAgainstClient(grr_api, client, appveyor_tests_endpoint=None):
         })
         logging.debug("Added %s to Appveyor Tests API. Response: %s",
                       test_name, resp)
+    """
 
     for test_name, test in tests_to_run:
       """
@@ -232,14 +234,25 @@ def RunTestsAgainstClient(grr_api, client, appveyor_tests_endpoint=None):
       millis_elapsed = int((time.time() - start_time) * 1000)
 
       if appveyor_tests_endpoint:
-        if result.errors or result.failures:
+        errors = ""
+        failures = ""
+        text_result = "Passed"
+        if result.errors:
           text_result = "Failed"
-        else:
-          text_result = "Passed"
+          # Unexpected errors.
+          errors = "\n".join([msg for _, msg in result.errors])
+        if result.falures:
+          text_result = "Failed"
+          # Assert failures.
+          failures = "\n".join([msg for _, msg in result.failures])
         resp = requests.post(appveyor_tests_endpoint, json={
             "testName": test_name,
+            "testFramework": "JUnit",
             "outcome": text_result,
             "durationMilliseconds": str(millis_elapsed),
+            "fileName": os.path.basename(inspect.getsourcefile(test.__class__)),
+            "ErrorMessage": failures,
+            "ErrorStackTrace": errors,
           })
         logging.debug("Set final status of %s. Response: %s", test_name, resp)
       results[test_name] = result
