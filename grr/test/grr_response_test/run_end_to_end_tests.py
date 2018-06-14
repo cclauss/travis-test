@@ -111,7 +111,7 @@ def RunEndToEndTests():
 
 def GetClient(grr_api):
   # TODO(ogaro): Make wait time a flag.
-  tries_left = 12
+  tries_left = 10
   interrogate_launched = False
   while tries_left > 0:
     tries_left -= 1
@@ -137,7 +137,7 @@ def GetClient(grr_api):
           "(%d tries left): %s" % (tries_left, e.args))
       if tries_left <= 0:
         raise
-    time.sleep(10)
+    time.sleep(30)
 
 
 def ValidateAllTests():
