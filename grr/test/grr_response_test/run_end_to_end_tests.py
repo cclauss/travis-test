@@ -54,6 +54,9 @@ flags.DEFINE_list("filenames_excluded_from_log", ["connectionpool.py"],
 flags.DEFINE_bool("upload_test_binaries", True,
                   "Whether to upload executables needed by some e2e tests.")
 
+flags.DEFINE_integer("flow_timeout_secs", 120,
+                     "How long to wait for flows to finish.")
+
 
 class E2ETestError(Exception):
   pass
@@ -70,6 +73,7 @@ def RunEndToEndTests():
     password = getpass.getpass(prompt="Please enter the API password for "
                                "user '%s': " % flags.FLAGS.api_user)
 
+  test_base.EndToEndTest.RETRY_TOTAL_TIMEOUT = flags.FLAGS.flow_timeout_secs
   grr_api = api.InitHttp(
       api_endpoint=flags.FLAGS.api_endpoint,
       auth=(flags.FLAGS.api_user, password))
@@ -206,7 +210,7 @@ def RunTestsAgainstClient(grr_api, client, appveyor_tests_endpoint=None):
 
     tests_to_run = sorted(tests_to_run.iteritems())
     if appveyor_tests_endpoint:
-      test_metadata = [x[1] for _, x in tests_to_run]
+      test_metadata = [metadata for _, (_, metadata) in tests_to_run]
       requests.post(urlparse.urljoin(appveyor_tests_endpoint, "batch"),
                     json=test_metadata)
 
