@@ -36,14 +36,13 @@ flags.DEFINE_string("api_user", "admin", "Username for GRR API.")
 
 flags.DEFINE_string("api_password", "", "Password for GRR API.")
 
-flags.DEFINE_list("client_ids", [], "List of client ids to test.")
-
-flags.DEFINE_list("hostnames", [], "List of client hostnames to test.")
+flags.DEFINE_string("client_id", "", "Id for client to run tests against.")
 
 flags.DEFINE_list(
     "testnames", [], "List of test cases to run. If unset we run all "
     "tests for a client's platform.")
 
+# TODO(ogaro): Remove.
 flags.DEFINE_string("default_platform", "",
                     "Default client platform if it isn't known yet.")
 
@@ -65,6 +64,9 @@ class E2ETestError(Exception):
 def RunEndToEndTests():
   """Runs end-to-end tests against clients using the GRR API."""
 
+  if not flags.FLAGS.client_id:
+    raise ValueError("--client_id must be provided.")
+
   ValidateAllTests()
 
   logging.info("Connecting to API at %s", flags.FLAGS.api_endpoint)
@@ -78,11 +80,7 @@ def RunEndToEndTests():
       api_endpoint=flags.FLAGS.api_endpoint,
       auth=(flags.FLAGS.api_user, password))
 
-  target_clients = GetClients(grr_api)
-  if not target_clients:
-    raise RuntimeError(
-        "No clients to test on. Either pass --client_ids or --hostnames "
-        "or check that corresponding clients checked in recently.")
+  client = GetClient(grr_api)
 
   # Make sure binaries required by tests are uploaded to the datastore.
   if flags.FLAGS.upload_test_binaries:
@@ -91,49 +89,55 @@ def RunEndToEndTests():
     UploadBinaryIfAbsent(server_paths, "hello", "linux/test/hello")
     UploadBinaryIfAbsent(server_paths, "hello.exe", "windows/test/hello.exe")
 
-  results_by_client = {}
-  max_test_name_len = 0
-
   appveyor_tests_endpoint = None
   appveyor_api_url = os.environ.get("APPVEYOR_API_URL", None)
   if appveyor_api_url:
     appveyor_tests_endpoint = urlparse.urljoin(appveyor_api_url, "api/tests")
 
-  logging.info("Running tests against %d clients...", len(target_clients))
-  for client in target_clients:
-    results_by_client[client.client_id] = RunTestsAgainstClient(
-        grr_api, client, appveyor_tests_endpoint=appveyor_tests_endpoint)
-    for test_name in results_by_client[client.client_id]:
-      max_test_name_len = max(max_test_name_len, len(test_name))
+  results = RunTestsAgainstClient(
+      grr_api, client, appveyor_tests_endpoint=appveyor_tests_endpoint)
+  max_test_name_len = max([len(test_name) for test_name in results])
+  logging.info("Results for %s:", client.client_id)
 
-  for client_urn, results in results_by_client.iteritems():
-    logging.info("Results for %s:", client_urn)
-    for test_name, result in sorted(results.items()):
-      res = "[  OK  ]"
-      if result.errors or result.failures:
-        res = "[ FAIL ]"
-      # Print a summary line for the test, using left-alignment for the test
-      # name and right alignment for the result.
-      logging.info("\t%s %s", (test_name + ":").ljust(max_test_name_len + 1),
-                   res.rjust(10))
+  for test_name, result in sorted(results.iteritems()):
+    pretty_result = "[  OK  ]"
+    if result.errors or result.failures:
+      pretty_result = "[ FAIL ]"
+    # Print a summary line for the test, using left-alignment for the test
+    # name and right alignment for the result.
+    logging.info("\t%s %s", (test_name + ":").ljust(max_test_name_len + 1),
+                 pretty_result.rjust(10))
 
 
-def GetClients(grr_api):
-  tries_left = 10
+def GetClient(grr_api):
+  # TODO(ogaro): Make wait time a flag.
+  tries_left = 12
+  interrogate_launched = False
   while tries_left > 0:
     tries_left -= 1
     try:
-      return test_base.GetClientTestTargets(
-          grr_api=grr_api,
-          client_ids=flags.FLAGS.client_ids,
-          hostnames=flags.FLAGS.hostnames)
+      client = grr_api.Client(flags.FLAGS.client_id).Get()
+      if client.data.os_info.system:
+        return client
+      logging.warning(
+          "Platform for %s is unknown. %d tries left...", client.client_id,
+          tries_left)
+      if not interrogate_launched:
+        interrogate_flow = client.CreateFlow(
+            name="Interrogate",
+            runner_args=grr_api.types.CreateFlowRunnerArgs())
+        interrogate_launched = True
+        logging.info("Launched Interrogate flow (%s) to retrieve system info "
+                     "from %s.", interrogate_flow.flow_id, client.client_id)
+      if tries_left <= 0:
+        raise E2ETestError("Timed out waiting for client.")
     except requests.ConnectionError as e:
       logging.error(
           "Encountered error trying to connect to GRR API "
           "(%d tries left): %s" % (tries_left, e.args))
       if tries_left <= 0:
         raise
-    time.sleep(5)
+    time.sleep(10)
 
 
 def ValidateAllTests():
@@ -187,7 +191,8 @@ def RunTestsAgainstClient(grr_api, client, appveyor_tests_endpoint=None):
   results = {}
   test_base.init_fn = lambda: (grr_api, client)
   test_runner = unittest.TextTestRunner()
-  for test_case in test_base.REGISTRY.values():
+  for test_case in sorted(
+      test_base.REGISTRY.values(), key=lambda tc: tc.__class__.__name__):
     if client_platform not in test_case.platforms:
       continue
 
@@ -204,31 +209,7 @@ def RunTestsAgainstClient(grr_api, client, appveyor_tests_endpoint=None):
 
     tests_to_run = sorted(tests_to_run.iteritems())
 
-    """
-    if appveyor_tests_endpoint:
-      for test_name, test in tests_to_run:
-        resp = requests.post(appveyor_tests_endpoint, json={
-          "testName": test_name,
-          "testFramework": "NUnit",
-          "fileName": os.path.basename(inspect.getsourcefile(test.__class__)),
-          "outcome": "None",
-        })
-        logging.debug("Added %s to Appveyor Tests API. Response: %s",
-                      test_name, resp)
-    """
-
     for test_name, test in tests_to_run:
-      """
-      if appveyor_tests_endpoint:
-        resp = requests.put(appveyor_tests_endpoint, json={
-          "testName": test_name,
-          "outcome": "Running",
-        })
-        logging.debug("Changed status of %s to RUNNING. Response: %s",
-                      test_name, resp)
-      logging.info("Running %s on %s (%s)", test_name, client.client_id,
-                   client_platform)
-      """
       start_time = time.time()
       result = test_runner.run(test)
       millis_elapsed = int((time.time() - start_time) * 1000)
