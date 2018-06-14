@@ -43,7 +43,7 @@ flags.DEFINE_list(
     "testnames", [], "List of test cases to run. If unset we run all "
     "tests for a client's platform.")
 
-flags.DEFINE_string("default_platform", ""
+flags.DEFINE_string("default_platform", "",
                     "Default client platform if it isn't known yet.")
 
 # We use a logging Filter to exclude noisy unwanted log output.
