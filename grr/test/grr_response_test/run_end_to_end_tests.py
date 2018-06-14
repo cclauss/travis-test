@@ -208,7 +208,7 @@ def RunTestsAgainstClient(grr_api, client, appveyor_tests_endpoint=None):
       for test_name, test in tests_to_run:
         resp = requests.post(appveyor_tests_endpoint, json={
           "testName": test_name,
-          "testFramework": "JUnit",
+          "testFramework": "NUnit",
           "fileName": os.path.basename(inspect.getsourcefile(test.__class__)),
           "outcome": "None",
         })
