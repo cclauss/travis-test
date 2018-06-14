@@ -209,8 +209,13 @@ def RunTestsAgainstClient(grr_api, client, appveyor_tests_endpoint=None):
         })
         logging.debug("Added %s to Appveyor Tests API. Response: %s",
                       test_name, resp)
+        requests.put(appveyor_tests_endpoint, json={
+          "testName": test_name,
+          "outcome": "Running",
+        })
 
     for test_name, test in tests_to_run:
+      """
       if appveyor_tests_endpoint:
         resp = requests.put(appveyor_tests_endpoint, json={
           "testName": test_name,
@@ -220,6 +225,7 @@ def RunTestsAgainstClient(grr_api, client, appveyor_tests_endpoint=None):
                       test_name, resp)
       logging.info("Running %s on %s (%s)", test_name, client.client_id,
                    client_platform)
+      """
       start_time = time.time()
       result = test_runner.run(test)
       millis_elapsed = int((time.time() - start_time) * 1000)
