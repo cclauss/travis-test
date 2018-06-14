@@ -126,7 +126,7 @@ def GetClients(grr_api):
         return target_clients
       logging.warning(
           "Platform is unknown for the following clients: %s. %d tries left...",
-          unfinished_clients)
+          unfinished_clients, tries_left)
       # TODO(ogaro): Remove.
       logging.warning("Client Data: %s", target_clients[0].data)
       if tries_left <= 0:
