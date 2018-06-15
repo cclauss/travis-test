@@ -8,8 +8,12 @@ import time
 
 import unittest
 
+from grr.lib import flags
 from grr_api_client import errors
 
+
+flags.DEFINE_integer("flow_timeout_secs", 650,
+                     "How long to wait for flows to finish.")
 
 class Error(Exception):
   """Base class for end-to-end tests exceptions."""
@@ -150,7 +154,7 @@ class EndToEndTest(unittest.TestCase):
     ALL = [LINUX, WINDOWS, DARWIN]
 
   RETRY_DELAY = 1
-  RETRY_TOTAL_TIMEOUT = 650
+
   # How long after flow is marked complete we should expect results to be
   # available in the collection. This is essentially how quickly we expect
   # results to be available to users in the UI.
@@ -185,10 +189,10 @@ class EndToEndTest(unittest.TestCase):
 
       time.sleep(self.RETRY_DELAY)
       total_time += self.RETRY_DELAY
-      if total_time >= self.RETRY_TOTAL_TIMEOUT:
-        raise RunFlowAndWaitError(
-            "Flow hasn't finished in %d seconds." % self.RETRY_TOTAL_TIMEOUT,
-            flow)
+      if total_time >= flags.FLAGS.flow_timeout_secs:
+        raise RunFlowAndWaitError("Flow hasn't finished in %d "
+                                  "seconds." % flags.FLAGS.flow_timeout_secs,
+                                  flow)
 
     if flow.data.state == flow.data.State.Value("ERROR"):
       raise RunFlowAndWaitError(

@@ -3,7 +3,7 @@ image: ubuntu
 # TODO(ogaro): Ask Appveyor to assign ports.
 environment:
   GRR_ADMIN_PASS: 'e2e_tests'
-  APPVEYOR_SSH_KEY: 'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDSsNjbcS6GuKxH/exANMX08Bp2DNeiejq2JslT7QXB+TtRYml2p/vemMVnozxLQ/Vso3HdpuO+Pa35uAHb4VHTagkIHRZ1BX4smIxgC9PO6ewA/OvskTKhAOGxyEfxw3aCOecij6tMd+JsVc0TKd86s8xLPW7dOqhDIn0Te+pFlolQV5G/PRZyd3YfxfIpGz4DcdsYmpsh9FiUQEyem1ydEkmMU7lxo1HkZPl654gpG5TRMQDwKdO2OCPVlsnNrfByQ8WJs3YmNjOeTHZSAt0soqVK6aRezieFjUYNiMpTdcEan+PDVvljN/0S2IJcz+Wbm6v7jAtRc09kmaggLBIh denver@ogaro.net'
+  #APPVEYOR_SSH_KEY: 'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDSsNjbcS6GuKxH/exANMX08Bp2DNeiejq2JslT7QXB+TtRYml2p/vemMVnozxLQ/Vso3HdpuO+Pa35uAHb4VHTagkIHRZ1BX4smIxgC9PO6ewA/OvskTKhAOGxyEfxw3aCOecij6tMd+JsVc0TKd86s8xLPW7dOqhDIn0Te+pFlolQV5G/PRZyd3YfxfIpGz4DcdsYmpsh9FiUQEyem1ydEkmMU7lxo1HkZPl654gpG5TRMQDwKdO2OCPVlsnNrfByQ8WJs3YmNjOeTHZSAt0soqVK6aRezieFjUYNiMpTdcEan+PDVvljN/0S2IJcz+Wbm6v7jAtRc09kmaggLBIh denver@ogaro.net'
 
 install:
 - lsb_release -a
@@ -16,6 +16,8 @@ build: off
 test_script:
 - sudo cp grr/test/grr_response_test/run_end_to_end_tests.py /usr/share/grr-server/lib/python2.7/site-packages/grr_response_test/
 - sudo cp api_client/python/grr_api_client/connectors/http_connector.py /usr/share/grr-server/lib/python2.7/site-packages/grr_api_client/connectors/
+- sudo cp grr/test/grr_response_test/end_to_end_tests/test_base.py /usr/share/grr-server/lib/python2.7/site-packages/grr_response_test/end_to_end_tests/
+- sudo cp grr/test/grr_response_test/end_to_end_tests/runner.py /usr/share/grr-server/lib/python2.7/site-packages/grr_response_test/end_to_end_tests/
 #- source /usr/share/grr-server/bin/activate
 #- python ./appveyor/linux/wait_for_api_init.py
 #- deactivate
@@ -48,6 +50,6 @@ artifacts:
 - path: client-logs/*
   name: Client Logs
 
-on_finish:
-  - export APPVEYOR_SSH_BLOCK=true
-  - curl -sflL 'https://raw.githubusercontent.com/appveyor/ci/master/scripts/enable-ssh.sh' | bash -e -
+#on_finish:
+#  - export APPVEYOR_SSH_BLOCK=true
+#  - curl -sflL 'https://raw.githubusercontent.com/appveyor/ci/master/scripts/enable-ssh.sh' | bash -e -
