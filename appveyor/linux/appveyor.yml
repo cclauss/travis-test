@@ -3,7 +3,7 @@ image: ubuntu
 # TODO(ogaro): Ask Appveyor to assign ports.
 environment:
   GRR_ADMIN_PASS: 'e2e_tests'
-  #APPVEYOR_SSH_KEY: 'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDSsNjbcS6GuKxH/exANMX08Bp2DNeiejq2JslT7QXB+TtRYml2p/vemMVnozxLQ/Vso3HdpuO+Pa35uAHb4VHTagkIHRZ1BX4smIxgC9PO6ewA/OvskTKhAOGxyEfxw3aCOecij6tMd+JsVc0TKd86s8xLPW7dOqhDIn0Te+pFlolQV5G/PRZyd3YfxfIpGz4DcdsYmpsh9FiUQEyem1ydEkmMU7lxo1HkZPl654gpG5TRMQDwKdO2OCPVlsnNrfByQ8WJs3YmNjOeTHZSAt0soqVK6aRezieFjUYNiMpTdcEan+PDVvljN/0S2IJcz+Wbm6v7jAtRc09kmaggLBIh denver@ogaro.net'
+  APPVEYOR_SSH_KEY: 'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDSsNjbcS6GuKxH/exANMX08Bp2DNeiejq2JslT7QXB+TtRYml2p/vemMVnozxLQ/Vso3HdpuO+Pa35uAHb4VHTagkIHRZ1BX4smIxgC9PO6ewA/OvskTKhAOGxyEfxw3aCOecij6tMd+JsVc0TKd86s8xLPW7dOqhDIn0Te+pFlolQV5G/PRZyd3YfxfIpGz4DcdsYmpsh9FiUQEyem1ydEkmMU7lxo1HkZPl654gpG5TRMQDwKdO2OCPVlsnNrfByQ8WJs3YmNjOeTHZSAt0soqVK6aRezieFjUYNiMpTdcEan+PDVvljN/0S2IJcz+Wbm6v7jAtRc09kmaggLBIh denver@ogaro.net'
 
 install:
 - lsb_release -a
@@ -50,6 +50,6 @@ artifacts:
 - path: client-logs/*
   name: Client Logs
 
-#on_finish:
-#  - export APPVEYOR_SSH_BLOCK=true
-#  - curl -sflL 'https://raw.githubusercontent.com/appveyor/ci/master/scripts/enable-ssh.sh' | bash -e -
+on_finish:
+- export APPVEYOR_SSH_BLOCK=true
+- curl -sflL 'https://raw.githubusercontent.com/appveyor/ci/master/scripts/enable-ssh.sh' | bash -e -

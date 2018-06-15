@@ -20,13 +20,10 @@ systemctl restart grr
 
 grr_end_to_end_tests --api_password "${GRR_ADMIN_PASS}" --client_id "${CLIENT_ID}" --flow_timeout_secs 60 --verbose 2>&1 | tee e2e.log
 
-SUCCESS_RESULT='[  OK  ]'
-FAILURE_RESULT='[ FAIL ]'
-
-if [[ ! -z "$(cat e2e.log | grep ${FAILURE_RESULT})" ]]; then
+if [[ ! -z "$(cat e2e.log | grep -F '[ FAIL ]')" ]]; then
   fatal 'End-to-end tests failed.'
 fi
 
-if [[ -z "$(cat e2e.log | grep ${SUCCESS_RESULT})" ]]; then
-  fatal "Expected to find at least one passing test in test log. End-to-end tests probably didn't run."
+if [[ -z "$(cat e2e.log | grep -F '[  OK  ]')" ]]; then
+  fatal "Expected to find at least one passing test in the test log. It is possible no tests actually ran."
 fi
