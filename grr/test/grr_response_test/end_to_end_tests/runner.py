@@ -34,16 +34,19 @@ class E2ETestRunner(object):
   be streamed to Appveyor, and will be visible in the UI.
   """
 
+  SUCCESS_RESULT = "[  OK  ]"
+  FAILURE_RESULT = "[ FAIL ]"
+
   def __init__(self, api_endpoint="", api_user="", api_password="",
       whitelisted_tests=None, upload_test_binaries=True,
-      client_retry_period_secs=30, client_retry_deadline_secs=500):
+      api_retry_period_secs=30, api_retry_deadline_secs=500):
     self._api_endpoint = api_endpoint
     self._api_user = api_user
     self._api_password = api_password
     self._whitelisted_tests = whitelisted_tests
     self._upload_test_binaries = upload_test_binaries
-    self._client_retry_period_secs=client_retry_period_secs
-    self._client_retry_deadline_secs=client_retry_deadline_secs
+    self._api_retry_period_secs = api_retry_period_secs
+    self._api_retry_deadline_secs = api_retry_deadline_secs
     self._grr_api = None
     self._appveyor_tests_endpoint = ""
 
@@ -67,12 +70,28 @@ class E2ETestRunner(object):
 
     # Make sure binaries required by tests are uploaded to the datastore.
     if self._upload_test_binaries:
-      api_response = self._grr_api._context.SendRequest("ListGrrBinaries", None)
-      server_paths = {item.path for item in api_response.items}
+      server_paths = self._GetUploadedBinaries()
       if "hello" not in server_paths:
         self._UploadBinary("hello", "linux/test/hello")
       if "hello.exe" not in server_paths:
         self._UploadBinary("hello.exe", "windows/test/hello.exe")
+
+  def _GetUploadedBinaries(self):
+    start_time = time.time()
+    while True:
+      try:
+        api_response = self._grr_api._context.SendRequest(
+            "ListGrrBinaries", None)
+        return {item.path for item in api_response.items}
+      except requests.ConnectionError as e:
+        if time.time() - start_time > self._api_retry_deadline_secs:
+          logging.error("Timeout of %d seconds exceeded.",
+                        self._api_retry_deadline_secs)
+          raise
+        logging.error(
+            "Encountered error trying to connect to GRR API: %s" % e.args)
+      logging.info("Retrying in %d seconds...", self._api_retry_period_secs)
+      time.sleep(self._api_retry_period_secs)
 
   def _UploadBinary(self, bin_name, server_path):
     """Uploads a binary from the GRR installation dir to the datastore."""
@@ -134,9 +153,9 @@ class E2ETestRunner(object):
     """
     start_time = time.time()
     def DeadlineExceeded():
-      return time.time() - start_time > self._client_retry_deadline_secs
+      return time.time() - start_time > self._api_retry_deadline_secs
     interrogate_launched = False
-    while not DeadlineExceeded():
+    while True:
       try:
         client = self._grr_api.Client(client_id).Get()
         if client.data.os_info.system:
@@ -144,7 +163,7 @@ class E2ETestRunner(object):
         if DeadlineExceeded():
           raise E2ETestError(
               "Timeout of %d seconds exceeded for %s.",
-              self._client_retry_deadline_secs, client.client_id)
+              self._api_retry_deadline_secs, client.client_id)
         logging.warning(
             "Platform for %s is not yet known to GRR.", client.client_id)
         if not interrogate_launched:
@@ -159,8 +178,8 @@ class E2ETestRunner(object):
           raise
         logging.error(
             "Encountered error trying to connect to GRR API: %s" % e.args)
-      logging.info("Retrying in %d seconds...", self._client_retry_period_secs)
-      time.sleep(self._client_retry_period_secs)
+      logging.info("Retrying in %d seconds...", self._api_retry_period_secs)
+      time.sleep(self._api_retry_period_secs)
 
   def _GetApplicableTests(self, client):
     """Returns all e2e test methods that should be run against the client."""
@@ -183,14 +202,15 @@ class E2ETestRunner(object):
     """Summarizes test results for display in a terminal."""
     report_lines = []
     max_test_name_len = max([len(test_name) for test_name in results_dict])
-    report_lines.append("Results for %s:", client_id)
+    report_lines.append("Results for %s:" % client_id)
     for test_name, result in results_dict.iteritems():
-      pretty_result = "[  OK  ]"
+      pretty_result = self.SUCCESS_RESULT
       if result.errors or result.failures:
-        pretty_result = "[ FAIL ]"
+        pretty_result = self.FAILURE_RESULT
       # Print a summary line for the test, using left-alignment for the test
       # name and right alignment for the result.
       report_lines.append(
-          "\t%s %s", (test_name + ":").ljust(max_test_name_len + 1),
-          pretty_result.rjust(10))
+          "\t%s %s" % (
+              (test_name + ":").ljust(max_test_name_len + 1),
+              pretty_result.rjust(10)))
     return report_lines
