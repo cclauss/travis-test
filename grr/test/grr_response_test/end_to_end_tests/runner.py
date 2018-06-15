@@ -57,6 +57,7 @@ class E2ETestRunner(object):
     """
     appveyor_api_url = os.environ.get("APPVEYOR_API_URL", None)
     if appveyor_api_url:
+      logging.info("Using Appveyor API at %s", appveyor_api_url)
       self._appveyor_tests_endpoint = urlparse.urljoin(
           appveyor_api_url, "api/tests")
 
