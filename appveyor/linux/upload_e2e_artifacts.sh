@@ -14,5 +14,5 @@ sudo chown -R "$(whoami)" server-configs server-logs client-configs client-logs
 appveyor PushArtifact e2e.log -DeploymentName 'Test Output'
 
 for cfg in "$(ls server-configs)"; do
-  appveyor PushArtifact "./server-configs/${cfg}" -DeploymentName 'Server Configs'
+  appveyor PushArtifact "server-configs/${cfg}" -DeploymentName 'Server Configs'
 done
