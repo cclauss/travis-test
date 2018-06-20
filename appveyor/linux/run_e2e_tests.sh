@@ -1,4 +1,8 @@
 #!/bin/bash
+#
+# Installs the 64-bit client deb in the GRR server's virtualenv
+# and runs end-to-end tests against it. If the tests fail,
+# the script will terminate with a non-zero exit-code.
 
 set -ex
 

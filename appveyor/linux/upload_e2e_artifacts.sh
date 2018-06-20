@@ -1,4 +1,7 @@
 #!/bin/bash
+#
+# Collects configs and logs for the various GRR components and
+# uploads them to Appveyor so they are available after the build.
 
 set -ex
 
@@ -20,11 +23,21 @@ sudo chown -R "$(whoami):$(whoami)" server-configs server-logs client-configs cl
 
 cd "${INITIAL_DIR}"
 
+# Artifact paths must be relative to the root of the GRR repo.
 appveyor PushArtifact e2e.log -DeploymentName 'Test Output'
 
-appveyor PushArtifact appveyor_e2e_artifacts/server-configs/grr-server.yaml -DeploymentName 'Server Configs'
+for cfg in appveyor_e2e_artifacts/server-configs/*; do
+  appveyor PushArtifact "${cfg}" -DeploymentName 'Server Configs'
+done
 
-#for cfg in "$(ls server-configs)"; do
-#  echo "server-configs/${cfg}"
-#  #appveyor PushArtifact "server-configs/${cfg}" -DeploymentName 'Server Configs'
-#done
+for log in appveyor_e2e_artifacts/server-logs/*; do
+  appveyor PushArtifact "${log}" -DeploymentName 'Server Logs'
+done
+
+for cfg in appveyor_e2e_artifacts/client-configs/*; do
+  appveyor PushArtifact "${cfg}" -DeploymentName 'Client Configs'
+done
+
+for log in appveyor_e2e_artifacts/client-logs/*; do
+  appveyor PushArtifact "${log}" -DeploymentName 'Client Logs'
+done
