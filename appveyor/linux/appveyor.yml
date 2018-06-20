@@ -8,50 +8,35 @@ environment:
 install:
 - lsb_release -a
 - echo "${PATH}"
-#- sudo -H GRR_ADMIN_PASS="${GRR_ADMIN_PASS}" ./appveyor/linux/install_latest_server_deb.sh
+- sudo -EH ./appveyor/linux/install_latest_server_deb.sh
 
 # Appveyor will try to build any Visual Studio projects it finds if we do not disable this.
 build: off
 
 test_script:
-#- sudo cp grr/test/grr_response_test/run_end_to_end_tests.py /usr/share/grr-server/lib/python2.7/site-packages/grr_response_test/
-#- sudo cp api_client/python/grr_api_client/connectors/http_connector.py /usr/share/grr-server/lib/python2.7/site-packages/grr_api_client/connectors/
-#- sudo cp grr/test/grr_response_test/end_to_end_tests/test_base.py /usr/share/grr-server/lib/python2.7/site-packages/grr_response_test/end_to_end_tests/
-#- sudo cp grr/test/grr_response_test/end_to_end_tests/runner.py /usr/share/grr-server/lib/python2.7/site-packages/grr_response_test/end_to_end_tests/
-#- source /usr/share/grr-server/bin/activate
-#- python ./appveyor/linux/wait_for_api_init.py
-#- deactivate
-- sudo -H GRR_ADMIN_PASS="${GRR_ADMIN_PASS}" APPVEYOR_API_URL="${APPVEYOR_API_URL}" ./appveyor/linux/run_e2e_tests.sh
-#- ./appveyor/linux/retry_api.sh
-
-# Make configs and log files available as artifacts after an Appveyor run.
-# Artifact paths need to be relative to the root of the checked out repo.
-after_test:
-- mkdir server-configs server-logs client-configs client-logs
-- sudo cp /usr/share/grr-server/install_data/etc/grr-server.yaml server-configs || true # Primary server config.
-- sudo cp /etc/grr/server.local.yaml server-configs || true # Server writeback.
-- sudo cp /usr/share/grr-server/lib/python2.7/site-packages/grr/var/log/* server-logs || true
-- sudo cp /usr/lib/grr/grr_*_amd64/grrd.yaml client-configs || true # Primary client config.
-- sudo cp /etc/grr.local.yaml client-configs || true # Secondary client config.
-- sudo cp /var/log/GRRlog.txt client-logs || true
-# Make artifacts readable by the non-root user so that they can be uploaded.
-- sudo chown -R "$(whoami)" server-configs server-logs client-configs client-logs
+- sudo cp grr/test/grr_response_test/run_end_to_end_tests.py /usr/share/grr-server/lib/python2.7/site-packages/grr_response_test/
+- sudo cp api_client/python/grr_api_client/connectors/http_connector.py /usr/share/grr-server/lib/python2.7/site-packages/grr_api_client/connectors/
+- sudo cp grr/test/grr_response_test/end_to_end_tests/test_base.py /usr/share/grr-server/lib/python2.7/site-packages/grr_response_test/end_to_end_tests/
+- sudo cp grr/test/grr_response_test/end_to_end_tests/runner.py /usr/share/grr-server/lib/python2.7/site-packages/grr_response_test/end_to_end_tests/
+- sudo -EH ./appveyor/linux/run_e2e_tests.sh
 
 # TODO(ogaro): Make sure these are available even when tests fail.
-artifacts:
-- path: e2e.log
-  name: Test Output
-- path: server-configs/*
-  name: Server Configs
-- path: server-logs/*
-  name: Server Logs
-- path: client-configs/*
-  name: Client Configs
-- path: client-logs/*
-  name: Client Logs
+#artifacts:
+#- path: e2e.log
+#  name: Test Output
+#- path: server-configs/*
+#  name: Server Configs
+#- path: server-logs/*
+#  name: Server Logs
+#- path: client-configs/*
+#  name: Client Configs
+#- path: client-logs/*
+#  name: Client Logs
 
-on_failure:
-- sh: appveyor PushArtifact e2e.log -DeploymentName 'Test Output (Manual)'
+#on_failure:
+#- sh: appveyor PushArtifact e2e.log -DeploymentName 'Test Output (Manual)'
+on_finish:
+- ./appveyor/linux/upload_e2e_artifacts.sh
 
 #on_finish:
 #- export APPVEYOR_SSH_BLOCK=true
