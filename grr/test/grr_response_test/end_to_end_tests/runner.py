@@ -61,7 +61,7 @@ class E2ETestRunner(object):
       self._appveyor_tests_endpoint = urlparse.urljoin(
           appveyor_api_url, "api/tests")
 
-    logging.info("Connecting to API at %s", self._api_endpoint)
+    logging.info("Connecting to GRR API at %s", self._api_endpoint)
     password = self._api_password
     if not password:
       password = getpass.getpass(prompt="Please enter the API password for "

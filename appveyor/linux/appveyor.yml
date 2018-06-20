@@ -8,16 +8,16 @@ environment:
 install:
 - lsb_release -a
 - echo "${PATH}"
-- sudo -H GRR_ADMIN_PASS="${GRR_ADMIN_PASS}" ./appveyor/linux/install_latest_server_deb.sh
+#- sudo -H GRR_ADMIN_PASS="${GRR_ADMIN_PASS}" ./appveyor/linux/install_latest_server_deb.sh
 
 # Appveyor will try to build any Visual Studio projects it finds if we do not disable this.
 build: off
 
 test_script:
-- sudo cp grr/test/grr_response_test/run_end_to_end_tests.py /usr/share/grr-server/lib/python2.7/site-packages/grr_response_test/
-- sudo cp api_client/python/grr_api_client/connectors/http_connector.py /usr/share/grr-server/lib/python2.7/site-packages/grr_api_client/connectors/
-- sudo cp grr/test/grr_response_test/end_to_end_tests/test_base.py /usr/share/grr-server/lib/python2.7/site-packages/grr_response_test/end_to_end_tests/
-- sudo cp grr/test/grr_response_test/end_to_end_tests/runner.py /usr/share/grr-server/lib/python2.7/site-packages/grr_response_test/end_to_end_tests/
+#- sudo cp grr/test/grr_response_test/run_end_to_end_tests.py /usr/share/grr-server/lib/python2.7/site-packages/grr_response_test/
+#- sudo cp api_client/python/grr_api_client/connectors/http_connector.py /usr/share/grr-server/lib/python2.7/site-packages/grr_api_client/connectors/
+#- sudo cp grr/test/grr_response_test/end_to_end_tests/test_base.py /usr/share/grr-server/lib/python2.7/site-packages/grr_response_test/end_to_end_tests/
+#- sudo cp grr/test/grr_response_test/end_to_end_tests/runner.py /usr/share/grr-server/lib/python2.7/site-packages/grr_response_test/end_to_end_tests/
 #- source /usr/share/grr-server/bin/activate
 #- python ./appveyor/linux/wait_for_api_init.py
 #- deactivate

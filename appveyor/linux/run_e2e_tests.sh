@@ -24,6 +24,6 @@ if [[ ! -z "$(cat e2e.log | grep -F '[ FAIL ]')" ]]; then
   fatal 'End-to-end tests failed.'
 fi
 
-if [[ -z "$(cat e2e.log | grep -F '[  OK  ]')" ]]; then
+if [[ -z "$(cat e2e.log | grep -F '[ PASS ]')" ]]; then
   fatal "Expected to find at least one passing test in the test log. It is possible no tests actually ran."
 fi
