@@ -10,8 +10,8 @@ environment:
 install:
 - lsb_release -a
 - echo "${PATH}"
-- sudo cp grr/test/grr_response_test/end_to_end_tests/runner.py /usr/share/grr-server/lib/python2.7/site-packages/grr_response_test/end_to_end_tests/
 - sudo -EH ./appveyor/linux/install_latest_server_deb.sh
+- sudo cp grr/test/grr_response_test/end_to_end_tests/runner.py /usr/share/grr-server/lib/python2.7/site-packages/grr_response_test/end_to_end_tests/
 
 # Appveyor will try to build any Visual Studio projects it finds
 # if we do not disable this.
