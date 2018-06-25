@@ -23,6 +23,7 @@ from grr.lib.rdfvalues import client as rdf_client
 
 from grr.lib.rdfvalues import crypto as rdf_crypto
 from grr.lib.rdfvalues import flows as rdf_flows
+from grr.lib.rdfvalues import objects as rdf_objects
 from grr.lib.rdfvalues import paths as rdf_paths
 from grr.lib.rdfvalues import structs as rdf_structs
 from grr_response_proto import tests_pb2
@@ -78,32 +79,61 @@ def CreateFileVersions(client_id, token):
   # This file already exists in the fixture at TIME_0, we write a
   # later version.
   CreateFileVersion(
-      "aff4:/%s/fs/os/c/Downloads/a.txt" % client_id,
+      client_id,
+      "fs/os/c/Downloads/a.txt",
       "Hello World",
       timestamp=TIME_1,
       token=token)
   CreateFileVersion(
-      "aff4:/%s/fs/os/c/Downloads/a.txt" % client_id,
+      client_id,
+      "fs/os/c/Downloads/a.txt",
       "Goodbye World",
       timestamp=TIME_2,
       token=token)
 
 
-def CreateFileVersion(path, content, timestamp, token=None):
+def CreateFileVersion(client_id, path, content="", timestamp=None, token=None):
   """Add a new version for a file."""
+  if timestamp is None:
+    timestamp = rdfvalue.RDFDatetime.Now()
+
   with test_lib.FakeTime(timestamp):
     with aff4.FACTORY.Create(
-        path, aff4_type=aff4_grr.VFSFile, mode="w", token=token) as fd:
+        client_id.Add(path), aff4_type=aff4_grr.VFSFile, mode="w",
+        token=token) as fd:
       fd.Write(content)
       fd.Set(fd.Schema.CONTENT_LAST, rdfvalue.RDFDatetime.Now())
 
+    if data_store.RelationalDBWriteEnabled():
+      path_type, components = rdf_objects.ParseCategorizedPath(path)
 
-def CreateFolder(path, timestamp, token=None):
+      path_info = rdf_objects.PathInfo()
+      path_info.path_type = path_type
+      path_info.components = components
+      path_info.directory = False
+
+      data_store.REL_DB.WritePathInfos(client_id.Basename(), [path_info])
+
+
+def CreateFolder(client_id, path, timestamp, token=None):
   """Creates a VFS folder."""
   with test_lib.FakeTime(timestamp):
     with aff4.FACTORY.Create(
-        path, aff4_type=aff4_standard.VFSDirectory, mode="w", token=token) as _:
+        client_id.Add(path),
+        aff4_type=aff4_standard.VFSDirectory,
+        mode="w",
+        token=token) as _:
       pass
+
+    if data_store.RelationalDBWriteEnabled():
+      path_type, components = rdf_objects.ParseCategorizedPath(path)
+
+      path_info = rdf_objects.PathInfo()
+      path_info.path_type = path_type
+      path_info.components = components
+      path_info.directory = True
+
+      data_store.REL_DB.WritePathInfos(client_id.Basename(), [path_info])
 
 
 def SeleniumAction(f):
@@ -127,6 +157,20 @@ def SeleniumAction(f):
         time.sleep(delay)
 
   return Decorator
+
+
+class DisabledHttpErrorChecksContextManager(object):
+  """Context manager to be returned by test's DisabledHttpErrorChecks call."""
+
+  def __init__(self, test):
+    self.test = test
+
+  def __enter__(self):
+    return self
+
+  def __exit__(self, unused_type, unused_value, unused_traceback):
+    self.test.ignore_http_errors = False
+    self.test.driver.execute_script("window.grrInterceptedHTTPErrors_ = []")
 
 
 class GRRSeleniumTest(test_lib.GRRBaseTest, acl_test_lib.AclTestMixin):
@@ -165,12 +209,25 @@ class GRRSeleniumTest(test_lib.GRRBaseTest, acl_test_lib.AclTestMixin):
     options = webdriver.ChromeOptions()
     if flags.FLAGS.use_headless_chrome:
       options.add_argument("--headless")
+      options.add_argument("--window-size=1400,1080")
 
     if flags.FLAGS.chrome_driver_path:
       GRRSeleniumTest.driver = webdriver.Chrome(
           flags.FLAGS.chrome_driver_path, chrome_options=options)
     else:
       GRRSeleniumTest.driver = webdriver.Chrome(chrome_options=options)
+
+    # TODO(user): Hack! This is needed to allow downloads in headless mode.
+    # Remove this code when upstream Python ChromeDriver implementation has
+    # send_command implemented.
+    #
+    # See
+    # https://stackoverflow.com/questions/45631715/downloading-with-chrome-headless-and-selenium
+    # and the code in setUp().
+    # pylint: disable=protected-access
+    GRRSeleniumTest.driver.command_executor._commands["send_command"] = (
+        "POST", "/session/$sessionId/chromium/send_command")
+    # pylint: enable=protected-access
     # pylint: enable=unreachable
 
   _selenium_set_up_lock = threading.RLock()
@@ -220,10 +277,10 @@ class GRRSeleniumTest(test_lib.GRRBaseTest, acl_test_lib.AclTestMixin):
     # setting (i.e. without overrides).
     api_auth_manager.APIACLInit.InitApiAuthManager()
 
-  def CheckJavascriptErrors(self):
+  def _CheckJavascriptErrors(self):
     errors = self.driver.execute_script(
-        "return (() => {const e = window.grrInterceptedErrors_ || []; "
-        "window.grrInterceptedErrors_ = []; return e;})();")
+        "return (() => {const e = window.grrInterceptedJSErrors_ || []; "
+        "window.grrInterceptedJSErrors_ = []; return e;})();")
 
     msgs = []
     for e in errors:
@@ -235,8 +292,33 @@ class GRRSeleniumTest(test_lib.GRRBaseTest, acl_test_lib.AclTestMixin):
       self.fail(
           "Javascript error encountered during test: %s" % "\n\t".join(msgs))
 
+  def DisableHttpErrorChecks(self):
+    self.ignore_http_errors = True
+    return DisabledHttpErrorChecksContextManager(self)
+
+  def _CheckHttpErrors(self):
+    if self.ignore_http_errors:
+      return
+
+    errors = self.driver.execute_script(
+        "return (() => {const e = window.grrInterceptedHTTPErrors_ || []; "
+        "window.grrInterceptedHTTPErrors_ = []; return e;})();")
+
+    msgs = []
+    for e in errors:
+      msg = "[http]: %s" % e
+      logging.error(msg)
+      msgs.append(msg)
+
+    if msgs:
+      self.fail("HTTP request failed during test: %s" % "\n\t".join(msgs))
+
+  def CheckBrowserErrors(self):
+    self._CheckJavascriptErrors()
+    self._CheckHttpErrors()
+
   def WaitUntil(self, condition_cb, *args):
-    self.CheckJavascriptErrors()
+    self.CheckBrowserErrors()
 
     for _ in xrange(int(self.duration / self.sleep_time)):
       try:
@@ -252,7 +334,7 @@ class GRRSeleniumTest(test_lib.GRRBaseTest, acl_test_lib.AclTestMixin):
       except Exception as e:  # pylint: disable=broad-except
         logging.warn("Selenium raised %s", utils.SmartUnicode(e))
 
-      self.CheckJavascriptErrors()
+      self.CheckBrowserErrors()
       time.sleep(self.sleep_time)
 
     self.fail("condition not met, body is: %s" %
@@ -410,14 +492,9 @@ class GRRSeleniumTest(test_lib.GRRBaseTest, acl_test_lib.AclTestMixin):
     return self.driver.execute_script(js_expression)
 
   def _WaitForAjaxCompleted(self):
-    self.driver.execute_script("""
-window._grrHasOutstandingRequests = true;
-$('body').injector().get('$browser').notifyWhenNoOutstandingRequests(function() {
-  window._grrHasOutstandingRequests = false;
-});
-""")
-    self.WaitUntilEqual(False, self.GetJavaScriptValue,
-                        "return window._grrHasOutstandingRequests || false")
+    self.WaitUntilEqual(
+        [], self.GetJavaScriptValue,
+        "return $('body').injector().get('$http').pendingRequests")
 
   @SeleniumAction
   def Type(self, target, text, end_with_enter=False):
@@ -491,9 +568,11 @@ $('body').injector().get('$browser').notifyWhenNoOutstandingRequests(function() 
     return len(self._FindElements(target))
 
   def WaitUntilEqual(self, target, condition_cb, *args):
+    condition_value = None
     for _ in xrange(int(self.duration / self.sleep_time)):
       try:
-        if condition_cb(*args) == target:
+        condition_value = condition_cb(*args)
+        if condition_value == target:
           return True
 
       # Raise in case of a test-related error (i.e. failing assertion).
@@ -506,8 +585,8 @@ $('body').injector().get('$browser').notifyWhenNoOutstandingRequests(function() 
 
       time.sleep(self.sleep_time)
 
-    self.fail("condition not met, body is: %s" %
-              self.driver.find_element_by_tag_name("body").text)
+    self.fail("condition %s(%s) not met (expected=%s, got_last_time=%s)" %
+              (condition_cb, args, target, condition_value))
 
   def WaitUntilContains(self, target, condition_cb, *args):
     data = ""
@@ -536,6 +615,8 @@ $('body').injector().get('$browser').notifyWhenNoOutstandingRequests(function() 
 
     # Used by InstallACLChecks/UninstallACLChecks
     self.config_override = None
+    # Used by CheckHttpErrors
+    self.ignore_http_errors = False
 
     self.token.username = "gui_user"
     webauth.WEBAUTH_MANAGER.SetUserName(self.token.username)
@@ -557,9 +638,21 @@ $('body').injector().get('$browser').notifyWhenNoOutstandingRequests(function() 
 
     self.InstallACLChecks()
 
+    if flags.FLAGS.use_headless_chrome:
+      params = {
+          "cmd": "Page.setDownloadBehavior",
+          "params": {
+              "behavior": "allow",
+              "downloadPath": self.temp_dir
+          }
+      }
+      result = self.driver.execute("send_command", params)
+      if result["status"] != 0:
+        raise RuntimeError("can't set Page.setDownloadBehavior: %s" % result)
+
   def tearDown(self):
     self._artifact_patcher.stop()
-    self.CheckJavascriptErrors()
+    self.CheckBrowserErrors()
     super(GRRSeleniumTest, self).tearDown()
 
   def WaitForNotification(self, user):
@@ -638,6 +731,8 @@ class GRRSeleniumHuntTest(GRRSeleniumTest, hunt_test_lib.StandardHuntTestMixin):
 
   def CreateGenericHuntWithCollection(self, values=None):
     self.client_ids = self.SetupClients(10)
+
+    CreateFileVersion(self.client_ids[0], "fs/os/c/bin/bash", token=self.token)
 
     if values is None:
       values = [

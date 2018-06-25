@@ -7,7 +7,6 @@ import mock
 import unittest
 from grr.lib import flags
 from grr.lib.rdfvalues import client as rdf_client
-from grr.server.grr_response_server import aff4
 
 from grr.server.grr_response_server.gui import api_call_router_with_approval_checks
 from grr.server.grr_response_server.gui import gui_test_lib
@@ -47,7 +46,8 @@ class VFSViewTest(gui_test_lib.GRRSeleniumTest):
 
   def testUrlSensitiveCharactersAreShownInTree(self):
     gui_test_lib.CreateFileVersion(
-        "aff4:/C.0000000000000001/fs/os/c/foo?bar&oh/a&=?b.txt",
+        self.client_id,
+        "fs/os/c/foo?bar&oh/a&=?b.txt",
         "Hello World",
         timestamp=gui_test_lib.TIME_1,
         token=self.token)
@@ -74,7 +74,8 @@ class VFSViewTest(gui_test_lib.GRRSeleniumTest):
 
   def testFolderPathCanContainUrlSensitiveCharacters(self):
     gui_test_lib.CreateFileVersion(
-        "aff4:/C.0000000000000001/fs/os/c/foo?bar&oh/a&=?b.txt",
+        self.client_id,
+        "fs/os/c/foo?bar&oh/a&=?b.txt",
         "Hello World",
         timestamp=gui_test_lib.TIME_1,
         token=self.token)
@@ -114,42 +115,10 @@ class VFSViewTest(gui_test_lib.GRRSeleniumTest):
     self.WaitUntil(self.IsElementPresent,
                    "css=#content_rightPane .breadcrumb li:contains('os')")
 
-  def testClickingOnTreeNodeRefreshesChildrenFoldersList(self):
-    self.Open("/#/clients/C.0000000000000001/vfs/fs/os/c/")
-
-    self.WaitUntil(self.IsElementPresent, "link=Downloads")
-    self.WaitUntil(self.IsElementPresent, "link=bin")
-
-    aff4.FACTORY.Delete(
-        "aff4:/C.0000000000000001/fs/os/c/bin", token=self.token)
-
-    self.Click("link=c")
-    self.WaitUntil(self.IsElementPresent, "link=Downloads")
-    self.WaitUntilNot(self.IsElementPresent, "link=bin")
-
-  def testClickingOnTreeNodeArrowRefreshesChildrenFoldersList(self):
-    self.Open("/#/clients/C.0000000000000001/vfs/fs/os/c/")
-
-    self.WaitUntil(self.IsElementPresent, "link=Downloads")
-    self.WaitUntil(self.IsElementPresent, "link=bin")
-
-    aff4.FACTORY.Delete(
-        "aff4:/C.0000000000000001/fs/os/c/bin", token=self.token)
-
-    # Click on the arrow icon, it should close the tree branch.
-    self.Click("css=#_fs-os-c i.jstree-icon")
-    self.WaitUntilNot(self.IsElementPresent, "link=Downloads")
-    self.WaitUntilNot(self.IsElementPresent, "link=bin")
-
-    # Click on the arrow icon again, it should reopen the tree
-    # branch. It should be updated.
-    self.Click("css=#_fs-os-c i.jstree-icon")
-    self.WaitUntil(self.IsElementPresent, "link=Downloads")
-    self.WaitUntilNot(self.IsElementPresent, "link=bin")
-
   @mock.patch.object(
       api_call_router_with_approval_checks.ApiCallRouterWithApprovalChecks,
-      "GetVfsFilesArchive")
+      "GetVfsFilesArchive",
+      return_value=api_vfs.ApiGetVfsFilesArchiveHandler())
   def testClickingOnDownloadCurrentFolderButtonStartsDownload(
       self, mock_method):
     # Open VFS view for client 1 on a specific location.
@@ -158,15 +127,19 @@ class VFSViewTest(gui_test_lib.GRRSeleniumTest):
 
     self.Click("css=grr-vfs-files-archive-button")
     self.Click("css=a[name=downloadCurrentFolder]")
-    self.WaitUntilEqual(1, lambda: mock_method.call_count)
-    mock_method.assert_called_once_with(
+
+    # Mock method will be called twice: once for HEAD request (to check
+    # permissions) and once for GET request.
+    self.WaitUntil(lambda: mock_method.call_count)
+    mock_method.assert_called_with(
         api_vfs.ApiGetVfsFilesArchiveArgs(
             client_id="C.0000000000000001", file_path="fs/os/c/proc"),
         token=mock.ANY)
 
   @mock.patch.object(
       api_call_router_with_approval_checks.ApiCallRouterWithApprovalChecks,
-      "GetVfsFilesArchive")
+      "GetVfsFilesArchive",
+      return_value=api_vfs.ApiGetVfsFilesArchiveHandler())
   def testClickingOnDownloadEverythingButtonStartsDownload(self, mock_method):
     # Open VFS view for client 1 on a specific location.
     self.Open("/#c=C.0000000000000001&main=VirtualFileSystemView"
@@ -174,8 +147,11 @@ class VFSViewTest(gui_test_lib.GRRSeleniumTest):
 
     self.Click("css=grr-vfs-files-archive-button")
     self.Click("css=a[name=downloadEverything]:not([disabled])")
-    self.WaitUntilEqual(1, lambda: mock_method.call_count)
-    mock_method.assert_called_once_with(
+
+    # Mock method will be called twice: once for HEAD request (to check
+    # permissions) and once for GET request.
+    self.WaitUntil(lambda: mock_method.call_count)
+    mock_method.assert_called_with(
         api_vfs.ApiGetVfsFilesArchiveArgs(client_id="C.0000000000000001"),
         token=mock.ANY)
 

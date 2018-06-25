@@ -4,7 +4,7 @@
 import logging
 from grr import config
 
-from grr.lib import parsers
+from grr.lib import parser
 from grr.lib import rdfvalue
 from grr.lib import utils
 from grr.lib.rdfvalues import client as rdf_client
@@ -13,15 +13,13 @@ from grr.lib.rdfvalues import paths
 from grr.lib.rdfvalues import rekall_types as rdf_rekall_types
 from grr.lib.rdfvalues import structs as rdf_structs
 # For file collection artifacts. pylint: disable=unused-import
-from grr.parsers import registry_init
-# pylint: enable=unused-import
-from grr.parsers import windows_persistence
 from grr_response_proto import flows_pb2
-# For various parsers use by artifacts. pylint: disable=unused-import
-from grr.server.grr_response_server import aff4
 # pylint: enable=unused-import
+from grr.server.grr_response_server import aff4
 from grr.server.grr_response_server import artifact
+# For various parsers use by artifacts. pylint: disable=unused-import
 from grr.server.grr_response_server import artifact_registry
+# pylint: enable=unused-import
 from grr.server.grr_response_server import artifact_utils
 from grr.server.grr_response_server import data_store
 from grr.server.grr_response_server import flow
@@ -31,6 +29,10 @@ from grr.server.grr_response_server.flows.general import file_finder
 from grr.server.grr_response_server.flows.general import filesystem
 from grr.server.grr_response_server.flows.general import memory
 from grr.server.grr_response_server.flows.general import transfer
+# For file collection artifacts. pylint: disable=unused-import
+from grr.server.grr_response_server.parsers import registry_init
+# pylint: enable=unused-import
+from grr.server.grr_response_server.parsers import windows_persistence
 
 
 class ArtifactCollectorFlow(flow.GRRFlow):
@@ -589,7 +591,7 @@ class ArtifactCollectorFlow(flow.GRRFlow):
     output_collection_map = {}
 
     # Now process the responses.
-    processors = parsers.Parser.GetClassesByArtifact(artifact_name)
+    processors = parser.Parser.GetClassesByArtifact(artifact_name)
     saved_responses = {}
     for response in responses:
       if processors and self.args.apply_parsers:
@@ -609,7 +611,7 @@ class ArtifactCollectorFlow(flow.GRRFlow):
 
     # If we were saving responses, process them now:
     for processor_name, responses_list in saved_responses.items():
-      processor_obj = parsers.Parser.classes[processor_name]()
+      processor_obj = parser.Parser.classes[processor_name]()
       self._ParseResponses(processor_obj, responses_list, responses,
                            artifact_name, source, output_collection_map)
 
@@ -849,8 +851,8 @@ class ArtifactFilesDownloaderFlow(transfer.MultiGetFileMixin, flow.GRRFlow):
     else:
       path_type = paths.PathSpec.PathType.OS
 
-    parser = windows_persistence.WindowsPersistenceMechanismsParser()
-    parsed_items = parser.Parse(response, knowledge_base, path_type)
+    p = windows_persistence.WindowsPersistenceMechanismsParser()
+    parsed_items = p.Parse(response, knowledge_base, path_type)
 
     return [item.pathspec for item in parsed_items]
 

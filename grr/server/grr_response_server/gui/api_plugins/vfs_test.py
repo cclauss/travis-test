@@ -3,6 +3,7 @@
 """This modules contains tests for VFS API handlers."""
 
 import StringIO
+import unittest
 import zipfile
 
 from grr.lib import flags
@@ -22,6 +23,7 @@ from grr.server.grr_response_server.flows.general import transfer
 from grr.server.grr_response_server.gui import api_test_lib
 from grr.server.grr_response_server.gui.api_plugins import vfs as vfs_plugin
 from grr.test_lib import action_mocks
+from grr.test_lib import db_test_lib
 from grr.test_lib import fixture_test_lib
 from grr.test_lib import flow_test_lib
 from grr.test_lib import notification_test_lib
@@ -36,8 +38,12 @@ class VfsTestMixin(object):
   time_1 = time_0 + rdfvalue.Duration("1d")
   time_2 = time_1 + rdfvalue.Duration("1d")
 
+  # TODO(hanuszczak): This function not only contains a lot of code duplication
+  # but is also a duplication with `gui_test_lib.CreateFileVersion(s)`. This
+  # should be refactored in the near future.
   def CreateFileVersions(self, client_id, file_path):
     """Add a new version for a file."""
+    path_type, components = rdf_objects.ParseCategorizedPath(file_path)
 
     with test_lib.FakeTime(self.time_1):
       token = access_control.ACLToken(username="test")
@@ -49,6 +55,14 @@ class VfsTestMixin(object):
       fd.Write("Hello World")
       fd.Close()
 
+      if data_store.RelationalDBWriteEnabled():
+        path_info = rdf_objects.PathInfo()
+        path_info.path_type = path_type
+        path_info.components = components
+        path_info.directory = False
+
+        data_store.REL_DB.WritePathInfos(client_id.Basename(), [path_info])
+
     with test_lib.FakeTime(self.time_2):
       fd = aff4.FACTORY.Create(
           client_id.Add(file_path),
@@ -57,6 +71,14 @@ class VfsTestMixin(object):
           token=token)
       fd.Write("Goodbye World")
       fd.Close()
+
+      if data_store.RelationalDBWriteEnabled():
+        path_info = rdf_objects.PathInfo()
+        path_info.path_type = path_type
+        path_info.components = components
+        path_info.directory = False
+
+        data_store.REL_DB.WritePathInfos(client_id.Basename(), [path_info])
 
   def CreateRecursiveListFlow(self, client_id, token):
     flow_args = filesystem.RecursiveListDirectoryArgs()
@@ -79,6 +101,7 @@ class VfsTestMixin(object):
         token=token)
 
 
+@db_test_lib.DualDBTest
 class ApiGetFileDetailsHandlerTest(api_test_lib.ApiCallHandlerTest,
                                    VfsTestMixin):
   """Test for ApiGetFileDetailsHandler."""
@@ -155,6 +178,7 @@ class ApiGetFileDetailsHandlerTest(api_test_lib.ApiCallHandlerTest,
       self.assertTrue(set(attrs).issubset(all_attrs))
 
 
+@db_test_lib.DualDBTest
 class ApiListFilesHandlerTest(api_test_lib.ApiCallHandlerTest, VfsTestMixin):
   """Test for ApiListFilesHandler."""
 
@@ -206,6 +230,12 @@ class ApiListFilesHandlerTest(api_test_lib.ApiCallHandlerTest, VfsTestMixin):
     self.assertIn(self.file_path, result.items[0].path)
 
   def testHandlerRespectsTimestamp(self):
+    # TODO(hanuszczak): Enable this test in relational database mode once
+    # timestamp-specific file listing is supported by the data store.
+    if data_store.RelationalDBReadEnabled():
+      raise unittest.SkipTest("relational backend does not support timestamp-"
+                              "specific file listing")
+
     # file_path is "fs/os/etc", a directory.
     self.CreateFileVersions(self.client_id, self.file_path + "/file")
 
@@ -233,6 +263,7 @@ class ApiListFilesHandlerTest(api_test_lib.ApiCallHandlerTest, VfsTestMixin):
     self.assertEqual(len(result.items), 0)
 
 
+@db_test_lib.DualDBTest
 class ApiGetFileTextHandlerTest(api_test_lib.ApiCallHandlerTest, VfsTestMixin):
   """Test for ApiGetFileTextHandler."""
 
@@ -292,6 +323,7 @@ class ApiGetFileTextHandlerTest(api_test_lib.ApiCallHandlerTest, VfsTestMixin):
     self.assertEqual(result.total_size, 13)
 
 
+@db_test_lib.DualDBTest
 class ApiGetFileBlobHandlerTest(api_test_lib.ApiCallHandlerTest, VfsTestMixin):
 
   def setUp(self):
@@ -369,6 +401,7 @@ class ApiGetFileBlobHandlerTest(api_test_lib.ApiCallHandlerTest, VfsTestMixin):
       self.assertEqual(chunk, char * self.handler.CHUNK_SIZE)
 
 
+@db_test_lib.DualDBTest
 class ApiGetFileVersionTimesHandlerTest(api_test_lib.ApiCallHandlerTest,
                                         VfsTestMixin):
 
@@ -396,6 +429,7 @@ class ApiGetFileVersionTimesHandlerTest(api_test_lib.ApiCallHandlerTest,
       self.handler.Handle(args, token=self.token)
 
 
+@db_test_lib.DualDBTest
 class ApiGetFileDownloadCommandHandlerTest(api_test_lib.ApiCallHandlerTest,
                                            VfsTestMixin):
 
@@ -423,6 +457,9 @@ class ApiGetFileDownloadCommandHandlerTest(api_test_lib.ApiCallHandlerTest,
       self.handler.Handle(args, token=self.token)
 
 
+# TODO(hanuszczak): There are some issues with user notifications if dual-db
+# mode is enabled. Once they are resolved, `db_test_lib.DualDBTest` should be
+# added.
 class ApiCreateVfsRefreshOperationHandlerTest(
     notification_test_lib.NotificationTestMixin,
     api_test_lib.ApiCallHandlerTest):
@@ -506,6 +543,7 @@ class ApiCreateVfsRefreshOperationHandlerTest(
                      self.client_id.Add(self.file_path))
 
 
+@db_test_lib.DualDBTest
 class ApiGetVfsRefreshOperationStateHandlerTest(api_test_lib.ApiCallHandlerTest,
                                                 VfsTestMixin):
   """Test for GetVfsRefreshOperationStateHandler."""
@@ -560,6 +598,7 @@ class ApiGetVfsRefreshOperationStateHandlerTest(api_test_lib.ApiCallHandlerTest,
       self.handler.Handle(args, token=self.token)
 
 
+@db_test_lib.DualDBTest
 class ApiUpdateVfsFileContentHandlerTest(api_test_lib.ApiCallHandlerTest):
   """Test for ApiUpdateVfsFileContentHandler."""
 
@@ -600,6 +639,7 @@ class ApiUpdateVfsFileContentHandlerTest(api_test_lib.ApiCallHandlerTest):
         flow_obj.Get(flow_obj.Schema.TYPE), transfer.MultiGetFile.__name__)
 
 
+@db_test_lib.DualDBTest
 class ApiGetVfsFileContentUpdateStateHandlerTest(
     api_test_lib.ApiCallHandlerTest, VfsTestMixin):
   """Test for ApiGetVfsFileContentUpdateStateHandler."""
@@ -686,6 +726,7 @@ class VfsTimelineTestMixin(object):
           data_store.REL_DB.WritePathInfos(client_id, [path_info])
 
 
+@db_test_lib.DualDBTest
 class ApiGetVfsTimelineAsCsvHandlerTest(api_test_lib.ApiCallHandlerTest,
                                         VfsTimelineTestMixin):
 
@@ -747,6 +788,7 @@ class ApiGetVfsTimelineAsCsvHandlerTest(api_test_lib.ApiCallHandlerTest,
       next(result.GenerateContent())
 
 
+@db_test_lib.DualDBTest
 class ApiGetVfsTimelineHandlerTest(api_test_lib.ApiCallHandlerTest,
                                    VfsTimelineTestMixin):
 
@@ -774,6 +816,7 @@ class ApiGetVfsTimelineHandlerTest(api_test_lib.ApiCallHandlerTest,
       self.handler.Handle(args, token=self.token)
 
 
+@db_test_lib.DualDBTest
 class ApiGetVfsFilesArchiveHandlerTest(api_test_lib.ApiCallHandlerTest,
                                        VfsTestMixin):
   """Tests for ApiGetVfsFileArchiveHandler."""

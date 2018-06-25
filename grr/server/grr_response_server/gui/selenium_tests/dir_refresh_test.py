@@ -8,7 +8,6 @@ from grr.lib import flags
 from grr.lib import rdfvalue
 from grr.lib.rdfvalues import client as rdf_client
 from grr.server.grr_response_server import aff4
-from grr.server.grr_response_server.aff4_objects import aff4_grr
 from grr.server.grr_response_server.flows.general import filesystem
 from grr.server.grr_response_server.flows.general import transfer
 from grr.server.grr_response_server.gui import gui_test_lib
@@ -36,16 +35,19 @@ class DirRefreshTest(gui_test_lib.GRRSeleniumTest):
     flows = list(fd.ListChildren())
 
     gui_test_lib.CreateFileVersion(
-        client_id.Add("fs/os/c/a.txt"),
+        client_id,
+        "fs/os/c/a.txt",
         "Hello World",
         timestamp=gui_test_lib.TIME_0,
         token=self.token)
     gui_test_lib.CreateFolder(
-        client_id.Add("fs/os/c/TestFolder"),
+        client_id,
+        "fs/os/c/TestFolder",
         timestamp=gui_test_lib.TIME_0,
         token=self.token)
     gui_test_lib.CreateFolder(
-        client_id.Add("fs/os/c/bin/TestBinFolder"),
+        client_id,
+        "fs/os/c/bin/TestBinFolder",
         timestamp=gui_test_lib.TIME_0,
         token=self.token)
 
@@ -117,18 +119,20 @@ class DirRefreshTest(gui_test_lib.GRRSeleniumTest):
     # be indistinguishable in the UI (as it has a 1s precision when
     # displaying versions).
     with test_lib.FakeTime(time_in_future):
-      with aff4.FACTORY.Open(
-          "aff4:/C.0000000000000001/fs/os/c/Downloads/a.txt",
-          aff4_type=aff4_grr.VFSFile,
-          mode="rw",
-          token=self.token) as fd:
-        fd.Write("The newest version!")
+      gui_test_lib.CreateFileVersion(
+          rdf_client.ClientURN("C.0000000000000001"),
+          "fs/os/c/Downloads/a.txt",
+          "The newest version!",
+          timestamp=rdfvalue.RDFDatetime.Now(),
+          token=self.token)
 
     # Once the flow has finished, the file view should update and add the
     # newly created, latest version of the file to the list. The selected
     # option should still be "HEAD".
     self.WaitUntilContains("HEAD", self.GetText,
                            "css=.version-dropdown > option[selected]")
+
+    # The file table should also update and display the new timestamp.
     self.WaitUntilContains(
         gui_test_lib.DateTimeString(time_in_future), self.GetText,
         "css=.version-dropdown > option:nth(1)")
@@ -263,36 +267,38 @@ class DirRefreshTest(gui_test_lib.GRRSeleniumTest):
 
   def testClickingOnTreeNodeRefreshesChildrenFoldersList(self):
     self.Open("/#/clients/C.0000000000000001/vfs/fs/os/c/")
+    self.WaitUntilNot(self.IsElementPresent, "link=foo")
 
-    self.WaitUntil(self.IsElementPresent, "link=Downloads")
-    self.WaitUntil(self.IsElementPresent, "link=bin")
-
-    aff4.FACTORY.Delete(
-        "aff4:/C.0000000000000001/fs/os/c/bin", token=self.token)
+    gui_test_lib.CreateFolder(
+        rdf_client.ClientURN("C.0000000000000001"),
+        "fs/os/c/foo",
+        timestamp=gui_test_lib.TIME_0,
+        token=self.token)
 
     self.Click("link=c")
-    self.WaitUntil(self.IsElementPresent, "link=Downloads")
-    self.WaitUntilNot(self.IsElementPresent, "link=bin")
+    self.WaitUntil(self.IsElementPresent, "link=foo")
 
   def testClickingOnTreeNodeArrowRefreshesChildrenFoldersList(self):
     self.Open("/#/clients/C.0000000000000001/vfs/fs/os/c/")
-
     self.WaitUntil(self.IsElementPresent, "link=Downloads")
-    self.WaitUntil(self.IsElementPresent, "link=bin")
+    self.WaitUntilNot(self.IsElementPresent, "link=foo")
 
-    aff4.FACTORY.Delete(
-        "aff4:/C.0000000000000001/fs/os/c/bin", token=self.token)
+    gui_test_lib.CreateFolder(
+        rdf_client.ClientURN("C.0000000000000001"),
+        "fs/os/c/foo",
+        timestamp=gui_test_lib.TIME_0,
+        token=self.token)
 
     # Click on the arrow icon, it should close the tree branch.
     self.Click("css=#_fs-os-c i.jstree-icon")
     self.WaitUntilNot(self.IsElementPresent, "link=Downloads")
-    self.WaitUntilNot(self.IsElementPresent, "link=bin")
+    self.WaitUntilNot(self.IsElementPresent, "link=foo")
 
     # Click on the arrow icon again, it should reopen the tree
     # branch. It should be updated.
     self.Click("css=#_fs-os-c i.jstree-icon")
     self.WaitUntil(self.IsElementPresent, "link=Downloads")
-    self.WaitUntilNot(self.IsElementPresent, "link=bin")
+    self.WaitUntil(self.IsElementPresent, "link=foo")
 
 
 def main(argv):

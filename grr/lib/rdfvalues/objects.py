@@ -5,6 +5,7 @@ This package contains the rdfvalue wrappers around the top level datastore
 objects defined by objects.proto.
 """
 import hashlib
+import os
 import re
 import stat
 
@@ -205,6 +206,8 @@ class PathID(object):
   """
 
   def __init__(self, components):
+    _ValidatePathComponents(components)
+
     # TODO(hanuszczak): `SmartStr` is terrible, lets not do that.
     components = map(utils.SmartStr, components)
 
@@ -252,7 +255,12 @@ class PathInfo(structs.RDFProtoStruct):
   rdf_deps = [
       rdfvalue.RDFDatetime,
       rdf_client.StatEntry,
+      rdf_crypto.Hash,
   ]
+
+  def __init__(self, *args, **kwargs):
+    super(PathInfo, self).__init__(*args, **kwargs)
+    _ValidatePathComponents(self.components)
 
   # TODO(hanuszczak): Find a reliable way to make sure that noone ends up with
   # incorrect `PathInfo` (a one that is both root and non-directory). Simple
@@ -302,7 +310,19 @@ class PathInfo(structs.RDFProtoStruct):
       if pathelem.stream_name:
         path += ":%s" % pathelem.stream_name
 
-      components.extend(path.split("/"))
+      # TODO(hanuszczak): Sometimes the paths start with '/', sometimes they do
+      # not (even though they are all supposed to be absolute). If they do start
+      # with `/` we get an empty component at the beginning which needs to be
+      # removed.
+      #
+      # It is also possible that path is simply '/' which, if split, yields two
+      # empty components. To simplify things we just filter out all empty
+      # components. As a side effect we also support pathological cases such as
+      # '//foo//bar////baz'.
+      #
+      # Ideally, pathspec should only allow one format (either with or without
+      # leading slash) sanitizing the input as soon as possible.
+      components.extend(component for component in path.split("/") if component)
 
     return cls(
         path_type=path_type,
@@ -375,9 +395,64 @@ class PathInfo(structs.RDFProtoStruct):
       raise ValueError("src [%s] does not represent the same path as self [%s]"
                        % (src.components, self.components))
 
-    self.last_path_history_timestamp = max(self.last_path_history_timestamp,
-                                           src.last_path_history_timestamp)
+    if src.HasField("stat_entry"):
+      self.stat_entry = src.stat_entry
+
+    self.last_stat_entry_timestamp = max(self.last_stat_entry_timestamp,
+                                         src.last_stat_entry_timestamp)
     self.directory |= src.directory
+
+
+def _ValidatePathComponent(component):
+  if not component:
+    raise ValueError("Empty path component")
+
+  if component == "." or component == "..":
+    raise ValueError("Incorrect path component: '%s'" % component)
+
+
+def _ValidatePathComponents(components):
+  try:
+    for component in components:
+      _ValidatePathComponent(component)
+  except ValueError as error:
+    message = "Incorrect path component list '%s': %s"
+    raise ValueError(message % (components, error))
+
+
+# TODO(hanuszczak): Instead of these two functions for categorized paths we
+# should create an RDF value that wraps a string and provides these two as
+# methods.
+
+
+def ParseCategorizedPath(path):
+  """Parses a categorized path string into type and list of components."""
+  components = [component for component in path.split("/") if component]
+  if components[0:2] == ["fs", "os"]:
+    return PathInfo.PathType.OS, components[2:]
+  elif components[0:2] == ["fs", "tsk"]:
+    return PathInfo.PathType.TSK, components[2:]
+  elif components[0:1] == ["registry"]:
+    return PathInfo.PathType.REGISTRY, components[1:]
+  elif components[0:1] == ["temp"]:
+    return PathInfo.PathType.TEMP, components[1:]
+  else:
+    raise ValueError("Incorrect path: '%s'" % path)
+
+
+def ToCategorizedPath(path_type, components):
+  """Translates a path type and a list of components to a categorized path."""
+  try:
+    prefix = {
+        PathInfo.PathType.OS: ["fs", "os"],
+        PathInfo.PathType.TSK: ["fs", "tsk"],
+        PathInfo.PathType.REGISTRY: ["registry"],
+        PathInfo.PathType.TEMP: ["temp"],
+    }[path_type]
+  except KeyError:
+    raise ValueError("Unknown path type: `%s`" % path_type)
+
+  return "/".join(prefix + components)
 
 
 class ClientReference(structs.RDFProtoStruct):
@@ -400,17 +475,46 @@ class CronJobReference(structs.RDFProtoStruct):
 
 class FlowReference(structs.RDFProtoStruct):
   protobuf = objects_pb2.FlowReference
-  rdf_deps = [
-      rdf_client.ClientURN,
-  ]
+  rdf_deps = []
 
   def ToFlowURN(self):
-    return self.client_id.Add("flows").Add(self.flow_id)
+    return rdfvalue.RDFURN(self.client_id).Add("flows").Add(self.flow_id)
 
 
 class VfsFileReference(structs.RDFProtoStruct):
+  """Object reference pointing to a VFS file."""
+
   protobuf = objects_pb2.VfsFileReference
   rdf_deps = []
+
+  def ToURN(self):
+    """Converts a reference into an URN."""
+
+    if self.path_type in [PathInfo.PathType.OS, PathInfo.PathType.TSK]:
+      return rdfvalue.RDFURN(self.client_id).Add("fs").Add(
+          self.path_type.name.lower()).Add("/".join(self.path_components))
+    elif self.path_type == PathInfo.PathType.REGISTRY:
+      return rdfvalue.RDFURN(self.client_id).Add("registry").Add("/".join(
+          self.path_components))
+    elif self.path_type == PathInfo.PathType.TEMP:
+      return rdfvalue.RDFURN(self.client_id).Add("temp").Add("/".join(
+          self.path_components))
+
+    raise ValueError("Unsupported path type: %s" % self.path_type)
+
+  def ToPath(self):
+    """Converts a reference into a VFS file path."""
+
+    if self.path_type == PathInfo.PathType.OS:
+      return os.path.join("fs", "os", *self.path_components)
+    elif self.path_type == PathInfo.PathType.TSK:
+      return os.path.join("fs", "tsk", *self.path_components)
+    elif self.path_type == PathInfo.PathType.REGISTRY:
+      return os.path.join("registry", *self.path_components)
+    elif self.path_type == PathInfo.PathType.TEMP:
+      return os.path.join("temp", *self.path_components)
+
+    raise ValueError("Unsupported path type: %s" % self.path_type)
 
 
 class ApprovalRequestReference(structs.RDFProtoStruct):

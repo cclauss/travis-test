@@ -4,6 +4,7 @@
 from grr.lib import flags
 from grr.lib import rdfvalue
 
+from grr.lib.rdfvalues import cronjobs as rdf_cronjobs
 from grr.lib.rdfvalues import hunts as rdf_hunts
 from grr.lib.rdfvalues import objects as rdf_objects
 from grr.server.grr_response_server import aff4
@@ -438,8 +439,8 @@ class ApiGetCronJobApprovalHandlerRegressionTest(
     with test_lib.FakeTime(42):
       self.CreateAdminUser("approver")
 
-      cron_manager = aff4_cronjobs.CronManager()
-      cron_args = aff4_cronjobs.CreateCronJobFlowArgs(
+      cron_manager = aff4_cronjobs.GetCronManager()
+      cron_args = rdf_cronjobs.CreateCronJobFlowArgs(
           periodicity="1d", allow_overruns=False)
       cron1_id = cron_manager.CreateJob(cron_args=cron_args, token=self.token)
       cron2_id = cron_manager.CreateJob(cron_args=cron_args, token=self.token)
@@ -490,8 +491,8 @@ class ApiGrantCronJobApprovalHandlerRegressionTest(
     with test_lib.FakeTime(42):
       self.CreateAdminUser("requestor")
 
-      cron_manager = aff4_cronjobs.CronManager()
-      cron_args = aff4_cronjobs.CreateCronJobFlowArgs(
+      cron_manager = aff4_cronjobs.GetCronManager()
+      cron_args = rdf_cronjobs.CreateCronJobFlowArgs(
           periodicity="1d", allow_overruns=False)
       cron_id = cron_manager.CreateJob(cron_args=cron_args, token=self.token)
 
@@ -526,8 +527,8 @@ class ApiCreateCronJobApprovalHandlerRegressionTest(
     with test_lib.FakeTime(42):
       self.CreateUser("approver")
 
-    cron_manager = aff4_cronjobs.CronManager()
-    cron_args = aff4_cronjobs.CreateCronJobFlowArgs(
+    cron_manager = aff4_cronjobs.GetCronManager()
+    cron_args = rdf_cronjobs.CreateCronJobFlowArgs(
         periodicity="1d", allow_overruns=False)
     cron_id = cron_manager.CreateJob(cron_args=cron_args, token=self.token)
 
@@ -659,19 +660,23 @@ class ApiListAndResetUserNotificationsHandlerRegressionTest(
   def Run(self):
     _SendNotifications(self.token.username, self.client_id)
 
-    # Notifications are pending in this request.
-    self.Check(
-        "ListAndResetUserNotifications",
-        args=user_plugin.ApiListAndResetUserNotificationsArgs())
+    # _SendNotifications schedule notifications at timestamp 42 and 44.
+    # REL_DB-based ListAndResetUserNotifications implementation only
+    # reads last 6 months worth of notifications. Hence - using FakeTime.
+    with test_lib.FakeTime(45):
+      # Notifications are pending in this request.
+      self.Check(
+          "ListAndResetUserNotifications",
+          args=user_plugin.ApiListAndResetUserNotificationsArgs())
 
-    # But not anymore in these requests.
-    self.Check(
-        "ListAndResetUserNotifications",
-        args=user_plugin.ApiListAndResetUserNotificationsArgs(
-            offset=1, count=1))
-    self.Check(
-        "ListAndResetUserNotifications",
-        args=user_plugin.ApiListAndResetUserNotificationsArgs(filter="other"))
+      # But not anymore in these requests.
+      self.Check(
+          "ListAndResetUserNotifications",
+          args=user_plugin.ApiListAndResetUserNotificationsArgs(
+              offset=1, count=1))
+      self.Check(
+          "ListAndResetUserNotifications",
+          args=user_plugin.ApiListAndResetUserNotificationsArgs(filter="other"))
 
 
 class ApiListPendingGlobalNotificationsHandlerRegressionTest(
@@ -688,9 +693,6 @@ class ApiListPendingGlobalNotificationsHandlerRegressionTest(
   TIME_TOO_EARLY = NOW - rdfvalue.Duration("4w")
   TIME_0 = NOW - rdfvalue.Duration("12h")
   TIME_1 = NOW - rdfvalue.Duration("1h")
-
-  def setUp(self):
-    super(ApiListPendingGlobalNotificationsHandlerRegressionTest, self).setUp()
 
   def Run(self):
     with aff4.FACTORY.Create(

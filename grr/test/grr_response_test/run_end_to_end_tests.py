@@ -17,7 +17,6 @@ from grr.server.grr_response_server import data_store
 from grr.server.grr_response_server import server_startup
 from grr_response_test.end_to_end_tests import runner
 
-
 flags.DEFINE_string("api_endpoint", "http://localhost:8000",
                     "GRR API endpoint.")
 
@@ -28,8 +27,13 @@ flags.DEFINE_string("api_password", "", "Password for GRR API.")
 flags.DEFINE_string("client_id", "", "Id for client to run tests against.")
 
 flags.DEFINE_list(
-    "testnames", [], "List of test cases to run. If unset we run all "
-    "tests for a client's platform.")
+    "whitelisted_tests", [],
+    "(Optional) comma-separated list of tests to run (skipping all others).")
+
+flags.DEFINE_list(
+    "blacklisted_tests", [],
+    "(Optional) comma-separated list of tests to skip. Trumps "
+    "--whitelisted_tests if there are any conflicts.")
 
 # We use a logging Filter to exclude noisy unwanted log output.
 flags.DEFINE_list("filenames_excluded_from_log", ["connectionpool.py"],
@@ -58,7 +62,8 @@ def main(argv):
       api_endpoint=flags.FLAGS.api_endpoint,
       api_user=flags.FLAGS.api_user,
       api_password=flags.FLAGS.api_password,
-      whitelisted_tests=flags.FLAGS.testnames,
+      whitelisted_tests=flags.FLAGS.whitelisted_tests,
+      blacklisted_tests=flags.FLAGS.blacklisted_tests,
       upload_test_binaries=flags.FLAGS.upload_test_binaries)
   test_runner.Initialize()
   test_runner.RunTestsAgainstClient(flags.FLAGS.client_id)

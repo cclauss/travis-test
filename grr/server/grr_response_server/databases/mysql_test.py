@@ -173,6 +173,9 @@ class TestMysqlDB(stats_test_lib.StatsTestMixin,
   def testWritePathInfosMetadata(self):
     pass
 
+  def testWritePathInfosMetadataTimestampUpdate(self):
+    pass
+
   def testWritePathInfosStatEntry(self):
     pass
 
@@ -189,6 +192,15 @@ class TestMysqlDB(stats_test_lib.StatsTestMixin,
     pass
 
   def testFindPathInfosByPathIDsNonExistent(self):
+    pass
+
+  def testFindPathInfoByPathIDNonExistent(self):
+    pass
+
+  def testFindPathInfoByPathIDTimestampStatEntry(self):
+    pass
+
+  def testFindPathInfosByPathIDsMany(self):
     pass
 
   def testWritePathInfosDuplicatedData(self):
@@ -213,6 +225,24 @@ class TestMysqlDB(stats_test_lib.StatsTestMixin,
     pass
 
   def testFindDescendentPathIDsAll(self):
+    pass
+
+  # TODO(hanuszczak): Remove these once support for storing file hashes in
+  # the F1 backend is ready.
+
+  def testWritePathInfosHashEntry(self):
+    pass
+
+  def testWritePathInfosHashAndStatEntry(self):
+    pass
+
+  def testWritePathInfoHashAndStatEntrySeparateWrites(self):
+    pass
+
+  def testFindPathInfoByPathIDTimestampHashEntry(self):
+    pass
+
+  def testFindPathInfoByPathIDTimestampStatAndHashEntry(self):
     pass
 
 

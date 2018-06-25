@@ -6,6 +6,7 @@ from grr.lib import flags
 from grr.lib import rdfvalue
 from grr.lib import utils
 
+from grr.lib.rdfvalues import cronjobs as rdf_cronjobs
 from grr.lib.rdfvalues import flows as rdf_flows
 from grr.lib.rdfvalues import objects as rdf_objects
 from grr.server.grr_response_server import access_control
@@ -31,6 +32,7 @@ from grr.test_lib import notification_test_lib
 from grr.test_lib import test_lib
 
 
+@db_test_lib.DualDBTest
 class ApiNotificationTest(acl_test_lib.AclTestMixin,
                           notification_test_lib.NotificationTestMixin,
                           api_test_lib.ApiCallHandlerTest):
@@ -46,7 +48,12 @@ class ApiNotificationTest(acl_test_lib.AclTestMixin,
                         reference)
     ns = self.GetUserNotifications(self.token.username)
 
-    return user_plugin.ApiNotification().InitFromNotification(ns[0])
+    if data_store.RelationalDBReadEnabled():
+      # Treat the notification as an object coming from REL_DB.
+      return user_plugin.ApiNotification().InitFromUserNotification(ns[0])
+    else:
+      # Treat the notification as an old-style notification object.
+      return user_plugin.ApiNotification().InitFromNotification(ns[0])
 
   def testDiscoveryNotificationIsParsedCorrectly(self):
     n = self.InitFromObj_(
@@ -56,8 +63,8 @@ class ApiNotificationTest(acl_test_lib.AclTestMixin,
             client=rdf_objects.ClientReference(
                 client_id=self.client_id.Basename())))
 
-    self.assertEqual(n.reference.type, "DISCOVERY")
-    self.assertEqual(n.reference.discovery.client_id, self.client_id)
+    self.assertEqual(n.reference.type, "CLIENT")
+    self.assertEqual(n.reference.client.client_id, self.client_id)
 
   def testClientApprovalGrantedNotificationIsParsedCorrectly(self):
     n = self.InitFromObj_(
@@ -67,8 +74,8 @@ class ApiNotificationTest(acl_test_lib.AclTestMixin,
             client=rdf_objects.ClientReference(
                 client_id=self.client_id.Basename())))
 
-    self.assertEqual(n.reference.type, "DISCOVERY")
-    self.assertEqual(n.reference.discovery.client_id, self.client_id)
+    self.assertEqual(n.reference.type, "CLIENT")
+    self.assertEqual(n.reference.client.client_id, self.client_id)
 
   def testHuntNotificationIsParsedCorrectly(self):
     n = self.InitFromObj_(
@@ -78,7 +85,7 @@ class ApiNotificationTest(acl_test_lib.AclTestMixin,
             hunt=rdf_objects.HuntReference(hunt_id="H:123456")))
 
     self.assertEqual(n.reference.type, "HUNT")
-    self.assertEqual(n.reference.hunt.hunt_urn, "aff4:/hunts/H:123456")
+    self.assertEqual(n.reference.hunt.hunt_id, "H:123456")
 
   def testCronNotificationIsParsedCorrectly(self):
     n = self.InitFromObj_(
@@ -88,7 +95,7 @@ class ApiNotificationTest(acl_test_lib.AclTestMixin,
             cron_job=rdf_objects.CronJobReference(cron_job_id="FooBar")))
 
     self.assertEqual(n.reference.type, "CRON")
-    self.assertEqual(n.reference.cron.cron_job_urn, "aff4:/cron/FooBar")
+    self.assertEqual(n.reference.cron.cron_job_id, "FooBar")
 
   def testFlowSuccessNotificationIsParsedCorrectly(self):
     n = self.InitFromObj_(
@@ -180,12 +187,12 @@ class ApiNotificationTest(acl_test_lib.AclTestMixin,
                      self.token.username)
     self.assertEqual(n.reference.cron_job_approval.approval_id, "foo-bar")
 
-  def testFileArchiveGenerationFailedNotificationIsParsedAsUnknown(self):
+  def testFileArchiveGenerationFailedNotificationIsParsedAsUnknownOrUnset(self):
     n = self.InitFromObj_(
         rdf_objects.UserNotification.Type.TYPE_FILE_ARCHIVE_GENERATION_FAILED,
         None,
         message="blah")
-    self.assertEqual(n.reference.type, "UNKNOWN")
+    self.assertTrue(n.reference.type in ["UNSET", "UNKNOWN"])
     self.assertEqual(n.message, "blah")
 
   def testVfsListDirectoryCompletedIsParsedCorrectly(self):
@@ -587,8 +594,8 @@ class ApiCreateCronJobApprovalHandlerTest(
 
     self.SetUpApprovalTest()
 
-    cron_manager = aff4_cronjobs.CronManager()
-    cron_args = aff4_cronjobs.CreateCronJobFlowArgs(
+    cron_manager = aff4_cronjobs.GetCronManager()
+    cron_args = rdf_cronjobs.CreateCronJobFlowArgs(
         periodicity="1d", allow_overruns=False)
     cron_id = cron_manager.CreateJob(cron_args=cron_args, token=self.token)
 
@@ -610,14 +617,13 @@ class ApiListCronJobApprovalsHandlerTest(acl_test_lib.AclTestMixin,
     self.handler = user_plugin.ApiListCronJobApprovalsHandler()
 
   def testRendersRequestedCronJobApproval(self):
-    cron_manager = aff4_cronjobs.CronManager()
-    cron_args = aff4_cronjobs.CreateCronJobFlowArgs(
+    cron_manager = aff4_cronjobs.GetCronManager()
+    cron_args = rdf_cronjobs.CreateCronJobFlowArgs(
         periodicity="1d", allow_overruns=False)
-    cron_job_name = cron_manager.CreateJob(
-        cron_args=cron_args, token=self.token)
+    cron_job_id = cron_manager.CreateJob(cron_args=cron_args, token=self.token)
 
     self.RequestCronJobApproval(
-        cron_job_name,
+        cron_job_id,
         reason=self.token.reason,
         approver="approver",
         requestor=self.token.username)

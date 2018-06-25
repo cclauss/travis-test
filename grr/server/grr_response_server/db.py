@@ -45,6 +45,28 @@ class UnknownClientError(NotFoundError):
     self.cause = cause
 
 
+class UnknownPathError(NotFoundError):
+  """An exception class representing errors about unknown paths.
+
+  Attributes:
+    client_id: An id of the client for which the path does not exists.
+    path_type: A type of the path.
+    path_id: An id of the path.
+  """
+
+  def __init__(self, client_id, path_type, path_id, cause=None):
+    message = "Path of type '%s' with id '%s' on client '%s' does not exist"
+    message %= (path_type, path_id, client_id)
+    if cause is not None:
+      message += ": %s" % cause
+    super(UnknownPathError, self).__init__(message)
+
+    self.client_id = client_id
+    self.path_type = path_type
+    self.path_id = path_id
+    self.cause = cause
+
+
 class UnknownRuleError(NotFoundError):
   pass
 
@@ -57,9 +79,15 @@ class UnknownApprovalRequestError(NotFoundError):
   pass
 
 
+class UnknownCronjobError(NotFoundError):
+  pass
+
+
 class Database(object):
   """The GRR relational database abstraction."""
   __metaclass__ = abc.ABCMeta
+
+  unchanged = "__unchanged__"
 
   @abc.abstractmethod
   def WriteClientMetadata(self,
@@ -551,6 +579,25 @@ class Database(object):
           yield snapshot
 
   @abc.abstractmethod
+  def FindPathInfoByPathID(self, client_id, path_type, path_id, timestamp=None):
+    """Returns path info record for a particular path on a particular client.
+
+    The `timestamp` parameter specifies for what moment in time the path
+    information is to be retrieved. For example, if (using abstract time units)
+    at time 1 the path was in state A, at time 5 it was observed to be in state
+    B and at time 8 it was in state C one wants to retrieve information at time
+    6 the result is going to be B.
+
+    Args:
+      client_id: The client of interest.
+      path_type: A type of the path to retrieve information for.
+      path_id: The id of the path to retrieve information for.
+      timestamp: A moment in time for which we want to retrieve the information.
+                 If none is provided, the latest known path information is
+                 returned.
+    """
+
+  @abc.abstractmethod
   def FindPathInfosByPathIDs(self, client_id, path_type, path_ids):
     """Returns path info records for a client.
 
@@ -602,11 +649,12 @@ class Database(object):
     """
 
   @abc.abstractmethod
-  def ReadUserNotifications(self, username, timerange=None):
+  def ReadUserNotifications(self, username, state=None, timerange=None):
     """Reads notifications scheduled for a user within a given timerange.
 
     Args:
       username: Username identifying the user.
+      state: If set, only return the notifications with a given state attribute.
       timerange: Should be either a tuple of (from, to) or None.
                  "from" and to" should be rdfvalue.RDFDatetime or None values
                  (from==None means "all record up to 'to'", to==None means
@@ -686,6 +734,122 @@ class Database(object):
       A list of objects.MessageHandlerRequest, the leased requests.
     """
 
+  @abc.abstractmethod
+  def WriteCronJob(self, cronjob):
+    """Writes a cronjob to the database.
+
+    Args:
+      cronjob: A cronjobs.CronJob object.
+    """
+
+  def ReadCronJob(self, cronjob_id):
+    """Reads a cronjob from the database.
+
+    Args:
+      cronjob_id: The id of the cron job to read.
+
+    Returns:
+      A list of cronjobs.CronJob objects.
+
+    Raises:
+      UnknownCronjobError: A cron job with the given id does not exist.
+    """
+    return self.ReadCronJobs(cronjob_ids=[cronjob_id])[0]
+
+  @abc.abstractmethod
+  def ReadCronJobs(self, cronjob_ids=None):
+    """Reads all cronjobs from the database.
+
+    Args:
+      cronjob_ids: A list of cronjob ids to read. If not set, returns all
+                   cron jobs in the database.
+
+    Returns:
+      A list of cronjobs.CronJob objects.
+
+    Raises:
+      UnknownCronjobError: A cron job for at least one of the given ids
+                           does not exist.
+    """
+
+  @abc.abstractmethod
+  def EnableCronJob(self, cronjob_id):
+    """Enables a cronjob.
+
+    Args:
+      cronjob_id: The id of the cron job to enable.
+
+    Raises:
+      UnknownCronjobError: A cron job with the given id does not exist.
+    """
+
+  @abc.abstractmethod
+  def DisableCronJob(self, cronjob_id):
+    """Disables a cronjob.
+
+    Args:
+      cronjob_id: The id of the cron job to disable.
+
+    Raises:
+      UnknownCronjobError: A cron job with the given id does not exist.
+    """
+
+  @abc.abstractmethod
+  def DeleteCronJob(self, cronjob_id):
+    """Deletes a cronjob.
+
+    Args:
+      cronjob_id: The id of the cron job to delete.
+
+    Raises:
+      UnknownCronjobError: A cron job with the given id does not exist.
+    """
+
+  @abc.abstractmethod
+  def UpdateCronJob(self,
+                    cronjob_id,
+                    last_run_status=unchanged,
+                    last_run_time=unchanged,
+                    current_run_id=unchanged,
+                    state=unchanged):
+    """Updates run information for an existing cron job.
+
+    Args:
+      cronjob_id: The id of the cron job to update.
+      last_run_status: A CronJobRunStatus object.
+      last_run_time: The last time a run was started for this cron job.
+      current_run_id: The id of the currently active run.
+      state: The state dict for stateful cron jobs.
+
+    Raises:
+      UnknownCronjobError: A cron job with the given id does not exist.
+    """
+
+  @abc.abstractmethod
+  def LeaseCronJobs(self, cronjob_ids=None, lease_time=None):
+    """Leases all available cron jobs.
+
+    Args:
+      cronjob_ids: A list of cronjob ids that should be leased. If None,
+                   all available cronjobs will be leased.
+      lease_time: rdfvalue.Duration indicating how long the lease should be
+                  valid.
+
+    Returns:
+      A list of cronjobs.CronJob objects that were leased.
+    """
+
+  @abc.abstractmethod
+  def ReturnLeasedCronJobs(self, jobs):
+    """Makes leased cron jobs available for leasing again.
+
+    Args:
+      jobs: A list of leased cronjobs.
+
+    Raises:
+      ValueError: If not all of the cronjobs are leased.
+    """
+
 
 class DatabaseValidationWrapper(Database):
   """Database wrapper that validates the arguments."""
@@ -693,6 +857,12 @@ class DatabaseValidationWrapper(Database):
   def __init__(self, delegate):
     super(DatabaseValidationWrapper, self).__init__()
     self.delegate = delegate
+
+  @staticmethod
+  def _ValidateType(value, expected_type):
+    if not isinstance(value, expected_type):
+      message = "Expected `%s` but got `%s` instead"
+      raise TypeError(message % (expected_type, type(value)))
 
   def _ValidateStringId(self, id_type, id_value):
     if not isinstance(id_value, basestring):
@@ -723,9 +893,7 @@ class DatabaseValidationWrapper(Database):
     self._ValidateStringId("username", username)
 
   def _ValidatePathInfo(self, path_info):
-    if not isinstance(path_info, rdf_objects.PathInfo):
-      raise TypeError(
-          "Expected `rdfvalues.objects.PathInfo`, got: %s" % type(path_info))
+    self._ValidateType(path_info, rdf_objects.PathInfo)
     if not path_info.path_type:
       raise ValueError(
           "Expected path_type to be set, got: %s" % str(path_info.path_type))
@@ -759,8 +927,10 @@ class DatabaseValidationWrapper(Database):
             "Timerange items should be None or rdfvalue.RDFDatetime")
 
   def _ValidateDuration(self, duration):
-    if not isinstance(duration, rdfvalue.Duration):
-      raise TypeError("Expected an rdfvalue.Duration, got %s." % type(duration))
+    self._ValidateType(duration, rdfvalue.Duration)
+
+  def _ValidateTimestamp(self, timestamp):
+    self._ValidateType(timestamp, rdfvalue.RDFDatetime)
 
   def WriteClientMetadata(self,
                           client_id,
@@ -1021,6 +1191,15 @@ class DatabaseValidationWrapper(Database):
     return self.delegate.GrantApproval(requestor_username, approval_id,
                                        grantor_username)
 
+  def FindPathInfoByPathID(self, client_id, path_type, path_id, timestamp=None):
+    self._ValidateClientId(client_id)
+
+    if timestamp is not None:
+      self._ValidateTimestamp(timestamp)
+
+    return self.delegate.FindPathInfoByPathID(
+        client_id, path_type, path_id, timestamp=timestamp)
+
   def FindPathInfosByPathIDs(self, client_id, path_type, path_ids):
     self._ValidateClientId(client_id)
 
@@ -1060,11 +1239,14 @@ class DatabaseValidationWrapper(Database):
 
     return self.delegate.WriteUserNotification(notification)
 
-  def ReadUserNotifications(self, username, timerange=None):
+  def ReadUserNotifications(self, username, state=None, timerange=None):
     self._ValidateUsername(username)
     self._ValidateTimeRange(timerange)
+    if state is not None:
+      self._ValidateNotificationState(state)
 
-    return self.delegate.ReadUserNotifications(username, timerange=timerange)
+    return self.delegate.ReadUserNotifications(
+        username, state=state, timerange=timerange)
 
   def UpdateUserNotifications(self, username, timestamps, state=None):
     self._ValidateNotificationState(state)
@@ -1095,3 +1277,41 @@ class DatabaseValidationWrapper(Database):
     self._ValidateDuration(lease_time)
     return self.delegate.LeaseMessageHandlerRequests(
         lease_time=lease_time, limit=limit)
+
+  def WriteCronJob(self, cronjob):
+    return self.delegate.WriteCronJob(cronjob)
+
+  def ReadCronJob(self, cronjob_id):
+    return self.delegate.ReadCronJob(cronjob_id)
+
+  def ReadCronJobs(self, cronjob_ids=None):
+    return self.delegate.ReadCronJobs(cronjob_ids=cronjob_ids)
+
+  def EnableCronJob(self, cronjob_id):
+    return self.delegate.EnableCronJob(cronjob_id)
+
+  def DisableCronJob(self, cronjob_id):
+    return self.delegate.DisableCronJob(cronjob_id)
+
+  def DeleteCronJob(self, cronjob_id):
+    return self.delegate.DeleteCronJob(cronjob_id)
+
+  def UpdateCronJob(self,
+                    cronjob_id,
+                    last_run_status=Database.unchanged,
+                    last_run_time=Database.unchanged,
+                    current_run_id=Database.unchanged,
+                    state=Database.unchanged):
+    return self.delegate.UpdateCronJob(
+        cronjob_id,
+        last_run_status=last_run_status,
+        last_run_time=last_run_time,
+        current_run_id=current_run_id,
+        state=state)
+
+  def LeaseCronJobs(self, cronjob_ids=None, lease_time=None):
+    return self.delegate.LeaseCronJobs(
+        cronjob_ids=cronjob_ids, lease_time=lease_time)
+
+  def ReturnLeasedCronJobs(self, jobs):
+    return self.delegate.ReturnLeasedCronJobs(jobs)
