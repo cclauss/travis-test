@@ -47,20 +47,23 @@ class E2ETestRunner(object):
   WINDOWS_TEST_BINARY_PATH = "windows/test/hello.exe"
 
   def __init__(self,
-               api_endpoint="",
-               api_user="",
-               api_password="",
-               whitelisted_tests=None,
-               blacklisted_tests=None,
-               upload_test_binaries=True,
-               api_retry_period_secs=30.0,
-               api_retry_deadline_secs=500.0):
+      api_endpoint="",
+      api_user="",
+      api_password="",
+      whitelisted_tests=None,
+      blacklisted_tests=None,
+      upload_test_binaries=True,
+      api_retry_period_secs=30.0,
+      api_retry_deadline_secs=500.0,
+      max_test_attempts=3):
     if not api_endpoint:
       raise ValueError("GRR api_endpoint is required.")
     if isinstance(whitelisted_tests, basestring):
       raise ValueError("whitelisted_tests should be a list.")
     if isinstance(blacklisted_tests, basestring):
       raise ValueError("blacklisted_tests should be a list.")
+    if max_test_attempts < 1:
+      raise ValueError("max_test_attempts must be at least 1.")
     self._api_endpoint = api_endpoint
     self._api_user = api_user
     self._api_password = api_password
@@ -69,8 +72,10 @@ class E2ETestRunner(object):
     self._upload_test_binaries = upload_test_binaries
     self._api_retry_period_secs = api_retry_period_secs
     self._api_retry_deadline_secs = api_retry_deadline_secs
+    self._max_test_attempts = 3
     self._grr_api = None
     self._appveyor_tests_endpoint = ""
+    self._appveyor_messages_endpoint = ""
 
   def Initialize(self):
     """Initializes state in preparation for running end-to-end tests.
@@ -83,12 +88,14 @@ class E2ETestRunner(object):
       # See https://www.appveyor.com/docs/build-worker-api/
       self._appveyor_tests_endpoint = urlparse.urljoin(appveyor_root_url,
                                                        "api/tests")
+      self._appveyor_messages_endpoint = urlparse.urljoin(appveyor_root_url,
+                                                          "api/build/messages")
 
     logging.info("Connecting to GRR API at %s", self._api_endpoint)
     password = self._api_password
     if not password:
       password = getpass.getpass(prompt="Please enter the API password for "
-                                 "user '%s': " % self._api_user)
+                                        "user '%s': " % self._api_user)
     self._grr_api = api.InitHttp(
         api_endpoint=self._api_endpoint, auth=(self._api_user, password))
 
@@ -120,7 +127,7 @@ class E2ETestRunner(object):
 
   def _UploadBinary(self, bin_name, server_path):
     """Uploads a binary from the GRR installation dir to the datastore."""
-    # TODO(user): Upload binaries via the GRR API.
+    # TODO(ogaro): Upload binaries via the GRR API.
     logging.info("Uploading %s binary to server.", server_path)
     package_dir = config_lib.Resource().Filter(
         "grr_response_test@grr-response-test")
@@ -138,9 +145,7 @@ class E2ETestRunner(object):
 
     results = collections.OrderedDict()
     for test_name, test in self._GetApplicableTests(client).iteritems():
-      start_time = time.time()
-      result = unittest_runner.run(test)
-      millis_elapsed = int((time.time() - start_time) * 1000)
+      result, millis_elapsed = self._RetryTest(test_name, test, unittest_runner)
       results[test_name] = result
       if not self._appveyor_tests_endpoint:
         continue
@@ -157,20 +162,20 @@ class E2ETestRunner(object):
       resp = requests.post(
           self._appveyor_tests_endpoint,
           json={
-              "testName":
-                  test_name,
-              "testFramework":
-                  "JUnit",
-              "outcome":
-                  appveyor_result_string,
-              "durationMilliseconds":
-                  str(millis_elapsed),
-              "fileName":
-                  os.path.basename(inspect.getsourcefile(test.__class__)),
-              "ErrorMessage":
-                  assert_failures,
-              "ErrorStackTrace":
-                  unexpected_errors,
+            "testName":
+              test_name,
+            "testFramework":
+              "JUnit",
+            "outcome":
+              appveyor_result_string,
+            "durationMilliseconds":
+              str(millis_elapsed),
+            "fileName":
+              os.path.basename(inspect.getsourcefile(test.__class__)),
+            "ErrorMessage":
+              assert_failures,
+            "ErrorStackTrace":
+              unexpected_errors,
           })
       logging.debug("Uploaded results of %s to Appveyor. Response: %s",
                     test_name, resp)
@@ -255,6 +260,34 @@ class E2ETestRunner(object):
         else:
           applicable_tests[test_name] = test
     return collections.OrderedDict(sorted(applicable_tests.iteritems()))
+
+  def _RetryTest(self, test_name, test, unittest_runner):
+    num_attempts = 0
+    result = None
+    millis_elapsed = None
+    while num_attempts < self._max_test_attempts:
+      start_time = time.time()
+      result = unittest_runner.run(test)
+      millis_elapsed = int((time.time() - start_time) * 1000)
+      num_attempts += 1
+      if result.failures or result.errors:
+        logging.error("Test %s failed. Attempts left: %d", test_name,
+                      self._max_test_attempts - num_attempts)
+        continue
+
+      if num_attempts > 1 and self._appveyor_messages_endpoint:
+        appveyor_msg = "Flaky test %s passed after %d attempts." % (
+          test_name, num_attempts)
+        resp = requests.post(
+            self._appveyor_messages_endpoint,
+            json={"message": appveyor_msg, "category": "information"})
+        logging.debug(
+            "Uploaded info message for %s to Appveyor. Response: %s",
+            test_name, resp)
+
+      break  # Test passed, no need for retry.
+
+    return result, millis_elapsed
 
   def _GenerateReportLines(self, client_id, results_dict):
     """Summarizes test results for printing to a terminal/log-file."""
