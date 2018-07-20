@@ -8,13 +8,16 @@ import os
 import pwd
 import time
 
+
+from builtins import map  # pylint: disable=redefined-builtin
+
 from grr_response_client import actions
 from grr_response_client import client_utils_common
 from grr_response_client.client_actions import standard
-from grr.lib import rdfvalue
-from grr.lib import utils
-from grr.lib.rdfvalues import client as rdf_client
-from grr.lib.rdfvalues import protodict as rdf_protodict
+from grr_response_core.lib import rdfvalue
+from grr_response_core.lib import utils
+from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_core.lib.rdfvalues import protodict as rdf_protodict
 
 # struct sockaddr_ll
 #   {
@@ -126,6 +129,8 @@ class EnumerateInterfaces(actions.ActionPlugin):
       ifs.add(ifname)
       try:
         iffamily = ord(m.contents.ifa_addr[0])
+        # TODO(hanuszczak): There are some Python 3-incompatible `chr` usages
+        # here, they should be fixed.
         if iffamily == 0x2:  # AF_INET
           data = ctypes.cast(m.contents.ifa_addr, ctypes.POINTER(Sockaddrin))
           ip4 = "".join(map(chr, data.contents.sin_addr))

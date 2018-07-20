@@ -5,13 +5,15 @@ An index of client machines, associating likely identifiers to client IDs.
 """
 
 
-from grr.lib import rdfvalue
-from grr.lib import utils
-from grr.lib.rdfvalues import client as rdf_client
-from grr.server.grr_response_server import aff4
-from grr.server.grr_response_server import data_store
-from grr.server.grr_response_server import keyword_index
-from grr.server.grr_response_server.aff4_objects import aff4_grr
+from builtins import map  # pylint: disable=redefined-builtin
+
+from grr_response_core.lib import rdfvalue
+from grr_response_core.lib import utils
+from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_server import aff4
+from grr_response_server import data_store
+from grr_response_server import keyword_index
+from grr_response_server.aff4_objects import aff4_grr
 
 
 def CreateClientIndex(token=None):
@@ -98,7 +100,7 @@ class AFF4ClientIndex(keyword_index.AFF4KeywordIndex):
     # AsMicrosecondsSinceEpoch is unnecessary.
 
     raw_results = self.Lookup(
-        map(self._NormalizeKeyword, filtered_keywords),
+        list(map(self._NormalizeKeyword, filtered_keywords)),
         start_time=start_time.AsMicrosecondsSinceEpoch(),
         end_time=end_time.AsMicrosecondsSinceEpoch(),
         last_seen_map=last_seen_map)
@@ -108,7 +110,7 @@ class AFF4ClientIndex(keyword_index.AFF4KeywordIndex):
     if unversioned_keywords:
       universal_last_seen_raw = {}
       self.ReadPostingLists(
-          map(self._NormalizeKeyword, raw_results),
+          list(map(self._NormalizeKeyword, raw_results)),
           start_time=start_time.AsMicrosecondsSinceEpoch(),
           end_time=end_time.AsMicrosecondsSinceEpoch(),
           last_seen_map=universal_last_seen_raw)
@@ -365,7 +367,8 @@ class ClientIndex(object):
     start_time, filtered_keywords = self._AnalyzeKeywords(keywords)
 
     keyword_map = data_store.REL_DB.ListClientsForKeywords(
-        map(self._NormalizeKeyword, filtered_keywords), start_time=start_time)
+        list(map(self._NormalizeKeyword, filtered_keywords)),
+        start_time=start_time)
 
     results = keyword_map.values()
     relevant_set = set(results[0])

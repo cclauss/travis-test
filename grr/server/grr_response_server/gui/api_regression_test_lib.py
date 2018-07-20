@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 """Base test classes for API handlers tests."""
+from __future__ import print_function
 
 import abc
 import json
@@ -10,20 +11,21 @@ import socket
 import sys
 
 
+from future.utils import with_metaclass
 import psutil
 import pytest
 
-from grr.lib import flags
-from grr.lib import registry
-from grr.lib import utils
-from grr.server.grr_response_server.gui import api_auth_manager
+from grr_response_core.lib import flags
+from grr_response_core.lib import registry
+from grr_response_core.lib import utils
+from grr_response_server.gui import api_auth_manager
 # This import guarantees that all API-related RDF types will get imported
 # (as they're all references by api_call_router).
 # pylint: disable=unused-import
-from grr.server.grr_response_server.gui import api_call_router
+from grr_response_server.gui import api_call_router
 # pylint: enable=unused-import
-from grr.server.grr_response_server.gui import api_regression_http
-from grr.server.grr_response_server.gui import webauth
+from grr_response_server.gui import api_regression_http
+from grr_response_server.gui import webauth
 from grr.test_lib import test_lib
 
 flags.DEFINE_string(
@@ -81,7 +83,8 @@ ApiRegressionTestMetaclass.RegisterConnectionMixin(
 
 @pytest.mark.small
 @pytest.mark.api_regression
-class ApiRegressionTest(test_lib.GRRBaseTest):
+class ApiRegressionTest(
+    with_metaclass(ApiRegressionTestMetaclass, test_lib.GRRBaseTest)):
   """Base class for API handlers regression tests.
 
   Regression tests are supposed to implement a single abstract Run() method.
@@ -97,8 +100,6 @@ class ApiRegressionTest(test_lib.GRRBaseTest):
   aggregated with data from other test classes and printed to the stdout.
 
   """
-
-  __metaclass__ = ApiRegressionTestMetaclass
 
   # Name of the ApiCallRouter's method that's tested in this class.
   api_method = None
@@ -294,7 +295,7 @@ class ApiRegressionGoldenOutputGenerator(object):
 
     json_sample_data = json.dumps(
         sample_data, indent=2, sort_keys=True, separators=(",", ": "))
-    print json_sample_data
+    print(json_sample_data)
 
 
 def main(argv=None):

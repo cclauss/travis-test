@@ -4,8 +4,8 @@
 # pylint: disable=g-import-not-at-top
 # Argparse runs on import, and maintains static state.
 
-from grr.lib import config_lib
-from grr.lib import flags
+from grr_response_core.lib import config_lib
+from grr_response_core.lib import flags
 
 
 def SetConfigOptions():
@@ -38,53 +38,53 @@ def SetConfigOptions():
 
   # 1. Specified on the command line with the "--config XXXX" option.
   # 2. Use the default config file from the grr-response package.
-  flags.PARSER.set_defaults(
-      config=config_lib.Resource().Filter("install_data/etc/grr-server.yaml"))
+  flags.PARSER.set_defaults(config=config_lib.Resource().Filter(
+      "install_data/etc/grr-server.yaml@grr-response-core"))
 
 
 def Console():
-  from grr.server.grr_response_server.bin import console
+  from grr_response_server.bin import console
   SetConfigOptions()
   flags.StartMain(console.main)
 
 
 def ApiShellRawAccess():
-  from grr.server.grr_response_server.bin import api_shell_raw_access
+  from grr_response_server.bin import api_shell_raw_access
   SetConfigOptions()
   flags.StartMain(api_shell_raw_access.main)
 
 
 def ConfigUpdater():
-  from grr.server.grr_response_server.bin import config_updater
+  from grr_response_server.bin import config_updater
   SetConfigOptions()
   flags.StartMain(config_updater.main)
 
 
 def GrrServer():
-  from grr.server.grr_response_server.bin import grr_server
+  from grr_response_server.bin import grr_server
   SetConfigOptions()
   flags.StartMain(grr_server.main)
 
 
 def GrrFrontend():
-  from grr.server.grr_response_server.bin import frontend
+  from grr_response_server.bin import frontend
   SetConfigOptions()
   flags.StartMain(frontend.main)
 
 
 def Worker():
-  from grr.server.grr_response_server.bin import worker
+  from grr_response_server.bin import worker
   SetConfigOptions()
   flags.StartMain(worker.main)
 
 
 def GRRFuse():
-  from grr.server.grr_response_server.bin import fuse_mount
+  from grr_response_server.bin import fuse_mount
   SetConfigOptions()
   flags.StartMain(fuse_mount.main)
 
 
 def AdminUI():
-  from grr.server.grr_response_server.gui import admin_ui
+  from grr_response_server.gui import admin_ui
   SetConfigOptions()
   flags.StartMain(admin_ui.main)

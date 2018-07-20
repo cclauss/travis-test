@@ -19,13 +19,13 @@ import win32service
 import win32serviceutil
 import wmi
 
-from grr import config
 from grr_response_client import actions
-
 from grr_response_client.client_actions import standard
-from grr.lib import rdfvalue
-from grr.lib.rdfvalues import client as rdf_client
-from grr.lib.rdfvalues import protodict as rdf_protodict
+
+from grr_response_core import config
+from grr_response_core.lib import rdfvalue
+from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_core.lib.rdfvalues import protodict as rdf_protodict
 
 # Properties to remove from results sent to the server.
 # These properties are included with nearly every WMI object and use space.
@@ -158,6 +158,11 @@ class WmiQuery(actions.ActionPlugin):
 
   def Run(self, args):
     """Run the WMI query and return the data."""
+    for res in self.Start(args):
+      self.SendReply(res)
+
+  @classmethod
+  def Start(cls, args):
     query = args.query
     base_object = args.base_object or r"winmgmts:\root\cimv2"
 
@@ -165,7 +170,7 @@ class WmiQuery(actions.ActionPlugin):
       raise RuntimeError("Only SELECT WMI queries allowed.")
 
     for response_dict in RunWMIQuery(query, baseobj=base_object):
-      self.SendReply(response_dict)
+      yield response_dict
 
 
 def RunWMIQuery(query, baseobj=r"winmgmts:\root\cimv2"):

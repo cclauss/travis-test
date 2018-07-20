@@ -1,26 +1,24 @@
 #!/usr/bin/env python
 """System cron flows tests."""
 
-from grr import config
-from grr.lib import flags
-from grr.lib import rdfvalue
-from grr.lib.rdfvalues import client as rdf_client
-from grr.server.grr_response_server import aff4
-from grr.server.grr_response_server import data_store
-from grr.server.grr_response_server.aff4_objects import aff4_grr
-from grr.server.grr_response_server.aff4_objects import stats as aff4_stats
-from grr.server.grr_response_server.flows.cron import system
+from grr_response_core import config
+from grr_response_core.lib import flags
+from grr_response_core.lib import rdfvalue
+from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_server import aff4
+from grr_response_server import data_store
+from grr_response_server.aff4_objects import stats as aff4_stats
+from grr_response_server.flows.cron import system
+from grr_response_server.rdfvalues import cronjobs as rdf_cronjobs
 from grr.test_lib import db_test_lib
 from grr.test_lib import flow_test_lib
 from grr.test_lib import test_lib
 
 
-@db_test_lib.DualDBTest
-class SystemCronFlowTest(flow_test_lib.FlowTestsBaseclass):
-  """Test system cron flows."""
+class SystemCronTestMixin(object):
 
   def setUp(self):
-    super(SystemCronFlowTest, self).setUp()
+    super(SystemCronTestMixin, self).setUp()
 
     # This is not optimal, we create clients 0-19 with Linux, then
     # overwrite clients 0-9 with Windows, leaving 10-19 for Linux.
@@ -63,16 +61,11 @@ class SystemCronFlowTest(flow_test_lib.FlowTestsBaseclass):
                      "GRR Monitor %s" % config.CONFIG["Source.version_numeric"])
     self.assertEqual(histogram[3][0].y_value, counts[3])
 
-  def testGRRVersionBreakDown(self):
-    """Check that all client stats cron jobs are run.
+  def _CheckGRRVersionBreakDown(self):
+    """Checks the result of the GRRVersionBreakDown cron job."""
 
-    All machines should be in All once.
-    Windows machines should be in Label1 and Label2.
-    There should be no stats for UserLabel.
-    """
-    flow_test_lib.TestFlowHelper(
-        system.GRRVersionBreakDown.__name__, token=self.token)
-
+    # All machines should be in All once. Windows machines should be in Label1
+    # and Label2. There should be no stats for UserLabel.
     histogram = aff4_stats.ClientFleetStats.SchemaCls.GRRVERSION_HISTOGRAM
     self._CheckVersionStats("All", histogram, [0, 0, 20, 20])
     self._CheckVersionStats("Label1", histogram, [0, 0, 10, 10])
@@ -116,10 +109,7 @@ class SystemCronFlowTest(flow_test_lib.FlowTestsBaseclass):
       self.assertEqual(item.y_value, counts[3][item.label])
     self.assertItemsEqual(all_labels, counts[3].keys())
 
-  def testOSBreakdown(self):
-    """Check that all client stats cron jobs are run."""
-    flow_test_lib.TestFlowHelper(system.OSBreakDown.__name__, token=self.token)
-
+  def _CheckOSBreakdown(self):
     histogram = aff4_stats.ClientFleetStats.SchemaCls.OS_HISTOGRAM
     self._CheckOSStats(
         "All", histogram,
@@ -151,24 +141,21 @@ class SystemCronFlowTest(flow_test_lib.FlowTestsBaseclass):
 
     data = [(x.x_value, x.y_value) for x in histogram]
 
-    self.assertEqual(
-        data, [(86400000000L, 0L), (172800000000L, 0L), (259200000000L, 0L),
-               (604800000000L, 0L), (1209600000000L, count),
-               (2592000000000L, count), (5184000000000L, count)])
+    self.assertEqual(data,
+                     [(86400000000, 0), (172800000000, 0), (259200000000, 0),
+                      (604800000000, 0), (1209600000000, count),
+                      (2592000000000, count), (5184000000000, count)])
 
-  def testLastAccessStats(self):
-    """Check that all client stats cron jobs are run."""
-    flow_test_lib.TestFlowHelper(
-        system.LastAccessStats.__name__, token=self.token)
+  def _CheckLastAccessStats(self):
 
     # All our clients appeared at the same time (and did not appear since).
-    self._CheckAccessStats("All", count=20L)
+    self._CheckAccessStats("All", count=20)
 
     # All our clients appeared at the same time but this label is only half.
-    self._CheckAccessStats("Label1", count=10L)
+    self._CheckAccessStats("Label1", count=10)
 
     # All our clients appeared at the same time but this label is only half.
-    self._CheckAccessStats("Label2", count=10L)
+    self._CheckAccessStats("Label2", count=10)
 
   def testPurgeClientStats(self):
     client_id = test_lib.TEST_CLIENT_ID
@@ -191,28 +178,74 @@ class SystemCronFlowTest(flow_test_lib.FlowTestsBaseclass):
     self.assertTrue(max_age in [e.RSS_size for e in stat_entries])
 
     with test_lib.FakeTime(2.5 * max_age):
-      flow_test_lib.TestFlowHelper(
-          system.PurgeClientStats.__name__,
-          None,
-          client_id=client_id,
-          token=self.token)
+      self._RunPurgeClientStats()
 
     stat_obj = aff4.FACTORY.Open(urn, age=aff4.ALL_TIMES, token=self.token)
     stat_entries = list(stat_obj.GetValuesForAttribute(stat_obj.Schema.STATS))
     self.assertEqual(len(stat_entries), 1)
     self.assertTrue(max_age not in [e.RSS_size for e in stat_entries])
 
-  def _SetSummaries(self, client_id):
-    client = aff4.FACTORY.Create(
-        client_id, aff4_grr.VFSGRRClient, mode="rw", token=self.token)
-    client.Set(client.Schema.HOSTNAME(client_id))
-    client.Set(client.Schema.SYSTEM("Darwin"))
-    client.Set(client.Schema.OS_RELEASE("OSX"))
-    client.Set(client.Schema.OS_VERSION("10.9.2"))
-    client.Set(client.Schema.KERNEL("13.1.0"))
-    client.Set(client.Schema.FQDN("%s.example.com" % client_id))
-    client.Set(client.Schema.ARCH("AMD64"))
-    client.Flush()
+
+@db_test_lib.DualDBTest
+class SystemCronFlowTest(SystemCronTestMixin, flow_test_lib.FlowTestsBaseclass):
+  """Test system cron flows."""
+
+  def testGRRVersionBreakDown(self):
+    """Check that all client stats cron jobs are run."""
+    flow_test_lib.TestFlowHelper(
+        system.GRRVersionBreakDown.__name__, token=self.token)
+
+    self._CheckGRRVersionBreakDown()
+
+  def testOSBreakdown(self):
+    """Check that all client stats cron jobs are run."""
+    flow_test_lib.TestFlowHelper(system.OSBreakDown.__name__, token=self.token)
+
+    self._CheckOSBreakdown()
+
+  def testLastAccessStats(self):
+    """Check that all client stats cron jobs are run."""
+    flow_test_lib.TestFlowHelper(
+        system.LastAccessStats.__name__, token=self.token)
+
+    self._CheckLastAccessStats()
+
+  def _RunPurgeClientStats(self):
+    flow_test_lib.TestFlowHelper(
+        system.PurgeClientStats.__name__, None, token=self.token)
+
+
+class SystemCronJobTest(SystemCronTestMixin, test_lib.GRRBaseTest):
+  """Test system cron jobs."""
+
+  def testGRRVersionBreakDown(self):
+    """Check that all client stats cron jobs are run."""
+    run = rdf_cronjobs.CronJobRun()
+    job = rdf_cronjobs.CronJob()
+    system.GRRVersionBreakDownCronJob(run, job).Run()
+
+    self._CheckGRRVersionBreakDown()
+
+  def testOSBreakdown(self):
+    """Check that all client stats cron jobs are run."""
+    run = rdf_cronjobs.CronJobRun()
+    job = rdf_cronjobs.CronJob()
+    system.OSBreakDownCronJob(run, job).Run()
+
+    self._CheckOSBreakdown()
+
+  def testLastAccessStats(self):
+    """Check that all client stats cron jobs are run."""
+    run = rdf_cronjobs.CronJobRun()
+    job = rdf_cronjobs.CronJob()
+    system.LastAccessStatsCronJob(run, job).Run()
+
+    self._CheckLastAccessStats()
+
+  def _RunPurgeClientStats(self):
+    run = rdf_cronjobs.CronJobRun()
+    job = rdf_cronjobs.CronJob()
+    system.PurgeClientStatsCronJob(run, job).Run()
 
 
 def main(argv):

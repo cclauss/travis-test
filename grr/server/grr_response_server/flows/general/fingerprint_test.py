@@ -5,22 +5,27 @@
 import os
 
 from grr_response_client.client_actions import file_fingerprint
-from grr.lib import flags
-from grr.lib.rdfvalues import paths as rdf_paths
-from grr.server.grr_response_server import aff4
-from grr.server.grr_response_server import flow
-from grr.server.grr_response_server.aff4_objects import aff4_grr
-from grr.server.grr_response_server.flows.general import fingerprint as flows_fingerprint
+from grr_response_core.lib import flags
+from grr_response_core.lib.rdfvalues import paths as rdf_paths
+from grr_response_server import aff4
+from grr_response_server import data_store
+from grr_response_server import flow
+from grr_response_server.aff4_objects import aff4_grr
+from grr_response_server.flows.general import fingerprint as flows_fingerprint
+from grr_response_server.rdfvalues import objects as rdf_objects
 from grr.test_lib import action_mocks
+from grr.test_lib import db_test_lib
 from grr.test_lib import flow_test_lib
 from grr.test_lib import test_lib
 
 
+@db_test_lib.DualDBTest
 class TestFingerprintFlow(flow_test_lib.FlowTestsBaseclass):
   """Test the Fingerprint flow."""
 
   def testFingerprintPresence(self):
-    client_id = test_lib.TEST_CLIENT_ID
+    client_id = self.SetupClient(0)
+
     path = os.path.join(self.base_path, "winexec_img.dd")
     pathspec = rdf_paths.PathSpec(
         pathtype=rdf_paths.PathSpec.PathType.OS, path=path)
@@ -55,11 +60,21 @@ class TestFingerprintFlow(flow_test_lib.FlowTestsBaseclass):
         self.assertEqual(
             str(reply.hash_entry.md5), "12be1109aa3d3b46c9398972af2008e1")
 
-    urn = pathspec.AFF4Path(client_id)
-    fd = aff4.FACTORY.Open(urn, token=self.token)
-    self.assertEqual(fd.__class__, aff4_grr.VFSFile)
+    if data_store.RelationalDBReadEnabled(category="vfs"):
+      path_info = rdf_objects.PathInfo.FromPathSpec(pathspec)
+      path_info = data_store.REL_DB.ReadPathInfo(
+          client_id.Basename(),
+          path_info.path_type,
+          components=tuple(path_info.components))
 
-    hash_obj = fd.Get(fd.Schema.HASH)
+      hash_obj = path_info.hash_entry
+    else:
+      urn = pathspec.AFF4Path(client_id)
+      fd = aff4.FACTORY.Open(urn, token=self.token)
+      self.assertEqual(fd.__class__, aff4_grr.VFSFile)
+
+      hash_obj = fd.Get(fd.Schema.HASH)
+
     self.assertEqual(hash_obj.pecoff_sha1,
                      "1f32fa4eedfba023653c094143d90999f6b9bc4f")
 

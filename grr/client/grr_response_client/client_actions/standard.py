@@ -1,9 +1,11 @@
 #!/usr/bin/env python
 """Standard actions that happen on the client."""
-import cStringIO as StringIO
+from __future__ import print_function
+
 import ctypes
 import gzip
 import hashlib
+import io
 import logging
 import os
 import platform
@@ -15,20 +17,20 @@ import zlib
 
 import psutil
 
-from grr import config
 from grr_response_client import actions
 from grr_response_client import client_utils_common
 from grr_response_client import vfs
 from grr_response_client.client_actions import tempfiles
-from grr.lib import constants
-from grr.lib import flags
-from grr.lib import rdfvalue
-from grr.lib import utils
-from grr.lib.rdfvalues import client as rdf_client
-from grr.lib.rdfvalues import crypto as rdf_crypto
-from grr.lib.rdfvalues import flows as rdf_flows
-from grr.lib.rdfvalues import paths as rdf_paths
-from grr.lib.rdfvalues import protodict as rdf_protodict
+from grr_response_core import config
+from grr_response_core.lib import constants
+from grr_response_core.lib import flags
+from grr_response_core.lib import rdfvalue
+from grr_response_core.lib import utils
+from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_core.lib.rdfvalues import crypto as rdf_crypto
+from grr_response_core.lib.rdfvalues import flows as rdf_flows
+from grr_response_core.lib.rdfvalues import paths as rdf_paths
+from grr_response_core.lib.rdfvalues import protodict as rdf_protodict
 
 
 class ReadBuffer(actions.ActionPlugin):
@@ -278,14 +280,25 @@ class GetFileStat(actions.ActionPlugin):
     except (IOError, OSError) as error:
       self.SetStatus(rdf_flows.GrrStatus.ReturnedStatus.IOERROR, error)
 
+  @classmethod
+  def Start(cls, args):
+    fd = vfs.VFSOpen(args.pathspec)
+    stat_entry = fd.Stat(ext_attrs=args.collect_ext_attrs)
+    yield stat_entry
+
 
 class ExecuteCommand(actions.ActionPlugin):
   """Executes one of the predefined commands."""
+
   in_rdfvalue = rdf_client.ExecuteRequest
   out_rdfvalues = [rdf_client.ExecuteResponse]
 
   def Run(self, command):
-    """Run."""
+    for res in self.Start(command):
+      self.SendReply(res)
+
+  @classmethod
+  def Start(cls, command):
     cmd = command.cmd
     args = command.args
     time_limit = command.time_limit
@@ -297,14 +310,13 @@ class ExecuteCommand(actions.ActionPlugin):
     stdout = stdout[:10 * 1024 * 1024]
     stderr = stderr[:10 * 1024 * 1024]
 
-    self.SendReply(
-        rdf_client.ExecuteResponse(
-            request=command,
-            stdout=stdout,
-            stderr=stderr,
-            exit_status=status,
-            # We have to return microseconds.
-            time_used=int(1e6 * time_used)))
+    yield rdf_client.ExecuteResponse(
+        request=command,
+        stdout=stdout,
+        stderr=stderr,
+        exit_status=status,
+        # We have to return microseconds.
+        time_used=int(1e6 * time_used))
 
 
 class ExecuteBinaryCommand(actions.ActionPlugin):
@@ -429,7 +441,11 @@ class ExecutePython(actions.ActionPlugin):
     # Export the Progress function to allow python hacks to call it.
     context["Progress"] = self.Progress
 
-    stdout = StringIO.StringIO()
+    # TODO(hanuszczak): In Python 3 writing to stdout is writing human readable
+    # text so `StringIO` is better fit. Actions should be refactored so that
+    # they write unicode (probably they already do) instead of arbitrary stream
+    # of bytes.
+    stdout = io.BytesIO()
     with utils.Stubber(sys, "stdout", StdOutHook(stdout)):
       exec (args.python_code.data, context)  # pylint: disable=exec-used
 
@@ -457,7 +473,7 @@ class Segfault(actions.ActionPlugin):
     """Does the segfaulting."""
     if flags.FLAGS.debug:
       logging.warning("Segfault action requested :(")
-      print ctypes.cast(1, ctypes.POINTER(ctypes.c_void_p)).contents
+      print(ctypes.cast(1, ctypes.POINTER(ctypes.c_void_p)).contents)
     else:
       logging.warning("Segfault requested but not running in debug mode.")
 

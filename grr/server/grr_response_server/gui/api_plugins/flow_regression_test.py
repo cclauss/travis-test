@@ -4,24 +4,23 @@
 
 import psutil
 
-from grr.lib import flags
-from grr.lib import registry
-from grr.lib import utils
-
-from grr.lib.rdfvalues import flows as rdf_flows
-from grr.lib.rdfvalues import paths as rdf_paths
-from grr.server.grr_response_server import aff4
-from grr.server.grr_response_server import data_store
-from grr.server.grr_response_server import flow
-from grr.server.grr_response_server import output_plugin
-from grr.server.grr_response_server import queue_manager
-from grr.server.grr_response_server.flows.general import discovery
-from grr.server.grr_response_server.flows.general import file_finder
-from grr.server.grr_response_server.flows.general import processes
-from grr.server.grr_response_server.flows.general import transfer
-from grr.server.grr_response_server.gui import api_regression_test_lib
-from grr.server.grr_response_server.gui.api_plugins import flow as flow_plugin
-from grr.server.grr_response_server.output_plugins import email_plugin
+from grr_response_core.lib import flags
+from grr_response_core.lib import registry
+from grr_response_core.lib import utils
+from grr_response_core.lib.rdfvalues import paths as rdf_paths
+from grr_response_server import aff4
+from grr_response_server import data_store
+from grr_response_server import flow
+from grr_response_server import queue_manager
+from grr_response_server.flows.general import discovery
+from grr_response_server.flows.general import file_finder
+from grr_response_server.flows.general import processes
+from grr_response_server.flows.general import transfer
+from grr_response_server.gui import api_regression_test_lib
+from grr_response_server.gui.api_plugins import flow as flow_plugin
+from grr_response_server.output_plugins import email_plugin
+from grr_response_server.rdfvalues import flow_runner as rdf_flow_runner
+from grr_response_server.rdfvalues import output_plugin as rdf_output_plugin
 from grr.test_lib import acl_test_lib
 from grr.test_lib import client_test_lib
 from grr.test_lib import flow_test_lib
@@ -47,7 +46,7 @@ class ApiGetFlowHandlerRegressionTest(
           client_urn, mode="rw", token=self.token) as client_obj:
         client_obj.DeleteAttribute(client_obj.Schema.CERT)
 
-      flow_id = flow.GRRFlow.StartFlow(
+      flow_id = flow.StartFlow(
           flow_name=discovery.Interrogate.__name__,
           client_id=client_urn,
           token=self.token)
@@ -79,17 +78,18 @@ class ApiListFlowsHandlerRegressionTest(
   handler = flow_plugin.ApiListFlowsHandler
 
   def Run(self):
+    acl_test_lib.CreateUser(self.token.username)
     with test_lib.FakeTime(42):
       client_urn = self.SetupClient(0)
 
     with test_lib.FakeTime(43):
-      flow_id_1 = flow.GRRFlow.StartFlow(
+      flow_id_1 = flow.StartFlow(
           flow_name=discovery.Interrogate.__name__,
           client_id=client_urn,
           token=self.token)
 
     with test_lib.FakeTime(44):
-      flow_id_2 = flow.GRRFlow.StartFlow(
+      flow_id_2 = flow.StartFlow(
           flow_name=processes.ListProcesses.__name__,
           client_id=client_urn,
           token=self.token)
@@ -110,20 +110,17 @@ class ApiListFlowRequestsHandlerRegressionTest(
   api_method = "ListFlowRequests"
   handler = flow_plugin.ApiListFlowRequestsHandler
 
-  def setUp(self):
-    super(ApiListFlowRequestsHandlerRegressionTest, self).setUp()
-    self.client_id = self.SetupClient(0)
-
   def Run(self):
+    client_id = self.SetupClient(0)
     with test_lib.FakeTime(42):
-      flow_urn = flow.GRRFlow.StartFlow(
+      flow_urn = flow.StartFlow(
           flow_name=processes.ListProcesses.__name__,
-          client_id=self.client_id,
+          client_id=client_id,
           token=self.token)
 
       test_process = client_test_lib.MockWindowsProcess(name="test_process")
       with utils.Stubber(psutil, "Process", lambda: test_process):
-        mock = flow_test_lib.MockClient(self.client_id, None, token=self.token)
+        mock = flow_test_lib.MockClient(client_id, None, token=self.token)
         while mock.Next():
           pass
 
@@ -139,7 +136,7 @@ class ApiListFlowRequestsHandlerRegressionTest(
     self.Check(
         "ListFlowRequests",
         args=flow_plugin.ApiListFlowRequestsArgs(
-            client_id=self.client_id.Basename(), flow_id=flow_urn.Basename()),
+            client_id=client_id.Basename(), flow_id=flow_urn.Basename()),
         replace=replace)
 
 
@@ -150,12 +147,11 @@ class ApiListFlowResultsHandlerRegressionTest(
   api_method = "ListFlowResults"
   handler = flow_plugin.ApiListFlowResultsHandler
 
-  def setUp(self):
-    super(ApiListFlowResultsHandlerRegressionTest, self).setUp()
-    self.client_id = self.SetupClient(0)
-
   def Run(self):
-    runner_args = rdf_flows.FlowRunnerArgs(flow_name=transfer.GetFile.__name__)
+    acl_test_lib.CreateUser(self.token.username)
+    client_id = self.SetupClient(0)
+    runner_args = rdf_flow_runner.FlowRunnerArgs(
+        flow_name=transfer.GetFile.__name__)
 
     flow_args = transfer.GetFileArgs(
         pathspec=rdf_paths.PathSpec(
@@ -164,8 +160,8 @@ class ApiListFlowResultsHandlerRegressionTest(
     client_mock = hunt_test_lib.SampleHuntMock()
 
     with test_lib.FakeTime(42):
-      flow_urn = flow.GRRFlow.StartFlow(
-          client_id=self.client_id,
+      flow_urn = flow.StartFlow(
+          client_id=client_id,
           args=flow_args,
           runner_args=runner_args,
           token=self.token)
@@ -173,13 +169,13 @@ class ApiListFlowResultsHandlerRegressionTest(
       flow_test_lib.TestFlowHelper(
           flow_urn,
           client_mock=client_mock,
-          client_id=self.client_id,
+          client_id=client_id,
           token=self.token)
 
     self.Check(
         "ListFlowResults",
         args=flow_plugin.ApiListFlowResultsArgs(
-            client_id=self.client_id.Basename(), flow_id=flow_urn.Basename()),
+            client_id=client_id.Basename(), flow_id=flow_urn.Basename()),
         replace={flow_urn.Basename(): "W:ABCDEF"})
 
 
@@ -190,14 +186,11 @@ class ApiListFlowLogsHandlerRegressionTest(
   api_method = "ListFlowLogs"
   handler = flow_plugin.ApiListFlowLogsHandler
 
-  def setUp(self):
-    super(ApiListFlowLogsHandlerRegressionTest, self).setUp()
-    self.client_id = self.SetupClient(0)
-
   def Run(self):
-    flow_urn = flow.GRRFlow.StartFlow(
+    client_id = self.SetupClient(0)
+    flow_urn = flow.StartFlow(
         flow_name=processes.ListProcesses.__name__,
-        client_id=self.client_id,
+        client_id=client_id,
         token=self.token)
 
     with aff4.FACTORY.Open(flow_urn, mode="rw", token=self.token) as flow_obj:
@@ -211,19 +204,19 @@ class ApiListFlowLogsHandlerRegressionTest(
     self.Check(
         "ListFlowLogs",
         args=flow_plugin.ApiListFlowLogsArgs(
-            client_id=self.client_id.Basename(), flow_id=flow_urn.Basename()),
+            client_id=client_id.Basename(), flow_id=flow_urn.Basename()),
         replace=replace)
     self.Check(
         "ListFlowLogs",
         args=flow_plugin.ApiListFlowLogsArgs(
-            client_id=self.client_id.Basename(),
+            client_id=client_id.Basename(),
             flow_id=flow_urn.Basename(),
             count=1),
         replace=replace)
     self.Check(
         "ListFlowLogs",
         args=flow_plugin.ApiListFlowLogsArgs(
-            client_id=self.client_id.Basename(),
+            client_id=client_id.Basename(),
             flow_id=flow_urn.Basename(),
             count=1,
             offset=1),
@@ -237,21 +230,18 @@ class ApiGetFlowResultsExportCommandHandlerRegressionTest(
   api_method = "GetFlowResultsExportCommand"
   handler = flow_plugin.ApiGetFlowResultsExportCommandHandler
 
-  def setUp(self):
-    super(ApiGetFlowResultsExportCommandHandlerRegressionTest, self).setUp()
-    self.client_id = self.SetupClient(0)
-
   def Run(self):
+    client_id = self.SetupClient(0)
     with test_lib.FakeTime(42):
-      flow_urn = flow.GRRFlow.StartFlow(
+      flow_urn = flow.StartFlow(
           flow_name=processes.ListProcesses.__name__,
-          client_id=self.client_id,
+          client_id=client_id,
           token=self.token)
 
     self.Check(
         "GetFlowResultsExportCommand",
         args=flow_plugin.ApiGetFlowResultsExportCommandArgs(
-            client_id=self.client_id.Basename(), flow_id=flow_urn.Basename()),
+            client_id=client_id.Basename(), flow_id=flow_urn.Basename()),
         replace={flow_urn.Basename()[2:]: "ABCDEF"})
 
 
@@ -268,27 +258,24 @@ class ApiListFlowOutputPluginsHandlerRegressionTest(
   # we can replace these URNs with something stable.
   uses_legacy_dynamic_protos = True
 
-  def setUp(self):
-    super(ApiListFlowOutputPluginsHandlerRegressionTest, self).setUp()
-    self.client_id = self.SetupClient(0)
-
   def Run(self):
-    email_descriptor = output_plugin.OutputPluginDescriptor(
+    client_id = self.SetupClient(0)
+    email_descriptor = rdf_output_plugin.OutputPluginDescriptor(
         plugin_name=email_plugin.EmailOutputPlugin.__name__,
         plugin_args=email_plugin.EmailOutputPluginArgs(
             email_address="test@localhost", emails_limit=42))
 
     with test_lib.FakeTime(42):
-      flow_urn = flow.GRRFlow.StartFlow(
+      flow_urn = flow.StartFlow(
           flow_name=processes.ListProcesses.__name__,
-          client_id=self.client_id,
+          client_id=client_id,
           output_plugins=[email_descriptor],
           token=self.token)
 
     self.Check(
         "ListFlowOutputPlugins",
         args=flow_plugin.ApiListFlowOutputPluginsArgs(
-            client_id=self.client_id.Basename(), flow_id=flow_urn.Basename()),
+            client_id=client_id.Basename(), flow_id=flow_urn.Basename()),
         replace={flow_urn.Basename(): "W:ABCDEF"})
 
 
@@ -305,20 +292,17 @@ class ApiListFlowOutputPluginLogsHandlerRegressionTest(
   # we can replace these URNs with something stable.
   uses_legacy_dynamic_protos = True
 
-  def setUp(self):
-    super(ApiListFlowOutputPluginLogsHandlerRegressionTest, self).setUp()
-    self.client_id = self.SetupClient(0)
-
   def Run(self):
-    email_descriptor = output_plugin.OutputPluginDescriptor(
+    client_id = self.SetupClient(0)
+    email_descriptor = rdf_output_plugin.OutputPluginDescriptor(
         plugin_name=email_plugin.EmailOutputPlugin.__name__,
         plugin_args=email_plugin.EmailOutputPluginArgs(
             email_address="test@localhost", emails_limit=42))
 
     with test_lib.FakeTime(42):
-      flow_urn = flow.GRRFlow.StartFlow(
+      flow_urn = flow.StartFlow(
           flow_name=flow_test_lib.DummyFlowWithSingleReply.__name__,
-          client_id=self.client_id,
+          client_id=client_id,
           output_plugins=[email_descriptor],
           token=self.token)
 
@@ -328,7 +312,7 @@ class ApiListFlowOutputPluginLogsHandlerRegressionTest(
     self.Check(
         "ListFlowOutputPluginLogs",
         args=flow_plugin.ApiListFlowOutputPluginLogsArgs(
-            client_id=self.client_id.Basename(),
+            client_id=client_id.Basename(),
             flow_id=flow_urn.Basename(),
             plugin_id="EmailOutputPlugin_0"),
         replace={flow_urn.Basename(): "W:ABCDEF"})
@@ -347,18 +331,15 @@ class ApiListFlowOutputPluginErrorsHandlerRegressionTest(
   # we can replace these URNs with something stable.
   uses_legacy_dynamic_protos = True
 
-  def setUp(self):
-    super(ApiListFlowOutputPluginErrorsHandlerRegressionTest, self).setUp()
-    self.client_id = self.SetupClient(0)
-
   def Run(self):
-    failing_descriptor = output_plugin.OutputPluginDescriptor(
+    client_id = self.SetupClient(0)
+    failing_descriptor = rdf_output_plugin.OutputPluginDescriptor(
         plugin_name=hunt_test_lib.FailingDummyHuntOutputPlugin.__name__)
 
     with test_lib.FakeTime(42):
-      flow_urn = flow.GRRFlow.StartFlow(
+      flow_urn = flow.StartFlow(
           flow_name=flow_test_lib.DummyFlowWithSingleReply.__name__,
-          client_id=self.client_id,
+          client_id=client_id,
           output_plugins=[failing_descriptor],
           token=self.token)
 
@@ -368,7 +349,7 @@ class ApiListFlowOutputPluginErrorsHandlerRegressionTest(
     self.Check(
         "ListFlowOutputPluginErrors",
         args=flow_plugin.ApiListFlowOutputPluginErrorsArgs(
-            client_id=self.client_id.Basename(),
+            client_id=client_id.Basename(),
             flow_id=flow_urn.Basename(),
             plugin_id="FailingDummyHuntOutputPlugin_0"),
         replace={flow_urn.Basename(): "W:ABCDEF"})
@@ -381,15 +362,11 @@ class ApiCreateFlowHandlerRegressionTest(
   api_method = "CreateFlow"
   handler = flow_plugin.ApiCreateFlowHandler
 
-  def setUp(self):
-    super(ApiCreateFlowHandlerRegressionTest, self).setUp()
-    self.client_id = self.SetupClient(0)
-
   def Run(self):
+    client_id = self.SetupClient(0)
 
     def ReplaceFlowId():
-      flows_dir_fd = aff4.FACTORY.Open(
-          self.client_id.Add("flows"), token=self.token)
+      flows_dir_fd = aff4.FACTORY.Open(client_id.Add("flows"), token=self.token)
       flow_urn = list(flows_dir_fd.ListChildren())[0]
       return {flow_urn.Basename(): "W:ABCDEF"}
 
@@ -397,12 +374,12 @@ class ApiCreateFlowHandlerRegressionTest(
       self.Check(
           "CreateFlow",
           args=flow_plugin.ApiCreateFlowArgs(
-              client_id=self.client_id.Basename(),
+              client_id=client_id.Basename(),
               flow=flow_plugin.ApiFlow(
                   name=processes.ListProcesses.__name__,
                   args=processes.ListProcessesArgs(
                       filename_regex=".", fetch_binaries=True),
-                  runner_args=rdf_flows.FlowRunnerArgs(
+                  runner_args=rdf_flow_runner.FlowRunnerArgs(
                       output_plugins=[],
                       priority="HIGH_PRIORITY",
                       notify_to_user=False))),
@@ -416,21 +393,18 @@ class ApiCancelFlowHandlerRegressionTest(
   api_method = "CancelFlow"
   handler = flow_plugin.ApiCancelFlowHandler
 
-  def setUp(self):
-    super(ApiCancelFlowHandlerRegressionTest, self).setUp()
-    self.client_id = self.SetupClient(0)
-
   def Run(self):
+    client_id = self.SetupClient(0)
     with test_lib.FakeTime(42):
-      flow_urn = flow.GRRFlow.StartFlow(
+      flow_urn = flow.StartFlow(
           flow_name=processes.ListProcesses.__name__,
-          client_id=self.client_id,
+          client_id=client_id,
           token=self.token)
 
     self.Check(
         "CancelFlow",
         args=flow_plugin.ApiCancelFlowArgs(
-            client_id=self.client_id.Basename(), flow_id=flow_urn.Basename()),
+            client_id=client_id.Basename(), flow_id=flow_urn.Basename()),
         replace={flow_urn.Basename(): "W:ABCDEF"})
 
 

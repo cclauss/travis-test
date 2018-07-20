@@ -3,12 +3,12 @@
 
 import os
 
-from grr import config
-from grr.lib import flags
-from grr.server.grr_response_server import artifact
-from grr.server.grr_response_server import artifact_registry
-from grr.server.grr_response_server.gui import api_test_lib
-from grr.server.grr_response_server.gui.api_plugins import artifact as artifact_plugin
+from grr_response_core import config
+from grr_response_core.lib import flags
+from grr_response_core.lib.rdfvalues import artifacts as rdf_artifacts
+from grr_response_server import artifact
+from grr_response_server.gui import api_test_lib
+from grr_response_server.gui.api_plugins import artifact as artifact_plugin
 from grr.test_lib import artifact_test_lib
 from grr.test_lib import flow_test_lib
 from grr.test_lib import test_lib
@@ -68,7 +68,7 @@ class ApiUploadArtifactHandlerTest(api_test_lib.ApiCallHandlerTest):
     with open(test_artifacts_file, "rb") as fd:
       args = self.handler.args_type(artifact=fd.read())
 
-    with self.assertRaises(artifact_registry.ArtifactNotRegisteredError):
+    with self.assertRaises(rdf_artifacts.ArtifactNotRegisteredError):
       registry.GetArtifact("TestDrivers")
 
     self.handler.Handle(args, token=self.token)

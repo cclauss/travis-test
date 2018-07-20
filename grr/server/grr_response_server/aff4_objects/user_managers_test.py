@@ -1,10 +1,10 @@
 #!/usr/bin/env python
-from grr.lib import flags
-from grr.lib import rdfvalue
-from grr.server.grr_response_server import access_control
-from grr.server.grr_response_server import aff4
-from grr.server.grr_response_server.aff4_objects import user_managers
-from grr.server.grr_response_server.aff4_objects import users
+from grr_response_core.lib import flags
+from grr_response_core.lib import rdfvalue
+from grr_response_server import access_control
+from grr_response_server import aff4
+from grr_response_server.aff4_objects import user_managers
+from grr_response_server.aff4_objects import users
 from grr.test_lib import acl_test_lib
 from grr.test_lib import aff4_test_lib
 from grr.test_lib import flow_test_lib
@@ -187,9 +187,6 @@ class FullAccessControlManagerTest(test_lib.GRRBaseTest,
     self.NotOk("aff4:/C.0000000000000001/fs/os", access)
     self.NotOk("aff4:/C.0000000000000001/flows/F:12345678", access)
 
-    self.Ok("aff4:/tmp", access)
-    self.Ok("aff4:/tmp/C8FAFC0F", access)
-
   def testQuerySomePaths(self):
     """Tests some real world paths."""
     access = "rq"
@@ -230,8 +227,6 @@ class FullAccessControlManagerTest(test_lib.GRRBaseTest,
     self.Ok("aff4:/C.0000000000000001", access)
     self.NotOk("aff4:/C.0000000000000001/fs/os", access)
     self.NotOk("aff4:/C.0000000000000001/flows", access)
-
-    self.NotOk("aff4:/tmp", access)
 
   def testSupervisorCanDoAnything(self):
     token = access_control.ACLToken(username="unknown", supervisor=True)

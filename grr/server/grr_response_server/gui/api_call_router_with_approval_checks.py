@@ -1,26 +1,26 @@
 #!/usr/bin/env python
 """Implementation of a router class that has approvals-based ACL checks."""
 
-from grr.lib import stats
-from grr.lib import utils
-from grr.lib.rdfvalues import objects as rdf_objects
-from grr.server.grr_response_server import access_control
+from grr_response_core.lib import stats
+from grr_response_core.lib import utils
+from grr_response_server import access_control
+from grr_response_server import aff4
 
-from grr.server.grr_response_server import aff4
-from grr.server.grr_response_server import data_store
+from grr_response_server import data_store
+from grr_response_server import flow
 
-from grr.server.grr_response_server import flow
-from grr.server.grr_response_server.aff4_objects import user_managers
-from grr.server.grr_response_server.gui import api_call_handler_base
+from grr_response_server.aff4_objects import user_managers
+from grr_response_server.gui import api_call_handler_base
+from grr_response_server.gui import api_call_router
 
-from grr.server.grr_response_server.gui import api_call_router
-from grr.server.grr_response_server.gui import api_call_router_without_checks
-from grr.server.grr_response_server.gui import approval_checks
-from grr.server.grr_response_server.gui.api_plugins import flow as api_flow
+from grr_response_server.gui import api_call_router_without_checks
+from grr_response_server.gui import approval_checks
+from grr_response_server.gui.api_plugins import flow as api_flow
+from grr_response_server.gui.api_plugins import user as api_user
 
-from grr.server.grr_response_server.gui.api_plugins import user as api_user
+from grr_response_server.hunts import implementation
 
-from grr.server.grr_response_server.hunts import implementation
+from grr_response_server.rdfvalues import objects as rdf_objects
 
 
 class LegacyChecker(object):
@@ -424,15 +424,15 @@ class ApiCallRouterWithApprovalChecks(api_call_router.ApiCallRouterStub):
 
     return self.delegate.ModifyCronJob(args, token=token)
 
-  def ListCronJobFlows(self, args, token=None):
-    # Everybody can list cron jobs' flows.
+  def ListCronJobRuns(self, args, token=None):
+    # Everybody can list cron jobs' runs.
 
-    return self.delegate.ListCronJobFlows(args, token=token)
+    return self.delegate.ListCronJobRuns(args, token=token)
 
-  def GetCronJobFlow(self, args, token=None):
-    # Everybody can get cron flows.
+  def GetCronJobRun(self, args, token=None):
+    # Everybody can get cron runs.
 
-    return self.delegate.GetCronJobFlow(args, token=token)
+    return self.delegate.GetCronJobRun(args, token=token)
 
   def DeleteCronJob(self, args, token=None):
     self.access_checker.CheckCronJobAccess(token.username, args.cron_job_id)

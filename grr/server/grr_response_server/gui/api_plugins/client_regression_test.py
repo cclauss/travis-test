@@ -4,21 +4,21 @@
 
 import psutil
 
-from grr.lib import flags
-from grr.lib import rdfvalue
+from grr_response_core.lib import flags
+from grr_response_core.lib import rdfvalue
 
-from grr.lib import utils
-from grr.lib.rdfvalues import client as rdf_client
-from grr.server.grr_response_server import aff4
-from grr.server.grr_response_server import data_store
-from grr.server.grr_response_server import flow
-from grr.server.grr_response_server import queue_manager
-from grr.server.grr_response_server.aff4_objects import aff4_grr
-from grr.server.grr_response_server.aff4_objects import stats as aff4_stats
-from grr.server.grr_response_server.flows.general import processes
+from grr_response_core.lib import utils
+from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_server import aff4
+from grr_response_server import data_store
+from grr_response_server import flow
+from grr_response_server import queue_manager
+from grr_response_server.aff4_objects import aff4_grr
+from grr_response_server.aff4_objects import stats as aff4_stats
+from grr_response_server.flows.general import processes
 
-from grr.server.grr_response_server.gui import api_regression_test_lib
-from grr.server.grr_response_server.gui.api_plugins import client as client_plugin
+from grr_response_server.gui import api_regression_test_lib
+from grr_response_server.gui.api_plugins import client as client_plugin
 from grr.test_lib import client_test_lib
 from grr.test_lib import flow_test_lib
 from grr.test_lib import hunt_test_lib
@@ -264,7 +264,7 @@ class ApiListClientActionRequestsHandlerRegressionTest(
 
     replace = {}
     with test_lib.FakeTime(42):
-      flow_urn = flow.GRRFlow.StartFlow(
+      flow_urn = flow.StartFlow(
           client_id=client_id,
           flow_name=processes.ListProcesses.__name__,
           token=self.token)

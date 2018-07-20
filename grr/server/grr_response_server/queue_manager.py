@@ -5,17 +5,17 @@ import collections
 import logging
 import random
 
-from grr import config
-from grr.lib import queues
-from grr.lib import rdfvalue
-from grr.lib import registry
-from grr.lib import stats
-from grr.lib import utils
-from grr.lib.rdfvalues import client as rdf_client
-from grr.lib.rdfvalues import flows as rdf_flows
-from grr.lib.rdfvalues import objects as rdf_objects
-from grr.server.grr_response_server import data_store
-from grr.server.grr_response_server import fleetspeak_utils
+from grr_response_core import config
+from grr_response_core.lib import queues
+from grr_response_core.lib import rdfvalue
+from grr_response_core.lib import registry
+from grr_response_core.lib import stats
+from grr_response_core.lib import utils
+from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_core.lib.rdfvalues import flows as rdf_flows
+from grr_response_server import data_store
+from grr_response_server import fleetspeak_utils
+from grr_response_server.rdfvalues import objects as rdf_objects
 
 
 class Error(Exception):
@@ -30,6 +30,7 @@ session_id_map = {
     rdfvalue.SessionID(queue=queues.ENROLLMENT, flow_name="Enrol"): "Enrol",
     rdfvalue.SessionID(queue=queues.STATS, flow_name="Stats"): "StatsHandler",
     rdfvalue.SessionID(flow_name="TransferStore"): "BlobHandler",
+    rdfvalue.SessionID(flow_name="Foreman"): "ForemanHandler",
 }
 
 
@@ -185,13 +186,9 @@ class QueueManager(object):
     self.Flush()
     self.UnfreezeTimestamp()
 
-  def DeQueueClientRequest(self, client_id, task_id):
+  def DeQueueClientRequest(self, request):
     """Remove the message from the client queue that this request forms."""
-    # Check this request was actually bound for a client.
-    if client_id:
-      client_id = rdf_client.ClientURN(client_id)
-
-      self.client_messages_to_delete.setdefault(client_id, []).append(task_id)
+    self.client_messages_to_delete[request.task_id] = request
 
   def MultiCheckStatus(self, requests):
     """Checks if there is a status message queued for a number of requests."""
@@ -281,7 +278,7 @@ class QueueManager(object):
     self.requests_to_delete.append(request)
 
     if request and request.HasField("request"):
-      self.DeQueueClientRequest(request.client_id, request.request.task_id)
+      self.DeQueueClientRequest(request.request)
 
     data_store.DB.DeleteRequest(request)
 
@@ -297,7 +294,7 @@ class QueueManager(object):
     for request in deleted_requests:
       if request.HasField("request"):
         # Client request dequeueing is cached so we can call it directly.
-        self.DeQueueClientRequest(request.client_id, request.request.task_id)
+        self.DeQueueClientRequest(request.request)
 
   def Flush(self):
     """Writes the changes in this object to the datastore."""
@@ -330,8 +327,17 @@ class QueueManager(object):
     # we flush after writing all requests and only notify afterwards.
     mutation_pool = self.data_store.GetMutationPool()
     with mutation_pool:
-      for client_id, messages in self.client_messages_to_delete.iteritems():
-        self.Delete(client_id.Queue(), messages, mutation_pool=mutation_pool)
+
+      if data_store.RelationalDBReadEnabled(category="client_messages"):
+        if self.client_messages_to_delete:
+          data_store.REL_DB.DeleteClientMessages(
+              self.client_messages_to_delete.values())
+      else:
+        messages_by_queue = utils.GroupBy(
+            self.client_messages_to_delete.values(),
+            lambda request: request.queue)
+        for queue, messages in messages_by_queue.items():
+          self.Delete(queue, messages, mutation_pool=mutation_pool)
 
       if self.new_client_messages:
         for timestamp, messages in utils.GroupBy(self.new_client_messages,
@@ -441,8 +447,12 @@ class QueueManager(object):
           fleetspeak_utils.SendGrrMessageThroughFleetspeak(client_id, task)
         continue
       non_fleetspeak_tasks.extend(queued_tasks)
-    timestamp = timestamp or self.frozen_timestamp
-    mutation_pool.QueueScheduleTasks(non_fleetspeak_tasks, timestamp)
+
+    if data_store.RelationalDBReadEnabled(category="client_messages"):
+      data_store.REL_DB.WriteClientMessages(non_fleetspeak_tasks)
+    else:
+      timestamp = timestamp or self.frozen_timestamp
+      mutation_pool.QueueScheduleTasks(non_fleetspeak_tasks, timestamp)
 
   def _SortByPriority(self, notifications, queue, output_dict=None):
     """Sort notifications by priority into output_dict."""
@@ -639,7 +649,10 @@ class QueueManager(object):
     if isinstance(queue, rdf_client.ClientURN):
       queue = queue.Queue()
 
-    return self.data_store.QueueQueryTasks(queue, limit=limit)
+    if data_store.RelationalDBReadEnabled(category="client_messages"):
+      return data_store.REL_DB.ReadClientMessages(queue.Split()[0])
+    else:
+      return self.data_store.QueueQueryTasks(queue, limit=limit)
 
   def QueryAndOwn(self, queue, lease_seconds=10, limit=1):
     """Returns a list of Tasks leased for a certain time.
@@ -651,6 +664,9 @@ class QueueManager(object):
     Returns:
         A list of GrrMessage() objects leased.
     """
+    if data_store.RelationalDBReadEnabled(category="client_messages"):
+      return data_store.REL_DB.LeaseClientMessages(
+          queue.Split()[0], lease_time=rdfvalue.Duration("%ds" % lease_seconds))
     with self.data_store.GetMutationPool() as mutation_pool:
       return mutation_pool.QueueQueryAndOwn(queue, lease_seconds, limit,
                                             self.frozen_timestamp)

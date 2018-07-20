@@ -4,9 +4,11 @@ import os
 import re
 
 
-from grr.lib import parser
-from grr.lib.parsers import config_file
-from grr.lib.rdfvalues import config_file as rdf_config_file
+from builtins import zip  # pylint: disable=redefined-builtin
+
+from grr_response_core.lib import parser
+from grr_response_core.lib.parsers import config_file
+from grr_response_core.lib.rdfvalues import config_file as rdf_config_file
 
 
 class PAMParser(parser.FileParser, config_file.FieldParser):

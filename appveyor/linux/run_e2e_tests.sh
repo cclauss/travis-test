@@ -9,10 +9,7 @@
 set -ex
 
 readonly FLAKY_TESTS_ARR=(\
-  TestClientInterrogate.runTest \
-  TestFileFinderOSHomedir.runTest \
   TestCheckRunner.runTest \
-  TestRecursiveListDirectoryLinuxDarwin.runTest \
 )
 # Convert array to string (comma-separated).
 readonly FLAKY_TESTS="$(IFS=,;echo "${FLAKY_TESTS_ARR[*]}")"
@@ -24,7 +21,7 @@ function fatal() {
 
 apt install -y /usr/share/grr-server/executables/installers/grr_*_amd64.deb
 
-CLIENT_ID="$(grr_console --code_to_execute 'from grr.test_lib import test_lib; print(test_lib.GetClientId("/etc/grr.local.yaml"))')"
+CLIENT_ID="$(grr_console --code_to_execute 'from grr_response_test import test_utils; print(test_utils.GetClientId("/etc/grr.local.yaml"))')"
 
 echo "Installed GRR client [Id ${CLIENT_ID}]"
 
@@ -37,7 +34,9 @@ systemctl restart grr
 grr_end_to_end_tests --verbose \
   --api_password "${GRR_ADMIN_PASS}" \
   --client_id "${CLIENT_ID}" \
-  --flow_timeout_secs 60 \
+  --flow_timeout_secs 240 \
+  --flow_results_sla_secs 60 \
+  --blacklisted_tests "${FLAKY_TESTS}" \
   2>&1 | tee e2e.log
 
 if [[ ! -z "$(cat e2e.log | grep -F '[ FAIL ]')" ]]; then

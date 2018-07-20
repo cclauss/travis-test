@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 """Renderers that render RDFValues into JSON compatible data structures."""
+from __future__ import division
 
 import base64
 import inspect
@@ -7,20 +8,23 @@ import logging
 import numbers
 
 
-from grr.lib import rdfvalue
-from grr.lib import registry
+from future.utils import with_metaclass
+from past.builtins import long
 
-from grr.lib import utils
-from grr.lib.rdfvalues import flows as rdf_flows
-from grr.lib.rdfvalues import protodict as rdf_protodict
-from grr.lib.rdfvalues import rekall_types as rdf_rekall_types
-from grr.lib.rdfvalues import stats as rdf_stats
-from grr.lib.rdfvalues import structs as rdf_structs
+from grr_response_core.lib import rdfvalue
+from grr_response_core.lib import registry
+
+from grr_response_core.lib import utils
+from grr_response_core.lib.rdfvalues import flows as rdf_flows
+from grr_response_core.lib.rdfvalues import protodict as rdf_protodict
+from grr_response_core.lib.rdfvalues import rekall_types as rdf_rekall_types
+from grr_response_core.lib.rdfvalues import stats as rdf_stats
+from grr_response_core.lib.rdfvalues import structs as rdf_structs
 from grr_response_proto.api import reflection_pb2
-from grr.server.grr_response_server import aff4
-from grr.server.grr_response_server.gui.api_plugins import output_plugin as api_output_plugin
+from grr_response_server import aff4
+from grr_response_server.gui.api_plugins import output_plugin as api_output_plugin
 
-from grr.server.grr_response_server.gui.api_plugins import stats as api_stats
+from grr_response_server.gui.api_plugins import stats as api_stats
 
 
 class Error(Exception):
@@ -72,10 +76,8 @@ def StripTypeInfo(rendered_data):
     return rendered_data
 
 
-class ApiValueRenderer(object):
+class ApiValueRenderer(with_metaclass(registry.MetaclassRegistry, object)):
   """Baseclass for API renderers that render RDFValues."""
-
-  __metaclass__ = registry.MetaclassRegistry
 
   value_class = object
 

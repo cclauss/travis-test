@@ -6,23 +6,27 @@ import logging
 import pdb
 import traceback
 
+
+from future.utils import with_metaclass
+
 from grr_response_client.client_actions import standard
 
-from grr.lib import flags
-from grr.lib import rdfvalue
-from grr.lib import registry
-from grr.lib.rdfvalues import client as rdf_client
-from grr.lib.rdfvalues import flows as rdf_flows
-from grr.lib.rdfvalues import objects as rdf_objects
-from grr.lib.rdfvalues import protodict as rdf_protodict
-from grr.lib.rdfvalues import structs as rdf_structs
+from grr_response_core.lib import flags
+from grr_response_core.lib import rdfvalue
+from grr_response_core.lib import registry
+from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_core.lib.rdfvalues import flows as rdf_flows
+from grr_response_core.lib.rdfvalues import protodict as rdf_protodict
+from grr_response_core.lib.rdfvalues import structs as rdf_structs
 from grr_response_proto import tests_pb2
-from grr.server.grr_response_server import aff4
-from grr.server.grr_response_server import events
-from grr.server.grr_response_server import flow
-from grr.server.grr_response_server import handler_registry
-from grr.server.grr_response_server import queue_manager
-from grr.server.grr_response_server import server_stubs
+from grr_response_server import aff4
+from grr_response_server import events
+from grr_response_server import flow
+from grr_response_server import handler_registry
+from grr_response_server import queue_manager
+from grr_response_server import server_stubs
+from grr_response_server.rdfvalues import flow_runner as rdf_flow_runner
+from grr_response_server.rdfvalues import objects as rdf_objects
 from grr.test_lib import action_mocks
 from grr.test_lib import client_test_lib
 
@@ -223,16 +227,15 @@ class WellKnownSessionTest2(WellKnownSessionTest):
       queue=rdfvalue.RDFURN("test"), flow_name="TestSessionId2")
 
 
-class FlowTestsBaseclass(test_lib.GRRBaseTest):
+class FlowTestsBaseclass(
+    with_metaclass(registry.MetaclassRegistry, test_lib.GRRBaseTest)):
   """The base class for all flow tests."""
-
-  __metaclass__ = registry.MetaclassRegistry
 
   def FlowSetup(self, name, client_id=None):
     if client_id is None:
       client_id = self.client_id
 
-    session_id = flow.GRRFlow.StartFlow(
+    session_id = flow.StartFlow(
         client_id=client_id, flow_name=name, token=self.token)
 
     return aff4.FACTORY.Open(session_id, mode="rw", token=self.token)
@@ -501,7 +504,7 @@ def CheckFlowErrors(total_flows, token=None):
     except IOError:
       continue
 
-    if flow_obj.context.state != rdf_flows.FlowContext.State.TERMINATED:
+    if flow_obj.context.state != rdf_flow_runner.FlowContext.State.TERMINATED:
       if flags.FLAGS.debug:
         pdb.set_trace()
       raise RuntimeError(
@@ -528,7 +531,7 @@ def TestFlowHelper(flow_urn_or_cls_name,
                        execution.
     token: Security token.
     sync: Whether StartFlow call should be synchronous or not.
-    **kwargs: Arbitrary args that will be passed to flow.GRRFlow.StartFlow().
+    **kwargs: Arbitrary args that will be passed to flow.StartFlow().
   Returns:
     The session id of the flow that was run.
   """
@@ -542,7 +545,7 @@ def TestFlowHelper(flow_urn_or_cls_name,
     session_id = flow_urn_or_cls_name
   else:
     # Instantiate the flow:
-    session_id = flow.GRRFlow.StartFlow(
+    session_id = flow.StartFlow(
         client_id=client_id,
         flow_name=flow_urn_or_cls_name,
         sync=sync,

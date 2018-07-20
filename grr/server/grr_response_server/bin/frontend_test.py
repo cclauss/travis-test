@@ -13,18 +13,19 @@ import requests
 
 from google.protobuf import json_format
 
-from grr.lib import flags
-from grr.lib import utils
-from grr.lib.rdfvalues import file_finder as rdf_file_finder
-from grr.lib.rdfvalues import paths as rdf_paths
-from grr.lib.rdfvalues import rekall_types as rdf_rekall_types
-from grr.server.grr_response_server import aff4
-from grr.server.grr_response_server import flow
-from grr.server.grr_response_server import frontend_lib
-from grr.server.grr_response_server.aff4_objects import aff4_grr
-from grr.server.grr_response_server.aff4_objects import filestore
-from grr.server.grr_response_server.bin import frontend
-from grr.server.grr_response_server.flows.general import file_finder
+from grr_response_core.lib import flags
+from grr_response_core.lib import utils
+from grr_response_core.lib.rdfvalues import file_finder as rdf_file_finder
+from grr_response_core.lib.rdfvalues import paths as rdf_paths
+from grr_response_core.lib.rdfvalues import rekall_types as rdf_rekall_types
+from grr_response_server import aff4
+from grr_response_server import data_store_utils
+from grr_response_server import flow
+from grr_response_server import frontend_lib
+from grr_response_server.aff4_objects import aff4_grr
+from grr_response_server.aff4_objects import filestore
+from grr_response_server.bin import frontend
+from grr_response_server.flows.general import file_finder
 from grr.test_lib import action_mocks
 from grr.test_lib import flow_test_lib
 from grr.test_lib import rekall_test_lib
@@ -125,7 +126,7 @@ class GRRHTTPServerTest(test_lib.GRRBaseTest):
       data = open(r.stat_entry.pathspec.path, "rb").read()
       self.assertEqual(aff4_obj.Read(100), data[:100])
 
-      hash_obj = aff4_obj.Get(aff4_obj.Schema.HASH)
+      hash_obj = data_store_utils.GetFileHashEntry(aff4_obj)
       self.assertEqual(hash_obj.md5, hashlib.md5(data).hexdigest())
       self.assertEqual(hash_obj.sha1, hashlib.sha1(data).hexdigest())
       self.assertEqual(hash_obj.sha256, hashlib.sha256(data).hexdigest())
@@ -235,7 +236,7 @@ class GRRHTTPServerTest(test_lib.GRRBaseTest):
 
         # Make sure the HashFileStore has references to this file for
         # all hashes.
-        hashes = aff4_obj.Get(aff4_obj.Schema.HASH)
+        hashes = data_store_utils.GetFileHashEntry(aff4_obj)
         fs = filestore.HashFileStore
         md5_refs = list(fs.GetReferencesMD5(hashes.md5, token=self.token))
         self.assertIn(aff4_obj.urn, md5_refs)

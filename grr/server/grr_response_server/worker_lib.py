@@ -7,24 +7,25 @@ import time
 import traceback
 
 
-from grr import config
-from grr.lib import flags
-from grr.lib import queues as queues_config
-from grr.lib import rdfvalue
-from grr.lib import registry
-from grr.lib import stats
-from grr.lib import utils
-from grr.lib.rdfvalues import flows as rdf_flows
-from grr.server.grr_response_server import aff4
-from grr.server.grr_response_server import data_store
-from grr.server.grr_response_server import flow
-from grr.server.grr_response_server import handler_registry
-from grr.server.grr_response_server import master
-from grr.server.grr_response_server import queue_manager as queue_manager_lib
+from grr_response_core import config
+from grr_response_core.lib import flags
+from grr_response_core.lib import queues as queues_config
+from grr_response_core.lib import rdfvalue
+from grr_response_core.lib import registry
+from grr_response_core.lib import stats
+from grr_response_core.lib import utils
+from grr_response_core.lib.rdfvalues import flows as rdf_flows
+from grr_response_server import aff4
+from grr_response_server import data_store
+from grr_response_server import flow
+from grr_response_server import handler_registry
+from grr_response_server import master
+from grr_response_server import queue_manager as queue_manager_lib
 # pylint: disable=unused-import
-from grr.server.grr_response_server import server_stubs
+from grr_response_server import server_stubs
 # pylint: enable=unused-import
-from grr.server.grr_response_server import threadpool
+from grr_response_server import threadpool
+from grr_response_server.rdfvalues import flow_runner as rdf_flow_runner
 
 
 class Error(Exception):
@@ -44,8 +45,8 @@ class GRRWorker(object):
   SHORT_POLLING_INTERVAL = 0.3
   SHORT_POLL_TIME = 30
 
-  # Time in seconds to wait between trying to lease message handlers.
-  MH_LEASE_INTERVAL = 15
+  # Time to wait between trying to lease message handlers.
+  MH_LEASE_INTERVAL = rdfvalue.Duration("15s")
 
   # target maximum time to spend on RunOnce
   RUN_ONCE_MAX_SECONDS = 300
@@ -97,19 +98,29 @@ class GRRWorker(object):
 
     self.token = token
     self.last_active = 0
-    self.last_mh_lease_attempt = 0
+    self.last_mh_lease_attempt = rdfvalue.RDFDatetime.FromSecondsSinceEpoch(0)
 
     # Well known flows are just instantiated.
     self.well_known_flows = flow.WellKnownFlow.GetAllWellKnownFlows(token=token)
 
   def Run(self):
     """Event loop."""
+    was_master = False
     try:
       while 1:
         if master.MASTER_WATCHER.IsMaster():
           processed = self.RunOnce()
+          if not was_master:
+            if data_store.RelationalDBReadEnabled(category="message_handlers"):
+              data_store.REL_DB.RegisterMessageHandler(
+                  self._ProcessMessageHandlerRequests,
+                  self.well_known_flow_lease_time,
+                  limit=1000)
+          was_master = True
         else:
           processed = 0
+          data_store.REL_DB.UnregisterMessageHandler()
+          was_master = False
           time.sleep(60)
 
         if processed == 0:
@@ -126,20 +137,8 @@ class GRRWorker(object):
       logging.info("Caught interrupt, exiting.")
       self.__class__.thread_pool.Join()
 
-  def _ProcessMessageHandlerRequests(self):
+  def _ProcessMessageHandlerRequests(self, requests):
     """Processes message handler requests."""
-
-    if not data_store.RelationalDBReadEnabled(category="message_handlers"):
-      return 0
-
-    if time.time() - self.last_mh_lease_attempt < self.MH_LEASE_INTERVAL:
-      return 0
-
-    requests = data_store.REL_DB.LeaseMessageHandlerRequests(
-        lease_time=self.well_known_flow_lease_time, limit=1000)
-    if not requests:
-      return 0
-
     logging.debug("Leased message handler request ids: %s", ",".join(
         str(r.request_id) for r in requests))
     grouped_requests = utils.GroupBy(requests, lambda r: r.handler_name)
@@ -160,7 +159,6 @@ class GRRWorker(object):
     logging.debug("Deleting message handler request ids: %s", ",".join(
         str(r.request_id) for r in requests))
     data_store.REL_DB.DeleteMessageHandlerRequests(requests)
-    return len(requests)
 
   def RunOnce(self):
     """Processes one set of messages from Task Scheduler.
@@ -172,7 +170,7 @@ class GRRWorker(object):
         Total number of messages processed by this call.
     """
     start_time = time.time()
-    processed = self._ProcessMessageHandlerRequests()
+    processed = 0
 
     queue_manager = queue_manager_lib.QueueManager(token=self.token)
     for queue in self.queues:
@@ -297,7 +295,7 @@ class GRRWorker(object):
       runner.ProcessCompletedRequests(notification, self.__class__.thread_pool)
     except Exception as e:  # pylint: disable=broad-except
       # Something went wrong - log it in the flow.
-      runner.context.state = rdf_flows.FlowContext.State.ERROR
+      runner.context.state = rdf_flow_runner.FlowContext.State.ERROR
       runner.context.backtrace = traceback.format_exc()
       logging.error("Flow %s: %s", flow_obj, e)
       raise FlowProcessingError(e)

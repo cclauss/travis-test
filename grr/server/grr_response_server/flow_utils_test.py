@@ -2,11 +2,11 @@
 """Tests for flow utils classes."""
 
 
-from grr.lib import flags
-from grr.lib import rdfvalue
-from grr.lib.rdfvalues import client as rdf_client
-from grr.server.grr_response_server import aff4
-from grr.server.grr_response_server import flow_utils
+from grr_response_core.lib import flags
+from grr_response_core.lib import rdfvalue
+from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_server import aff4
+from grr_response_server import flow_utils
 from grr.test_lib import flow_test_lib
 from grr.test_lib import test_lib
 

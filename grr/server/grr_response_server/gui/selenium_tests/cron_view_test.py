@@ -4,16 +4,17 @@
 
 
 import unittest
-from grr.lib import flags
-from grr.lib import rdfvalue
-from grr.lib.rdfvalues import cronjobs as rdf_cronjobs
-from grr.lib.rdfvalues import objects as rdf_objects
-from grr.server.grr_response_server import aff4
-from grr.server.grr_response_server import data_store
-from grr.server.grr_response_server import notification
-from grr.server.grr_response_server.aff4_objects import cronjobs
-from grr.server.grr_response_server.flows.cron import system as cron_system
-from grr.server.grr_response_server.gui import gui_test_lib
+from grr_response_core.lib import flags
+from grr_response_core.lib import rdfvalue
+from grr_response_server import aff4
+from grr_response_server import data_store
+from grr_response_server import notification
+from grr_response_server.aff4_objects import cronjobs
+from grr_response_server.flows.cron import system as cron_system
+from grr_response_server.gui import gui_test_lib
+from grr_response_server.gui.api_plugins import cron
+from grr_response_server.rdfvalues import cronjobs as rdf_cronjobs
+from grr_response_server.rdfvalues import objects as rdf_objects
 from grr.test_lib import db_test_lib
 from grr.test_lib import test_lib
 
@@ -24,6 +25,7 @@ class TestCronView(gui_test_lib.GRRSeleniumTest):
 
   def AddJobStatus(self, job_id, status):
     if data_store.RelationalDBReadEnabled():
+      status = cron.ApiCronJob().status_map[status]
       data_store.REL_DB.UpdateCronJob(
           job_id,
           last_run_time=rdfvalue.RDFDatetime.Now(),
@@ -41,13 +43,15 @@ class TestCronView(gui_test_lib.GRRSeleniumTest):
         cron_system.GRRVersionBreakDown.__name__,
         cron_system.OSBreakDown.__name__, cron_system.LastAccessStats.__name__
     ]:
-      cron_args = rdf_cronjobs.CreateCronJobFlowArgs(
-          periodicity="7d", lifetime="1d")
-      cron_args.flow_runner_args.flow_name = flow_name
+      cron_args = rdf_cronjobs.CreateCronJobArgs(
+          frequency="7d", lifetime="1d", flow_name=flow_name)
       cronjobs.GetCronManager().CreateJob(
           cron_args, job_id=flow_name, token=self.token)
 
-    cronjobs.GetCronManager().RunOnce(token=self.token)
+    manager = cronjobs.GetCronManager()
+    manager.RunOnce(token=self.token)
+    if data_store.RelationalDBReadEnabled():
+      manager._GetThreadPool().Join()
 
   def testCronView(self):
     self.Open("/")
@@ -66,9 +70,9 @@ class TestCronView(gui_test_lib.GRRSeleniumTest):
     # Select a Cron.
     self.Click("css=td:contains('OSBreakDown')")
 
-    # Check that there's one flow in the list.
+    # Check that the cron job is displayed.
     self.WaitUntil(self.IsElementPresent,
-                   "css=#main_bottomPane td:contains('OSBreakDown')")
+                   "css=#main_bottomPane dd:contains('OSBreakDown')")
 
   def testMessageIsShownWhenNoCronJobSelected(self):
     self.Open("/")
@@ -86,21 +90,24 @@ class TestCronView(gui_test_lib.GRRSeleniumTest):
 
     # Tabs should appear in the bottom pane
     self.WaitUntil(self.IsElementPresent, "css=#main_bottomPane #Details")
-    self.WaitUntil(self.IsElementPresent, "css=#main_bottomPane #Flows")
+    self.WaitUntil(self.IsElementPresent, "css=#main_bottomPane #Runs")
 
     self.WaitUntil(self.IsTextPresent, "Allow Overruns")
-    self.WaitUntil(self.IsTextPresent, "Flow Arguments")
+    self.WaitUntil(self.IsTextPresent, "Cron Arguments")
 
-    # Click on "Flows" tab
-    self.Click("css=#main_bottomPane #Flows")
+    # Click on "Runs" tab
+    self.Click("css=#main_bottomPane #Runs")
 
     # Click on the first flow and wait for flow details panel to appear.
-    self.Click("css=#main_bottomPane td:contains('OSBreakDown')")
-    self.WaitUntil(self.IsTextPresent, "Outstanding requests")
+    runs = cronjobs.GetCronManager().ReadJobRuns(
+        cron_system.OSBreakDown.__name__)
+    try:
+      run_id = runs[0].run_id
+    except AttributeError:
+      run_id = runs[0].urn.Basename()
 
-    # Close the panel.
-    self.Click("css=#main_bottomPane .panel button.close")
-    self.WaitUntilNot(self.IsTextPresent, "Outstanding requests")
+    self.assertEqual(len(runs), 1)
+    self.WaitUntil(self.IsElementPresent, "css=td:contains('%s')" % run_id)
 
   def testToolbarStateForDisabledCronJob(self):
     cronjobs.GetCronManager().DisableJob(job_id="OSBreakDown")
@@ -171,10 +178,15 @@ class TestCronView(gui_test_lib.GRRSeleniumTest):
     self.Click("css=button[name=Close]")
     self.WaitUntilNot(self.IsVisible, "css=.modal-open")
 
-    # View should be refreshed automatically.
+    # TODO(amoser): The lower pane does not refresh automatically so we need to
+    # workaround. Remove when we have implemented this auto refresh.
+    self.Open("/")
+    self.Click("css=a[grrtarget=crons]")
+    self.Click("css=td:contains('OSBreakDown')")
+
     self.WaitUntil(self.IsTextPresent, cron_system.OSBreakDown.__name__)
     self.WaitUntil(self.IsElementPresent,
-                   "css=tr:contains('OSBreakDown') *[state=ENABLED]")
+                   "css=div:contains('Enabled') dd:contains('true')")
 
   def testDisableCronJob(self):
     cronjobs.GetCronManager().EnableJob(job_id="OSBreakDown")
@@ -214,10 +226,15 @@ class TestCronView(gui_test_lib.GRRSeleniumTest):
     self.Click("css=button[name=Close]")
     self.WaitUntilNot(self.IsVisible, "css=.modal-open")
 
-    # View should be refreshed automatically.
+    # TODO(amoser): The lower pane does not refresh automatically so we need to
+    # workaround. Remove when we have implemented this auto refresh.
+    self.Open("/")
+    self.Click("css=a[grrtarget=crons]")
+    self.Click("css=td:contains('OSBreakDown')")
+
     self.WaitUntil(self.IsTextPresent, cron_system.OSBreakDown.__name__)
     self.WaitUntil(self.IsElementPresent,
-                   "css=tr:contains('OSBreakDown') *[state=DISABLED]")
+                   "css=div:contains('Enabled') dd:contains('false')")
 
   def testDeleteCronJob(self):
     cronjobs.GetCronManager().EnableJob(job_id="OSBreakDown")
@@ -306,6 +323,18 @@ class TestCronView(gui_test_lib.GRRSeleniumTest):
       # Click on "Close" and check that dialog disappears.
       self.Click("css=button[name=Close]")
       self.WaitUntilNot(self.IsVisible, "css=.modal-open")
+
+      # Relational cron jobs will only be run the next time a worker checks in.
+      if data_store.RelationalDBReadEnabled():
+        manager = cronjobs.GetCronManager()
+        manager.RunOnce(token=self.token)
+        manager._GetThreadPool().Join()
+
+      # TODO(amoser): The lower pane does not refresh automatically so we need
+      # to workaround. Remove when we have implemented this auto refresh.
+      self.Open("/")
+      self.Click("css=a[grrtarget=crons]")
+      self.Click("css=td:contains('OSBreakDown')")
 
       # View should be refreshed automatically. The last run date should appear.
       self.WaitUntil(

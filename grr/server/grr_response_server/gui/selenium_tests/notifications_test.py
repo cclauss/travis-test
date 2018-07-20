@@ -3,15 +3,15 @@
 """Test the fileview interface."""
 
 import unittest
-from grr.lib import flags
-from grr.lib import utils
-from grr.lib.rdfvalues import objects as rdf_objects
-from grr.server.grr_response_server import aff4
-from grr.server.grr_response_server import flow
-from grr.server.grr_response_server import notification
-from grr.server.grr_response_server.flows.general import discovery
-from grr.server.grr_response_server.gui import gui_test_lib
-from grr.server.grr_response_server.gui.api_plugins.client import ApiSearchClientsHandler
+from grr_response_core.lib import flags
+from grr_response_core.lib import utils
+from grr_response_server import aff4
+from grr_response_server import flow
+from grr_response_server import notification
+from grr_response_server.flows.general import discovery
+from grr_response_server.gui import gui_test_lib
+from grr_response_server.gui.api_plugins.client import ApiSearchClientsHandler
+from grr_response_server.rdfvalues import objects as rdf_objects
 from grr.test_lib import db_test_lib
 
 
@@ -22,7 +22,7 @@ class TestNotifications(gui_test_lib.GRRSeleniumTest):
   @classmethod
   def GenerateNotifications(cls, client_id, token):
     """Generates fake notifications of different notification types."""
-    session_id = flow.GRRFlow.StartFlow(
+    session_id = flow.StartFlow(
         client_id=client_id,
         flow_name=discovery.Interrogate.__name__,
         token=token)

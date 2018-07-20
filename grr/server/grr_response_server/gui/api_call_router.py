@@ -5,21 +5,23 @@ import inspect
 import re
 
 
-from grr.lib import registry
+from future.utils import with_metaclass
 
-from grr.server.grr_response_server.gui import api_value_renderers
-from grr.server.grr_response_server.gui.api_plugins import artifact as api_artifact
-from grr.server.grr_response_server.gui.api_plugins import client as api_client
-from grr.server.grr_response_server.gui.api_plugins import config as api_config
-from grr.server.grr_response_server.gui.api_plugins import cron as api_cron
-from grr.server.grr_response_server.gui.api_plugins import flow as api_flow
-from grr.server.grr_response_server.gui.api_plugins import hunt as api_hunt
-from grr.server.grr_response_server.gui.api_plugins import output_plugin as api_output_plugin
-from grr.server.grr_response_server.gui.api_plugins import reflection as api_reflection
-from grr.server.grr_response_server.gui.api_plugins import stats as api_stats
-from grr.server.grr_response_server.gui.api_plugins import user as api_user
+from grr_response_core.lib import registry
 
-from grr.server.grr_response_server.gui.api_plugins import vfs as api_vfs
+from grr_response_server.gui import api_value_renderers
+from grr_response_server.gui.api_plugins import artifact as api_artifact
+from grr_response_server.gui.api_plugins import client as api_client
+from grr_response_server.gui.api_plugins import config as api_config
+from grr_response_server.gui.api_plugins import cron as api_cron
+from grr_response_server.gui.api_plugins import flow as api_flow
+from grr_response_server.gui.api_plugins import hunt as api_hunt
+from grr_response_server.gui.api_plugins import output_plugin as api_output_plugin
+from grr_response_server.gui.api_plugins import reflection as api_reflection
+from grr_response_server.gui.api_plugins import stats as api_stats
+from grr_response_server.gui.api_plugins import user as api_user
+
+from grr_response_server.gui.api_plugins import vfs as api_vfs
 
 
 class Http(object):
@@ -139,10 +141,8 @@ class RouterMethodMetadata(object):
     return result
 
 
-class ApiCallRouter(object):
+class ApiCallRouter(with_metaclass(registry.MetaclassRegistry, object)):
   """Routers do ACL checks and route API requests to handlers."""
-
-  __metaclass__ = registry.MetaclassRegistry
   __abstract = True  # pylint: disable=g-bad-name
 
   # If router is configurable, RDFValue class of its configuration
@@ -629,7 +629,7 @@ class ApiCallRouterStub(ApiCallRouter):
     raise NotImplementedError()
 
   @Category("Cron")
-  @ArgsType(api_cron.ApiCronJob)
+  @ArgsType(api_cron.ApiCreateCronJobArgs)
   @ResultType(api_cron.ApiCronJob)
   @Http("POST", "/api/cron-jobs", strip_root_types=False)
   def CreateCronJob(self, args, token=None):
@@ -664,23 +664,23 @@ class ApiCallRouterStub(ApiCallRouter):
     raise NotImplementedError()
 
   @Category("Cron")
-  @ArgsType(api_cron.ApiListCronJobFlowsArgs)
-  @ResultType(api_flow.ApiListFlowsResult)
-  @Http("GET", "/api/cron-jobs/<cron_job_id>/flows")
-  def ListCronJobFlows(self, args, token=None):
-    """List flows initiated by the given cron job."""
+  @ArgsType(api_cron.ApiListCronJobRunsArgs)
+  @ResultType(api_cron.ApiListCronJobRunsResult)
+  @Http("GET", "/api/cron-jobs/<cron_job_id>/runs")
+  def ListCronJobRuns(self, args, token=None):
+    """List runs initiated by the given cron job."""
 
     raise NotImplementedError()
 
   @Category("Cron")
-  @ArgsType(api_cron.ApiGetCronJobFlowArgs)
-  @ResultType(api_flow.ApiFlow)
+  @ArgsType(api_cron.ApiGetCronJobRunArgs)
+  @ResultType(api_cron.ApiCronJobRun)
   @Http(
       "GET",
-      "/api/cron-jobs/<cron_job_id>/flows/<flow_id>",
+      "/api/cron-jobs/<cron_job_id>/runs/<run_id>",
       strip_root_types=False)
-  def GetCronJobFlow(self, args, token=None):
-    """Get details of a flow started by a cron job."""
+  def GetCronJobRun(self, args, token=None):
+    """Get details of a run started by a cron job."""
 
     raise NotImplementedError()
 

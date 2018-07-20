@@ -1,13 +1,13 @@
 #!/usr/bin/env python
 """Tests for grr.lib.throttle."""
 
-from grr.lib import flags
-from grr.lib import rdfvalue
-from grr.lib.rdfvalues import file_finder as rdf_file_finder
-from grr.server.grr_response_server import access_control
-from grr.server.grr_response_server import flow
-from grr.server.grr_response_server import throttle
-from grr.server.grr_response_server.flows.general import file_finder
+from grr_response_core.lib import flags
+from grr_response_core.lib import rdfvalue
+from grr_response_core.lib.rdfvalues import file_finder as rdf_file_finder
+from grr_response_server import access_control
+from grr_response_server import flow
+from grr_response_server import throttle
+from grr_response_server.flows.general import file_finder
 from grr.test_lib import flow_test_lib
 from grr.test_lib import test_lib
 
@@ -22,14 +22,14 @@ class ThrottleTest(test_lib.GRRBaseTest):
   def testCheckFlowRequestLimit(self):
     # Create a flow
     with test_lib.FakeTime(self.BASE_TIME):
-      flow.GRRFlow.StartFlow(
+      flow.StartFlow(
           client_id=self.client_id,
           flow_name=flow_test_lib.DummyLogFlow.__name__,
           token=self.token)
 
     # One day + 1s later
     with test_lib.FakeTime(self.BASE_TIME + 86400 + 1):
-      flow.GRRFlow.StartFlow(
+      flow.StartFlow(
           client_id=self.client_id,
           flow_name=flow_test_lib.DummyLogFlow.__name__,
           token=self.token)
@@ -48,11 +48,11 @@ class ThrottleTest(test_lib.GRRBaseTest):
 
       # Start some more flows with a different user
       token2 = access_control.ACLToken(username="test2", reason="Running tests")
-      flow.GRRFlow.StartFlow(
+      flow.StartFlow(
           client_id=self.client_id,
           flow_name=flow_test_lib.DummyLogFlow.__name__,
           token=token2)
-      flow.GRRFlow.StartFlow(
+      flow.StartFlow(
           client_id=self.client_id,
           flow_name=flow_test_lib.DummyLogFlow.__name__,
           token=token2)
@@ -66,7 +66,7 @@ class ThrottleTest(test_lib.GRRBaseTest):
           token=self.token)
 
       # Add another flow at current time
-      flow.GRRFlow.StartFlow(
+      flow.StartFlow(
           client_id=self.client_id,
           flow_name=flow_test_lib.DummyLogFlow.__name__,
           token=self.token)
@@ -93,7 +93,7 @@ class ThrottleTest(test_lib.GRRBaseTest):
           None,
           token=self.token)
 
-      flow.GRRFlow.StartFlow(
+      flow.StartFlow(
           client_id=self.client_id,
           flow_name=flow_test_lib.DummyLogFlow.__name__,
           token=self.token)
@@ -115,7 +115,7 @@ class ThrottleTest(test_lib.GRRBaseTest):
           None,
           token=self.token)
 
-      flow.GRRFlow.StartFlow(
+      flow.StartFlow(
           client_id=self.client_id,
           flow_name=flow_test_lib.DummyLogFlow.__name__,
           token=self.token)
@@ -141,7 +141,7 @@ class ThrottleTest(test_lib.GRRBaseTest):
           args,
           token=self.token)
 
-      flow.GRRFlow.StartFlow(
+      flow.StartFlow(
           client_id=self.client_id,
           flow_name=file_finder.FileFinder.__name__,
           token=self.token,

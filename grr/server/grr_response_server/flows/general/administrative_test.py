@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 """Tests for administrative flows."""
+from __future__ import division
 
 import os
 import subprocess
@@ -7,36 +8,37 @@ import sys
 import time
 
 
+from builtins import zip  # pylint: disable=redefined-builtin
 import psutil
 
-from grr import config
 from grr_response_client.client_actions import admin
 from grr_response_client.client_actions import standard
-from grr.lib import flags
-from grr.lib import rdfvalue
-from grr.lib import utils
-from grr.lib.rdfvalues import client as rdf_client
-from grr.lib.rdfvalues import flows as rdf_flows
-from grr.lib.rdfvalues import protodict as rdf_protodict
-from grr.lib.rdfvalues import structs as rdf_structs
+from grr_response_core import config
+from grr_response_core.lib import flags
+from grr_response_core.lib import rdfvalue
+from grr_response_core.lib import utils
+from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_core.lib.rdfvalues import protodict as rdf_protodict
+from grr_response_core.lib.rdfvalues import structs as rdf_structs
 from grr_response_proto import tests_pb2
-from grr.server.grr_response_server import aff4
-from grr.server.grr_response_server import data_store
-from grr.server.grr_response_server import email_alerts
-from grr.server.grr_response_server import flow
-from grr.server.grr_response_server import maintenance_utils
-from grr.server.grr_response_server import server_stubs
-from grr.server.grr_response_server.aff4_objects import aff4_grr
-from grr.server.grr_response_server.aff4_objects import stats as aff4_stats
-from grr.server.grr_response_server.aff4_objects import users
-from grr.server.grr_response_server.flows.general import administrative
+from grr_response_server import aff4
+from grr_response_server import data_store
+from grr_response_server import email_alerts
+from grr_response_server import flow
+from grr_response_server import maintenance_utils
+from grr_response_server import server_stubs
+from grr_response_server.aff4_objects import aff4_grr
+from grr_response_server.aff4_objects import stats as aff4_stats
+from grr_response_server.aff4_objects import users
+from grr_response_server.flows.general import administrative
 # pylint: disable=unused-import
 # For AuditEventListener, needed to handle published audit events.
-from grr.server.grr_response_server.flows.general import audit as _
+from grr_response_server.flows.general import audit as _
 # pylint: enable=unused-import
-from grr.server.grr_response_server.flows.general import discovery
-from grr.server.grr_response_server.hunts import implementation as hunts_implementation
-from grr.server.grr_response_server.hunts import standard as hunts_standard
+from grr_response_server.flows.general import discovery
+from grr_response_server.hunts import implementation as hunts_implementation
+from grr_response_server.hunts import standard as hunts_standard
+from grr_response_server.rdfvalues import flow_runner as rdf_flow_runner
 from grr.test_lib import action_mocks
 from grr.test_lib import client_test_lib
 from grr.test_lib import flow_test_lib
@@ -173,7 +175,8 @@ class TestAdministrativeFlows(AdministrativeFlowTests):
 
     flow_obj = aff4.FACTORY.Open(
         client.flow_id, age=aff4.ALL_TIMES, token=self.token)
-    self.assertEqual(flow_obj.context.state, rdf_flows.FlowContext.State.ERROR)
+    self.assertEqual(flow_obj.context.state,
+                     rdf_flow_runner.FlowContext.State.ERROR)
 
     # Make sure client object is updated with the last crash.
 
@@ -214,9 +217,9 @@ class TestAdministrativeFlows(AdministrativeFlowTests):
       self.email_messages.append(
           dict(address=address, sender=sender, title=title, message=message))
 
-    with hunts_implementation.GRRHunt.StartHunt(
+    with hunts_implementation.StartHunt(
         hunt_name=hunts_standard.GenericHunt.__name__,
-        flow_runner_args=rdf_flows.FlowRunnerArgs(
+        flow_runner_args=rdf_flow_runner.FlowRunnerArgs(
             flow_name=flow_test_lib.FlowWithOneClientRequest.__name__),
         client_rate=0,
         crash_alert_email="crashes@example.com",

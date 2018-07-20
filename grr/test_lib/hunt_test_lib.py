@@ -3,18 +3,19 @@
 
 import time
 
-from grr.lib.rdfvalues import client as rdf_client
-from grr.lib.rdfvalues import flows as rdf_flows
-from grr.lib.rdfvalues import paths as rdf_paths
-from grr.server.grr_response_server import aff4
-from grr.server.grr_response_server import flow
-from grr.server.grr_response_server import foreman
-from grr.server.grr_response_server import foreman_rules
-from grr.server.grr_response_server import output_plugin
-from grr.server.grr_response_server.flows.general import transfer
-from grr.server.grr_response_server.hunts import implementation
-from grr.server.grr_response_server.hunts import process_results
-from grr.server.grr_response_server.hunts import standard
+from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_core.lib.rdfvalues import flows as rdf_flows
+from grr_response_core.lib.rdfvalues import paths as rdf_paths
+from grr_response_server import aff4
+from grr_response_server import flow
+from grr_response_server import foreman
+from grr_response_server import foreman_rules
+from grr_response_server import output_plugin
+from grr_response_server.flows.general import transfer
+from grr_response_server.hunts import implementation
+from grr_response_server.hunts import process_results
+from grr_response_server.hunts import standard
+from grr_response_server.rdfvalues import flow_runner as rdf_flow_runner
 from grr.test_lib import acl_test_lib
 from grr.test_lib import flow_test_lib
 from grr.test_lib import worker_test_lib
@@ -48,7 +49,7 @@ class SampleHuntMock(object):
         pathspec=args.pathspec,
         st_mode=33184,
         st_ino=1063090,
-        st_dev=64512L,
+        st_dev=64512,
         st_nlink=1,
         st_uid=139592,
         st_gid=5000,
@@ -207,10 +208,10 @@ class StandardHuntTestMixin(acl_test_lib.AclTestMixin):
 
     flow_runner_args = (
         flow_runner_args or
-        rdf_flows.FlowRunnerArgs(flow_name=transfer.GetFile.__name__))
+        rdf_flow_runner.FlowRunnerArgs(flow_name=transfer.GetFile.__name__))
 
     client_rule_set = (client_rule_set or self._CreateForemanClientRuleSet())
-    return implementation.GRRHunt.StartHunt(
+    return implementation.StartHunt(
         hunt_name=standard.GenericHunt.__name__,
         flow_runner_args=flow_runner_args,
         flow_args=flow_args,
@@ -250,11 +251,10 @@ class StandardHuntTestMixin(acl_test_lib.AclTestMixin):
         hunt_urn, age=aff4.ALL_TIMES, mode="rw", token=self.token) as hunt_obj:
       hunt_obj.Stop()
 
-  def ProcessHuntOutputPlugins(self, **flow_args):
-    flow_urn = flow.GRRFlow.StartFlow(
+  def ProcessHuntOutputPlugins(self):
+    flow_urn = flow.StartFlow(
         flow_name=process_results.ProcessHuntResultCollectionsCronFlow.__name__,
-        token=self.token,
-        **flow_args)
+        token=self.token)
     flow_test_lib.TestFlowHelper(flow_urn, token=self.token)
     return flow_urn
 

@@ -38,22 +38,22 @@ unset _JAVA_OPTIONS
 # Note that because of dependencies, order here is important.
 #
 # Proto package.
-pip install -e grr/proto/
+pip install -e grr/proto
 
 # Base package, grr-response-core, depends on grr-response-proto.
-pip install -e .
+pip install -e grr/core
 
 # Depends on grr-response-core
-pip install -e grr/client/
+pip install -e grr/client
 
 # Depends on grr-response-core
-pip install -e api_client/python/
+pip install -e api_client/python
 
 # Depends on grr-response-client
-pip install -e grr/config/grr-response-server/[mysqldatastore]
+pip install -e grr/server/[mysqldatastore]
 
 # Depends on grr-response-server and grr-api-client
 pip install -e grr/test
 
 cd grr/proto && python makefile.py && cd -
-cd grr/artifacts && python makefile.py && cd -
+cd grr/core/grr_response_core/artifacts && python makefile.py && cd -

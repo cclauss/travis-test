@@ -5,14 +5,14 @@ import functools
 import logging
 import time
 
-from grr.lib import registry
-from grr.lib import stats
-from grr.lib import utils
-from grr.server.grr_response_server import db
+from grr_response_core.lib import registry
+from grr_response_core.lib import stats
+from grr_response_core.lib import utils
+from grr_response_server import db
 
 
 def CallLoggedAndAccounted(f):
-  """Decorator to log and acoount for a DB call."""
+  """Decorator to log and account for a DB call."""
 
   @functools.wraps(f)
   def Decorator(*args, **kwargs):
@@ -42,11 +42,20 @@ def CallLoggedAndAccounted(f):
   return Decorator
 
 
+def ClientIdFromGrrMessage(m):
+  if m.queue:
+    return m.queue.Split()[0]
+  if m.source:
+    return m.source.Basename()
+
+
 class DBMetricsInit(registry.InitHook):
   """Install database metrics."""
 
   def RunOnce(self):
     stats.STATS.RegisterEventMetric(
-        "db_request_latency", fields=[("call", str)])
+        "db_request_latency",
+        fields=[("call", str)],
+        bins=[0.05 * 1.2**x for x in range(30)])  # 50ms to ~10 seconds
     stats.STATS.RegisterCounterMetric(
         "db_request_errors", fields=[("call", str), ("type", str)])

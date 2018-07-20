@@ -9,11 +9,12 @@
 
 import exceptions
 import logging
-import urlparse
 import _winreg
 
-from grr.lib import config_lib
-from grr.lib import utils
+from future.moves.urllib import parse as urlparse
+
+from grr_response_core.lib import config_lib
+from grr_response_core.lib import utils
 
 
 class RegistryConfigParser(config_lib.GRRConfigParser):

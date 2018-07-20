@@ -5,27 +5,27 @@ import logging
 import operator
 import time
 
-from grr import config
-from grr.lib import communicator
-from grr.lib import queues
-from grr.lib import rdfvalue
-from grr.lib import registry
-from grr.lib import stats
-from grr.lib import utils
-from grr.lib.rdfvalues import client as rdf_client
-from grr.lib.rdfvalues import flows as rdf_flows
-from grr.server.grr_response_server import access_control
-from grr.server.grr_response_server import aff4
-from grr.server.grr_response_server import client_index
-from grr.server.grr_response_server import data_migration
-from grr.server.grr_response_server import data_store
-from grr.server.grr_response_server import db
-from grr.server.grr_response_server import events
-from grr.server.grr_response_server import flow
-from grr.server.grr_response_server import queue_manager
-from grr.server.grr_response_server import rekall_profile_server
-from grr.server.grr_response_server import threadpool
-from grr.server.grr_response_server.aff4_objects import aff4_grr
+from grr_response_core import config
+from grr_response_core.lib import communicator
+from grr_response_core.lib import queues
+from grr_response_core.lib import rdfvalue
+from grr_response_core.lib import registry
+from grr_response_core.lib import stats
+from grr_response_core.lib import utils
+from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_core.lib.rdfvalues import flows as rdf_flows
+from grr_response_server import access_control
+from grr_response_server import aff4
+from grr_response_server import client_index
+from grr_response_server import data_migration
+from grr_response_server import data_store
+from grr_response_server import db
+from grr_response_server import events
+from grr_response_server import flow
+from grr_response_server import queue_manager
+from grr_response_server import rekall_profile_server
+from grr_response_server import threadpool
+from grr_response_server.aff4_objects import aff4_grr
 
 
 class ServerCommunicator(communicator.Communicator):
@@ -126,9 +126,9 @@ class ServerCommunicator(communicator.Communicator):
       # now excessive and we have changed the replay protection to
       # only trigger on messages that are more than one hour old.
 
-      if client_time < long(remote_time - rdfvalue.Duration("1h")):
+      if client_time < remote_time - rdfvalue.Duration("1h"):
         logging.warning("Message desynchronized for %s: %s >= %s", client_id,
-                        long(remote_time), int(client_time))
+                        remote_time, client_time)
         # This is likely an old message
         return rdf_flows.GrrMessage.AuthorizationState.DESYNCHRONIZED
 
@@ -136,8 +136,8 @@ class ServerCommunicator(communicator.Communicator):
 
       # Update the client and server timestamps only if the client
       # time moves forward.
-      if client_time > long(remote_time):
-        client.Set(client.Schema.CLOCK, rdfvalue.RDFDatetime(client_time))
+      if client_time > remote_time:
+        client.Set(client.Schema.CLOCK, client_time)
         client.Set(client.Schema.PING, rdfvalue.RDFDatetime.Now())
 
         clock = client_time
@@ -150,7 +150,7 @@ class ServerCommunicator(communicator.Communicator):
         clock = None
         ping = None
         logging.warning("Out of order message for %s: %s >= %s", client_id,
-                        long(remote_time), int(client_time))
+                        remote_time, client_time)
 
       client.Flush()
       if data_store.RelationalDBWriteEnabled():
@@ -253,7 +253,7 @@ class RelationalServerCommunicator(communicator.Communicator):
 
         if client_time < stored_client_time - rdfvalue.Duration("1h"):
           logging.warning("Message desynchronized for %s: %s >= %s", client_id,
-                          long(stored_client_time), long(client_time))
+                          stored_client_time, client_time)
           # This is likely an old message
           return rdf_flows.GrrMessage.AuthorizationState.DESYNCHRONIZED
 
@@ -263,7 +263,7 @@ class RelationalServerCommunicator(communicator.Communicator):
         # time moves forward.
         if client_time <= stored_client_time:
           logging.warning("Out of order message for %s: %s >= %s", client_id,
-                          long(stored_client_time), long(client_time))
+                          stored_client_time, client_time)
           return rdf_flows.GrrMessage.AuthorizationState.AUTHENTICATED
 
       stats.STATS.IncrementCounter("grr_authenticated_messages")
@@ -464,7 +464,7 @@ class FrontEndServer(object):
           if task not in status_found:
             result.append(task)
           else:
-            manager.DeQueueClientRequest(client, task.task_id)
+            manager.DeQueueClientRequest(task)
 
     stats.STATS.IncrementCounter("grr_messages_sent", len(result))
     if result:
@@ -563,7 +563,7 @@ class FrontEndServer(object):
             # not set (message originated at the client, there was no request on
             # the server), so we have to check .HasTaskID() first.
             if msg.HasTaskID():
-              manager.DeQueueClientRequest(client_id, msg.task_id)
+              manager.DeQueueClientRequest(msg)
 
             manager.QueueNotification(
                 session_id=msg.session_id,

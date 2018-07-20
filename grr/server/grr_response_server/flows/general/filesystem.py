@@ -1,25 +1,30 @@
 #!/usr/bin/env python
 """These are filesystem related flows."""
+from __future__ import division
+
 import fnmatch
 import re
 import stat
 
-from grr.lib import rdfvalue
-from grr.lib import utils
-from grr.lib.rdfvalues import client as rdf_client
-from grr.lib.rdfvalues import objects as rdf_objects
-from grr.lib.rdfvalues import paths as rdf_paths
-from grr.lib.rdfvalues import structs as rdf_structs
+
+from builtins import map  # pylint: disable=redefined-builtin
+
+from grr_response_core.lib import artifact_utils
+from grr_response_core.lib import rdfvalue
+from grr_response_core.lib import utils
+from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_core.lib.rdfvalues import paths as rdf_paths
+from grr_response_core.lib.rdfvalues import structs as rdf_structs
 from grr_response_proto import flows_pb2
-from grr.server.grr_response_server import aff4
-from grr.server.grr_response_server import artifact_utils
-from grr.server.grr_response_server import data_store
-from grr.server.grr_response_server import flow
-from grr.server.grr_response_server import notification
-from grr.server.grr_response_server import server_stubs
-from grr.server.grr_response_server.aff4_objects import aff4_grr
-from grr.server.grr_response_server.aff4_objects import standard
-from grr.server.grr_response_server.flows.general import transfer
+from grr_response_server import aff4
+from grr_response_server import data_store
+from grr_response_server import flow
+from grr_response_server import notification
+from grr_response_server import server_stubs
+from grr_response_server.aff4_objects import aff4_grr
+from grr_response_server.aff4_objects import standard
+from grr_response_server.flows.general import transfer
+from grr_response_server.rdfvalues import objects as rdf_objects
 
 # This is all bits that define the type of the file in the stat mode. Equal to
 # 0b1111000000000000.
@@ -70,7 +75,7 @@ def WriteStatEntries(stat_entries, client_id, mutation_pool, token=None):
         token=token)
 
   if data_store.RelationalDBWriteEnabled():
-    path_infos = map(rdf_objects.PathInfo.FromStatEntry, stat_entries)
+    path_infos = list(map(rdf_objects.PathInfo.FromStatEntry, stat_entries))
     data_store.REL_DB.WritePathInfos(client_id.Basename(), path_infos)
 
 
@@ -148,7 +153,7 @@ class ListDirectory(flow.GRRFlow):
         path_info = rdf_objects.PathInfo.FromStatEntry(self.state.stat)
         data_store.REL_DB.WritePathInfos(self.client_id.Basename(), [path_info])
 
-      stat_entries = map(rdf_client.StatEntry, responses)
+      stat_entries = list(map(rdf_client.StatEntry, responses))
       WriteStatEntries(
           stat_entries,
           client_id=self.client_id,
@@ -247,7 +252,7 @@ class IteratedListDirectory(ListDirectory):
           urn, standard.VFSDirectory, mutation_pool=pool, token=self.token):
         pass
 
-      stat_entries = map(rdf_client.StatEntry, self.state.responses)
+      stat_entries = list(map(rdf_client.StatEntry, self.state.responses))
       WriteStatEntries(
           stat_entries,
           client_id=self.client_id,
@@ -354,7 +359,7 @@ class RecursiveListDirectory(flow.GRRFlow):
     """Stores all stat responses."""
     with data_store.DB.GetMutationPool() as pool:
 
-      stat_entries = map(rdf_client.StatEntry, responses)
+      stat_entries = list(map(rdf_client.StatEntry, responses))
       WriteStatEntries(
           stat_entries,
           client_id=self.client_id,
@@ -452,7 +457,7 @@ class UpdateSparseImageChunks(flow.GRRFlow):
       raise IOError("Error running TransferBuffer: %s" % responses.status)
     response = responses.First()
 
-    chunk_number = response.offset / self.state.chunksize
+    chunk_number = response.offset // self.state.chunksize
 
     self.state.blobs.append([chunk_number, response])
 
@@ -540,7 +545,7 @@ class FetchBufferForSparseImage(flow.GRRFlow):
 
     # Write the data we got from the client to the file.
     # sparse_image = self.state.fd
-    chunk_number = response.offset / self.state.chunksize
+    chunk_number = response.offset // self.state.chunksize
     self.state.blobs.append([chunk_number, response])
 
     length_to_read = min(self.state.chunksize, self.state.bytes_left_to_read)
@@ -589,8 +594,8 @@ class FetchBufferForSparseImage(flow.GRRFlow):
       A (length, offset) tuple, containing the length and offset
       required to read all affected chunks.
     """
-    start_chunk = offset / chunksize
-    end_chunk = (offset + length) / chunksize
+    start_chunk = offset // chunksize
+    end_chunk = (offset + length) // chunksize
     # If we happened to round down to the beginning of the end chunk, make sure
     # to read to the end of it (which is the beginning of the next chunk).
     if (offset + length) % chunksize != 0:

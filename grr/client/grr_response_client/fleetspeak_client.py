@@ -15,14 +15,14 @@ import time
 
 from fleetspeak.src.client.daemonservice.client import client as fs_client
 from fleetspeak.src.common.proto.fleetspeak import common_pb2 as fs_common_pb2
-from grr import config
 from grr_response_client import comms
-from grr.lib import communicator
-from grr.lib import flags
-from grr.lib import rdfvalue
-from grr.lib import stats
-from grr.lib.rdfvalues import flows as rdf_flows
-from grr.lib.rdfvalues import protodict as rdf_protodict
+from grr_response_core import config
+from grr_response_core.lib import communicator
+from grr_response_core.lib import flags
+from grr_response_core.lib import rdfvalue
+from grr_response_core.lib import stats
+from grr_response_core.lib.rdfvalues import flows as rdf_flows
+from grr_response_core.lib.rdfvalues import protodict as rdf_protodict
 from grr_response_proto import jobs_pb2
 
 # pyformat: disable
@@ -134,9 +134,9 @@ class GRRFleetspeakClient(object):
 
     try:
       sent_bytes = self._fs.Send(fs_msg)
-    except (IOError, struct.error) as e:
+    except (IOError, struct.error):
       logging.critical("Broken local Fleetspeak connection (write end).")
-      raise e
+      raise
 
     stats.STATS.IncrementCounter("grr_client_sent_bytes", sent_bytes)
 
@@ -174,9 +174,9 @@ class GRRFleetspeakClient(object):
     """Receives a single message through Fleetspeak."""
     try:
       fs_msg, received_bytes = self._fs.Recv()
-    except (IOError, struct.error) as e:
+    except (IOError, struct.error):
       logging.critical("Broken local Fleetspeak connection (read end).")
-      raise e
+      raise
 
     received_type = fs_msg.data.TypeName()
     if not received_type.endswith("grr.GrrMessage"):

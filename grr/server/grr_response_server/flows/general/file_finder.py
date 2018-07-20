@@ -3,21 +3,21 @@
 
 import stat
 
-from grr.lib import rdfvalue
-from grr.lib.rdfvalues import client as rdf_client
-from grr.lib.rdfvalues import file_finder as rdf_file_finder
-from grr.lib.rdfvalues import objects as rdf_objects
-from grr.lib.rdfvalues import paths as rdf_paths
-from grr.server.grr_response_server import aff4
-from grr.server.grr_response_server import artifact_utils
-from grr.server.grr_response_server import data_store
-from grr.server.grr_response_server import events
-from grr.server.grr_response_server import flow
-from grr.server.grr_response_server import server_stubs
-from grr.server.grr_response_server.aff4_objects import aff4_grr
-from grr.server.grr_response_server.flows.general import filesystem
-from grr.server.grr_response_server.flows.general import fingerprint
-from grr.server.grr_response_server.flows.general import transfer
+from grr_response_core.lib import artifact_utils
+from grr_response_core.lib import rdfvalue
+from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_core.lib.rdfvalues import file_finder as rdf_file_finder
+from grr_response_core.lib.rdfvalues import paths as rdf_paths
+from grr_response_server import aff4
+from grr_response_server import data_store
+from grr_response_server import events
+from grr_response_server import flow
+from grr_response_server import server_stubs
+from grr_response_server.aff4_objects import aff4_grr
+from grr_response_server.flows.general import filesystem
+from grr_response_server.flows.general import fingerprint
+from grr_response_server.flows.general import transfer
+from grr_response_server.rdfvalues import objects as rdf_objects
 
 
 class FileFinder(transfer.MultiGetFileMixin, fingerprint.FingerprintFileMixin,

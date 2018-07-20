@@ -5,18 +5,18 @@ import os
 
 
 from grr_api_client import errors as grr_api_errors
-from grr.lib import flags
-from grr.lib import utils
-from grr.lib.rdfvalues import client as rdf_client
-from grr.server.grr_response_server import aff4
-from grr.server.grr_response_server import data_store
-from grr.server.grr_response_server.aff4_objects import aff4_grr
-from grr.server.grr_response_server.authorization import client_approval_auth
-from grr.server.grr_response_server.gui import api_auth_manager
-from grr.server.grr_response_server.gui import api_call_router_with_approval_checks
-from grr.server.grr_response_server.gui import api_e2e_test_lib
-from grr.server.grr_response_server.gui import gui_test_lib
-from grr.server.grr_response_server.gui import webauth
+from grr_response_core.lib import flags
+from grr_response_core.lib import utils
+from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_server import aff4
+from grr_response_server import data_store
+from grr_response_server.aff4_objects import aff4_grr
+from grr_response_server.authorization import client_approval_auth
+from grr_response_server.gui import api_auth_manager
+from grr_response_server.gui import api_call_router_with_approval_checks
+from grr_response_server.gui import api_e2e_test_lib
+from grr_response_server.gui import gui_test_lib
+from grr_response_server.gui import webauth
 from grr.test_lib import db_test_lib
 from grr.test_lib import test_lib
 

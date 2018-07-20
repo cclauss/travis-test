@@ -2,17 +2,24 @@
 """Base classes and routines used by all end to end tests."""
 
 import abc
+import io
 import logging
-import StringIO
 import time
+
+
+from future.utils import with_metaclass
 
 import unittest
 
 from grr_api_client import errors
-from grr.lib import flags
+from grr_response_core.lib import flags
 
 flags.DEFINE_integer("flow_timeout_secs", 650,
                      "How long to wait for flows to finish.")
+
+flags.DEFINE_integer(
+    "flow_results_sla_secs", 60,
+    "How long to wait for flow results to be available after a flow completes.")
 
 
 class Error(Exception):
@@ -123,9 +130,9 @@ class WaitForNewFileContextManager(object):
             new_file.data.age > self.prev_file.data.age):
           return
 
-      if time.time() - start_time > EndToEndTest.RESULTS_SLA:
+      if time.time() - start_time > flags.FLAGS.flow_results_sla_secs:
         raise RuntimeError("File couldn't be found after %d seconds of trying."
-                           % EndToEndTest.RESULTS_SLA)
+                           % flags.FLAGS.flow_results_sla_secs)
 
       time.sleep(EndToEndTest.RETRY_DELAY)
 
@@ -144,10 +151,8 @@ class RunFlowAndWaitError(Error):
 init_fn = lambda: (None, None)
 
 
-class EndToEndTest(unittest.TestCase):
+class EndToEndTest(with_metaclass(EndToEndTestMetaclass, unittest.TestCase)):
   """This is a end-to-end test base class."""
-
-  __metaclass__ = EndToEndTestMetaclass
 
   class Platform(object):
     LINUX = "Linux"
@@ -157,11 +162,6 @@ class EndToEndTest(unittest.TestCase):
     ALL = [LINUX, WINDOWS, DARWIN]
 
   RETRY_DELAY = 1
-
-  # How long after flow is marked complete we should expect results to be
-  # available in the collection. This is essentially how quickly we expect
-  # results to be available to users in the UI.
-  RESULTS_SLA = 10
 
   platforms = []
 
@@ -220,7 +220,7 @@ class EndToEndTest(unittest.TestCase):
 class AbstractFileTransferTest(EndToEndTest):
 
   def ReadFromFile(self, path, num_bytes):
-    s = StringIO.StringIO()
+    s = io.BytesIO()
     self.client.File(path).GetBlob().WriteToStream(s)
     return s.getvalue()[:num_bytes]
 

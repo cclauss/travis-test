@@ -4,14 +4,14 @@ import os
 
 
 import unittest
-from grr.lib import flags
-from grr.lib import utils
+from grr_response_core.lib import flags
+from grr_response_core.lib import utils
 
-from grr.lib.rdfvalues import paths as rdf_paths
-from grr.server.grr_response_server import flow
-from grr.server.grr_response_server.flows.general import transfer as flows_transfer
-from grr.server.grr_response_server.gui import api_call_handler_utils
-from grr.server.grr_response_server.gui import gui_test_lib
+from grr_response_core.lib.rdfvalues import paths as rdf_paths
+from grr_response_server import flow
+from grr_response_server.flows.general import transfer as flows_transfer
+from grr_response_server.gui import api_call_handler_utils
+from grr_response_server.gui import gui_test_lib
 from grr.test_lib import action_mocks
 from grr.test_lib import db_test_lib
 from grr.test_lib import flow_test_lib
@@ -33,7 +33,7 @@ class TestFlowNotifications(gui_test_lib.GRRSeleniumTest):
     pathspec = rdf_paths.PathSpec(
         path=os.path.join(self.base_path, "test.plist"),
         pathtype=rdf_paths.PathSpec.PathType.OS)
-    flow_urn = flow.GRRFlow.StartFlow(
+    flow_urn = flow.StartFlow(
         flow_name=flows_transfer.GetFile.__name__,
         client_id=self.client_id,
         pathspec=pathspec,
@@ -61,7 +61,7 @@ class TestFlowNotifications(gui_test_lib.GRRSeleniumTest):
     pathspec = rdf_paths.PathSpec(
         path=os.path.join(self.base_path, "test.plist"),
         pathtype=rdf_paths.PathSpec.PathType.OS)
-    flow_urn = flow.GRRFlow.StartFlow(
+    flow_urn = flow.StartFlow(
         flow_name=flows_transfer.GetFile.__name__,
         client_id=self.client_id,
         pathspec=pathspec,
@@ -96,7 +96,7 @@ class TestFlowNotifications(gui_test_lib.GRRSeleniumTest):
     pathspec = rdf_paths.PathSpec(
         path=os.path.join(self.base_path, "test.plist"),
         pathtype=rdf_paths.PathSpec.PathType.OS)
-    flow_urn = flow.GRRFlow.StartFlow(
+    flow_urn = flow.StartFlow(
         flow_name=flows_transfer.GetFile.__name__,
         client_id=self.client_id,
         pathspec=pathspec,

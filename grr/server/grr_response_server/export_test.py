@@ -6,29 +6,31 @@ import os
 import socket
 
 from grr_response_client.components.rekall_support import grr_rekall
-from grr.lib import flags
-from grr.lib import queues
-from grr.lib import rdfvalue
-from grr.lib.rdfvalues import anomaly as rdf_anomaly
-from grr.lib.rdfvalues import client as rdf_client
-from grr.lib.rdfvalues import crypto as rdf_crypto
-from grr.lib.rdfvalues import file_finder as rdf_file_finder
-from grr.lib.rdfvalues import flows as rdf_flows
-from grr.lib.rdfvalues import paths as rdf_paths
-from grr.lib.rdfvalues import protodict as rdf_protodict
-from grr.lib.rdfvalues import rdf_yara
-from grr.lib.rdfvalues import rekall_types as rdf_rekall_types
-from grr.server.grr_response_server import aff4
-from grr.server.grr_response_server import data_store
-from grr.server.grr_response_server import events
-from grr.server.grr_response_server import export
-from grr.server.grr_response_server.aff4_objects import aff4_grr
-from grr.server.grr_response_server.aff4_objects import filestore
-from grr.server.grr_response_server.checks import checks
-from grr.server.grr_response_server.flows.general import collectors
-from grr.server.grr_response_server.flows.general import transfer
-from grr.server.grr_response_server.hunts import results as hunts_results
+from grr_response_core.lib import flags
+from grr_response_core.lib import queues
+from grr_response_core.lib import rdfvalue
+from grr_response_core.lib.rdfvalues import anomaly as rdf_anomaly
+from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_core.lib.rdfvalues import crypto as rdf_crypto
+from grr_response_core.lib.rdfvalues import file_finder as rdf_file_finder
+from grr_response_core.lib.rdfvalues import flows as rdf_flows
+from grr_response_core.lib.rdfvalues import paths as rdf_paths
+from grr_response_core.lib.rdfvalues import protodict as rdf_protodict
+from grr_response_core.lib.rdfvalues import rdf_yara
+from grr_response_core.lib.rdfvalues import rekall_types as rdf_rekall_types
+from grr_response_server import aff4
+from grr_response_server import data_store
+from grr_response_server import events
+from grr_response_server import export
+from grr_response_server.aff4_objects import aff4_grr
+from grr_response_server.aff4_objects import filestore
+from grr_response_server.check_lib import checks
+from grr_response_server.flows.general import collectors
+from grr_response_server.flows.general import transfer
+from grr_response_server.hunts import results as hunts_results
+from grr_response_server.rdfvalues import objects as rdf_objects
 from grr.test_lib import action_mocks
+from grr.test_lib import db_test_lib
 from grr.test_lib import export_test_lib
 from grr.test_lib import fixture_test_lib
 from grr.test_lib import flow_test_lib
@@ -113,6 +115,7 @@ class ExportTestBase(test_lib.GRRBaseTest):
     self.metadata = export.ExportedMetadata(client_urn=self.client_id)
 
 
+@db_test_lib.DualDBTest
 class ExportTest(ExportTestBase):
   """Tests export converters."""
 
@@ -292,8 +295,16 @@ class ExportTest(ExportTestBase):
     events.Events.PublishEvent(
         "FileStore.AddFileToStore", urn, token=self.token)
 
-    fd = aff4.FACTORY.Open(urn, token=self.token)
-    hash_value = fd.Get(fd.Schema.HASH)
+    if data_store.RelationalDBReadEnabled(category="vfs"):
+      path_info = rdf_objects.PathInfo.FromPathSpec(pathspec)
+      path_info = data_store.REL_DB.ReadPathInfo(self.client_id.Basename(),
+                                                 path_info.path_type,
+                                                 tuple(path_info.components))
+      hash_value = path_info.hash_entry
+    else:
+      fd = aff4.FACTORY.Open(urn, token=self.token)
+      hash_value = fd.Get(fd.Schema.HASH)
+
     self.assertTrue(hash_value)
 
     converter = export.StatEntryToExportedFileConverter(
@@ -397,7 +408,7 @@ class ExportTest(ExportTestBase):
         ppid=1,
         cmdline=["cmd.exe"],
         exe="c:\\windows\\cmd.exe",
-        ctime=long(1333718907.167083 * 1e6))
+        ctime=1333718907167083)
 
     converter = export.ProcessToExportedProcessConverter()
     results = list(converter.Convert(self.metadata, process, token=self.token))
@@ -407,7 +418,7 @@ class ExportTest(ExportTestBase):
     self.assertEqual(results[0].ppid, 1)
     self.assertEqual(results[0].cmdline, "cmd.exe")
     self.assertEqual(results[0].exe, "c:\\windows\\cmd.exe")
-    self.assertEqual(results[0].ctime, long(1333718907.167083 * 1e6))
+    self.assertEqual(results[0].ctime, 1333718907167083)
 
   def testProcessToExportedOpenFileConverter(self):
     process = rdf_client.Process(
@@ -415,7 +426,7 @@ class ExportTest(ExportTestBase):
         ppid=1,
         cmdline=["cmd.exe"],
         exe="c:\\windows\\cmd.exe",
-        ctime=long(1333718907.167083 * 1e6),
+        ctime=1333718907167083,
         open_files=["/some/a", "/some/b"])
 
     converter = export.ProcessToExportedOpenFileConverter()
@@ -448,7 +459,7 @@ class ExportTest(ExportTestBase):
         ppid=1,
         cmdline=["cmd.exe"],
         exe="c:\\windows\\cmd.exe",
-        ctime=long(1333718907.167083 * 1e6),
+        ctime=1333718907167083,
         connections=[conn1, conn2])
 
     converter = export.ProcessToExportedNetworkConnectionConverter()
@@ -480,18 +491,22 @@ class ExportTest(ExportTestBase):
   def testRDFURNConverterWithURNPointingToFile(self):
     urn = self.client_id.Add("fs/os/some/path")
 
-    fd = aff4.FACTORY.Create(urn, aff4_grr.VFSFile, token=self.token)
-    fd.Set(
-        fd.Schema.STAT(
-            rdf_client.StatEntry(
-                pathspec=rdf_paths.PathSpec(
-                    path="/some/path", pathtype=rdf_paths.PathSpec.PathType.OS),
-                st_mode=33184,
-                st_ino=1063090,
-                st_atime=1336469177,
-                st_mtime=1336129892,
-                st_ctime=1336129892)))
-    fd.Close()
+    stat_entry = rdf_client.StatEntry()
+    stat_entry.pathspec.path = "/some/path"
+    stat_entry.pathspec.pathtype = rdf_paths.PathSpec.PathType.OS
+    stat_entry.st_mode = 33184
+    stat_entry.st_ino = 1063090
+    stat_entry.st_atime = 1336469177
+    stat_entry.st_mtime = 1336129892
+    stat_entry.st_ctime = 1336129892
+
+    with aff4.FACTORY.Create(urn, aff4_grr.VFSFile, token=self.token) as fd:
+      fd.Set(fd.Schema.STAT(stat_entry))
+
+    if data_store.RelationalDBWriteEnabled():
+      path_info = rdf_objects.PathInfo.OS(
+          components=["some", "path"], stat_entry=stat_entry)
+      data_store.REL_DB.WritePathInfos(self.client_id.Basename(), [path_info])
 
     converter = export.RDFURNConverter()
     results = list(converter.Convert(self.metadata, urn, token=self.token))
@@ -1234,7 +1249,7 @@ class YaraProcessScanResponseConverterTest(ExportTestBase):
         ppid=1,
         cmdline=["cmd.exe"],
         exe="c:\\windows\\cmd.exe",
-        ctime=long(1333718907.167083 * 1e6))
+        ctime=1333718907167083)
     return rdf_yara.YaraProcessScanMatch(
         process=process, match=match, scan_time_us=42)
 
@@ -1250,7 +1265,7 @@ class YaraProcessScanResponseConverterTest(ExportTestBase):
     self.assertEqual(converted[0].process.ppid, 1)
     self.assertEqual(converted[0].process.cmdline, "cmd.exe")
     self.assertEqual(converted[0].process.exe, "c:\\windows\\cmd.exe")
-    self.assertEqual(converted[0].process.ctime, long(1333718907.167083 * 1e6))
+    self.assertEqual(converted[0].process.ctime, 1333718907167083)
 
     self.assertEqual(converted[0].rule_name, "foo")
     self.assertEqual(converted[0].scan_time_us, 42)

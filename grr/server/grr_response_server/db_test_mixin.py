@@ -4,25 +4,31 @@
 import abc
 import random
 
-from grr.server.grr_response_server import db
-from grr.server.grr_response_server import db_clients_test
-from grr.server.grr_response_server import db_cronjob_test
-from grr.server.grr_response_server import db_events_test
-from grr.server.grr_response_server import db_foreman_rules_test
-from grr.server.grr_response_server import db_message_handler_test
-from grr.server.grr_response_server import db_paths_test
-from grr.server.grr_response_server import db_users_test
+
+from future.utils import with_metaclass
+
+from grr_response_server import db
+from grr_response_server import db_blobs_test
+from grr_response_server import db_clients_test
+from grr_response_server import db_cronjob_test
+from grr_response_server import db_events_test
+from grr_response_server import db_flows_test
+from grr_response_server import db_foreman_rules_test
+from grr_response_server import db_message_handler_test
+from grr_response_server import db_paths_test
+from grr_response_server import db_users_test
 
 
 class DatabaseTestMixin(
-    db_clients_test.DatabaseTestClientsMixin,
-    db_cronjob_test.DatabaseTestCronjobMixin,
-    db_events_test.DatabaseEventsTestMixin,
-    db_foreman_rules_test.DatabaseTestForemanRulesMixin,
-    db_message_handler_test.DatabaseTestHandlerMixin,
-    db_paths_test.DatabaseTestPathsMixin,
-    db_users_test.DatabaseTestUsersMixin,
-):
+    with_metaclass(abc.ABCMeta, db_blobs_test.DatabaseTestBlobsMixin,
+                   db_clients_test.DatabaseTestClientsMixin,
+                   db_cronjob_test.DatabaseTestCronjobMixin,
+                   db_events_test.DatabaseEventsTestMixin,
+                   db_flows_test.DatabaseTestFlowMixin,
+                   db_foreman_rules_test.DatabaseTestForemanRulesMixin,
+                   db_message_handler_test.DatabaseTestHandlerMixin,
+                   db_paths_test.DatabaseTestPathsMixin,
+                   db_users_test.DatabaseTestUsersMixin)):
   """An abstract class for testing db.Database implementations.
 
   Implementations should override CreateDatabase in order to produce
@@ -31,7 +37,6 @@ class DatabaseTestMixin(
   This class does not inherit from `TestCase` to prevent the test runner from
   executing its method. Instead it should be mixed into the actual test classes.
   """
-  __metaclass__ = abc.ABCMeta
 
   @abc.abstractmethod
   def CreateDatabase(self):
@@ -51,6 +56,7 @@ class DatabaseTestMixin(
   def tearDown(self):
     if self.cleanup:
       self.cleanup()
+    self.db.UnregisterMessageHandler()
     super(DatabaseTestMixin, self).tearDown()
 
   def testDatabaseType(self):

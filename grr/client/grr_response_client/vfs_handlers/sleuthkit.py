@@ -7,9 +7,9 @@ import pytsk3
 
 from grr_response_client import client_utils
 from grr_response_client import vfs
-from grr.lib import utils
-from grr.lib.rdfvalues import client as rdf_client
-from grr.lib.rdfvalues import paths as rdf_paths
+from grr_response_core.lib import utils
+from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_core.lib.rdfvalues import paths as rdf_paths
 
 
 class CachedFilesystem(object):
@@ -40,7 +40,7 @@ class MyImgInfo(pytsk3.Img_Info):
     # Windows is unable to report the true size of the raw device and allows
     # arbitrary reading past the end - so we lie here to force tsk to read it
     # anyway
-    return long(1e12)
+    return 1e12
 
 
 class TSKFile(vfs.VFSHandler):

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Tests for grr.server.grr_response_server.flows.general.collectors.
+"""Tests for grr_response_server.flows.general.collectors.
 
 These tests cover the interaction of artifacts. They test that collection of
 good artifacts can still succeed if some bad artifacts are defined, and the
@@ -9,18 +9,19 @@ various ways of loading artifacts.
 import os
 
 
-from grr import config
-from grr.lib import flags
-from grr.lib import rdfvalue
-from grr.lib import utils
-from grr.lib.rdfvalues import paths as rdf_paths
-from grr.server.grr_response_server import aff4
-from grr.server.grr_response_server import artifact
-from grr.server.grr_response_server import artifact_registry
-from grr.server.grr_response_server import data_store
-from grr.server.grr_response_server import flow
-from grr.server.grr_response_server.flows.general import collectors
-from grr.server.grr_response_server.flows.general import transfer
+from grr_response_core import config
+from grr_response_core.lib import flags
+from grr_response_core.lib import rdfvalue
+from grr_response_core.lib import utils
+from grr_response_core.lib.rdfvalues import artifacts as rdf_artifacts
+from grr_response_core.lib.rdfvalues import paths as rdf_paths
+from grr_response_server import aff4
+from grr_response_server import artifact
+from grr_response_server import artifact_registry
+from grr_response_server import data_store
+from grr_response_server import flow
+from grr_response_server.flows.general import collectors
+from grr_response_server.flows.general import transfer
 from grr.test_lib import action_mocks
 from grr.test_lib import artifact_test_lib
 from grr.test_lib import flow_test_lib
@@ -76,11 +77,10 @@ supported_os: [ "Linux" ]
     test_registry.AddDatastoreSource(rdfvalue.RDFURN("aff4:/artifact_store"))
     test_registry._dirty = False
     with utils.Stubber(artifact_registry, "REGISTRY", test_registry):
-      collect_flow = collectors.ArtifactCollectorFlow(None, token=self.token)
-      with self.assertRaises(artifact_registry.ArtifactNotRegisteredError):
+      with self.assertRaises(rdf_artifacts.ArtifactNotRegisteredError):
         artifact_registry.REGISTRY.GetArtifact("TestCmdArtifact")
 
-      with self.assertRaises(artifact_registry.ArtifactNotRegisteredError):
+      with self.assertRaises(rdf_artifacts.ArtifactNotRegisteredError):
         artifact_registry.REGISTRY.GetArtifact("NotInDatastore")
 
       # Add artifact to datastore but not registry
@@ -99,13 +99,13 @@ supported_os: [ "Linux" ]
 
       # This should succeeded because the artifacts will be reloaded from the
       # datastore.
-      self.assertTrue(collect_flow._GetArtifactFromName("TestCmdArtifact"))
+      self.assertTrue(artifact_registry.REGISTRY.GetArtifact("TestCmdArtifact"))
 
       # We registered this artifact with datastore source but didn't
       # write it into aff4. This simulates an artifact that was
       # uploaded in the UI then later deleted. We expect it to get
       # cleared when the artifacts are reloaded from the datastore.
-      with self.assertRaises(artifact_registry.ArtifactNotRegisteredError):
+      with self.assertRaises(rdf_artifacts.ArtifactNotRegisteredError):
         artifact_registry.REGISTRY.GetArtifact("NotInDatastore")
 
   def testProcessCollectedArtifacts(self):

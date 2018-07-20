@@ -1,17 +1,18 @@
 #!/usr/bin/env python
 """Test for the foreman client rule classes."""
+from __future__ import division
 
-from grr.lib import flags
-from grr.lib import rdfvalue
-from grr.lib.rdfvalues import test_base
-from grr.server.grr_response_server import aff4
-from grr.server.grr_response_server import data_store
-from grr.server.grr_response_server import foreman_rules
+from grr_response_core.lib import flags
+from grr_response_core.lib import rdfvalue
+from grr_response_core.lib.rdfvalues import test_base as rdf_test_base
+from grr_response_server import aff4
+from grr_response_server import data_store
+from grr_response_server import foreman_rules
 from grr.test_lib import db_test_lib
 from grr.test_lib import test_lib
 
 
-class ForemanClientRuleSetTest(test_base.RDFValueTestMixin,
+class ForemanClientRuleSetTest(rdf_test_base.RDFValueTestMixin,
                                test_lib.GRRBaseTest):
   rdfvalue_class = foreman_rules.ForemanClientRuleSet
 
@@ -26,7 +27,7 @@ class ForemanClientRuleSetTest(test_base.RDFValueTestMixin,
 
     # Generate a sequence of rules using all other bits
     ret.rules = [
-        ForemanClientRuleTest.GenerateSample(n) for n in xrange(number / 2)
+        ForemanClientRuleTest.GenerateSample(n) for n in xrange(number // 2)
     ]
 
     return ret
@@ -141,7 +142,8 @@ class ForemanClientRuleSetTest(test_base.RDFValueTestMixin,
         rs.Evaluate(aff4.FACTORY.Open(client_id_lin, token=self.token)))
 
 
-class ForemanClientRuleTest(test_base.RDFValueTestMixin, test_lib.GRRBaseTest):
+class ForemanClientRuleTest(rdf_test_base.RDFValueTestMixin,
+                            test_lib.GRRBaseTest):
   rdfvalue_class = foreman_rules.ForemanClientRule
 
   @staticmethod
@@ -174,7 +176,7 @@ class ForemanClientRuleTest(test_base.RDFValueTestMixin, test_lib.GRRBaseTest):
         r.Evaluate(aff4.FACTORY.Open(client_id_win, token=self.token)))
 
 
-class ForemanOsClientRuleTest(test_base.RDFValueTestMixin,
+class ForemanOsClientRuleTest(rdf_test_base.RDFValueTestMixin,
                               test_lib.GRRBaseTest):
   rdfvalue_class = foreman_rules.ForemanOsClientRule
 
@@ -264,7 +266,7 @@ class ForemanOsClientRuleTestRelational(db_test_lib.RelationalDBEnabledMixin,
     self.assertTrue(r1.Evaluate(info))
 
 
-class ForemanLabelClientRuleTest(test_base.RDFValueTestMixin,
+class ForemanLabelClientRuleTest(rdf_test_base.RDFValueTestMixin,
                                  test_lib.GRRBaseTest):
   rdfvalue_class = foreman_rules.ForemanLabelClientRule
 
@@ -375,7 +377,7 @@ class ForemanLabelClientRuleTestRelational(db_test_lib.RelationalDBEnabledMixin,
     return rule.Evaluate(client_info)
 
 
-class ForemanRegexClientRuleTest(test_base.RDFValueTestMixin,
+class ForemanRegexClientRuleTest(rdf_test_base.RDFValueTestMixin,
                                  test_lib.GRRBaseTest):
   rdfvalue_class = foreman_rules.ForemanRegexClientRule
 
@@ -504,7 +506,7 @@ class ForemanRegexClientRuleTestRelational(db_test_lib.RelationalDBEnabledMixin,
     self.assertFalse(r.Evaluate(info))
 
 
-class ForemanIntegerClientRuleTest(test_base.RDFValueTestMixin,
+class ForemanIntegerClientRuleTest(rdf_test_base.RDFValueTestMixin,
                                    test_lib.GRRBaseTest):
   rdfvalue_class = foreman_rules.ForemanIntegerClientRule
 

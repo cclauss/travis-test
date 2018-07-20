@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 """GRR API shell implementation."""
+from __future__ import print_function
 
 import argparse
 import logging
@@ -27,12 +28,17 @@ class GrrApiShellArgParser(argparse.ArgumentParser):
         "--basic_auth_username",
         type=str,
         help="HTTP basic auth username (HTTP basic auth will be used if this "
-        "flag is set.")
+        "flag is set).")
     self.add_argument(
         "--basic_auth_password",
         type=str,
         help="HTTP basic auth password (will be used if basic_auth_username is "
-        "set.")
+        "set).")
+    self.add_argument(
+        "--no-check-certificate",
+        dest="no_check_certificate",
+        action="store_true",
+        help="If set, don't verify server's SSL certificate.")
     self.add_argument(
         "--debug",
         dest="debug",
@@ -69,18 +75,25 @@ def main(argv=None):
   if flags.basic_auth_username:
     auth = (flags.basic_auth_username, flags.basic_auth_password or "")
 
+  verify = True
+  if flags.no_check_certificate:
+    verify = False
+
   grrapi = api.InitHttp(
-      api_endpoint=flags.api_endpoint, page_size=flags.page_size, auth=auth)
+      api_endpoint=flags.api_endpoint,
+      page_size=flags.page_size,
+      auth=auth,
+      verify=verify)
 
   if flags.exec_code and flags.exec_file:
-    print "--exec_code --exec_file flags can't be supplied together"
+    print("--exec_code --exec_file flags can't be supplied together")
     sys.exit(1)
   elif flags.exec_code:
     # pylint: disable=exec-used
     exec (flags.exec_code, dict(grrapi=grrapi))
     # pylint: enable=exec-used
   elif flags.exec_file:
-    execfile(flags.exec_file, dict(grrapi=grrapi))
+    api_shell_lib.ExecFile(flags.exec_file, grrapi)
   else:
     api_shell_lib.IPShell([sys.argv[0]], user_ns=dict(grrapi=grrapi))
 

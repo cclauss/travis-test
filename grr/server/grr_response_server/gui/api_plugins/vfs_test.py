@@ -2,26 +2,30 @@
 # -*- mode: python; encoding: utf-8 -*-
 """This modules contains tests for VFS API handlers."""
 
-import StringIO
+import io
 import unittest
 import zipfile
 
-from grr.lib import flags
 
-from grr.lib import rdfvalue
-from grr.lib.rdfvalues import client as rdf_client
-from grr.lib.rdfvalues import objects as rdf_objects
-from grr.lib.rdfvalues import paths as rdf_paths
-from grr.server.grr_response_server import access_control
-from grr.server.grr_response_server import aff4
-from grr.server.grr_response_server import data_store
-from grr.server.grr_response_server import flow
-from grr.server.grr_response_server.aff4_objects import aff4_grr
-from grr.server.grr_response_server.flows.general import discovery
-from grr.server.grr_response_server.flows.general import filesystem
-from grr.server.grr_response_server.flows.general import transfer
-from grr.server.grr_response_server.gui import api_test_lib
-from grr.server.grr_response_server.gui.api_plugins import vfs as vfs_plugin
+from builtins import zip  # pylint: disable=redefined-builtin
+
+from grr_response_core.lib import flags
+from grr_response_core.lib import rdfvalue
+from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_core.lib.rdfvalues import paths as rdf_paths
+
+from grr_response_server import access_control
+from grr_response_server import aff4
+from grr_response_server import data_store
+from grr_response_server import flow
+from grr_response_server.aff4_objects import aff4_grr
+from grr_response_server.flows.general import discovery
+from grr_response_server.flows.general import filesystem
+from grr_response_server.flows.general import transfer
+from grr_response_server.gui import api_test_lib
+from grr_response_server.gui.api_plugins import vfs as vfs_plugin
+from grr_response_server.rdfvalues import objects as rdf_objects
+
 from grr.test_lib import action_mocks
 from grr.test_lib import db_test_lib
 from grr.test_lib import fixture_test_lib
@@ -83,7 +87,7 @@ class VfsTestMixin(object):
   def CreateRecursiveListFlow(self, client_id, token):
     flow_args = filesystem.RecursiveListDirectoryArgs()
 
-    return flow.GRRFlow.StartFlow(
+    return flow.StartFlow(
         client_id=client_id,
         flow_name=filesystem.RecursiveListDirectory.__name__,
         args=flow_args,
@@ -94,7 +98,7 @@ class VfsTestMixin(object):
         path=file_path, pathtype=rdf_paths.PathSpec.PathType.OS)
     flow_args = transfer.MultiGetFileArgs(pathspecs=[pathspec])
 
-    return flow.GRRFlow.StartFlow(
+    return flow.StartFlow(
         client_id=client_id,
         flow_name=transfer.MultiGetFile.__name__,
         args=flow_args,
@@ -576,7 +580,7 @@ class ApiGetVfsRefreshOperationStateHandlerTest(api_test_lib.ApiCallHandlerTest,
 
   def testHandlerThrowsExceptionOnArbitraryFlowId(self):
     # Create a mock flow.
-    self.flow_urn = flow.GRRFlow.StartFlow(
+    self.flow_urn = flow.StartFlow(
         client_id=self.client_id,
         flow_name=discovery.Interrogate.__name__,
         token=self.token)
@@ -673,7 +677,7 @@ class ApiGetVfsFileContentUpdateStateHandlerTest(
 
   def testHandlerRaisesOnArbitraryFlowId(self):
     # Create a mock flow.
-    self.flow_urn = flow.GRRFlow.StartFlow(
+    self.flow_urn = flow.StartFlow(
         client_id=self.client_id,
         flow_name=discovery.Interrogate.__name__,
         token=self.token)
@@ -700,15 +704,15 @@ class VfsTimelineTestMixin(object):
   """
 
   def SetupTestTimeline(self):
-    self.client_id = self.SetupClient(0)
-    fixture_test_lib.ClientFixture(self.client_id, token=self.token)
+    client_id = self.SetupClient(0)
+    fixture_test_lib.ClientFixture(client_id, token=self.token)
 
     # Choose some directory with pathspec in the ClientFixture.
     self.category_path = "fs/os"
     self.folder_path = self.category_path + "/Users/中国新闻网新闻中/Shared"
     self.file_path = self.folder_path + "/a.txt"
 
-    file_urn = self.client_id.Add(self.file_path)
+    file_urn = client_id.Add(self.file_path)
     for i in range(0, 5):
       with test_lib.FakeTime(i):
         stat_entry = rdf_client.StatEntry()
@@ -721,9 +725,10 @@ class VfsTimelineTestMixin(object):
           fd.Set(fd.Schema.STAT, stat_entry)
 
         if data_store.RelationalDBWriteEnabled():
-          client_id = self.client_id.Basename()
+          cid = client_id.Basename()
           path_info = rdf_objects.PathInfo.FromStatEntry(stat_entry)
-          data_store.REL_DB.WritePathInfos(client_id, [path_info])
+          data_store.REL_DB.WritePathInfos(cid, [path_info])
+    return client_id
 
 
 @db_test_lib.DualDBTest
@@ -733,7 +738,7 @@ class ApiGetVfsTimelineAsCsvHandlerTest(api_test_lib.ApiCallHandlerTest,
   def setUp(self):
     super(ApiGetVfsTimelineAsCsvHandlerTest, self).setUp()
     self.handler = vfs_plugin.ApiGetVfsTimelineAsCsvHandler()
-    self.SetupTestTimeline()
+    self.client_id = self.SetupTestTimeline()
 
   def testRaisesOnEmptyPath(self):
     args = vfs_plugin.ApiGetVfsTimelineAsCsvArgs(
@@ -795,7 +800,7 @@ class ApiGetVfsTimelineHandlerTest(api_test_lib.ApiCallHandlerTest,
   def setUp(self):
     super(ApiGetVfsTimelineHandlerTest, self).setUp()
     self.handler = vfs_plugin.ApiGetVfsTimelineHandler()
-    self.SetupTestTimeline()
+    self.client_id = self.SetupTestTimeline()
 
   def testRaisesOnEmptyPath(self):
     args = vfs_plugin.ApiGetVfsTimelineArgs(
@@ -839,7 +844,7 @@ class ApiGetVfsFilesArchiveHandlerTest(api_test_lib.ApiCallHandlerTest,
         vfs_plugin.ApiGetVfsFilesArchiveArgs(client_id=self.client_id),
         token=self.token)
 
-    out_fd = StringIO.StringIO()
+    out_fd = io.BytesIO()
     for chunk in result.GenerateContent():
       out_fd.write(chunk)
 
@@ -860,7 +865,7 @@ class ApiGetVfsFilesArchiveHandlerTest(api_test_lib.ApiCallHandlerTest,
             client_id=self.client_id, file_path="fs/os/c/Downloads"),
         token=self.token)
 
-    out_fd = StringIO.StringIO()
+    out_fd = io.BytesIO()
     for chunk in result.GenerateContent():
       out_fd.write(chunk)
 
@@ -876,7 +881,7 @@ class ApiGetVfsFilesArchiveHandlerTest(api_test_lib.ApiCallHandlerTest,
             client_id=self.client_id, file_path="fs/os/blah/blah"),
         token=self.token)
 
-    out_fd = StringIO.StringIO()
+    out_fd = io.BytesIO()
     for chunk in result.GenerateContent():
       out_fd.write(chunk)
 
@@ -898,7 +903,7 @@ class ApiGetVfsFilesArchiveHandlerTest(api_test_lib.ApiCallHandlerTest,
         vfs_plugin.ApiGetVfsFilesArchiveArgs(
             client_id=self.client_id, timestamp=self.time_2),
         token=self.token)
-    out_fd = StringIO.StringIO()
+    out_fd = io.BytesIO()
     for chunk in result.GenerateContent():
       out_fd.write(chunk)
     zip_fd = zipfile.ZipFile(out_fd, "r")
@@ -911,7 +916,7 @@ class ApiGetVfsFilesArchiveHandlerTest(api_test_lib.ApiCallHandlerTest,
         vfs_plugin.ApiGetVfsFilesArchiveArgs(
             client_id=self.client_id, timestamp=self.time_1),
         token=self.token)
-    out_fd = StringIO.StringIO()
+    out_fd = io.BytesIO()
     for chunk in result.GenerateContent():
       out_fd.write(chunk)
     zip_fd = zipfile.ZipFile(out_fd, "r")

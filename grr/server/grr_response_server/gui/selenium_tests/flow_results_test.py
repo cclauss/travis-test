@@ -4,12 +4,12 @@
 
 
 import unittest
-from grr.lib import flags
+from grr_response_core.lib import flags
 
-from grr.lib.rdfvalues import client as rdf_client
-from grr.server.grr_response_server import data_store
-from grr.server.grr_response_server import flow
-from grr.server.grr_response_server.gui import gui_test_lib
+from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_server import data_store
+from grr_response_server import flow
+from grr_response_server.gui import gui_test_lib
 from grr.test_lib import db_test_lib
 
 
@@ -24,7 +24,7 @@ class TestFlowResults(gui_test_lib.GRRSeleniumTest):
     self.RequestAndGrantClientApproval(self.client_id)
 
   def testLaunchBinaryFlowResultsHaveReadableStdOutAndStdErr(self):
-    flow_urn = flow.GRRFlow.StartFlow(
+    flow_urn = flow.StartFlow(
         client_id=self.client_id,
         flow_name=gui_test_lib.RecursiveTestFlow.__name__,
         token=self.token)

@@ -1,7 +1,11 @@
 syntax = "proto2";
 
+import "google/protobuf/any.proto";
+
 import "grr_response_proto/jobs.proto";
+import "grr_response_proto/knowledge_base.proto";
 import "grr_response_proto/semantic.proto";
+import "grr_response_proto/sysinfo.proto";
 
 
 
@@ -138,4 +142,94 @@ message ArtifactDescriptor {
   optional string error_message = 7 [(sem_type) = {
       description: "The error message for artifacts that failed validation."
     }];
+}
+
+message ClientArtifactCollectorArgs {
+  repeated ExtendedArtifact artifacts = 1
+      [(sem_type) = { description: "A list of artifacts." }];
+  optional KnowledgeBase knowledge_base = 2 [(sem_type) = {
+    description: "The knowledge base containing information about the client."
+  }];
+  optional bool use_tsk = 3 [
+    (sem_type) = {
+      description: "Whether raw filesystem access should be used.",
+    },
+    default = false
+  ];
+  optional bool apply_parsers = 6 [
+    (sem_type) = {
+      description: "If True, apply any relevant parser to the collected data. "
+                   "If False, return the raw collected data e.g Files or Registry Keys.",
+      label: ADVANCED,
+    },
+    default = true
+  ];
+  optional bool ignore_interpolation_errors = 7 [
+    (sem_type) = {
+      description: "If true, don't die if %%users.homedir%% and similar fail"
+                   " to expand. It's common on windows for some user attributes to be"
+                   " missing if users have never logged in. Enable this when you have"
+                   " multiple artifacts or paths and want to report partial results.",
+    },
+    default = false
+  ];
+  optional uint64 max_file_size = 8 [
+    (sem_type) = {
+      type: "ByteSize",
+      description: "The maximum size of files we will download in bytes,"
+                   " 500MB by default.",
+      label: ADVANCED
+    },
+    default = 500000000
+  ];
+}
+
+message ExtendedArtifact {
+  required string name = 1 [(sem_type) = {
+    description: "The name of the artifact.",
+    type: "ArtifactName",
+  }];
+  repeated ExtendedSource sources = 2
+      [(sem_type) = { description: "The sources and what they depend on." }];
+}
+
+message ExtendedSource {
+  required ArtifactSource base_source = 1
+      [(sem_type) = { description: "The base source." }];
+  optional PathSpec.PathType path_type = 6
+      [(sem_type) = { description: "Path Type" }];
+  optional uint64 max_bytesize = 7 [(sem_type) = {
+    type: "ByteSize",
+    description: "File Finder Download Action Option: The maximum byte size of "
+                 "files we will download."
+  }];
+  optional int32 max_number_files = 8 [(sem_type) = {
+    description: "File Finder Action Option: The maximum number of "
+                 "results to get."
+  }];
+}
+
+message ClientArtifactCollectorResult {
+  repeated CollectedArtifact collected_artifacts = 1 [(sem_type) = {
+    description: "The results of the single collected artifacts."
+  }];
+}
+
+message CollectedArtifact {
+  required string name = 1 [(sem_type) = {
+    description: "The name of the artifact.",
+    type: "ArtifactName",
+  }];
+  repeated ClientActionResult action_results = 2 [(sem_type) = {
+    description: "The results from the performed client actions."
+  }];
+}
+
+message ClientActionResult {
+  optional string type = 11
+      [(sem_type) = { description: "The type of the client action result." }];
+  optional google.protobuf.Any value = 12 [(sem_type) = {
+    description: "The value of the response."
+    dynamic_type: "GetValueClass"
+  }];
 }

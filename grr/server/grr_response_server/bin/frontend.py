@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 """This is the GRR frontend HTTP Server."""
+from __future__ import print_function
 
-import BaseHTTPServer
 import cgi
-import cStringIO
+import io
 import logging
 import pdb
 import socket
@@ -11,32 +11,33 @@ import SocketServer
 import threading
 
 
+from http import server as http_server
 import ipaddr
 
 from google.protobuf import json_format
 
 # pylint: disable=unused-import,g-bad-import-order
-from grr.server.grr_response_server import server_plugins
+from grr_response_server import server_plugins
 # pylint: enable=unused-import, g-bad-import-order
 
-from grr import config
-from grr.config import server as config_server
-from grr.lib import communicator
-from grr.lib import flags
-from grr.lib import rdfvalue
-from grr.lib import stats
-from grr.lib import utils
-from grr.lib.rdfvalues import flows as rdf_flows
-from grr.server.grr_response_server import aff4
-from grr.server.grr_response_server import frontend_lib
-from grr.server.grr_response_server import master
-from grr.server.grr_response_server import server_logging
-from grr.server.grr_response_server import server_startup
+from grr_response_core import config
+from grr_response_core.config import server as config_server
+from grr_response_core.lib import communicator
+from grr_response_core.lib import flags
+from grr_response_core.lib import rdfvalue
+from grr_response_core.lib import stats
+from grr_response_core.lib import utils
+from grr_response_core.lib.rdfvalues import flows as rdf_flows
+from grr_response_server import aff4
+from grr_response_server import frontend_lib
+from grr_response_server import master
+from grr_response_server import server_logging
+from grr_response_server import server_startup
 
 flags.DEFINE_version(config_server.VERSION["packageversion"])
 
 
-class GRRHTTPServerHandler(BaseHTTPServer.BaseHTTPRequestHandler):
+class GRRHTTPServerHandler(http_server.BaseHTTPRequestHandler):
   """GRR HTTP handler for receiving client posts."""
 
   statustext = {
@@ -162,7 +163,7 @@ class GRRHTTPServerHandler(BaseHTTPServer.BaseHTTPRequestHandler):
     # that would stall for a long time when calling socket.recv(n) with a large
     # n. rfile.read() passes the length down to socket.recv() so it's much
     # faster to read the data in small 8k chunks.
-    input_data = cStringIO.StringIO()
+    input_data = io.BytesIO()
     while length >= 0:
       read_size = min(self.RECV_BLOCK_SIZE, length)
       data = self.rfile.read(read_size)
@@ -307,7 +308,7 @@ class GRRHTTPServerHandler(BaseHTTPServer.BaseHTTPRequestHandler):
             "frontend_active_count", self.active_counter, fields=["http"])
 
 
-class GRRHTTPServer(SocketServer.ThreadingMixIn, BaseHTTPServer.HTTPServer):
+class GRRHTTPServer(SocketServer.ThreadingMixIn, http_server.HTTPServer):
   """The GRR HTTP frontend server."""
 
   allow_reuse_address = True
@@ -339,8 +340,8 @@ class GRRHTTPServer(SocketServer.ThreadingMixIn, BaseHTTPServer.HTTPServer):
       self.address_family = socket.AF_INET6
 
     logging.info("Will attempt to listen on %s", server_address)
-    BaseHTTPServer.HTTPServer.__init__(self, server_address, handler, *args,
-                                       **kwargs)
+    http_server.HTTPServer.__init__(self, server_address, handler, *args,
+                                    **kwargs)
 
 
 def CreateServer(frontend=None):
@@ -380,7 +381,7 @@ def main(argv):
   try:
     httpd.serve_forever()
   except KeyboardInterrupt:
-    print "Caught keyboard interrupt, stopping"
+    print("Caught keyboard interrupt, stopping")
 
 
 if __name__ == "__main__":

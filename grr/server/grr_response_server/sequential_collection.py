@@ -7,12 +7,12 @@ import random
 import threading
 import time
 
-from grr.lib import rdfvalue
-from grr.lib import registry
-from grr.lib.rdfvalues import flows as rdf_flows
-from grr.lib.rdfvalues import protodict as rdf_protodict
+from grr_response_core.lib import rdfvalue
+from grr_response_core.lib import registry
+from grr_response_core.lib.rdfvalues import flows as rdf_flows
+from grr_response_core.lib.rdfvalues import protodict as rdf_protodict
 
-from grr.server.grr_response_server import data_store
+from grr_response_server import data_store
 
 
 class SequentialCollection(object):

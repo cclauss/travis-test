@@ -11,11 +11,11 @@ import xattr
 
 from google.protobuf import message
 
-from grr import config
-from grr.lib import rdfvalue
-from grr.lib import utils
-from grr.lib.rdfvalues import client as rdf_client
-from grr.lib.rdfvalues import flows as rdf_flows
+from grr_response_core import config
+from grr_response_core.lib import rdfvalue
+from grr_response_core.lib import utils
+from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_core.lib.rdfvalues import flows as rdf_flows
 
 
 def VerifyFileOwner(filename):

@@ -1,31 +1,30 @@
 #!/usr/bin/env python
 """This module contains tests for flows-related API handlers."""
 
+import io
 import os
-import StringIO
 import tarfile
 import zipfile
 
 
 import yaml
 
-from grr.lib import flags
-from grr.lib import utils
-from grr.lib.rdfvalues import file_finder as rdf_file_finder
-
-from grr.lib.rdfvalues import flows as rdf_flows
-from grr.lib.rdfvalues import paths as rdf_paths
-from grr.lib.rdfvalues import test_base as rdf_test_base
-from grr.server.grr_response_server import aff4
-from grr.server.grr_response_server import flow
-from grr.server.grr_response_server.flows.general import file_finder
-from grr.server.grr_response_server.flows.general import processes
-from grr.server.grr_response_server.gui import api_test_lib
-from grr.server.grr_response_server.gui.api_plugins import client as client_plugin
-from grr.server.grr_response_server.gui.api_plugins import flow as flow_plugin
-from grr.server.grr_response_server.hunts import implementation
-from grr.server.grr_response_server.hunts import standard
-from grr.server.grr_response_server.output_plugins import test_plugins
+from grr_response_core.lib import flags
+from grr_response_core.lib import utils
+from grr_response_core.lib.rdfvalues import file_finder as rdf_file_finder
+from grr_response_core.lib.rdfvalues import paths as rdf_paths
+from grr_response_core.lib.rdfvalues import test_base as rdf_test_base
+from grr_response_server import aff4
+from grr_response_server import flow
+from grr_response_server.flows.general import file_finder
+from grr_response_server.flows.general import processes
+from grr_response_server.gui import api_test_lib
+from grr_response_server.gui.api_plugins import client as client_plugin
+from grr_response_server.gui.api_plugins import flow as flow_plugin
+from grr_response_server.hunts import implementation
+from grr_response_server.hunts import standard
+from grr_response_server.output_plugins import test_plugins
+from grr_response_server.rdfvalues import flow_runner as rdf_flow_runner
 from grr.test_lib import action_mocks
 from grr.test_lib import flow_test_lib
 from grr.test_lib import hunt_test_lib
@@ -53,7 +52,7 @@ class ApiFlowIdTest(rdf_test_base.RDFValueTestMixin,
       flow_plugin.ApiFlowId("foo/bar")
 
   def testResolvesSimpleFlowURN(self):
-    flow_urn = flow.GRRFlow.StartFlow(
+    flow_urn = flow.StartFlow(
         flow_name=flow_test_lib.FlowWithOneNestedFlow.__name__,
         client_id=self.client_urn,
         token=self.token)
@@ -65,7 +64,7 @@ class ApiFlowIdTest(rdf_test_base.RDFValueTestMixin,
         flow_urn)
 
   def testResolvesNestedFlowURN(self):
-    flow_urn = flow.GRRFlow.StartFlow(
+    flow_urn = flow.StartFlow(
         flow_name=flow_test_lib.FlowWithOneNestedFlow.__name__,
         client_id=self.client_urn,
         token=self.token)
@@ -85,9 +84,9 @@ class ApiFlowIdTest(rdf_test_base.RDFValueTestMixin,
         children[0].urn)
 
   def _StartHunt(self):
-    with implementation.GRRHunt.StartHunt(
+    with implementation.StartHunt(
         hunt_name=standard.GenericHunt.__name__,
-        flow_runner_args=rdf_flows.FlowRunnerArgs(
+        flow_runner_args=rdf_flow_runner.FlowRunnerArgs(
             flow_name=flow_test_lib.FlowWithOneNestedFlow.__name__),
         client_rate=0,
         token=self.token) as hunt:
@@ -136,7 +135,7 @@ class ApiFlowTest(test_lib.GRRBaseTest):
 
   def testInitializesClientIdForClientBasedFlows(self):
     client_id = self.SetupClient(0)
-    flow_urn = flow.GRRFlow.StartFlow(
+    flow_urn = flow.StartFlow(
         # Override base session id, so that the flow URN looks
         # like: aff4:/F:112233
         base_session_id="aff4:/",
@@ -151,7 +150,7 @@ class ApiFlowTest(test_lib.GRRBaseTest):
 
   def testLeavesClientIdEmptyForNonClientBasedFlows(self):
     client_id = self.SetupClient(0)
-    flow_urn = flow.GRRFlow.StartFlow(
+    flow_urn = flow.StartFlow(
         client_id=client_id,
         flow_name=processes.ListProcesses.__name__,
         token=self.token)
@@ -173,7 +172,8 @@ class ApiCreateFlowHandlerTest(api_test_lib.ApiCallHandlerTest):
 
   def testRunnerArgsBaseSessionIdDoesNotAffectCreatedFlow(self):
     """When multiple clients match, check we run on the latest one."""
-    flow_runner_args = rdf_flows.FlowRunnerArgs(base_session_id="aff4:/foo")
+    flow_runner_args = rdf_flow_runner.FlowRunnerArgs(
+        base_session_id="aff4:/foo")
     args = flow_plugin.ApiCreateFlowArgs(
         client_id=self.client_id.Basename(),
         flow=flow_plugin.ApiFlow(
@@ -194,7 +194,7 @@ class ApiGetFlowFilesArchiveHandlerTest(api_test_lib.ApiCallHandlerTest):
 
     self.client_id = self.SetupClient(0)
 
-    self.flow_urn = flow.GRRFlow.StartFlow(
+    self.flow_urn = flow.StartFlow(
         flow_name=file_finder.FileFinder.__name__,
         client_id=self.client_id,
         paths=[os.path.join(self.base_path, "test.plist")],
@@ -205,7 +205,7 @@ class ApiGetFlowFilesArchiveHandlerTest(api_test_lib.ApiCallHandlerTest):
         self.flow_urn, action_mock, client_id=self.client_id, token=self.token)
 
   def _GetZipManifest(self, result):
-    out_fd = StringIO.StringIO()
+    out_fd = io.BytesIO()
 
     for chunk in result.GenerateContent():
       out_fd.write(chunk)
@@ -331,7 +331,7 @@ class ApiGetExportedFlowResultsHandlerTest(test_lib.GRRBaseTest):
 
   def testWorksCorrectlyWithTestOutputPluginOnFlowWithSingleResult(self):
     with test_lib.FakeTime(42):
-      flow_urn = flow.GRRFlow.StartFlow(
+      flow_urn = flow.StartFlow(
           flow_name=flow_test_lib.DummyFlowWithSingleReply.__name__,
           client_id=self.client_id,
           token=self.token)

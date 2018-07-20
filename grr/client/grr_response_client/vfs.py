@@ -3,18 +3,22 @@
 
 import os
 
-from grr import config
+
+from builtins import filter  # pylint: disable=redefined-builtin
+from future.utils import with_metaclass
+
 from grr_response_client import client_utils
-from grr.lib import registry
-from grr.lib import utils
-from grr.lib.rdfvalues import paths as rdf_paths
+from grr_response_core import config
+from grr_response_core.lib import registry
+from grr_response_core.lib import utils
+from grr_response_core.lib.rdfvalues import paths as rdf_paths
 
 # A central Cache for vfs handlers. This can be used to keep objects alive
 # for a limited time.
 DEVICE_CACHE = utils.TimeBasedCache()
 
 
-class VFSHandler(object):
+class VFSHandler(with_metaclass(registry.MetaclassRegistry, object)):
   """Base class for handling objects in the VFS."""
   supported_pathtype = -1
 
@@ -32,8 +36,6 @@ class VFSHandler(object):
   # updated to reflect any potential recursion.
   pathspec = None
   base_fd = None
-
-  __metaclass__ = registry.MetaclassRegistry
 
   def __init__(self,
                base_fd,
@@ -215,7 +217,7 @@ class VFSHandler(object):
       return handler(base_fd=fd, pathspec=component)
 
     path_components = client_utils.LocalPathToCanonicalPath(component.path)
-    path_components = ["/"] + filter(None, path_components.split("/"))
+    path_components = ["/"] + list(filter(None, path_components.split("/")))
     for i, path_component in enumerate(path_components):
       try:
         if fd:

@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 """Administrative flows for managing the clients state."""
+from __future__ import division
 
 import logging
 import shlex
@@ -8,33 +9,33 @@ import time
 
 import jinja2
 
-from grr import config
-from grr.lib import queues
-from grr.lib import rdfvalue
-from grr.lib import registry
-from grr.lib import stats
-from grr.lib import utils
-from grr.lib.rdfvalues import client as rdf_client
-from grr.lib.rdfvalues import flows as rdf_flows
-from grr.lib.rdfvalues import paths
-from grr.lib.rdfvalues import protodict
-from grr.lib.rdfvalues import standard
-from grr.lib.rdfvalues import structs as rdf_structs
+from grr_response_core import config
+from grr_response_core.lib import queues
+from grr_response_core.lib import rdfvalue
+from grr_response_core.lib import registry
+from grr_response_core.lib import stats
+from grr_response_core.lib import utils
+from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_core.lib.rdfvalues import flows as rdf_flows
+from grr_response_core.lib.rdfvalues import paths as rdf_paths
+from grr_response_core.lib.rdfvalues import protodict as rdf_protodict
+from grr_response_core.lib.rdfvalues import standard as rdf_standard
+from grr_response_core.lib.rdfvalues import structs as rdf_structs
 from grr_response_proto import flows_pb2
-from grr.server.grr_response_server import aff4
-from grr.server.grr_response_server import data_store
-from grr.server.grr_response_server import db
-from grr.server.grr_response_server import email_alerts
-from grr.server.grr_response_server import events
-from grr.server.grr_response_server import flow
-from grr.server.grr_response_server import grr_collections
-from grr.server.grr_response_server import message_handlers
-from grr.server.grr_response_server import server_stubs
-from grr.server.grr_response_server.aff4_objects import aff4_grr
-from grr.server.grr_response_server.aff4_objects import collects
-from grr.server.grr_response_server.aff4_objects import stats as aff4_stats
-from grr.server.grr_response_server.flows.general import discovery
-from grr.server.grr_response_server.hunts import implementation
+from grr_response_server import aff4
+from grr_response_server import data_store
+from grr_response_server import db
+from grr_response_server import email_alerts
+from grr_response_server import events
+from grr_response_server import flow
+from grr_response_server import grr_collections
+from grr_response_server import message_handlers
+from grr_response_server import server_stubs
+from grr_response_server.aff4_objects import aff4_grr
+from grr_response_server.aff4_objects import collects
+from grr_response_server.aff4_objects import stats as aff4_stats
+from grr_response_server.flows.general import discovery
+from grr_response_server.hunts import implementation
 
 
 class AdministrativeInit(registry.InitHook):
@@ -44,65 +45,59 @@ class AdministrativeInit(registry.InitHook):
     stats.STATS.RegisterCounterMetric("grr_client_crashes")
 
 
-class CrashHandlingMixin(object):
-  """A mixin containing methods to store client crash information."""
+def ExtractHuntId(flow_session_id):
+  hunt_str, hunt_id, _ = flow_session_id.Split(3)
+  if hunt_str == "hunts":
+    return aff4.ROOT_URN.Add("hunts").Add(hunt_id)
 
-  def _AppendCrashDetails(self, path, crash_details):
-    with data_store.DB.GetMutationPool() as pool:
-      grr_collections.CrashCollection.StaticAdd(
-          path, crash_details, mutation_pool=pool)
 
-  def _ExtractHuntId(self, flow_session_id):
-    hunt_str, hunt_id, _ = flow_session_id.Split(3)
-    if hunt_str == "hunts":
-      return aff4.ROOT_URN.Add("hunts").Add(hunt_id)
+def WriteAllCrashDetails(client_id,
+                         crash_details,
+                         flow_session_id=None,
+                         hunt_session_id=None,
+                         token=None):
+  """Updates the last crash attribute of the client."""
 
-  def WriteAllCrashDetails(self,
-                           client_id,
-                           crash_details,
-                           flow_session_id=None,
-                           hunt_session_id=None,
-                           token=None):
-    """Updates the last crash attribute of the client."""
+  # AFF4.
+  with aff4.FACTORY.Create(
+      client_id, aff4_grr.VFSGRRClient, token=token) as client_obj:
+    client_obj.Set(client_obj.Schema.LAST_CRASH(crash_details))
 
-    # AFF4.
-    with aff4.FACTORY.Create(
-        client_id, aff4_grr.VFSGRRClient, token=token) as client_obj:
-      client_obj.Set(client_obj.Schema.LAST_CRASH(crash_details))
+  # Relational db.
+  if data_store.RelationalDBWriteEnabled():
+    try:
+      data_store.REL_DB.WriteClientCrashInfo(client_id.Basename(),
+                                             crash_details)
+    except db.UnknownClientError:
+      pass
 
-    # Relational db.
-    if data_store.RelationalDBWriteEnabled():
-      try:
-        data_store.REL_DB.WriteClientCrashInfo(client_id.Basename(),
-                                               crash_details)
-      except db.UnknownClientError:
-        pass
+  # Duplicate the crash information in a number of places so we can find it
+  # easily.
+  client_crashes = aff4_grr.VFSGRRClient.CrashCollectionURNForCID(client_id)
+  with data_store.DB.GetMutationPool() as pool:
+    grr_collections.CrashCollection.StaticAdd(
+        client_crashes, crash_details, mutation_pool=pool)
 
-    # Duplicate the crash information in a number of places so we can find it
-    # easily.
-    client_crashes = aff4_grr.VFSGRRClient.CrashCollectionURNForCID(client_id)
-    self._AppendCrashDetails(client_crashes, crash_details)
+  if flow_session_id:
+    with aff4.FACTORY.Open(
+        flow_session_id,
+        flow.GRRFlow,
+        mode="rw",
+        age=aff4.NEWEST_TIME,
+        token=token) as aff4_flow:
+      aff4_flow.Set(aff4_flow.Schema.CLIENT_CRASH(crash_details))
 
-    if flow_session_id:
-      with aff4.FACTORY.Open(
-          flow_session_id,
-          flow.GRRFlow,
+    hunt_session_id = ExtractHuntId(flow_session_id)
+    if hunt_session_id and hunt_session_id != flow_session_id:
+      hunt_obj = aff4.FACTORY.Open(
+          hunt_session_id,
+          aff4_type=implementation.GRRHunt,
           mode="rw",
-          age=aff4.NEWEST_TIME,
-          token=token) as aff4_flow:
-        aff4_flow.Set(aff4_flow.Schema.CLIENT_CRASH(crash_details))
-
-      hunt_session_id = self._ExtractHuntId(flow_session_id)
-      if hunt_session_id and hunt_session_id != flow_session_id:
-        hunt_obj = aff4.FACTORY.Open(
-            hunt_session_id,
-            aff4_type=implementation.GRRHunt,
-            mode="rw",
-            token=token)
-        hunt_obj.RegisterCrash(crash_details)
+          token=token)
+      hunt_obj.RegisterCrash(crash_details)
 
 
-class ClientCrashHandler(CrashHandlingMixin, events.EventListener):
+class ClientCrashHandler(events.EventListener):
   """A listener for client crashes."""
 
   EVENTS = ["ClientCrash"]
@@ -157,14 +152,14 @@ P.S. The state of the failing flow was:
       crash_details.client_info = client_info
       crash_details.crash_type = "Client Crash"
 
-      self.WriteAllCrashDetails(
+      WriteAllCrashDetails(
           client_id, crash_details, flow_session_id=session_id, token=token)
 
       # Also send email.
       to_send = []
 
       try:
-        hunt_session_id = self._ExtractHuntId(session_id)
+        hunt_session_id = ExtractHuntId(session_id)
         if hunt_session_id and hunt_session_id != session_id:
           hunt_obj = aff4.FACTORY.Open(
               hunt_session_id, aff4_type=implementation.GRRHunt, token=token)
@@ -281,7 +276,7 @@ class ClientStatsHandler(message_handlers.MessageHandler,
 class DeleteGRRTempFilesArgs(rdf_structs.RDFProtoStruct):
   protobuf = flows_pb2.DeleteGRRTempFilesArgs
   rdf_deps = [
-      paths.PathSpec,
+      rdf_paths.PathSpec,
   ]
 
 
@@ -372,7 +367,7 @@ class Kill(flow.GRRFlow):
 class UpdateConfigurationArgs(rdf_structs.RDFProtoStruct):
   protobuf = flows_pb2.UpdateConfigurationArgs
   rdf_deps = [
-      protodict.Dict,
+      rdf_protodict.Dict,
   ]
 
 
@@ -405,7 +400,7 @@ class UpdateConfiguration(flow.GRRFlow):
 class ExecutePythonHackArgs(rdf_structs.RDFProtoStruct):
   protobuf = flows_pb2.ExecutePythonHackArgs
   rdf_deps = [
-      protodict.Dict,
+      rdf_protodict.Dict,
   ]
 
 
@@ -534,7 +529,7 @@ class Foreman(flow.WellKnownFlow):
 class OnlineNotificationArgs(rdf_structs.RDFProtoStruct):
   protobuf = flows_pb2.OnlineNotificationArgs
   rdf_deps = [
-      standard.DomainEmailAddress,
+      rdf_standard.DomainEmailAddress,
   ]
 
 
@@ -687,7 +682,7 @@ class UpdateClient(flow.GRRFlow):
     self.Log("Client update completed, new version: %s" % info.client_version)
 
 
-class NannyMessageHandler(CrashHandlingMixin, flow.WellKnownFlow):
+class NannyMessageHandler(flow.WellKnownFlow):
   """A listener for nanny messages."""
 
   well_known_session_id = rdfvalue.SessionID(flow_name="NannyMessage")
@@ -732,10 +727,10 @@ Click <a href='{{ admin_ui }}/#{{ url }}'> here </a> to access this machine.
         client_id=client_id,
         client_info=client_info,
         crash_message=message,
-        timestamp=long(time.time() * 1e6),
+        timestamp=int(time.time() * 1e6),
         crash_type="Nanny Message")
 
-    self.WriteAllCrashDetails(client_id, crash_details, token=self.token)
+    WriteAllCrashDetails(client_id, crash_details, token=self.token)
 
     # Also send email.
     if config.CONFIG["Monitoring.alert_email"]:

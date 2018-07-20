@@ -7,12 +7,12 @@ import os
 import socket
 import time
 
-from grr import config
-from grr.lib import flags
+from grr_response_core import config
+from grr_response_core.lib import flags
 
 try:
   # pylint: disable=g-import-not-at-top
-  from grr.server.grr_response_server.local import log as local_log
+  from grr_response_server.local import log as local_log
   # pylint: enable=g-import-not-at-top
 except ImportError:
   local_log = None
@@ -31,7 +31,7 @@ class GrrApplicationLogger(object):
   def GetNewEventId(self, event_time=None):
     """Return a unique Event ID string."""
     if event_time is None:
-      event_time = long(time.time() * 1e6)
+      event_time = int(time.time() * 1e6)
 
     return "%s:%s:%s" % (event_time, socket.gethostname(), os.getpid())
 
@@ -65,12 +65,9 @@ class GrrApplicationLogger(object):
     # messages that have to do with handling corresponding request.
     event_id = self.GetNewEventId()
 
-    log_msg = "%s-%s [%s]: %s %s %s %s (%d)" % (event_id, request.source_ip,
-                                                source or "<unknown>",
-                                                request.method, request.url,
-                                                request.user_agent,
-                                                request.user,
-                                                message_count or 0)
+    log_msg = "%s-%s [%s]: %s %s %s %s (%d)" % (
+        event_id, request.source_ip, source or "<unknown>", request.method,
+        request.url, request.user_agent, request.user, message_count or 0)
     logging.info(log_msg)
 
 
@@ -131,7 +128,9 @@ def SetLogLevels():
     handler.setLevel(levels[handler.__class__.__name__])
 
 
-LOG_FORMAT = "%(levelname)s:%(asctime)s %(module)s:%(lineno)s] %(message)s"
+LOG_FORMAT = ("%(levelname)s:%(asctime)s %(process)d "
+              "%(processName)s %(thread)d %(threadName)s "
+              "%(module)s:%(lineno)s] %(message)s")
 
 
 def GetLogHandlers():

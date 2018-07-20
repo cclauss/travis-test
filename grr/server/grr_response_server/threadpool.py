@@ -21,6 +21,7 @@ Example usage:
 >>> SharedPool().Join()
 
 """
+from __future__ import division
 
 import itertools
 import logging
@@ -32,8 +33,8 @@ import time
 
 import psutil
 
-from grr.lib import stats
-from grr.lib import utils
+from grr_response_core.lib import stats
+from grr_response_core.lib import utils
 
 STOP_MESSAGE = "Stop message"
 
@@ -332,7 +333,7 @@ class ThreadPool(object):
 
   def AddTask(self,
               target,
-              args,
+              args=(),
               name="Unnamed task",
               blocking=True,
               inline=True):
@@ -508,7 +509,7 @@ class BatchConverter(object):
       return
 
     try:
-      total_batch_count = len(values) / self.batch_size
+      total_batch_count = len(values) // self.batch_size
     except TypeError:
       total_batch_count = -1
 

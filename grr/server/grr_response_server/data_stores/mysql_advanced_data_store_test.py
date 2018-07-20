@@ -1,10 +1,10 @@
 #!/usr/bin/env python
 """Tests the mysql data store."""
 
-from grr.lib import flags
-from grr.server.grr_response_server import data_store
-from grr.server.grr_response_server import data_store_test
-from grr.server.grr_response_server.data_stores import mysql_advanced_data_store
+from grr_response_core.lib import flags
+from grr_response_server import data_store
+from grr_response_server import data_store_test
+from grr_response_server.data_stores import mysql_advanced_data_store
 from grr.test_lib import test_lib
 
 

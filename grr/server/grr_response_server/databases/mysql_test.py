@@ -10,9 +10,9 @@ import unittest
 import MySQLdb
 
 import unittest
-from grr.server.grr_response_server import db_test_mixin
-from grr.server.grr_response_server import db_utils
-from grr.server.grr_response_server.databases import mysql
+from grr_response_server import db_test_mixin
+from grr_response_server import db_utils
+from grr_response_server.databases import mysql
 from grr.test_lib import stats_test_lib
 
 
@@ -46,13 +46,16 @@ class TestMysqlDB(stats_test_lib.StatsTestMixin,
     cursor.execute("CREATE DATABASE " + dbname)
     logging.info("Created test database: %s", dbname)
 
+    conn = mysql.MysqlDB(
+        host=host, port=port, user=user, passwd=passwd, db=dbname)
+
     def Fin():
       cursor.execute("DROP DATABASE " + dbname)
       cursor.close()
       connection.close()
+      conn.Close()
 
-    return mysql.MysqlDB(
-        host=host, port=port, user=user, passwd=passwd, db=dbname), Fin
+    return conn, Fin
     # pylint: enable=unreachable
 
   def testIsRetryable(self):
@@ -191,44 +194,77 @@ class TestMysqlDB(stats_test_lib.StatsTestMixin,
   def testWritePathInfosUpdatesAncestors(self):
     pass
 
-  def testFindPathInfosByPathIDsNonExistent(self):
+  def testWriteStatHistory(self):
     pass
 
-  def testFindPathInfoByPathIDNonExistent(self):
+  def testWriteHashHistory(self):
     pass
 
-  def testFindPathInfoByPathIDTimestampStatEntry(self):
+  def testMultiWriteHistoryEmpty(self):
     pass
 
-  def testFindPathInfosByPathIDsMany(self):
+  def testMultiWriteHistoryStatAndHash(self):
+    pass
+
+  def testMultiWriteHistoryTwoPathTypes(self):
+    pass
+
+  def testMultiWriteHistoryTwoPaths(self):
+    pass
+
+  def testReadPathInfosNonExistent(self):
+    pass
+
+  def testReadPathInfoNonExistent(self):
+    pass
+
+  def testReadPathInfoTimestampStatEntry(self):
+    pass
+
+  def testReadPathInfosMany(self):
     pass
 
   def testWritePathInfosDuplicatedData(self):
     pass
 
-  def testFindDescendentPathIDsEmptyResult(self):
+  def testWritePathInfosStoresCopy(self):
     pass
 
-  def testFindDescendentPathIDsSingleResult(self):
+  def testListDescendentPathInfosEmptyResult(self):
     pass
 
-  def testFindDescendentPathIDsSingle(self):
+  def testListDescendentPathInfosSingleResult(self):
     pass
 
-  def testFindDescendentPathIDsBranching(self):
+  def testListDescendentPathInfosSingle(self):
     pass
 
-  def testFindDescendentPathIDsLimited(self):
+  def testListDescendentPathInfosBranching(self):
     pass
 
-  def testFindDescendentPathIDsTypeSeparated(self):
+  def testListDescendentPathInfosLimited(self):
     pass
 
-  def testFindDescendentPathIDsAll(self):
+  def testListDescendentPathInfosTypeSeparated(self):
+    pass
+
+  def testListDescendentPathInfosAll(self):
+    pass
+
+  def testListDescendentPathInfosLimitedDirectory(self):
+    pass
+
+  def testListChildPathInfosRoot(self):
+    pass
+
+  def testListChildPathInfosDetails(self):
+    pass
+
+  def testListChildPathInfosDeepSorted(self):
     pass
 
   # TODO(hanuszczak): Remove these once support for storing file hashes in
-  # the F1 backend is ready.
+  # the MySQL backend is ready.
 
   def testWritePathInfosHashEntry(self):
     pass
@@ -239,10 +275,34 @@ class TestMysqlDB(stats_test_lib.StatsTestMixin,
   def testWritePathInfoHashAndStatEntrySeparateWrites(self):
     pass
 
-  def testFindPathInfoByPathIDTimestampHashEntry(self):
+  def testReadPathInfoTimestampHashEntry(self):
     pass
 
-  def testFindPathInfoByPathIDTimestampStatAndHashEntry(self):
+  def testReadPathInfoTimestampStatAndHashEntry(self):
+    pass
+
+  def testReadingNonExistentBlobReturnsNone(self):
+    pass
+
+  def testSingleBlobCanBeWrittenAndThenRead(self):
+    pass
+
+  def testMultipleBlobsCanBeWrittenAndThenRead(self):
+    pass
+
+  def testWritingBlobReferenceToNonExistentPathRaises(self):
+    pass
+
+  def testReadingBlobReferenceFromNonExistentPathReturnsEmptyResult(self):
+    pass
+
+  def testSingleBlobReferenceCanBeWrittenAndThenRead(self):
+    pass
+
+  def testMultipleBlobReferencesCanBeWrittenAndThenRead(self):
+    pass
+
+  def testReadPathInfoOlder(self):
     pass
 
 

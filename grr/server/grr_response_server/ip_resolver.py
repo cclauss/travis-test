@@ -4,11 +4,13 @@
 import logging
 import socket
 
+
+from future.utils import with_metaclass
 import ipaddr
 
-from grr import config
-from grr.lib import registry
-from grr.lib import utils
+from grr_response_core import config
+from grr_response_core.lib import registry
+from grr_response_core.lib import utils
 
 
 class IPInfo(object):
@@ -18,9 +20,7 @@ class IPInfo(object):
   VPN = 3
 
 
-class IPResolverBase(object):
-
-  __metaclass__ = registry.MetaclassRegistry
+class IPResolverBase(with_metaclass(registry.MetaclassRegistry, object)):
 
   def RetrieveIPInfo(self, ip):
     raise NotImplementedError()

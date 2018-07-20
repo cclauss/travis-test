@@ -1,22 +1,22 @@
 #!/usr/bin/env python
 """Test the grr aff4 objects."""
 
-import StringIO
+import io
 import time
 
 import mock
 
-from grr.lib import flags
-from grr.lib import rdfvalue
-from grr.lib import utils
-from grr.lib.rdfvalues import client as rdf_client
-from grr.lib.rdfvalues import cloud
-from grr.lib.rdfvalues import paths as rdf_paths
-from grr.server.grr_response_server import aff4
-from grr.server.grr_response_server import data_store
-from grr.server.grr_response_server import events
-from grr.server.grr_response_server.aff4_objects import aff4_grr
-from grr.server.grr_response_server.flows.general import transfer
+from grr_response_core.lib import flags
+from grr_response_core.lib import rdfvalue
+from grr_response_core.lib import utils
+from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_core.lib.rdfvalues import cloud as rdf_cloud
+from grr_response_core.lib.rdfvalues import paths as rdf_paths
+from grr_response_server import aff4
+from grr_response_server import data_store
+from grr_response_server import events
+from grr_response_server.aff4_objects import aff4_grr
+from grr_response_server.flows.general import transfer
 from grr.test_lib import action_mocks
 from grr.test_lib import aff4_test_lib
 from grr.test_lib import flow_test_lib
@@ -219,12 +219,12 @@ class AFF4GRRTest(aff4_test_lib.AFF4ObjectTest):
     user = "testuser"
     userobj = rdf_client.User(username=user)
     interface = rdf_client.Interface(ifname="eth0")
-    google_cloud_instance = cloud.GoogleCloudInstance(
+    google_cloud_instance = rdf_cloud.GoogleCloudInstance(
         instance_id="1771384456894610289",
         zone="projects/123456789733/zones/us-central1-a",
         project_id="myproject",
         unique_id="us-central1-a/myproject/1771384456894610289")
-    cloud_instance = cloud.CloudInstance(
+    cloud_instance = rdf_cloud.CloudInstance(
         cloud_type="GOOGLE", google=google_cloud_instance)
 
     serial_number = "DSD33679FZ"
@@ -295,8 +295,8 @@ class BlobImageTest(aff4_test_lib.AFF4ObjectTest):
   """Tests for cron functionality."""
 
   def testAppendContentError(self):
-    src_content = "ABCD" * 10
-    src_fd = StringIO.StringIO(src_content)
+    src_content = b"ABCD" * 10
+    src_fd = io.BytesIO(src_content)
 
     dest_fd = aff4.FACTORY.Create(
         aff4.ROOT_URN.Add("temp"),
@@ -313,8 +313,8 @@ class BlobImageTest(aff4_test_lib.AFF4ObjectTest):
 
   def testAppendContent(self):
     """Test writing content where content length % chunksize == 0."""
-    src_content = "ABCDEFG" * 10  # 10 chunksize blobs
-    src_fd = StringIO.StringIO(src_content)
+    src_content = b"ABCDEFG" * 10  # 10 chunksize blobs
+    src_fd = io.BytesIO(src_content)
 
     dest_fd = aff4.FACTORY.Create(
         aff4.ROOT_URN.Add("temp"),
@@ -344,25 +344,25 @@ class BlobImageTest(aff4_test_lib.AFF4ObjectTest):
     with aff4.FACTORY.Create(
         "aff4:/foo", aff4_type=aff4_grr.VFSBlobImage, token=self.token) as fd:
       fd.SetChunksize(10)
-      fd.AppendContent(StringIO.StringIO("123456789"))
+      fd.AppendContent(io.BytesIO(b"123456789"))
 
     fd = aff4.FACTORY.Open("aff4:/foo", token=self.token)
     chunks_fds = list(aff4.AFF4Stream.MultiStream([fd]))
 
     self.assertEqual(len(chunks_fds), 1)
-    self.assertEqual(chunks_fds[0][1], "123456789")
+    self.assertEqual(chunks_fds[0][1], b"123456789")
     self.assertIs(chunks_fds[0][0], fd)
 
   def testMultiStreamStreamsSinglfeFileWithTwoChunks(self):
     with aff4.FACTORY.Create(
         "aff4:/foo", aff4_type=aff4_grr.VFSBlobImage, token=self.token) as fd:
       fd.SetChunksize(10)
-      fd.AppendContent(StringIO.StringIO("123456789"))
+      fd.AppendContent(io.BytesIO(b"123456789"))
 
     with aff4.FACTORY.Create(
         "aff4:/bar", aff4_type=aff4_grr.VFSBlobImage, token=self.token) as fd:
       fd.SetChunksize(10)
-      fd.AppendContent(StringIO.StringIO("abcd"))
+      fd.AppendContent(io.BytesIO(b"abcd"))
 
     fd1 = aff4.FACTORY.Open("aff4:/foo", token=self.token)
     fd2 = aff4.FACTORY.Open("aff4:/bar", token=self.token)
@@ -370,22 +370,22 @@ class BlobImageTest(aff4_test_lib.AFF4ObjectTest):
 
     self.assertEqual(len(chunks_fds), 2)
 
-    self.assertEqual(chunks_fds[0][1], "123456789")
+    self.assertEqual(chunks_fds[0][1], b"123456789")
     self.assertIs(chunks_fds[0][0], fd1)
 
-    self.assertEqual(chunks_fds[1][1], "abcd")
+    self.assertEqual(chunks_fds[1][1], b"abcd")
     self.assertIs(chunks_fds[1][0], fd2)
 
   def testMultiStreamStreamsTwoFilesWithTwoChunksInEach(self):
     with aff4.FACTORY.Create(
         "aff4:/foo", aff4_type=aff4_grr.VFSBlobImage, token=self.token) as fd:
       fd.SetChunksize(10)
-      fd.AppendContent(StringIO.StringIO("*" * 10 + "123456789"))
+      fd.AppendContent(io.BytesIO(b"*" * 10 + b"123456789"))
 
     with aff4.FACTORY.Create(
         "aff4:/bar", aff4_type=aff4_grr.VFSBlobImage, token=self.token) as fd:
       fd.SetChunksize(10)
-      fd.AppendContent(StringIO.StringIO("*" * 10 + "abcd"))
+      fd.AppendContent(io.BytesIO(b"*" * 10 + b"abcd"))
 
     fd1 = aff4.FACTORY.Open("aff4:/foo", token=self.token)
     fd2 = aff4.FACTORY.Open("aff4:/bar", token=self.token)
@@ -393,23 +393,23 @@ class BlobImageTest(aff4_test_lib.AFF4ObjectTest):
 
     self.assertEqual(len(chunks_fds), 4)
 
-    self.assertEqual(chunks_fds[0][1], "*" * 10)
+    self.assertEqual(chunks_fds[0][1], b"*" * 10)
     self.assertIs(chunks_fds[0][0], fd1)
 
-    self.assertEqual(chunks_fds[1][1], "123456789")
+    self.assertEqual(chunks_fds[1][1], b"123456789")
     self.assertIs(chunks_fds[1][0], fd1)
 
-    self.assertEqual(chunks_fds[2][1], "*" * 10)
+    self.assertEqual(chunks_fds[2][1], b"*" * 10)
     self.assertIs(chunks_fds[2][0], fd2)
 
-    self.assertEqual(chunks_fds[3][1], "abcd")
+    self.assertEqual(chunks_fds[3][1], b"abcd")
     self.assertIs(chunks_fds[3][0], fd2)
 
   def testMultiStreamReturnsExceptionIfChunkIsMissing(self):
     with aff4.FACTORY.Create(
         "aff4:/foo", aff4_type=aff4_grr.VFSBlobImage, token=self.token) as fd:
       fd.SetChunksize(10)
-      fd.AppendContent(StringIO.StringIO("123456789"))
+      fd.AppendContent(io.BytesIO(b"123456789"))
 
       fd.index.seek(0)
       blob_id = fd.index.read(fd._HASH_SIZE).encode("hex")
@@ -426,7 +426,7 @@ class BlobImageTest(aff4_test_lib.AFF4ObjectTest):
     with aff4.FACTORY.Create(
         "aff4:/foo", aff4_type=aff4_grr.VFSBlobImage, token=self.token) as fd:
       fd.SetChunksize(10)
-      fd.AppendContent(StringIO.StringIO("*" * 10 + "123456789"))
+      fd.AppendContent(io.BytesIO(b"*" * 10 + b"123456789"))
 
       fd.index.seek(0)
       unused_blob_id_1 = fd.index.read(fd._HASH_SIZE).encode("hex")
@@ -450,7 +450,7 @@ class BlobImageTest(aff4_test_lib.AFF4ObjectTest):
     with aff4.FACTORY.Create(
         "aff4:/foo", aff4_type=aff4_grr.VFSBlobImage, token=self.token) as fd:
       fd.SetChunksize(10)
-      fd.AppendContent(StringIO.StringIO("*" * 10 + "123456789"))
+      fd.AppendContent(io.BytesIO(b"*" * 10 + b"123456789"))
 
       fd.index.seek(0)
       unused_blob_id_1 = fd.index.read(fd._HASH_SIZE).encode("hex")
@@ -467,7 +467,7 @@ class BlobImageTest(aff4_test_lib.AFF4ObjectTest):
       else:
         error_detected = True
 
-    self.assertEqual(content, ["*" * 10])
+    self.assertEqual(content, [b"*" * 10])
     self.assertTrue(error_detected)
 
   @mock.patch.object(aff4_grr.VFSBlobImage, "MULTI_STREAM_CHUNKS_READ_AHEAD", 1)
@@ -477,7 +477,7 @@ class BlobImageTest(aff4_test_lib.AFF4ObjectTest):
     with aff4.FACTORY.Create(
         "aff4:/foo", aff4_type=aff4_grr.VFSBlobImage, token=self.token) as fd:
       fd.SetChunksize(10)
-      fd.AppendContent(StringIO.StringIO("*" * 10 + "123456789"))
+      fd.AppendContent(io.BytesIO(b"*" * 10 + b"123456789"))
 
       fd.index.seek(0)
       blob_id_1 = fd.index.read(fd._HASH_SIZE).encode("hex")

@@ -7,13 +7,13 @@ import time
 
 from grr_api_client import errors as grr_api_errors
 from grr_api_client import utils as grr_api_utils
-from grr.lib import flags
-from grr.lib import utils
-from grr.lib.rdfvalues import client as rdf_client
-from grr.server.grr_response_server import aff4
-from grr.server.grr_response_server import flow
-from grr.server.grr_response_server.flows.general import processes
-from grr.server.grr_response_server.gui import api_e2e_test_lib
+from grr_response_core.lib import flags
+from grr_response_core.lib import utils
+from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_server import aff4
+from grr_response_server import flow
+from grr_response_server.flows.general import processes
+from grr_response_server.gui import api_e2e_test_lib
 from grr.test_lib import action_mocks
 from grr.test_lib import flow_test_lib
 from grr.test_lib import test_lib
@@ -39,7 +39,7 @@ class ApiClientLibFlowTest(api_e2e_test_lib.ApiE2ETest):
 
   def testListFlowsFromClientRef(self):
     client_urn = self.SetupClient(0)
-    flow_urn = flow.GRRFlow.StartFlow(
+    flow_urn = flow.StartFlow(
         client_id=client_urn,
         flow_name=processes.ListProcesses.__name__,
         token=self.token)
@@ -53,7 +53,7 @@ class ApiClientLibFlowTest(api_e2e_test_lib.ApiE2ETest):
 
   def testListFlowsFromClientObject(self):
     client_urn = self.SetupClient(0)
-    flow_urn = flow.GRRFlow.StartFlow(
+    flow_urn = flow.StartFlow(
         client_id=client_urn,
         flow_name=processes.ListProcesses.__name__,
         token=self.token)
@@ -106,13 +106,13 @@ class ApiClientLibFlowTest(api_e2e_test_lib.ApiE2ETest):
         ppid=1,
         cmdline=["cmd.exe"],
         exe="c:\\windows\\cmd.exe",
-        ctime=long(1333718907.167083 * 1e6),
+        ctime=1333718907167083,
         RSS_size=42)
 
     client_urn = self.SetupClient(0)
     client_mock = action_mocks.ListProcessesMock([process])
 
-    flow_urn = flow.GRRFlow.StartFlow(
+    flow_urn = flow.StartFlow(
         client_id=client_urn,
         flow_name=processes.ListProcesses.__name__,
         token=self.token)
@@ -129,7 +129,7 @@ class ApiClientLibFlowTest(api_e2e_test_lib.ApiE2ETest):
   def testWaitUntilDoneReturnsWhenFlowCompletes(self):
     client_urn = self.SetupClient(0)
 
-    flow_urn = flow.GRRFlow.StartFlow(
+    flow_urn = flow.StartFlow(
         client_id=client_urn,
         flow_name=processes.ListProcesses.__name__,
         token=self.token)
@@ -150,7 +150,7 @@ class ApiClientLibFlowTest(api_e2e_test_lib.ApiE2ETest):
   def testWaitUntilDoneRaisesWhenFlowFails(self):
     client_urn = self.SetupClient(0)
 
-    flow_urn = flow.GRRFlow.StartFlow(
+    flow_urn = flow.StartFlow(
         client_id=client_urn,
         flow_name=processes.ListProcesses.__name__,
         token=self.token)
@@ -169,7 +169,7 @@ class ApiClientLibFlowTest(api_e2e_test_lib.ApiE2ETest):
   def testWaitUntilDoneRasiesWhenItTimesOut(self):
     client_urn = self.SetupClient(0)
 
-    flow_urn = flow.GRRFlow.StartFlow(
+    flow_urn = flow.StartFlow(
         client_id=client_urn,
         flow_name=processes.ListProcesses.__name__,
         token=self.token)

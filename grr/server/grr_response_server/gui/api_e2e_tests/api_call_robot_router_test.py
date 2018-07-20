@@ -1,20 +1,20 @@
 #!/usr/bin/env python
 """API E2E tests for ApiCallRobotRouter."""
 
+import io
 import os
-import StringIO
 import zipfile
 
 
-from grr.lib import flags
-from grr.lib.rdfvalues import client as rdf_client
+from grr_response_core.lib import flags
+from grr_response_core.lib.rdfvalues import client as rdf_client
 
-from grr.lib.rdfvalues import file_finder as rdf_file_finder
-from grr.server.grr_response_server import flow
-from grr.server.grr_response_server.flows.general import file_finder
-from grr.server.grr_response_server.flows.general import processes
-from grr.server.grr_response_server.gui import api_auth_manager
-from grr.server.grr_response_server.gui import api_e2e_test_lib
+from grr_response_core.lib.rdfvalues import file_finder as rdf_file_finder
+from grr_response_server import flow
+from grr_response_server.flows.general import file_finder
+from grr_response_server.flows.general import processes
+from grr_response_server.gui import api_auth_manager
+from grr_response_server.gui import api_e2e_test_lib
 
 from grr.test_lib import action_mocks
 from grr.test_lib import flow_test_lib
@@ -110,7 +110,7 @@ users:
         ["test.plist", "numbers.txt", "numbers.txt.ver2"])
 
     # Now downloads the files archive.
-    zip_stream = StringIO.StringIO()
+    zip_stream = io.BytesIO()
     flow_obj.GetFilesArchive().WriteToStream(zip_stream)
     zip_fd = zipfile.ZipFile(zip_stream)
 
@@ -138,7 +138,7 @@ users:
   def testCheckingArbitraryFlowStateDoesNotWork(self):
     self.InitRouterConfig(
         self.__class__.FILE_FINDER_ROUTER_CONFIG % self.token.username)
-    flow_urn = flow.GRRFlow.StartFlow(
+    flow_urn = flow.StartFlow(
         client_id=self.client_id,
         flow_name=file_finder.FileFinder.__name__,
         token=self.token)

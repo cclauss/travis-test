@@ -1,15 +1,15 @@
 #!/usr/bin/env python
 """Tests for root API user management calls."""
 
-import StringIO
+import io
 
 
-from grr import config as config
 from grr_api_client import errors as grr_api_errors
-from grr.lib import flags
-from grr.lib.rdfvalues import crypto as rdf_crypto
+from grr_response_core import config as config
+from grr_response_core.lib import flags
+from grr_response_core.lib.rdfvalues import crypto as rdf_crypto
 from grr_response_proto.api import config_pb2
-from grr.server.grr_response_server.gui import api_e2e_test_lib
+from grr_response_server.gui import api_e2e_test_lib
 from grr.test_lib import test_lib
 
 
@@ -20,7 +20,7 @@ class RootApiBinaryManagementTest(api_e2e_test_lib.RootApiE2ETest):
     if not private_key:
       private_key = config.CONFIG["PrivateKeys.executable_signing_private_key"]
 
-    sio = StringIO.StringIO()
+    sio = io.BytesIO()
     sio.write(data)
     sio.seek(0)
 
@@ -36,7 +36,7 @@ class RootApiBinaryManagementTest(api_e2e_test_lib.RootApiE2ETest):
     read_binary = self.api.GrrBinary(binary_type, path).Get()
     self.assertTrue(read_binary.data.has_valid_signature)
 
-    result_sio = StringIO.StringIO()
+    result_sio = io.BytesIO()
     read_binary.GetBlob().WriteToStream(result_sio)
 
     self.assertEqual(result_sio.getvalue(), data)

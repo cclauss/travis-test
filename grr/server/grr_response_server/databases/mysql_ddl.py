@@ -118,13 +118,23 @@ CREATE TABLE IF NOT EXISTS cron_jobs(
     job_id VARCHAR(128),
     job MEDIUMBLOB,
     create_time DATETIME(6),
-    current_run_id INT UNSIGNED,
-    disabled BOOL,
+    current_run_id VARCHAR(128),
+    enabled BOOL,
+    forced_run_requested BOOL,
     last_run_time DATETIME(6),
     last_run_status INT UNSIGNED,
     state MEDIUMBLOB,
     leased_until DATETIME(6),
     leased_by VARCHAR(128),
     PRIMARY KEY (job_id)
+)""", """
+CREATE TABLE IF NOT EXISTS client_messages(
+    client_id BIGINT UNSIGNED,
+    message_id BIGINT UNSIGNED,
+    timestamp DATETIME(6),
+    message MEDIUMBLOB,
+    leased_until DATETIME(6),
+    leased_by VARCHAR(128),
+    PRIMARY KEY (client_id, message_id)
 )"""
 ]

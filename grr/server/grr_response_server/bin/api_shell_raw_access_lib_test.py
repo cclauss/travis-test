@@ -1,13 +1,13 @@
 #!/usr/bin/env python
-import StringIO
+import io
 
 
 from grr_api_client import errors
-from grr.lib import flags
+from grr_response_core.lib import flags
 from grr_response_proto.api import client_pb2
 from grr_response_proto.api import vfs_pb2
 from grr_response_proto.api.root import user_management_pb2
-from grr.server.grr_response_server.bin import api_shell_raw_access_lib
+from grr_response_server.bin import api_shell_raw_access_lib
 from grr.test_lib import acl_test_lib
 from grr.test_lib import fixture_test_lib
 from grr.test_lib import test_lib
@@ -33,7 +33,7 @@ class RawConnectorTest(test_lib.GRRBaseTest):
 
     args = vfs_pb2.ApiGetFileBlobArgs(
         client_id=client_id.Basename(), file_path="fs/tsk/c/bin/rbash")
-    out = StringIO.StringIO()
+    out = io.BytesIO()
     self.connector.SendStreamingRequest("GetFileBlob", args).WriteToStream(out)
     self.assertEqual(out.getvalue(), "Hello world")
 

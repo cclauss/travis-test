@@ -2,17 +2,17 @@
 """Tests for ApiCallRobotRouter."""
 
 
-from grr.lib import flags
+from grr_response_core.lib import artifact_utils
 
-from grr.lib.rdfvalues import file_finder as rdf_file_finder
+from grr_response_core.lib import flags
 
-from grr.server.grr_response_server import access_control
-from grr.server.grr_response_server import artifact_utils
-from grr.server.grr_response_server import flow
-from grr.server.grr_response_server.flows.general import collectors
-from grr.server.grr_response_server.flows.general import file_finder
-from grr.server.grr_response_server.gui import api_call_robot_router as rr
-from grr.server.grr_response_server.gui.api_plugins import flow as api_flow
+from grr_response_core.lib.rdfvalues import file_finder as rdf_file_finder
+from grr_response_server import access_control
+from grr_response_server import flow
+from grr_response_server.flows.general import collectors
+from grr_response_server.flows.general import file_finder
+from grr_response_server.gui import api_call_robot_router as rr
+from grr_response_server.gui.api_plugins import flow as api_flow
 
 from grr.test_lib import flow_test_lib
 from grr.test_lib import test_lib
@@ -312,7 +312,7 @@ class ApiCallRobotRouterTest(test_lib.GRRBaseTest):
       router.GetFlow(None, token=self.token)
 
   def testGetFlowRaisesIfFlowWasNotCreatedBySameRouter(self):
-    flow_urn = flow.GRRFlow.StartFlow(
+    flow_urn = flow.StartFlow(
         client_id=self.client_id,
         flow_name=file_finder.FileFinder.__name__,
         token=self.token)
@@ -339,7 +339,7 @@ class ApiCallRobotRouterTest(test_lib.GRRBaseTest):
       router.ListFlowResults(None, token=self.token)
 
   def testListFlowResultsRaisesIfFlowWasNotCreatedBySameRouter(self):
-    flow_urn = flow.GRRFlow.StartFlow(
+    flow_urn = flow.StartFlow(
         client_id=self.client_id,
         flow_name=file_finder.FileFinder.__name__,
         token=self.token)
@@ -367,7 +367,7 @@ class ApiCallRobotRouterTest(test_lib.GRRBaseTest):
       router.GetFlowFilesArchive(None, token=self.token)
 
   def testFlowFilesArchiveRaisesIfFlowWasNotCreatedBySameRouter(self):
-    flow_urn = flow.GRRFlow.StartFlow(
+    flow_urn = flow.StartFlow(
         client_id=self.client_id,
         flow_name=file_finder.FileFinder.__name__,
         token=self.token)
@@ -452,8 +452,8 @@ class ApiCallRobotRouterTest(test_lib.GRRBaseTest):
     router = self._CreateRouter()
 
     unchecked_methods = (
-        set(router.__class__.GetAnnotatedMethods().keys()) -
-        set(self.IMPLEMENTED_METHODS))
+        set(router.__class__.GetAnnotatedMethods().keys()) - set(
+            self.IMPLEMENTED_METHODS))
     self.assertTrue(unchecked_methods)
 
     for method_name in unchecked_methods:

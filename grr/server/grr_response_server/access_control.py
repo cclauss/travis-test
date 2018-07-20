@@ -15,10 +15,12 @@ import logging
 import time
 
 
-from grr.lib import rdfvalue
-from grr.lib import registry
-from grr.lib import stats
-from grr.lib.rdfvalues import structs as rdf_structs
+from future.utils import with_metaclass
+
+from grr_response_core.lib import rdfvalue
+from grr_response_core.lib import registry
+from grr_response_core.lib import stats
+from grr_response_core.lib.rdfvalues import structs as rdf_structs
 from grr_response_proto import flows_pb2
 
 
@@ -50,7 +52,7 @@ class ExpiryError(Error):
   counter = "grr_expired_tokens"
 
 
-class AccessControlManager(object):
+class AccessControlManager(with_metaclass(registry.MetaclassRegistry, object)):
   """A class for managing access to data resources.
 
   This class is responsible for determining which users have access to each
@@ -59,8 +61,6 @@ class AccessControlManager(object):
   By default it delegates some of this functionality to a UserManager class
   which takes care of label management and user management components.
   """
-
-  __metaclass__ = registry.MetaclassRegistry
 
   def CheckClientAccess(self, token, client_urn):
     """Checks access to the given client.

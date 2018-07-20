@@ -3,12 +3,12 @@
 
 from grr_response_client.client_actions import standard
 from grr_response_client.client_actions import tempfiles
-from grr.lib import flags
-from grr.lib.rdfvalues import chipsec_types
-from grr.server.grr_response_server import aff4
-from grr.server.grr_response_server import flow
-from grr.server.grr_response_server.aff4_objects import hardware as aff4_hardware
-from grr.server.grr_response_server.flows.general import hardware
+from grr_response_core.lib import flags
+from grr_response_core.lib.rdfvalues import chipsec_types as rdf_chipsec_types
+from grr_response_server import aff4
+from grr_response_server import flow
+from grr_response_server.aff4_objects import hardware as aff4_hardware
+from grr_response_server.flows.general import hardware
 from grr.test_lib import action_mocks
 from grr.test_lib import flow_test_lib
 from grr.test_lib import test_lib
@@ -27,7 +27,8 @@ class DumpFlashImageMock(action_mocks.ActionMock):
     flash_fd.write("\xff" * 1024)
     flash_fd.close()
     logs = ["test"] if args.log_level else []
-    response = chipsec_types.DumpFlashImageResponse(path=flash_path, logs=logs)
+    response = rdf_chipsec_types.DumpFlashImageResponse(
+        path=flash_path, logs=logs)
     return [response]
 
 
@@ -35,7 +36,7 @@ class UnknownChipsetDumpMock(DumpFlashImageMock):
 
   def DumpFlashImage(self, args):
     logs = ["Unknown chipset"]
-    response = chipsec_types.DumpFlashImageResponse(logs=logs)
+    response = rdf_chipsec_types.DumpFlashImageResponse(logs=logs)
     return [response]
 
 
@@ -73,7 +74,7 @@ class TestHardwareDumpFlashImage(flow_test_lib.FlowTestsBaseclass):
     client_mock = UnknownChipsetDumpMock()
 
     # Manually start the flow in order to be able to read the logs
-    flow_urn = flow.GRRFlow.StartFlow(
+    flow_urn = flow.StartFlow(
         client_id=self.client_id,
         flow_name=hardware.DumpFlashImage.__name__,
         token=self.token)
@@ -100,17 +101,17 @@ class DumpACPITableMock(action_mocks.ActionMock):
 
   ACPI_TABLES = {
       "DSDT": [
-          chipsec_types.ACPITableData(
+          rdf_chipsec_types.ACPITableData(
               table_address=0x1122334455667788, table_blob="\xAA" * 0xFF)
       ],
       "XSDT": [
-          chipsec_types.ACPITableData(
+          rdf_chipsec_types.ACPITableData(
               table_address=0x8877665544332211, table_blob="\xBB" * 0xFF)
       ],
       "SSDT": [
-          chipsec_types.ACPITableData(
+          rdf_chipsec_types.ACPITableData(
               table_address=0x1234567890ABCDEF, table_blob="\xCC" * 0xFF),
-          chipsec_types.ACPITableData(
+          rdf_chipsec_types.ACPITableData(
               table_address=0x2234567890ABCDEF, table_blob="\xDD" * 0xFF)
       ]
   }
@@ -128,7 +129,7 @@ class DumpACPITableMock(action_mocks.ActionMock):
     if args.logging:
       logs.append("log")
 
-    response = chipsec_types.DumpACPITableResponse(
+    response = rdf_chipsec_types.DumpACPITableResponse(
         acpi_tables=acpi_tables, logs=logs)
     return [response]
 

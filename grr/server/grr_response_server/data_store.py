@@ -33,6 +33,8 @@ More complex types should be encoded into bytes and stored in the data store as
 bytes. The data store can then treat the type as an opaque type (and will not be
 able to filter it directly).
 """
+from __future__ import division
+from __future__ import print_function
 
 import abc
 import atexit
@@ -42,18 +44,23 @@ import random
 import sys
 import time
 
-from grr import config
-from grr.lib import flags
-from grr.lib import rdfvalue
-from grr.lib import registry
-from grr.lib import stats
-from grr.lib import utils
-from grr.lib.rdfvalues import flows as rdf_flows
-from grr.server.grr_response_server import access_control
-from grr.server.grr_response_server import blob_store
-from grr.server.grr_response_server import db
-from grr.server.grr_response_server import stats_values
-from grr.server.grr_response_server.databases import registry_init
+
+from builtins import zip  # pylint: disable=redefined-builtin
+from future.utils import with_metaclass
+
+from grr_response_core import config
+from grr_response_core.lib import flags
+from grr_response_core.lib import rdfvalue
+from grr_response_core.lib import registry
+from grr_response_core.lib import stats
+from grr_response_core.lib import utils
+from grr_response_core.lib.rdfvalues import flows as rdf_flows
+from grr_response_server import access_control
+from grr_response_server import blob_store
+from grr_response_server import db
+from grr_response_server import stats_values
+from grr_response_server.databases import registry_init
+from grr_response_server.rdfvalues import flow_runner as rdf_flow_runner
 
 flags.DEFINE_bool("list_storage", False, "List all storage subsystems present.")
 
@@ -408,7 +415,7 @@ class MutationPool(object):
     """Business logic helper for QueueQueryAndOwn()."""
     tasks = []
 
-    lease = long(lease_seconds * 1e6)
+    lease = int(lease_seconds * 1e6)
 
     # Only grab attributes with timestamps in the past.
     delete_attrs = set()
@@ -418,8 +425,8 @@ class MutationPool(object):
         DataStore.QUEUE_TASK_PREDICATE_PREFIX,
         timestamp=(0, timestamp or rdfvalue.RDFDatetime.Now())):
       task = rdf_flows.GrrMessage.FromSerializedString(task)
-      task.eta = timestamp
-      task.last_lease = utils.ProcessIdString()
+      task.leased_until = timestamp
+      task.leased_by = utils.ProcessIdString()
       # Decrement the ttl
       task.task_ttl -= 1
       if task.task_ttl <= 0:
@@ -443,7 +450,7 @@ class MutationPool(object):
           subject,
           serialized_tasks_dict,
           replace=True,
-          timestamp=long(time.time() * 1e6) + lease,
+          timestamp=int(time.time() * 1e6) + lease,
           to_delete=delete_attrs)
 
     if delete_attrs:
@@ -527,10 +534,8 @@ class MutationPool(object):
         subject, [DataStore.AFF4_INDEX_DIR_TEMPLATE % utils.SmartStr(child)])
 
 
-class DataStore(object):
+class DataStore(with_metaclass(registry.MetaclassRegistry, object)):
   """Abstract database access."""
-
-  __metaclass__ = registry.MetaclassRegistry
 
   # Constants relating to timestamps.
   ALL_TIMESTAMPS = "ALL_TIMESTAMPS"
@@ -1056,7 +1061,7 @@ class DataStore(object):
             timestamp=timestamp))
 
     for urn, request_data in sorted(requests.items()):
-      request = rdf_flows.RequestState.FromSerializedString(request_data)
+      request = rdf_flow_runner.RequestState.FromSerializedString(request_data)
       responses = []
       for _, serialized, timestamp in response_data.get(urn, []):
         msg = rdf_flows.GrrMessage.FromSerializedString(serialized)
@@ -1085,7 +1090,7 @@ class DataStore(object):
 
     for request_id, serialized in sorted(requests.items()):
       if request_id in status:
-        yield (rdf_flows.RequestState.FromSerializedString(serialized),
+        yield (rdf_flow_runner.RequestState.FromSerializedString(serialized),
                rdf_flows.GrrMessage.FromSerializedString(status[request_id]))
 
   def ReadResponsesForRequestId(self, session_id, request_id, timestamp=None):
@@ -1099,7 +1104,7 @@ class DataStore(object):
     Yields:
       fetched responses for the request
     """
-    request = rdf_flows.RequestState(id=request_id, session_id=session_id)
+    request = rdf_flow_runner.RequestState(id=request_id, session_id=session_id)
     for _, responses in self.ReadResponses([request], timestamp=timestamp):
       return responses
 
@@ -1241,7 +1246,7 @@ class DataStore(object):
         subjects, self.FLOW_REQUEST_PREFIX, limit=request_limit):
       for _, serialized, _ in values:
 
-        request = rdf_flows.RequestState.FromSerializedString(serialized)
+        request = rdf_flow_runner.RequestState.FromSerializedString(serialized)
         deleted_requests.append(request)
 
         # Drop all responses to this request.
@@ -1452,7 +1457,7 @@ class DataStore(object):
     for _, serialized, ts in self.ResolvePrefix(
         queue, prefix, timestamp=DataStore.ALL_TIMESTAMPS):
       task = rdf_flows.GrrMessage.FromSerializedString(serialized)
-      task.eta = ts
+      task.leased_until = ts
       all_tasks.append(task)
 
     # Sort the tasks in order of priority.
@@ -1579,15 +1584,13 @@ class DataStore(object):
       yield (subject, children)
 
 
-class DBSubjectLock(object):
+class DBSubjectLock(with_metaclass(registry.MetaclassRegistry, object)):
   """Provide a simple subject lock using the database.
 
   This class should not be used directly. Its only safe to use via the
   DataStore.LockRetryWrapper() above which implements correct backoff and
   retry behavior.
   """
-
-  __metaclass__ = registry.MetaclassRegistry
 
   def __init__(self, data_store, subject, lease_time=None):
     """Obtain the subject lock for lease_time seconds.
@@ -1657,7 +1660,7 @@ class DataStoreInit(registry.InitHook):
 
   def _ListStorageOptions(self):
     for name, cls in DataStore.classes.items():
-      print "%s\t\t%s" % (name, cls.__doc__)
+      print("%s\t\t%s" % (name, cls.__doc__))
 
   def Run(self):
     """Initialize the data_store."""
@@ -1673,8 +1676,8 @@ class DataStoreInit(registry.InitHook):
     except KeyError:
       msg = ("No Storage System %s found." %
              config.CONFIG["Datastore.implementation"])
-      print msg
-      print "Available options:"
+      print(msg)
+      print("Available options:")
       self._ListStorageOptions()
       raise ValueError(msg)
 

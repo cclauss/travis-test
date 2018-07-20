@@ -1,18 +1,23 @@
 #!/usr/bin/env python
 """Classes for benchmarking-related tests."""
+from __future__ import division
+from __future__ import print_function
 
 import logging
 import time
+
+
+from future.utils import with_metaclass
 import pytest
 
-from grr.lib import registry
+from grr_response_core.lib import registry
 from grr.test_lib import test_lib
 
 
 @pytest.mark.large
-class MicroBenchmarks(test_lib.GRRBaseTest):
+class MicroBenchmarks(
+    with_metaclass(registry.MetaclassRegistry, test_lib.GRRBaseTest)):
   """This base class created the GRR benchmarks."""
-  __metaclass__ = registry.MetaclassRegistry
 
   units = "us"
 
@@ -43,8 +48,8 @@ class MicroBenchmarks(test_lib.GRRBaseTest):
     elif self.units == "ms":
       f = 1e3
     if len(self.scratchpad) > 2:
-      print "\nRunning benchmark %s: %s" % (self._testMethodName,
-                                            self._testMethodDoc or "")
+      print("\nRunning benchmark %s: %s" % (self._testMethodName,
+                                            self._testMethodDoc or ""))
 
       for row in self.scratchpad:
         if isinstance(row[1], (int, float)):
@@ -52,8 +57,8 @@ class MicroBenchmarks(test_lib.GRRBaseTest):
         elif "%" in row[1]:
           row[1] %= self.units
 
-        print self.scratchpad_fmt.format(*row)
-      print
+        print(self.scratchpad_fmt.format(*row))
+      print()
 
   def AddResult(self, name, time_taken, repetitions, *extra_values):
     logging.info("%s: %s (%s)", name, time_taken, repetitions)

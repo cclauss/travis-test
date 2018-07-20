@@ -1,39 +1,43 @@
 #!/usr/bin/env python
 """Tests for frontend server, client communicator, and the GRRHTTPClient."""
+from __future__ import division
 
 import array
 import logging
 import pdb
 import time
 
+from builtins import chr  # pylint: disable=redefined-builtin
+from builtins import map  # pylint: disable=redefined-builtin
+from builtins import zip  # pylint: disable=redefined-builtin
 import mock
 import requests
 
-from grr import config
 from grr_response_client import comms
 from grr_response_client.client_actions import admin
 from grr_response_client.client_actions import standard
-from grr.lib import communicator
-from grr.lib import flags
-from grr.lib import queues
-from grr.lib import rdfvalue
-from grr.lib import stats
-from grr.lib import utils
-from grr.lib.rdfvalues import client as rdf_client
-from grr.lib.rdfvalues import crypto as rdf_crypto
-from grr.lib.rdfvalues import flows as rdf_flows
-from grr.lib.rdfvalues import objects as rdf_objects
-from grr.lib.rdfvalues import protodict as rdf_protodict
-from grr.server.grr_response_server import aff4
-from grr.server.grr_response_server import data_store
-from grr.server.grr_response_server import fleetspeak_connector
-from grr.server.grr_response_server import flow
-from grr.server.grr_response_server import frontend_lib
-from grr.server.grr_response_server import maintenance_utils
-from grr.server.grr_response_server import queue_manager
-from grr.server.grr_response_server.aff4_objects import aff4_grr
-from grr.server.grr_response_server.flows.general import administrative
-from grr.server.grr_response_server.flows.general import ca_enroller
+from grr_response_core import config
+from grr_response_core.lib import communicator
+from grr_response_core.lib import flags
+from grr_response_core.lib import queues
+from grr_response_core.lib import rdfvalue
+from grr_response_core.lib import stats
+from grr_response_core.lib import utils
+from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_core.lib.rdfvalues import crypto as rdf_crypto
+from grr_response_core.lib.rdfvalues import flows as rdf_flows
+from grr_response_core.lib.rdfvalues import protodict as rdf_protodict
+from grr_response_server import aff4
+from grr_response_server import data_store
+from grr_response_server import fleetspeak_connector
+from grr_response_server import flow
+from grr_response_server import frontend_lib
+from grr_response_server import maintenance_utils
+from grr_response_server import queue_manager
+from grr_response_server.aff4_objects import aff4_grr
+from grr_response_server.flows.general import administrative
+from grr_response_server.flows.general import ca_enroller
+from grr_response_server.rdfvalues import objects as rdf_objects
 from grr.test_lib import client_test_lib
 from grr.test_lib import flow_test_lib
 from grr.test_lib import frontend_test_lib
@@ -373,7 +377,7 @@ class GRRFEServerTest(frontend_test_lib.FrontEndServerTest):
                       self.server.HandleMessageBundles, request_comms, 2)
 
     # We can still schedule a flow for it
-    flow.GRRFlow.StartFlow(
+    flow.StartFlow(
         client_id=client_id,
         flow_name=flow_test_lib.SendingFlow.__name__,
         message_count=1,
@@ -386,13 +390,13 @@ class GRRFEServerTest(frontend_test_lib.FrontEndServerTest):
 
     new_tasks = manager.Query(client_id, limit=100)
 
-    # The different in eta times reflect the lease that the server took on the
-    # client messages.
-    lease_time = (new_tasks[0].eta - tasks[0].eta) / 1e6
+    # The difference in leased_until times reflects the lease that the server
+    # took on the client messages.
+    lease_time = new_tasks[0].leased_until - tasks[0].leased_until
 
     # This lease time must be small, as the HandleMessageBundles() call failed,
     # the pending client messages must be put back on the queue.
-    self.assertLess(lease_time, 1)
+    self.assertLess(lease_time, rdfvalue.Duration("2s"))
 
     # Since the server tried to send it, the ttl must be decremented
     self.assertEqual(tasks[0].task_ttl - new_tasks[0].task_ttl, 1)
@@ -429,7 +433,7 @@ class GRRFEServerTest(frontend_test_lib.FrontEndServerTest):
 
     default_ttl = rdf_flows.GrrMessage().task_ttl
     with test_lib.FakeTime(base_time):
-      flow.GRRFlow.StartFlow(
+      flow.StartFlow(
           client_id=client_id,
           flow_name=flow_test_lib.SendingFlow.__name__,
           message_count=1,
@@ -443,7 +447,7 @@ class GRRFEServerTest(frontend_test_lib.FrontEndServerTest):
 
     # Should return a client message (ttl-1) times and nothing afterwards.
     self.assertEqual(
-        map(bool, msgs_recvd),
+        list(map(bool, msgs_recvd)),
         [True] * (rdf_flows.GrrMessage().task_ttl - 1) + [False])
 
     # Now we simulate that the workers are overloaded - the client messages
@@ -454,7 +458,7 @@ class GRRFEServerTest(frontend_test_lib.FrontEndServerTest):
     msgs_recvd = []
 
     with test_lib.FakeTime(base_time):
-      flow_id = flow.GRRFlow.StartFlow(
+      flow_id = flow.StartFlow(
           client_id=client_id,
           flow_name=flow_test_lib.SendingFlow.__name__,
           message_count=1,
@@ -478,7 +482,7 @@ class GRRFEServerTest(frontend_test_lib.FrontEndServerTest):
 
     # Should return a client message twice and nothing afterwards.
     self.assertEqual(
-        map(bool, msgs_recvd),
+        list(map(bool, msgs_recvd)),
         [True] * 2 + [False] * (rdf_flows.GrrMessage().task_ttl - 2))
 
   def testCrashReport(self):
@@ -749,9 +753,8 @@ class ClientCommsTest(test_lib.GRRBaseTest):
     # 4) The modification may have no effect on the data at all.
     for x in range(0, len(cipher_text), 50):
       # Futz with the cipher text (Make sure it's really changed)
-      mod_cipher_text = (
-          cipher_text[:x] + chr((ord(cipher_text[x]) % 250) + 1) +
-          cipher_text[x + 1:])
+      mod = chr((ord(cipher_text[x]) % 250) + 1).encode("latin-1")
+      mod_cipher_text = cipher_text[:x] + mod + cipher_text[x + 1:]
 
       try:
         decoded, client_id, _ = self.server_communicator.DecryptMessage(
@@ -957,7 +960,7 @@ class HTTPClientTests(test_lib.GRRBaseTest):
     except communicator.UnknownClientCert:
       raise MakeHTTPException(406)
     except Exception as e:
-      logging.info("Exception in mock urllib2.Open: %s.", e)
+      logging.info("Exception in mock urllib.request.Open: %s.", e)
       self.last_urlmock_error = e
 
       if flags.FLAGS.debug:
@@ -1169,8 +1172,9 @@ class HTTPClientTests(test_lib.GRRBaseTest):
           field_data = field_data.SerializeToString()
 
         modified_data = array.array("c", field_data)
-        offset = len(field_data) / 2
-        modified_data[offset] = chr((ord(field_data[offset]) % 250) + 1)
+        offset = len(field_data) // 2
+        char = field_data[offset]
+        modified_data[offset] = chr((ord(char) % 250) + 1).encode("latin-1")
         setattr(self.client_communication, self.corruptor_field,
                 modified_data.tostring())
 

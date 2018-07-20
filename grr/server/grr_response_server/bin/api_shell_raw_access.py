@@ -1,25 +1,26 @@
 #!/usr/bin/env python
 """Raw access server-side only API shell."""
+from __future__ import print_function
 
 import os
 import sys
 
 
 # pylint: disable=unused-import,g-bad-import-order
-from grr.server.grr_response_server import server_plugins
+from grr_response_server import server_plugins
 # pylint: enable=g-bad-import-order
 
 
-from grr import config
 from grr_api_client import api
 from grr_api_client import api_shell_lib
-from grr.config import contexts
-from grr.config import server as config_server
-from grr.lib import flags
-from grr.server.grr_response_server import access_control
-from grr.server.grr_response_server import fleetspeak_connector
-from grr.server.grr_response_server import server_startup
-from grr.server.grr_response_server.bin import api_shell_raw_access_lib
+from grr_response_core import config
+from grr_response_core.config import contexts
+from grr_response_core.config import server as config_server
+from grr_response_core.lib import flags
+from grr_response_server import access_control
+from grr_response_server import fleetspeak_connector
+from grr_response_server import server_startup
+from grr_response_server.bin import api_shell_raw_access_lib
 
 flags.DEFINE_integer(
     "page_size", 1000,
@@ -70,14 +71,14 @@ def main(argv=None):
           page_size=flags.FLAGS.page_size))
 
   if flags.FLAGS.exec_code and flags.FLAGS.exec_file:
-    print "--exec_code --exec_file flags can't be supplied together."
+    print("--exec_code --exec_file flags can't be supplied together.")
     sys.exit(1)
   elif flags.FLAGS.exec_code:
     # pylint: disable=exec-used
     exec (flags.FLAGS.exec_code, dict(grrapi=grrapi))
     # pylint: enable=exec-used
   elif flags.FLAGS.exec_file:
-    execfile(flags.FLAGS.exec_file, dict(grrapi=grrapi))
+    api_shell_lib.ExecFile(flags.FLAGS.exec_file, grrapi)
   else:
     api_shell_lib.IPShell([sys.argv[0]], user_ns=dict(grrapi=grrapi))
 

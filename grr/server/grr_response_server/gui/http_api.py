@@ -6,28 +6,28 @@ import json
 import logging
 import time
 import traceback
-import urllib2
 
 
+from future.moves.urllib import parse as urlparse
 from werkzeug import exceptions as werkzeug_exceptions
 from werkzeug import routing
 from werkzeug import wrappers as werkzeug_wrappers
 
 from google.protobuf import json_format
 
-from grr import config
-from grr.lib import rdfvalue
-from grr.lib import registry
-from grr.lib import stats
-from grr.lib import utils
-from grr.lib.rdfvalues import structs as rdf_structs
-from grr.server.grr_response_server import access_control
-from grr.server.grr_response_server import data_store
-from grr.server.grr_response_server.aff4_objects import users as aff4_users
-from grr.server.grr_response_server.gui import api_auth_manager
-from grr.server.grr_response_server.gui import api_call_handler_base
-from grr.server.grr_response_server.gui import api_call_router
-from grr.server.grr_response_server.gui import api_value_renderers
+from grr_response_core import config
+from grr_response_core.lib import rdfvalue
+from grr_response_core.lib import registry
+from grr_response_core.lib import stats
+from grr_response_core.lib import utils
+from grr_response_core.lib.rdfvalues import structs as rdf_structs
+from grr_response_server import access_control
+from grr_response_server import data_store
+from grr_response_server.aff4_objects import users as aff4_users
+from grr_response_server.gui import api_auth_manager
+from grr_response_server.gui import api_call_handler_base
+from grr_response_server.gui import api_call_router
+from grr_response_server.gui import api_value_renderers
 
 
 class Error(Exception):
@@ -135,7 +135,8 @@ class RouterMatcher(object):
           if type_info.name in route_args:
             self._SetField(args, type_info, route_args[type_info.name])
 
-        if request.content_type.startswith("multipart/form-data;"):
+        if request.content_type and request.content_type.startswith(
+            "multipart/form-data;"):
           payload = json.loads(request.form["_params_"])
           args.FromDict(payload)
 
@@ -236,7 +237,7 @@ class HttpRequestHandler(object):
     elif request.method in ["POST", "DELETE", "PATCH"]:
       # The header X-GRR-Reason is set in api-service.js.
       reason = utils.SmartUnicode(
-          urllib2.unquote(request.headers.get("X-Grr-Reason", "")))
+          urlparse.unquote(request.headers.get("X-Grr-Reason", "")))
 
     # We assume that request.user contains the username that we can trust.
     # No matter what authentication method is used, the WebAuthManager is

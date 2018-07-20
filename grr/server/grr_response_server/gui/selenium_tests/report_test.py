@@ -1,11 +1,11 @@
 #!/usr/bin/env python
 import unittest
-from grr.lib import flags
+from grr_response_core.lib import flags
 
-from grr.lib import rdfvalue
-from grr.lib.rdfvalues import events as rdf_events
-from grr.server.grr_response_server import events
-from grr.server.grr_response_server.gui import gui_test_lib
+from grr_response_core.lib import rdfvalue
+from grr_response_core.lib.rdfvalues import events as rdf_events
+from grr_response_server import events
+from grr_response_server.gui import gui_test_lib
 from grr.test_lib import db_test_lib
 from grr.test_lib import test_lib
 

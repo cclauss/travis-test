@@ -1,33 +1,33 @@
 #!/usr/bin/env python
 """GRR specific AFF4 objects."""
 
+import io
 import logging
 import re
-import StringIO
 import time
 
 
-from grr.lib import rdfvalue
-from grr.lib import registry
-from grr.lib import utils
-from grr.lib.rdfvalues import client as rdf_client
-from grr.lib.rdfvalues import cloud
-from grr.lib.rdfvalues import crypto as rdf_crypto
-from grr.lib.rdfvalues import flows as rdf_flows
-from grr.lib.rdfvalues import paths as rdf_paths
-from grr.lib.rdfvalues import protodict as rdf_protodict
-from grr.lib.rdfvalues import rekall_types as rdf_rekall_types
-from grr.lib.rdfvalues import structs as rdf_structs
+from grr_response_core.lib import rdfvalue
+from grr_response_core.lib import registry
+from grr_response_core.lib import utils
+from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_core.lib.rdfvalues import cloud as rdf_cloud
+from grr_response_core.lib.rdfvalues import crypto as rdf_crypto
+from grr_response_core.lib.rdfvalues import flows as rdf_flows
+from grr_response_core.lib.rdfvalues import paths as rdf_paths
+from grr_response_core.lib.rdfvalues import protodict as rdf_protodict
+from grr_response_core.lib.rdfvalues import rekall_types as rdf_rekall_types
+from grr_response_core.lib.rdfvalues import structs as rdf_structs
 from grr_response_proto import flows_pb2
-from grr.server.grr_response_server import access_control
-from grr.server.grr_response_server import aff4
-from grr.server.grr_response_server import data_store
-from grr.server.grr_response_server import db
-from grr.server.grr_response_server import flow
-from grr.server.grr_response_server import foreman_rules
-from grr.server.grr_response_server import grr_collections
-from grr.server.grr_response_server import queue_manager
-from grr.server.grr_response_server.aff4_objects import standard
+from grr_response_server import access_control
+from grr_response_server import aff4
+from grr_response_server import data_store
+from grr_response_server import db
+from grr_response_server import flow
+from grr_response_server import foreman_rules
+from grr_response_server import grr_collections
+from grr_response_server import queue_manager
+from grr_response_server.aff4_objects import standard
 
 
 class SpaceSeparatedStringArray(rdfvalue.RDFString):
@@ -196,7 +196,7 @@ class VFSGRRClient(standard.VFSDirectory):
 
     # Cloud VM information.
     CLOUD_INSTANCE = aff4.Attribute("metadata:cloud_instance",
-                                    cloud.CloudInstance,
+                                    rdf_cloud.CloudInstance,
                                     "Information about cloud machines.")
 
   # Valid client ids
@@ -242,7 +242,7 @@ class VFSGRRClient(standard.VFSDirectory):
 
   def Update(self, attribute=None, priority=None):
     if attribute == "CONTAINS":
-      flow_id = flow.GRRFlow.StartFlow(
+      flow_id = flow.StartFlow(
           client_id=self.client_id,
           # TODO(user): dependency loop with flows/general/discover.py
           # flow_name=discovery.Interrogate.__name__,
@@ -369,7 +369,7 @@ class VFSFile(aff4.AFF4Image):
 
     # Get the pathspec for this object
     pathspec = self.Get(self.Schema.STAT).pathspec
-    flow_urn = flow.GRRFlow.StartFlow(
+    flow_urn = flow.StartFlow(
         client_id=client_id,
         # TODO(user): dependency loop between aff4_grr.py and transfer.py
         # flow_name=transfer.MultiGetFile.__name__,
@@ -483,7 +483,7 @@ class GRRForeman(aff4.AFF4Object):
             flow_cls.StartClients(action.hunt_id, [client_id])
             actions_count += 1
         else:
-          flow.GRRFlow.StartFlow(
+          flow.StartFlow(
               client_id=client_id,
               flow_name=action.flow_name,
               token=token,
@@ -723,17 +723,23 @@ class VFSBlobImage(VFSFile):
     super(VFSBlobImage, self).Initialize()
     self.content_dirty = False
     if self.mode == "w":
-      self.index = StringIO.StringIO("")
+      self.index = io.BytesIO(b"")
       self.finalized = False
     else:
-      self.index = StringIO.StringIO(self.Get(self.Schema.HASHES, ""))
+      hashes = self.Get(self.Schema.HASHES)
+      if hashes is not None:
+        init = hashes.AsBytes()
+      else:
+        init = b""
+
+      self.index = io.BytesIO(init)
       self.finalized = self.Get(self.Schema.FINALIZED, False)
 
   def Truncate(self, offset=0):
     if offset != 0:
       raise IOError("Non-zero truncation not supported for BlobImage")
     super(VFSBlobImage, self).Truncate(0)
-    self.index = StringIO.StringIO("")
+    self.index = io.BytesIO("")
     self.finalized = False
 
   def _GetChunkForWriting(self, chunk):
@@ -772,7 +778,7 @@ class VFSBlobImage(VFSFile):
   def _ReadChunks(self, chunks):
     res = data_store.DB.ReadBlobs(chunks, token=self.token)
     for blob_hash, content in res.iteritems():
-      fd = StringIO.StringIO(content)
+      fd = io.BytesIO(content)
       fd.dirty = False
       fd.chunk = blob_hash
       self.chunk_cache.Put(blob_hash, fd)

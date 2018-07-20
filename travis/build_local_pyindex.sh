@@ -25,13 +25,13 @@ function build_sdists() {
 
   python grr/proto/setup.py --quiet sdist \
       --formats=zip --dist-dir="${PWD}/sdists"
-  python setup.py --quiet sdist --formats=zip \
+  python grr/core/setup.py --quiet sdist --formats=zip \
       --dist-dir="${PWD}/sdists" --no-sync-artifacts
   python grr/client/setup.py --quiet sdist \
       --formats=zip --dist-dir="${PWD}/sdists"
   python api_client/python/setup.py --quiet sdist \
       --formats=zip --dist-dir="${PWD}/sdists"
-  python grr/config/grr-response-server/setup.py --quiet sdist \
+  python grr/server/setup.py --quiet sdist \
       --formats=zip --dist-dir="${PWD}/sdists"
   python grr/test/setup.py --quiet sdist \
       --formats=zip --dist-dir="${PWD}/sdists"
@@ -49,6 +49,14 @@ function download_packages() {
     # shellcheck disable=SC2086
     pip download --find-links=sdists --dest=local_pypi "$(ls sdists/${pkg}-*.zip)"
   done
+
+  # See https://github.com/google/rekall/issues/422
+  #
+  # Installation of the grr-response-test sdist from local_pypi will fail
+  # if the version of sortedcontainers needed by Rekall is not present.
+  #
+  # TODO(user): This won't be necessary once the github issue is fixed.
+  pip download --find-links=local_pypi --dest=local_pypi sortedcontainers==1.5.7
 }
 
 function verify_packages() {

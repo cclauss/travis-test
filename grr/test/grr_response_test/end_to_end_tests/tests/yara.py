@@ -3,7 +3,7 @@
 
 import re
 
-from grr import config
+from grr_response_core import config
 from grr_response_test.end_to_end_tests import test_base
 
 
@@ -107,6 +107,7 @@ class TestYaraProcessDump(test_base.AbstractFileTransferTest):
     process_name = GetProcessName(self.platform)
     args.process_regex = GetProcessNameRegex(self.platform)
     args.ignore_grr_process = False
+    args.size_limit = 1024 * 1024
 
     f = self.RunFlowAndWait("YaraDumpProcessMemory", args=args)
 

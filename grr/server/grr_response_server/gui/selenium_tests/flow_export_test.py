@@ -3,10 +3,10 @@
 
 
 import unittest
-from grr.lib import flags
+from grr_response_core.lib import flags
 
-from grr.server.grr_response_server import flow
-from grr.server.grr_response_server.gui import gui_test_lib
+from grr_response_server import flow
+from grr_response_server.gui import gui_test_lib
 from grr.test_lib import action_mocks
 from grr.test_lib import db_test_lib
 from grr.test_lib import flow_test_lib
@@ -23,7 +23,7 @@ class TestFlowExport(gui_test_lib.GRRSeleniumTest):
     self.action_mock = action_mocks.FileFinderClientMock()
 
   def testExportCommandIsShownForStatEntryResults(self):
-    flow_urn = flow.GRRFlow.StartFlow(
+    flow_urn = flow.StartFlow(
         flow_name=gui_test_lib.FlowWithOneStatEntryResult.__name__,
         client_id=self.client_id,
         token=self.token)

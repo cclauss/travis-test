@@ -1,20 +1,22 @@
 #!/usr/bin/env python
 """Test the file transfer mechanism."""
+from __future__ import division
 
 import hashlib
 import os
 import platform
 import unittest
 
-from grr.lib import constants
-from grr.lib import flags
-from grr.lib import utils
-from grr.lib.rdfvalues import client as rdf_client
-from grr.lib.rdfvalues import paths as rdf_paths
-from grr.server.grr_response_server import aff4
-from grr.server.grr_response_server import flow
-from grr.server.grr_response_server.aff4_objects import aff4_grr
-from grr.server.grr_response_server.flows.general import transfer
+from grr_response_core.lib import constants
+from grr_response_core.lib import flags
+from grr_response_core.lib import utils
+from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_core.lib.rdfvalues import paths as rdf_paths
+from grr_response_server import aff4
+from grr_response_server import data_store_utils
+from grr_response_server import flow
+from grr_response_server.aff4_objects import aff4_grr
+from grr_response_server.flows.general import transfer
 from grr.test_lib import action_mocks
 from grr.test_lib import db_test_lib
 from grr.test_lib import flow_test_lib
@@ -39,6 +41,7 @@ class ClientMock(object):
     ]
 
 
+@db_test_lib.DualDBTest
 class TestTransfer(flow_test_lib.FlowTestsBaseclass):
   """Test the transfer mechanism."""
   maxDiff = 65 * 1024
@@ -93,7 +96,7 @@ class TestTransfer(flow_test_lib.FlowTestsBaseclass):
     self._RunAndCheck(chunk_size, download_length)
 
     # Not a multiple of the chunk size.
-    download_length = 15 * chunk_size + chunk_size / 2
+    download_length = 15 * chunk_size + chunk_size // 2
     self._RunAndCheck(chunk_size, download_length)
 
   def testGetFile(self):
@@ -365,8 +368,7 @@ class TestTransfer(flow_test_lib.FlowTestsBaseclass):
     pathspec.path = pathspec.path.replace("\\", "/")
     # Test the AFF4 file that was created.
     urn = pathspec.AFF4Path(self.client_id)
-    fd = aff4.FACTORY.Open(urn, token=self.token)
-    fd_hash = fd.Get(fd.Schema.HASH)
+    fd_hash = data_store_utils.GetUrnHashEntry(urn)
 
     self.assertTrue(fd_hash)
 
@@ -404,7 +406,7 @@ class TestTransfer(flow_test_lib.FlowTestsBaseclass):
     expected_data = open(image_path, "rb").read(expected_size)
 
     self.assertEqual(data, expected_data)
-    hash_obj = blobimage.Get(blobimage.Schema.HASH)
+    hash_obj = data_store_utils.GetFileHashEntry(blobimage)
 
     d = hashlib.sha1()
     d.update(expected_data)

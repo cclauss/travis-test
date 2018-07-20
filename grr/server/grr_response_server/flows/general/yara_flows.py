@@ -4,10 +4,10 @@
 import logging
 import re
 
-from grr.lib.rdfvalues import rdf_yara
-from grr.server.grr_response_server import flow
-from grr.server.grr_response_server import server_stubs
-from grr.server.grr_response_server.flows.general import transfer
+from grr_response_core.lib.rdfvalues import rdf_yara
+from grr_response_server import flow
+from grr_response_server import server_stubs
+from grr_response_server.flows.general import transfer
 
 
 class YaraProcessScan(flow.GRRFlow):

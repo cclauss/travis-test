@@ -4,28 +4,28 @@
 import itertools
 import re
 
-from grr import config
-from grr.lib import rdfvalue
-from grr.lib import registry
-from grr.lib import utils
-from grr.lib.rdfvalues import flows as rdf_flows
-from grr.lib.rdfvalues import objects as rdf_objects
-from grr.lib.rdfvalues import paths as rdf_paths
-from grr.lib.rdfvalues import structs as rdf_structs
+from grr_response_core import config
+from grr_response_core.lib import rdfvalue
+from grr_response_core.lib import registry
+from grr_response_core.lib import utils
+from grr_response_core.lib.rdfvalues import flows as rdf_flows
+from grr_response_core.lib.rdfvalues import paths as rdf_paths
+from grr_response_core.lib.rdfvalues import structs as rdf_structs
 from grr_response_proto.api import flow_pb2
-from grr.server.grr_response_server import access_control
-from grr.server.grr_response_server import aff4
-from grr.server.grr_response_server import flow
-from grr.server.grr_response_server import instant_output_plugin
-from grr.server.grr_response_server import notification
-from grr.server.grr_response_server import output_plugin
-from grr.server.grr_response_server import queue_manager
-from grr.server.grr_response_server.aff4_objects import aff4_grr
-from grr.server.grr_response_server.gui import api_call_handler_base
-from grr.server.grr_response_server.gui import api_call_handler_utils
-from grr.server.grr_response_server.gui.api_plugins import client
-
-from grr.server.grr_response_server.gui.api_plugins import output_plugin as api_output_plugin
+from grr_response_server import access_control
+from grr_response_server import aff4
+from grr_response_server import flow
+from grr_response_server import instant_output_plugin
+from grr_response_server import notification
+from grr_response_server import output_plugin
+from grr_response_server import queue_manager
+from grr_response_server.aff4_objects import aff4_grr
+from grr_response_server.gui import api_call_handler_base
+from grr_response_server.gui import api_call_handler_utils
+from grr_response_server.gui.api_plugins import client
+from grr_response_server.gui.api_plugins import output_plugin as api_output_plugin
+from grr_response_server.rdfvalues import flow_runner as rdf_flow_runner
+from grr_response_server.rdfvalues import objects as rdf_objects
 
 
 class FlowNotFoundError(api_call_handler_base.ResourceNotFoundError):
@@ -159,8 +159,8 @@ class ApiFlow(rdf_structs.RDFProtoStruct):
       "ApiFlow",  # TODO(user): recursive dependency.
       ApiFlowId,
       ApiFlowReference,
-      rdf_flows.FlowContext,
-      rdf_flows.FlowRunnerArgs,
+      rdf_flow_runner.FlowContext,
+      rdf_flow_runner.FlowRunnerArgs,
       rdfvalue.RDFDatetime,
       rdfvalue.SessionID,
   ]
@@ -246,7 +246,7 @@ class ApiFlowRequest(rdf_structs.RDFProtoStruct):
   protobuf = flow_pb2.ApiFlowRequest
   rdf_deps = [
       rdf_flows.GrrMessage,
-      rdf_flows.RequestState,
+      rdf_flow_runner.RequestState,
   ]
 
 
@@ -768,7 +768,11 @@ class ApiListFlowsHandler(api_call_handler_base.ApiCallHandler):
       return obj.Get(obj.Schema.LAST, 0)
 
   @staticmethod
-  def BuildFlowList(root_urn, count, offset, token=None):
+  def BuildFlowList(root_urn,
+                    count,
+                    offset,
+                    with_state_and_context=False,
+                    token=None):
     if not count:
       stop = None
     else:
@@ -804,7 +808,10 @@ class ApiListFlowsHandler(api_call_handler_base.ApiCallHandler):
             flow_id = "%s/%s" % (parent_id, urn.Basename())
           else:
             flow_id = urn.Basename()
-          api_flow = ApiFlow().InitFromAff4Object(fd, flow_id=flow_id)
+          api_flow = ApiFlow().InitFromAff4Object(
+              fd,
+              flow_id=flow_id,
+              with_state_and_context=with_state_and_context)
         except AttributeError:
           # If this doesn't work there's no way to recover.
           continue
@@ -880,7 +887,7 @@ class ApiCreateFlowHandler(api_call_handler_base.ApiCallHandler):
           flow_id=utils.SmartStr(args.original_flow.flow_id),
           client_id=utils.SmartStr(args.original_flow.client_id))
 
-    flow_id = flow.GRRFlow.StartFlow(
+    flow_id = flow.StartFlow(
         client_id=args.client_id.ToClientURN(),
         flow_name=flow_name,
         token=token,

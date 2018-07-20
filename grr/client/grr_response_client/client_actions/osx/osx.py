@@ -14,19 +14,21 @@ import shutil
 import sys
 
 
+from builtins import map  # pylint: disable=redefined-builtin
+
 import pytsk3
 
-from grr import config
 from grr_response_client import actions
 from grr_response_client import client_utils_common
 from grr_response_client import client_utils_osx
 from grr_response_client.client_actions import standard
-
 from grr_response_client.osx.objc import ServiceManagement
-from grr.lib import rdfvalue
-from grr.lib.parsers import osx_launchd
-from grr.lib.rdfvalues import client as rdf_client
-from grr.lib.rdfvalues import protodict as rdf_protodict
+
+from grr_response_core import config
+from grr_response_core.lib import rdfvalue
+from grr_response_core.lib.parsers import osx_launchd
+from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_core.lib.rdfvalues import protodict as rdf_protodict
 
 
 class Error(Exception):

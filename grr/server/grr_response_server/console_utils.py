@@ -4,6 +4,8 @@
 Includes functions that are used by interactive console utilities such as
 approval or token handling.
 """
+from __future__ import division
+from __future__ import print_function
 
 import csv
 import getpass
@@ -11,21 +13,24 @@ import logging
 import os
 import time
 
-from grr.lib import rdfvalue
-from grr.lib import type_info
-from grr.lib import utils
-from grr.lib.rdfvalues import client as rdf_client
-from grr.lib.rdfvalues import flows as rdf_flows
-from grr.server.grr_response_server import access_control
-from grr.server.grr_response_server import aff4
-from grr.server.grr_response_server import client_index
-from grr.server.grr_response_server import data_migration
-from grr.server.grr_response_server import data_store
-from grr.server.grr_response_server import flow
-from grr.server.grr_response_server import queue_manager
-from grr.server.grr_response_server import worker_lib
-from grr.server.grr_response_server.aff4_objects import security
-from grr.server.grr_response_server.aff4_objects import users
+
+from builtins import input  # pylint: disable=redefined-builtin
+
+from grr_response_core.lib import rdfvalue
+from grr_response_core.lib import type_info
+from grr_response_core.lib import utils
+from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_core.lib.rdfvalues import flows as rdf_flows
+from grr_response_server import access_control
+from grr_response_server import aff4
+from grr_response_server import client_index
+from grr_response_server import data_migration
+from grr_response_server import data_store
+from grr_response_server import flow
+from grr_response_server import queue_manager
+from grr_response_server import worker_lib
+from grr_response_server.aff4_objects import security
+from grr_response_server.aff4_objects import users
 
 
 def FormatISOTime(t):
@@ -173,16 +178,16 @@ def ApprovalGrant(token=None):
   for request in requests:
     _, client_id, user, reason = rdfvalue.RDFURN(request.subject).Split()
     reason = utils.DecodeReasonString(reason)
-    print request
-    print "Reason: %s" % reason
-    if raw_input("Do you approve this request? [y/N] ").lower() == "y":
+    print(request)
+    print("Reason: %s" % reason)
+    if input("Do you approve this request? [y/N] ").lower() == "y":
       security.ClientApprovalGrantor(
           subject_urn=client_id, reason=reason, delegate=user,
           token=token).Grant()
       # TODO(user): Remove the notification.
     else:
-      print "skipping request"
-    print "Approval sent"
+      print("skipping request")
+    print("Approval sent")
 
 
 def ApprovalFind(object_id, token=None):
@@ -192,10 +197,10 @@ def ApprovalFind(object_id, token=None):
   try:
     approved_token = security.Approval.GetApprovalForObject(
         object_id, token=token, username=user)
-    print "Found token %s" % str(approved_token)
+    print("Found token %s" % str(approved_token))
     return approved_token
   except access_control.UnauthorizedAccess:
-    print "No token available for access to %s" % object_id
+    print("No token available for access to %s" % object_id)
 
 
 def ApprovalCreateRaw(aff4_path,
@@ -552,7 +557,7 @@ def StartFlowAndWorker(client_id, flow_name, **kwargs):
   else:
     token = access_control.ACLToken(username="GRRConsole")
 
-  session_id = flow.GRRFlow.StartFlow(
+  session_id = flow.StartFlow(
       client_id=client_id,
       flow_name=flow_name,
       queue=queue,
@@ -564,7 +569,7 @@ def StartFlowAndWorker(client_id, flow_name, **kwargs):
     try:
       worker_thrd.RunOnce()
     except KeyboardInterrupt:
-      print "exiting"
+      print("exiting")
       worker_thrd.thread_pool.Join()
       break
 

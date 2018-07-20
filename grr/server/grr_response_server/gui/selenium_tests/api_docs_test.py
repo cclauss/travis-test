@@ -3,9 +3,9 @@
 
 
 import unittest
-from grr.lib import flags
+from grr_response_core.lib import flags
 
-from grr.server.grr_response_server.gui import gui_test_lib
+from grr_response_server.gui import gui_test_lib
 
 
 class TestAPIDocs(gui_test_lib.GRRSeleniumTest):

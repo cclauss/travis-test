@@ -2,9 +2,9 @@
 """Tests for grr.lib.keyword_index."""
 
 
-from grr.lib import flags
-from grr.server.grr_response_server import aff4
-from grr.server.grr_response_server import keyword_index
+from grr_response_core.lib import flags
+from grr_response_server import aff4
+from grr_response_server import keyword_index
 from grr.test_lib import aff4_test_lib
 from grr.test_lib import test_lib
 

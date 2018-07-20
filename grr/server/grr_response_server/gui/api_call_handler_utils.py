@@ -2,7 +2,7 @@
 """This file contains utility functions used in ApiCallHandler classes."""
 
 
-import cStringIO
+import io
 import itertools
 import logging
 import os
@@ -13,14 +13,14 @@ import zipfile
 
 import yaml
 
-from grr.lib import rdfvalue
-from grr.lib import utils
-from grr.lib.rdfvalues import client as rdf_client
-from grr.lib.rdfvalues import structs as rdf_structs
+from grr_response_core.lib import rdfvalue
+from grr_response_core.lib import utils
+from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_core.lib.rdfvalues import structs as rdf_structs
 from grr_response_proto import api_utils_pb2
-from grr.server.grr_response_server import aff4
-from grr.server.grr_response_server.aff4_objects import aff4_grr
-from grr.server.grr_response_server.flows.general import export as flow_export
+from grr_response_server import aff4
+from grr_response_server.aff4_objects import aff4_grr
+from grr_response_server.flows.general import export as flow_export
 
 
 class CollectionArchiveGenerator(object):
@@ -109,14 +109,18 @@ class CollectionArchiveGenerator(object):
     if self.failed_files:
       manifest["failed_files_list"] = self.failed_files
 
-    manifest_fd = cStringIO.StringIO()
+    # TODO(hanuszczak): Manifest is a YAML file which is supposed to be
+    # unicode-encoded format. However due to PyYAML incompetence we are given
+    # `bytes` object as a result of dumping. It should be investigated and
+    # changed to `StringIO` if possible.
+    manifest_fd = io.BytesIO()
     if self.total_files != self.archived_files:
       manifest_fd.write(self.FILES_SKIPPED_WARNING)
     manifest_fd.write(yaml.safe_dump(manifest))
 
     manifest_fd.seek(0)
-    st = os.stat_result((0644, 0, 0, 0, 0, 0, len(manifest_fd.getvalue()), 0, 0,
-                         0))
+    st = os.stat_result((0o644, 0, 0, 0, 0, 0, len(manifest_fd.getvalue()), 0,
+                         0, 0))
 
     for chunk in self.archive_generator.WriteFromFD(
         manifest_fd, os.path.join(self.prefix, "MANIFEST"), st=st):
@@ -128,7 +132,7 @@ class CollectionArchiveGenerator(object):
     client_info_path = os.path.join(self.prefix,
                                     client_fd.urn.Basename(),
                                     "client_info.yaml")
-    st = os.stat_result((0644, 0, 0, 0, 0, 0, len(summary), 0, 0, 0))
+    st = os.stat_result((0o644, 0, 0, 0, 0, 0, len(summary), 0, 0, 0))
     yield self.archive_generator.WriteFileHeader(client_info_path, st=st)
     yield self.archive_generator.WriteFileChunk(summary)
     yield self.archive_generator.WriteFileFooter()
@@ -168,7 +172,7 @@ class CollectionArchiveGenerator(object):
 
           # Make sure size of the original file is passed. It's required
           # when output_writer is StreamingTarWriter.
-          st = os.stat_result((0644, 0, 0, 0, 0, 0, fd.size, 0, 0, 0))
+          st = os.stat_result((0o644, 0, 0, 0, 0, 0, fd.size, 0, 0, 0))
           fds_to_write[fd] = (content_path, st)
 
       if fds_to_write:
@@ -268,7 +272,7 @@ def FilterCollection(collection, offset, count=0, filter_value=None):
   if count < 0:
     raise ValueError("Count needs to be greater than or equal to zero")
 
-  count = count or sys.maxint
+  count = count or sys.maxsize
   if filter_value:
     index = 0
     items = []

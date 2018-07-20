@@ -32,7 +32,7 @@ Statistics is written to the data store by StatsStoreWorker. It periodically
 fetches values for all the metrics and writes them to corresponding
 object on AFF4.
 """
-
+from __future__ import division
 
 import logging
 import re
@@ -40,15 +40,15 @@ import threading
 import time
 
 
-from grr import config
-from grr.lib import rdfvalue
-from grr.lib import registry
-from grr.lib import stats
-from grr.server.grr_response_server import access_control
-from grr.server.grr_response_server import aff4
-from grr.server.grr_response_server import data_store
-from grr.server.grr_response_server import stats_values
-from grr.server.grr_response_server import timeseries
+from grr_response_core import config
+from grr_response_core.lib import rdfvalue
+from grr_response_core.lib import registry
+from grr_response_core.lib import stats
+from grr_response_server import access_control
+from grr_response_server import aff4
+from grr_response_server import data_store
+from grr_response_server import stats_values
+from grr_response_server import timeseries
 
 
 class StatsStoreProcessData(aff4.AFF4Object):

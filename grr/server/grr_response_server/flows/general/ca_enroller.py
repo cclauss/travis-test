@@ -3,20 +3,20 @@
 
 import logging
 
-from grr.lib import queues
-from grr.lib import rdfvalue
-from grr.lib import utils
-from grr.lib.rdfvalues import client as rdf_client
-from grr.lib.rdfvalues import crypto as rdf_crypto
-from grr.lib.rdfvalues import structs as rdf_structs
+from grr_response_core.lib import queues
+from grr_response_core.lib import rdfvalue
+from grr_response_core.lib import utils
+from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_core.lib.rdfvalues import crypto as rdf_crypto
+from grr_response_core.lib.rdfvalues import structs as rdf_structs
 from grr_response_proto import flows_pb2
-from grr.server.grr_response_server import aff4
-from grr.server.grr_response_server import client_index
-from grr.server.grr_response_server import data_migration
-from grr.server.grr_response_server import data_store
-from grr.server.grr_response_server import flow
-from grr.server.grr_response_server import message_handlers
-from grr.server.grr_response_server.aff4_objects import aff4_grr
+from grr_response_server import aff4
+from grr_response_server import client_index
+from grr_response_server import data_migration
+from grr_response_server import data_store
+from grr_response_server import flow
+from grr_response_server import message_handlers
+from grr_response_server.aff4_objects import aff4_grr
 
 
 class CAEnrolerArgs(rdf_structs.RDFProtoStruct):
@@ -128,7 +128,7 @@ class Enroler(flow.WellKnownFlow):
     # Only enroll this client if it has no certificate yet.
     if not client.Get(client.Schema.CERT):
       # Start the enrollment flow for this client.
-      flow.GRRFlow.StartFlow(
+      flow.StartFlow(
           client_id=client_id,
           flow_name=CAEnroler.__name__,
           csr=cert,
@@ -166,7 +166,7 @@ class EnrolmentHandler(message_handlers.MessageHandler):
     for client_id in client_ids:
       if client_id not in mds or not mds[client_id].certificate:
         # Start the enrollment flow for this client.
-        flow.GRRFlow.StartFlow(
+        flow.StartFlow(
             client_id=client_id,
             flow_name=CAEnroler.__name__,
             csr=requests[client_id],

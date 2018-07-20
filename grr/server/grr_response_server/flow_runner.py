@@ -59,23 +59,24 @@ import threading
 import traceback
 
 
-from grr.lib import rdfvalue
-from grr.lib import stats
-from grr.lib import utils
-from grr.lib.rdfvalues import client as rdf_client
-from grr.lib.rdfvalues import flows as rdf_flows
-from grr.lib.rdfvalues import objects as rdf_objects
+from grr_response_core.lib import rdfvalue
+from grr_response_core.lib import stats
+from grr_response_core.lib import utils
+from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_core.lib.rdfvalues import flows as rdf_flows
+from grr_response_core.lib.rdfvalues import protodict as rdf_protodict
 # Note: OutputPluginDescriptor is also needed implicitly by FlowRunnerArgs
-from grr.lib.rdfvalues import protodict as rdf_protodict
-from grr.server.grr_response_server import aff4
-from grr.server.grr_response_server import data_store
-from grr.server.grr_response_server import grr_collections
-from grr.server.grr_response_server import multi_type_collection
-from grr.server.grr_response_server import notification as notification_lib
-from grr.server.grr_response_server import output_plugin as output_plugin_lib
-from grr.server.grr_response_server import queue_manager
-from grr.server.grr_response_server import sequential_collection
-from grr.server.grr_response_server.aff4_objects import users as aff4_users
+from grr_response_server import aff4
+from grr_response_server import data_store
+from grr_response_server import grr_collections
+from grr_response_server import multi_type_collection
+from grr_response_server import notification as notification_lib
+from grr_response_server import output_plugin as output_plugin_lib
+from grr_response_server import queue_manager
+from grr_response_server import sequential_collection
+from grr_response_server.aff4_objects import users as aff4_users
+from grr_response_server.rdfvalues import flow_runner as rdf_flow_runner
+from grr_response_server.rdfvalues import objects as rdf_objects
 
 
 class FlowRunnerError(Exception):
@@ -194,7 +195,7 @@ class FlowRunner(object):
   def InitializeContext(self, args):
     """Initializes the context of this flow."""
     if args is None:
-      args = rdf_flows.FlowRunnerArgs()
+      args = rdf_flow_runner.FlowRunnerArgs()
 
     output_plugins_states = []
     for plugin_descriptor in args.output_plugins:
@@ -219,7 +220,7 @@ class FlowRunner(object):
         plugin.state["errors"] = []
 
         output_plugins_states.append(
-            rdf_flows.OutputPluginState(
+            rdf_flow_runner.OutputPluginState(
                 plugin_state=plugin.state, plugin_descriptor=plugin_descriptor))
       except Exception as e:  # pylint: disable=broad-except
         logging.info("Plugin %s failed to initialize (%s), ignoring it.",
@@ -229,12 +230,12 @@ class FlowRunner(object):
     if self.parent_runner:
       parent_creator = self.parent_runner.context.creator
 
-    context = rdf_flows.FlowContext(
+    context = rdf_flow_runner.FlowContext(
         create_time=rdfvalue.RDFDatetime.Now(),
         creator=parent_creator or self.token.username,
         current_state="Start",
         output_plugins_states=output_plugins_states,
-        state=rdf_flows.FlowContext.State.RUNNING,
+        state=rdf_flow_runner.FlowContext.State.RUNNING,
     )
 
     return context
@@ -303,7 +304,7 @@ class FlowRunner(object):
       raise FlowRunnerError("Next state %s is invalid.")
 
     # Queue the response message to the parent flow
-    request_state = rdf_flows.RequestState(
+    request_state = rdf_flow_runner.RequestState(
         id=self.GetNextOutboundId(),
         session_id=self.context.session_id,
         client_id=self.runner_args.client_id,
@@ -436,8 +437,7 @@ class FlowRunner(object):
         # Requests which are not destined to clients have no embedded request
         # message.
         if request.HasField("request"):
-          manager.DeQueueClientRequest(request.client_id,
-                                       request.request.task_id)
+          manager.DeQueueClientRequest(request.request)
 
     # The flow is dead - remove all outstanding requests and responses.
     if not self.IsRunning():
@@ -684,7 +684,7 @@ class FlowRunner(object):
     outbound_id = self.GetNextOutboundId()
 
     # Create a new request state
-    state = rdf_flows.RequestState(
+    state = rdf_flow_runner.RequestState(
         id=outbound_id,
         session_id=self.session_id,
         next_state=next_state,
@@ -771,7 +771,7 @@ class FlowRunner(object):
     # the request state and the stated next_state. Note however, that there is
     # no client_id or actual request message here because we directly invoke the
     # child flow rather than queue anything for it.
-    state = rdf_flows.RequestState(
+    state = rdf_flow_runner.RequestState(
         id=self.GetNextOutboundId(),
         session_id=utils.SmartUnicode(self.session_id),
         client_id=client_id,
@@ -910,7 +910,7 @@ class FlowRunner(object):
 
     self._SendTerminationMessage(reply)
 
-    self.context.state = rdf_flows.FlowContext.State.ERROR
+    self.context.state = rdf_flow_runner.FlowContext.State.ERROR
 
     if self.ShouldSendNotifications():
       flow_ref = None
@@ -931,7 +931,7 @@ class FlowRunner(object):
     return self.context.state
 
   def IsRunning(self):
-    return self.context.state == rdf_flows.FlowContext.State.RUNNING
+    return self.context.state == rdf_flow_runner.FlowContext.State.RUNNING
 
   def ShouldSendNotifications(self):
     return (self.runner_args.notify_to_user and
@@ -1019,7 +1019,7 @@ class FlowRunner(object):
     self._SendTerminationMessage(status=status)
 
     # Mark as terminated.
-    self.context.state = rdf_flows.FlowContext.State.TERMINATED
+    self.context.state = rdf_flow_runner.FlowContext.State.TERMINATED
     self.flow_obj.Flush()
 
   def UpdateProtoResources(self, status):

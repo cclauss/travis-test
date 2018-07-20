@@ -1,29 +1,29 @@
 #!/usr/bin/env python
 """These are flows designed to discover information about the host."""
 
-from grr import config
-from grr.lib import queues
-from grr.lib import rdfvalue
-from grr.lib import utils
-from grr.lib.rdfvalues import client as rdf_client
-from grr.lib.rdfvalues import cloud
-from grr.lib.rdfvalues import objects as rdf_objects
-from grr.lib.rdfvalues import paths as rdf_paths
-from grr.lib.rdfvalues import protodict as rdf_protodict
-from grr.lib.rdfvalues import structs as rdf_structs
+from grr_response_core import config
+from grr_response_core.lib import queues
+from grr_response_core.lib import rdfvalue
+from grr_response_core.lib import utils
+from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_core.lib.rdfvalues import cloud as rdf_cloud
+from grr_response_core.lib.rdfvalues import paths as rdf_paths
+from grr_response_core.lib.rdfvalues import protodict as rdf_protodict
+from grr_response_core.lib.rdfvalues import structs as rdf_structs
 from grr_response_proto import flows_pb2
-from grr.server.grr_response_server import aff4
-from grr.server.grr_response_server import artifact
-from grr.server.grr_response_server import client_index
-from grr.server.grr_response_server import data_store
-from grr.server.grr_response_server import db
-from grr.server.grr_response_server import events
-from grr.server.grr_response_server import flow
-from grr.server.grr_response_server import notification
-from grr.server.grr_response_server import server_stubs
-from grr.server.grr_response_server.aff4_objects import aff4_grr
-from grr.server.grr_response_server.aff4_objects import standard
-from grr.server.grr_response_server.flows.general import collectors
+from grr_response_server import aff4
+from grr_response_server import artifact
+from grr_response_server import client_index
+from grr_response_server import data_store
+from grr_response_server import db
+from grr_response_server import events
+from grr_response_server import flow
+from grr_response_server import notification
+from grr_response_server import server_stubs
+from grr_response_server.aff4_objects import aff4_grr
+from grr_response_server.aff4_objects import standard
+from grr_response_server.flows.general import collectors
+from grr_response_server.rdfvalues import objects as rdf_objects
 
 
 class InterrogateArgs(rdf_structs.RDFProtoStruct):
@@ -98,17 +98,15 @@ class Interrogate(flow.GRRFlow):
     if not metadata_responses:
       return
 
+    convert = rdf_cloud.ConvertCloudMetadataResponsesToCloudInstance
+
     # AFF4 client.
     with self._CreateClient() as client:
-      client.Set(
-          client.Schema.CLOUD_INSTANCE(
-              cloud.ConvertCloudMetadataResponsesToCloudInstance(
-                  metadata_responses)))
+      client.Set(client.Schema.CLOUD_INSTANCE(convert(metadata_responses)))
 
     # rdf_objects.ClientSnapshot.
     client = self.state.client
-    client.cloud_instance = cloud.ConvertCloudMetadataResponsesToCloudInstance(
-        metadata_responses)
+    client.cloud_instance = convert(metadata_responses)
 
   @flow.StateHandler()
   def StoreMemorySize(self, responses):
@@ -185,7 +183,7 @@ class Interrogate(flow.GRRFlow):
       if response.system in ["Linux", "Windows"]:
         self.CallClient(
             server_stubs.GetCloudVMMetadata,
-            cloud.BuildCloudMetadataRequests(),
+            rdf_cloud.BuildCloudMetadataRequests(),
             next_state="CloudMetadata")
 
       known_system_type = True
@@ -515,7 +513,7 @@ class EnrolmentInterrogateEvent(events.EventListener):
 
   def ProcessMessages(self, msgs=None, token=None):
     for msg in msgs:
-      flow.GRRFlow.StartFlow(
+      flow.StartFlow(
           client_id=msg,
           flow_name=Interrogate.__name__,
           queue=queues.ENROLLMENT,

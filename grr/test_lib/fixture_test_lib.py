@@ -1,21 +1,21 @@
 #!/usr/bin/env python
 """Client fixture-related test classes."""
 
-from grr.lib import rdfvalue
-from grr.lib import utils
-from grr.lib.rdfvalues import client as rdf_client
-from grr.lib.rdfvalues import objects as rdf_objects
-from grr.lib.rdfvalues import paths as rdf_paths
-from grr.lib.rdfvalues import protodict as rdf_protodict
-from grr.lib.rdfvalues import structs as rdf_structs
-from grr.server.grr_response_server import aff4
-from grr.server.grr_response_server import artifact
-from grr.server.grr_response_server import client_fixture
-from grr.server.grr_response_server import client_index
-from grr.server.grr_response_server import data_migration
-from grr.server.grr_response_server import data_store
-from grr.server.grr_response_server.aff4_objects import aff4_grr
-from grr.server.grr_response_server.aff4_objects import standard as aff4_standard
+from grr_response_core.lib import rdfvalue
+from grr_response_core.lib import utils
+from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_core.lib.rdfvalues import paths as rdf_paths
+from grr_response_core.lib.rdfvalues import protodict as rdf_protodict
+from grr_response_core.lib.rdfvalues import structs as rdf_structs
+from grr_response_server import aff4
+from grr_response_server import artifact
+from grr_response_server import client_fixture
+from grr_response_server import client_index
+from grr_response_server import data_migration
+from grr_response_server import data_store
+from grr_response_server.aff4_objects import aff4_grr
+from grr_response_server.aff4_objects import standard as aff4_standard
+from grr_response_server.rdfvalues import objects as rdf_objects
 from grr.test_lib import test_lib
 
 # Make the fixture appear to be 1 week old.
@@ -129,7 +129,7 @@ class LegacyClientFixture(object):
           if attribute in ["aff4:content", "aff4:content"]:
             # For AFF4MemoryStreams we need to call Write() instead of
             # directly setting the contents..
-            aff4_object.Write(rdfvalue_object)
+            aff4_object.Write(rdfvalue_object.AsBytes())
           else:
             aff4_object.AddAttribute(attribute, rdfvalue_object)
 

@@ -3,21 +3,25 @@
 
 import logging
 
-from grr import config
-from grr.lib import parser
-from grr.lib import rdfvalue
-from grr.lib import registry
-from grr.lib import utils
-from grr.lib.rdfvalues import anomaly
-from grr.lib.rdfvalues import client as rdf_client
-from grr.lib.rdfvalues import protodict as rdf_protodict
-from grr.lib.rdfvalues import structs as rdf_structs
+
+from future.utils import with_metaclass
+
+from grr_response_core import config
+from grr_response_core.lib import artifact_utils
+from grr_response_core.lib import parser
+from grr_response_core.lib import rdfvalue
+from grr_response_core.lib import registry
+from grr_response_core.lib import utils
+from grr_response_core.lib.rdfvalues import anomaly as rdf_anomaly
+from grr_response_core.lib.rdfvalues import artifacts as rdf_artifacts
+from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_core.lib.rdfvalues import protodict as rdf_protodict
+from grr_response_core.lib.rdfvalues import structs as rdf_structs
 from grr_response_proto import flows_pb2
-from grr.server.grr_response_server import aff4
-from grr.server.grr_response_server import artifact_registry
-from grr.server.grr_response_server import artifact_utils
-from grr.server.grr_response_server import data_store
-from grr.server.grr_response_server import flow
+from grr_response_server import aff4
+from grr_response_server import artifact_registry
+from grr_response_server import data_store
+from grr_response_server import flow
 
 
 def GetArtifactKnowledgeBase(client_obj, allow_uninitialized=False):
@@ -152,7 +156,7 @@ class KnowledgeBaseInitializationFlow(flow.GRRFlow):
     # Schedule any new artifacts for which we have now fulfilled dependencies.
     for artifact_name in self.state.awaiting_deps_artifacts:
       artifact_obj = artifact_registry.REGISTRY.GetArtifact(artifact_name)
-      deps = artifact_obj.GetArtifactPathDependencies()
+      deps = artifact_registry.GetArtifactPathDependencies(artifact_obj)
       if set(deps).issubset(self.state.fulfilled_deps):
         self.state.in_flight_artifacts.append(artifact_name)
         self.state.awaiting_deps_artifacts.remove(artifact_name)
@@ -235,7 +239,7 @@ class KnowledgeBaseInitializationFlow(flow.GRRFlow):
     provided = set()  # Track which deps have been provided.
 
     for response in responses:
-      if isinstance(response, anomaly.Anomaly):
+      if isinstance(response, rdf_anomaly.Anomaly):
         logging.error("Artifact %s returned an Anomaly: %s", artifact_name,
                       response)
         continue
@@ -443,7 +447,7 @@ def UploadArtifactYamlFile(file_content,
   new_artifact_names = set()
   # A quick syntax check before we upload anything.
   for artifact_value in new_artifacts:
-    artifact_value.ValidateSyntax()
+    artifact_registry.ValidateSyntax(artifact_value)
     new_artifact_names.add(artifact_value.name)
 
   # Iterate through each artifact adding it to the collection.
@@ -476,17 +480,18 @@ def UploadArtifactYamlFile(file_content,
   # not have to perform a syntax validation because it is already done after
   # YAML is parsed.
   for artifact_value in loaded_artifacts:
-    artifact_value.ValidateDependencies()
+    artifact_registry.ValidateDependencies(artifact_value)
 
 
 class ArtifactFallbackCollectorArgs(rdf_structs.RDFProtoStruct):
   protobuf = flows_pb2.ArtifactFallbackCollectorArgs
   rdf_deps = [
-      artifact_registry.ArtifactName,
+      rdf_artifacts.ArtifactName,
   ]
 
 
-class ArtifactFallbackCollector(flow.GRRFlow):
+class ArtifactFallbackCollector(
+    with_metaclass(registry.MetaclassRegistry, flow.GRRFlow)):
   """Abstract class for artifact fallback flows.
 
   If an artifact can't be collected by normal means a flow can be registered
@@ -499,7 +504,6 @@ class ArtifactFallbackCollector(flow.GRRFlow):
   the artifact value in the same format as would have been returned by the
   original artifact collection.
   """
-  __metaclass__ = registry.MetaclassRegistry
   args_type = ArtifactFallbackCollectorArgs
 
   # List of artifact names for which we are registering as the fallback

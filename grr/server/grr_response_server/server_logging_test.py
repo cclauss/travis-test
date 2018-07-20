@@ -7,12 +7,12 @@ import time
 
 from werkzeug import wrappers as werkzeug_wrappers
 
-from grr.lib import flags
-from grr.lib import stats
-from grr.lib import utils
+from grr_response_core.lib import flags
+from grr_response_core.lib import stats
+from grr_response_core.lib import utils
 from grr_response_proto import jobs_pb2
-from grr.server.grr_response_server import server_logging
-from grr.server.grr_response_server.gui import wsgiapp
+from grr_response_server import server_logging
+from grr_response_server.gui import wsgiapp
 from grr.test_lib import test_lib
 
 

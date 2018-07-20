@@ -5,10 +5,12 @@ import os
 import re
 
 
-from grr.lib import parser
-from grr.lib.rdfvalues import anomaly as rdf_anomaly
-from grr.lib.rdfvalues import client as rdf_client
-from grr.server.grr_response_server import artifact_registry
+from builtins import zip  # pylint: disable=redefined-builtin
+
+from grr_response_core.lib import parser
+from grr_response_core.lib.rdfvalues import anomaly as rdf_anomaly
+from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_server import artifact_registry
 
 
 # TODO(user): Extend this to resolve repo/publisher to its baseurl.

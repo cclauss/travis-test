@@ -3,18 +3,18 @@
 """Tests Hunt ACLs."""
 
 import unittest
-from grr.lib import flags
+from grr_response_core.lib import flags
 
-from grr.lib.rdfvalues import file_finder as rdf_file_finder
-from grr.lib.rdfvalues import flows as rdf_flows
-from grr.lib.rdfvalues import hunts as rdf_hunts
-from grr.server.grr_response_server import access_control
-from grr.server.grr_response_server import flow
-from grr.server.grr_response_server import output_plugin
-from grr.server.grr_response_server.flows.general import file_finder
-from grr.server.grr_response_server.gui import gui_test_lib
-from grr.server.grr_response_server.hunts import implementation
-from grr.server.grr_response_server.hunts import standard
+from grr_response_core.lib.rdfvalues import file_finder as rdf_file_finder
+from grr_response_server import access_control
+from grr_response_server import flow
+from grr_response_server.flows.general import file_finder
+from grr_response_server.gui import gui_test_lib
+from grr_response_server.hunts import implementation
+from grr_response_server.hunts import standard
+from grr_response_server.rdfvalues import flow_runner as rdf_flow_runner
+from grr_response_server.rdfvalues import hunts as rdf_hunts
+from grr_response_server.rdfvalues import output_plugin as rdf_output_plugin
 from grr.test_lib import db_test_lib
 
 
@@ -26,7 +26,7 @@ class TestHuntACLWorkflow(gui_test_lib.GRRSeleniumHuntTest):
 
   def CreateSampleHunt(self, token=None):
 
-    with implementation.GRRHunt.StartHunt(
+    with implementation.StartHunt(
         hunt_name=standard.SampleHunt.__name__,
         client_rate=100,
         filename="TestFilename",
@@ -341,9 +341,9 @@ class TestHuntACLWorkflow(gui_test_lib.GRRSeleniumHuntTest):
     flow_args = rdf_file_finder.FileFinderArgs(
         paths=["a/*", "b/*"],
         action=rdf_file_finder.FileFinderAction(action_type="STAT"))
-    flow_runner_args = rdf_flows.FlowRunnerArgs(
+    flow_runner_args = rdf_flow_runner.FlowRunnerArgs(
         flow_name=file_finder.FileFinder.__name__)
-    flow_urn = flow.GRRFlow.StartFlow(
+    flow_urn = flow.StartFlow(
         client_id=self.client_id,
         args=flow_args,
         runner_args=flow_runner_args,
@@ -401,7 +401,7 @@ class TestHuntACLWorkflow(gui_test_lib.GRRSeleniumHuntTest):
     flow_args = rdf_file_finder.FileFinderArgs(
         paths=["a/*", "b/*"],
         action=rdf_file_finder.FileFinderAction(action_type="STAT"))
-    flow_runner_args = rdf_flows.FlowRunnerArgs(
+    flow_runner_args = rdf_flow_runner.FlowRunnerArgs(
         flow_name=file_finder.FileFinder.__name__)
     client_rule_set = self._CreateForemanClientRuleSet()
     source_h = self.CreateHunt(
@@ -416,7 +416,7 @@ class TestHuntACLWorkflow(gui_test_lib.GRRSeleniumHuntTest):
     flow_args.paths = ["b/*", "c/*"]
     client_rule_set.rules[0].regex.field = "FQDN"
     output_plugins = [
-        output_plugin.OutputPluginDescriptor(plugin_name="TestOutputPlugin")
+        rdf_output_plugin.OutputPluginDescriptor(plugin_name="TestOutputPlugin")
     ]
     new_h = self.CreateHunt(
         flow_args=flow_args,

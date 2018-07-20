@@ -1,26 +1,26 @@
 #!/usr/bin/env python
 """Implementation of a router class that should be used by robot users."""
 
-from grr.lib import rdfvalue
-from grr.lib import utils
-from grr.lib.rdfvalues import paths
+from grr_response_core.lib import rdfvalue
+from grr_response_core.lib import utils
+from grr_response_core.lib.rdfvalues import paths as rdf_paths
 
-from grr.lib.rdfvalues import structs as rdf_structs
+from grr_response_core.lib.rdfvalues import structs as rdf_structs
 from grr_response_proto import api_call_router_pb2
-from grr.server.grr_response_server import access_control
+from grr_response_server import access_control
 
-from grr.server.grr_response_server import aff4
-from grr.server.grr_response_server import flow
-from grr.server.grr_response_server import throttle
-from grr.server.grr_response_server.flows.general import collectors
-from grr.server.grr_response_server.flows.general import file_finder
+from grr_response_server import aff4
+from grr_response_server import flow
+from grr_response_server import throttle
+from grr_response_server.flows.general import collectors
+from grr_response_server.flows.general import file_finder
 
-from grr.server.grr_response_server.gui import api_call_handler_base
-from grr.server.grr_response_server.gui import api_call_router
-from grr.server.grr_response_server.gui import api_call_router_without_checks
-from grr.server.grr_response_server.gui.api_plugins import client as api_client
-from grr.server.grr_response_server.gui.api_plugins import flow as api_flow
-from grr.server.grr_response_server.gui.api_plugins import reflection as api_reflection
+from grr_response_server.gui import api_call_handler_base
+from grr_response_server.gui import api_call_router
+from grr_response_server.gui import api_call_router_without_checks
+from grr_response_server.gui.api_plugins import client as api_client
+from grr_response_server.gui.api_plugins import flow as api_flow
+from grr_response_server.gui.api_plugins import reflection as api_reflection
 
 
 class RobotRouterSearchClientsParams(rdf_structs.RDFProtoStruct):
@@ -52,7 +52,7 @@ class RobotRouterListFlowResultsParams(rdf_structs.RDFProtoStruct):
 class RobotRouterGetFlowFilesArchiveParams(rdf_structs.RDFProtoStruct):
   protobuf = api_call_router_pb2.RobotRouterGetFlowFilesArchiveParams
   rdf_deps = [
-      paths.GlobExpression,
+      rdf_paths.GlobExpression,
   ]
 
 
@@ -100,7 +100,7 @@ class ApiRobotCreateFlowHandler(api_call_handler_base.ApiCallHandler):
 
     # Note that runner_args are dropped. From all the arguments We use only
     # the flow name and the arguments.
-    flow_id = flow.GRRFlow.StartFlow(
+    flow_id = flow.StartFlow(
         client_id=args.client_id.ToClientURN(),
         flow_name=args.flow.name,
         token=token,

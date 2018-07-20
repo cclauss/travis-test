@@ -1,28 +1,29 @@
 #!/usr/bin/env python
 """These flows are designed for high performance transfers."""
+from __future__ import division
 
 import logging
 import zlib
 
-from grr.lib import constants
-from grr.lib import rdfvalue
-from grr.lib.rdfvalues import client as rdf_client
-from grr.lib.rdfvalues import crypto as rdf_crypto
-from grr.lib.rdfvalues import flows as rdf_flows
-from grr.lib.rdfvalues import objects as rdf_objects
-from grr.lib.rdfvalues import paths as rdf_paths
-from grr.lib.rdfvalues import protodict as rdf_protodict
-from grr.lib.rdfvalues import structs as rdf_structs
+from grr_response_core.lib import constants
+from grr_response_core.lib import rdfvalue
+from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_core.lib.rdfvalues import crypto as rdf_crypto
+from grr_response_core.lib.rdfvalues import flows as rdf_flows
+from grr_response_core.lib.rdfvalues import paths as rdf_paths
+from grr_response_core.lib.rdfvalues import protodict as rdf_protodict
+from grr_response_core.lib.rdfvalues import structs as rdf_structs
 from grr_response_proto import flows_pb2
-from grr.server.grr_response_server import aff4
-from grr.server.grr_response_server import data_store
-from grr.server.grr_response_server import events
-from grr.server.grr_response_server import flow
-from grr.server.grr_response_server import message_handlers
-from grr.server.grr_response_server import notification
-from grr.server.grr_response_server import server_stubs
-from grr.server.grr_response_server.aff4_objects import aff4_grr
-from grr.server.grr_response_server.aff4_objects import filestore
+from grr_response_server import aff4
+from grr_response_server import data_store
+from grr_response_server import events
+from grr_response_server import flow
+from grr_response_server import message_handlers
+from grr_response_server import notification
+from grr_response_server import server_stubs
+from grr_response_server.aff4_objects import aff4_grr
+from grr_response_server.aff4_objects import filestore
+from grr_response_server.rdfvalues import objects as rdf_objects
 
 
 class GetFileArgs(rdf_structs.RDFProtoStruct):
@@ -66,7 +67,7 @@ class GetFile(flow.GRRFlow):
   def Start(self):
     """Get information about the file from the client."""
     self.state.max_chunk_number = max(2,
-                                      self.args.read_length / self.CHUNK_SIZE)
+                                      self.args.read_length // self.CHUNK_SIZE)
 
     self.state.current_chunk_number = 0
     self.state.file_size = 0
@@ -103,7 +104,7 @@ class GetFile(flow.GRRFlow):
     else:
       self.state.file_size = self.args.read_length
 
-    self.state.max_chunk_number = (self.state.file_size / self.CHUNK_SIZE) + 1
+    self.state.max_chunk_number = (self.state.file_size // self.CHUNK_SIZE) + 1
 
     self.FetchWindow(
         min(self.WINDOW_SIZE,
@@ -575,7 +576,7 @@ class MultiGetFileMixin(object):
 
       # We do not have the file here yet - we need to retrieve it.
       expected_number_of_hashes = (
-          file_tracker["size_to_download"] / self.CHUNK_SIZE + 1)
+          file_tracker["size_to_download"] // self.CHUNK_SIZE + 1)
 
       # We just hash ALL the chunks in the file now. NOTE: This maximizes client
       # VFS cache hit rate and is far more efficient than launching multiple
@@ -836,7 +837,7 @@ class GetMBR(flow.GRRFlow):
     self.state.buffers = []
 
     buffer_size = constants.CLIENT_MAX_BUFFER_SIZE
-    buffers_we_need = self.args.length / buffer_size
+    buffers_we_need = self.args.length // buffer_size
     if self.args.length % buffer_size:
       buffers_we_need += 1
 

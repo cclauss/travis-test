@@ -6,8 +6,8 @@ from logging import handlers
 import os
 import socket
 
-from grr import config
-from grr.lib import flags
+from grr_response_core import config
+from grr_response_core.lib import flags
 
 
 class PreLoggingMemoryHandler(handlers.BufferingHandler):

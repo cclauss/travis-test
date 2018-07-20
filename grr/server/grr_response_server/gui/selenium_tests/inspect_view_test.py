@@ -3,14 +3,14 @@
 """Test the inspect interface."""
 
 import unittest
-from grr.lib import flags
+from grr_response_core.lib import flags
 
-from grr.lib.rdfvalues import client as rdf_client
-from grr.server.grr_response_server import flow
-from grr.server.grr_response_server import queue_manager
-from grr.server.grr_response_server.flows.general import discovery as flow_discovery
-from grr.server.grr_response_server.flows.general import processes
-from grr.server.grr_response_server.gui import gui_test_lib
+from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_server import flow
+from grr_response_server import queue_manager
+from grr_response_server.flows.general import discovery as flow_discovery
+from grr_response_server.flows.general import processes
+from grr_response_server.gui import gui_test_lib
 from grr.test_lib import db_test_lib
 from grr.test_lib import flow_test_lib
 
@@ -35,7 +35,7 @@ class TestClientLoadView(TestInspectViewBase):
     else:
       client_id = rdf_client.ClientURN(client_id)
 
-    flow.GRRFlow.StartFlow(
+    flow.StartFlow(
         client_id=client_id,
         flow_name=processes.ListProcesses.__name__,
         token=token)
@@ -54,7 +54,7 @@ class TestClientLoadView(TestInspectViewBase):
     self.Open("/#/clients/%s/load-stats" % self.client_id)
     self.WaitUntil(self.IsTextPresent, "No actions currently in progress.")
 
-    flow.GRRFlow.StartFlow(
+    flow.StartFlow(
         client_id=rdf_client.ClientURN(self.client_id),
         flow_name=processes.ListProcesses.__name__,
         token=self.token)
@@ -66,7 +66,7 @@ class TestClientLoadView(TestInspectViewBase):
     self.Open("/#/clients/%s/load-stats" % self.client_id)
     self.WaitUntil(self.IsTextPresent, processes.ListProcesses.__name__)
     self.WaitUntil(self.IsTextPresent, "Task id")
-    self.WaitUntil(self.IsTextPresent, "Task eta")
+    self.WaitUntil(self.IsTextPresent, "Leased until")
 
 
 @db_test_lib.DualDBTest
@@ -79,7 +79,7 @@ class TestDebugClientRequestsView(TestInspectViewBase):
 
     self.RequestAndGrantClientApproval(client_id)
 
-    flow.GRRFlow.StartFlow(
+    flow.StartFlow(
         client_id=rdf_client.ClientURN(client_id),
         flow_name=flow_discovery.Interrogate.__name__,
         token=self.token)

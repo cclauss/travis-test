@@ -1,15 +1,15 @@
 #!/usr/bin/env python
 """These are standard aff4 objects."""
+from __future__ import division
 
-import StringIO
+import io
 
-from grr.lib import rdfvalue
-from grr.lib import utils
-from grr.lib.rdfvalues import client as rdf_client
-from grr.lib.rdfvalues import paths as rdf_paths
-from grr.server.grr_response_server import aff4
-from grr.server.grr_response_server import data_store
-from grr.server.grr_response_server import flow
+from grr_response_core.lib import rdfvalue
+from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_core.lib.rdfvalues import paths as rdf_paths
+from grr_response_server import aff4
+from grr_response_server import data_store
+from grr_response_server import flow
 
 
 class VFSDirectory(aff4.AFF4Volume):
@@ -43,7 +43,7 @@ class VFSDirectory(aff4.AFF4Volume):
 
     if attribute == "CONTAINS":
       # Get the pathspec for this object
-      flow_id = flow.GRRFlow.StartFlow(
+      flow_id = flow.StartFlow(
           client_id=client_id,
           # Dependency loop: aff4_objects/aff4_grr.py depends on
           # aff4_objects/standard.py that depends on flows/general/filesystem.py
@@ -74,7 +74,7 @@ class HashList(rdfvalue.RDFBytes):
   HASH_SIZE = 32
 
   def __len__(self):
-    return len(self._value) / self.HASH_SIZE
+    return len(self._value) // self.HASH_SIZE
 
   def __iter__(self):
     for i in range(len(self)):
@@ -121,7 +121,7 @@ class AFF4SparseImage(aff4.AFF4ImageBase):
     res = data_store.DB.ReadBlobs(chunk_hashes.values(), token=self.token)
     for blob_hash, content in res.iteritems():
       for chunk_nr in chunk_nrs[blob_hash]:
-        fd = StringIO.StringIO(content)
+        fd = io.BytesIO(content)
         fd.dirty = False
         fd.chunk = chunk_nr
         self.chunk_cache.Put(chunk_nr, fd)
@@ -185,7 +185,7 @@ class AFF4SparseImage(aff4.AFF4ImageBase):
     except KeyError:
       pass
 
-    fd = StringIO.StringIO()
+    fd = io.BytesIO()
     fd.chunk = chunk
     fd.dirty = True
     self.chunk_cache.Put(chunk, fd)
@@ -199,7 +199,7 @@ class AFF4SparseImage(aff4.AFF4ImageBase):
 
   def _ReadPartial(self, length):
     """Read as much as possible, but not more than length."""
-    chunk = self.offset / self.chunksize
+    chunk = self.offset // self.chunksize
     chunk_offset = self.offset % self.chunksize
 
     # If we're past the end of the file, we don't have a chunk to read from, so
@@ -369,23 +369,3 @@ class LabelSet(aff4.AFF4Object):
     if self.to_set or self.to_delete:
       self.Flush()
     return data_store.DB.LabelFetchAll(self.urn)
-
-
-class TempMemoryFile(aff4.AFF4MemoryStream):
-  """A temporary AFF4MemoryStream-based file with a random URN."""
-
-  def __init__(self, urn, **kwargs):
-    if urn is None:
-      urn = rdfvalue.RDFURN("aff4:/tmp").Add("%X" % utils.PRNG.GetUInt32())
-
-    super(TempMemoryFile, self).__init__(urn, **kwargs)
-
-
-class TempImageFile(aff4.AFF4Image):
-  """A temporary file AFF4Image-based file with a random URN."""
-
-  def __init__(self, urn, **kwargs):
-    if urn is None:
-      urn = rdfvalue.RDFURN("aff4:/tmp").Add("%X" % utils.PRNG.GetUInt32())
-
-    super(TempImageFile, self).__init__(urn, **kwargs)

@@ -1,29 +1,31 @@
 #!/usr/bin/env python
 """This module contains tests for user API handlers."""
 
-from grr.lib import flags
 
-from grr.lib import rdfvalue
-from grr.lib import utils
+from builtins import zip  # pylint: disable=redefined-builtin
 
-from grr.lib.rdfvalues import cronjobs as rdf_cronjobs
-from grr.lib.rdfvalues import flows as rdf_flows
-from grr.lib.rdfvalues import objects as rdf_objects
-from grr.server.grr_response_server import access_control
-from grr.server.grr_response_server import aff4
-from grr.server.grr_response_server import data_store
-from grr.server.grr_response_server import email_alerts
-from grr.server.grr_response_server import notification
-from grr.server.grr_response_server.aff4_objects import cronjobs as aff4_cronjobs
-from grr.server.grr_response_server.aff4_objects import users as aff4_users
-from grr.server.grr_response_server.flows.general import administrative
-from grr.server.grr_response_server.gui import api_call_handler_base
+from grr_response_core.lib import flags
+from grr_response_core.lib import rdfvalue
+from grr_response_core.lib import utils
+from grr_response_core.lib.rdfvalues import flows as rdf_flows
 
-from grr.server.grr_response_server.gui import api_test_lib
-from grr.server.grr_response_server.gui.api_plugins import user as user_plugin
-from grr.server.grr_response_server.hunts import implementation
+from grr_response_server import access_control
+from grr_response_server import aff4
+from grr_response_server import data_store
+from grr_response_server import email_alerts
+from grr_response_server import notification
+from grr_response_server.aff4_objects import cronjobs as aff4_cronjobs
+from grr_response_server.aff4_objects import users as aff4_users
+from grr_response_server.flows.general import administrative
+from grr_response_server.gui import api_call_handler_base
+from grr_response_server.gui import api_test_lib
 
-from grr.server.grr_response_server.hunts import standard
+from grr_response_server.gui.api_plugins import user as user_plugin
+from grr_response_server.hunts import implementation
+from grr_response_server.hunts import standard
+
+from grr_response_server.rdfvalues import cronjobs as rdf_cronjobs
+from grr_response_server.rdfvalues import objects as rdf_objects
 
 from grr.test_lib import acl_test_lib
 from grr.test_lib import db_test_lib
@@ -560,7 +562,7 @@ class ApiListHuntApprovalsHandlerTest(acl_test_lib.AclTestMixin,
     self.handler = user_plugin.ApiListHuntApprovalsHandler()
 
   def testRendersRequestedHuntAppoval(self):
-    with implementation.GRRHunt.StartHunt(
+    with implementation.StartHunt(
         hunt_name=standard.SampleHunt.__name__, token=self.token) as hunt:
       pass
 
@@ -595,8 +597,8 @@ class ApiCreateCronJobApprovalHandlerTest(
     self.SetUpApprovalTest()
 
     cron_manager = aff4_cronjobs.GetCronManager()
-    cron_args = rdf_cronjobs.CreateCronJobFlowArgs(
-        periodicity="1d", allow_overruns=False)
+    cron_args = rdf_cronjobs.CreateCronJobArgs(
+        frequency="1d", allow_overruns=False)
     cron_id = cron_manager.CreateJob(cron_args=cron_args, token=self.token)
 
     self.handler = user_plugin.ApiCreateCronJobApprovalHandler()
@@ -618,8 +620,8 @@ class ApiListCronJobApprovalsHandlerTest(acl_test_lib.AclTestMixin,
 
   def testRendersRequestedCronJobApproval(self):
     cron_manager = aff4_cronjobs.GetCronManager()
-    cron_args = rdf_cronjobs.CreateCronJobFlowArgs(
-        periodicity="1d", allow_overruns=False)
+    cron_args = rdf_cronjobs.CreateCronJobArgs(
+        frequency="1d", allow_overruns=False)
     cron_job_id = cron_manager.CreateJob(cron_args=cron_args, token=self.token)
 
     self.RequestCronJobApproval(

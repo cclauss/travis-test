@@ -2,10 +2,10 @@
 """Tests for GRR settings-related views."""
 
 import unittest
-from grr.lib import flags
-from grr.server.grr_response_server.gui import gui_test_lib
+from grr_response_core.lib import flags
+from grr_response_server.gui import gui_test_lib
 
-from grr.server.grr_response_server.gui.api_plugins import config_test as api_config_test
+from grr_response_server.gui.api_plugins import config_test as api_config_test
 from grr.test_lib import db_test_lib
 from grr.test_lib import test_lib
 

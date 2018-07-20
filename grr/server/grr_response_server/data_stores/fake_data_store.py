@@ -1,13 +1,14 @@
 #!/usr/bin/env python
 """An implementation of an in-memory data store for testing."""
+from __future__ import print_function
 
 import sys
 import threading
 import time
 
-from grr.lib import rdfvalue
-from grr.lib import utils
-from grr.server.grr_response_server import data_store
+from grr_response_core.lib import rdfvalue
+from grr_response_core.lib import utils
+from grr_response_server import data_store
 
 
 class FakeDBSubjectLock(data_store.DBSubjectLock):
@@ -164,7 +165,7 @@ class FakeDataStore(data_store.DataStore):
 
         start = start or 0
         if end is None:
-          end = (2**63) - 1  # sys.maxint
+          end = (2**63) - 1  # sys.maxsize
         new_values = []
         for value, timestamp in values:
           if not start <= timestamp <= end:
@@ -377,4 +378,4 @@ class FakeDataStore(data_store.DataStore):
     for s in sorted(self.subjects):
       if literal and literal not in s:
         continue
-      print s
+      print(s)

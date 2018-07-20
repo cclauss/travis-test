@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 """Mixin tests for storing Foreman rules in the relational db."""
 
-from grr.lib import rdfvalue
-from grr.server.grr_response_server import foreman_rules
+from grr_response_core.lib import rdfvalue
+from grr_response_server import foreman_rules
 from grr.test_lib import test_lib
 
 

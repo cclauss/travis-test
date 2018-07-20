@@ -3,6 +3,8 @@
 
 SQLite database files are created by taking the root of each AFF4 object.
 """
+from __future__ import division
+from __future__ import print_function
 
 
 import itertools
@@ -16,13 +18,15 @@ import thread
 import threading
 import time
 
+
+from past.builtins import long
 import sqlite3
 
-from grr import config
-from grr.lib import utils
-from grr.server.grr_response_server import aff4
-from grr.server.grr_response_server import data_store
-from grr.server.grr_response_server.data_stores import common
+from grr_response_core import config
+from grr_response_core.lib import utils
+from grr_response_server import aff4
+from grr_response_server import data_store
+from grr_response_server.data_stores import common
 
 SQLITE_EXTENSION = ".sqlite"
 SQLITE_TIMEOUT = 600.0
@@ -508,8 +512,8 @@ class SqliteConnection(object):
     """Print the SQLite database."""
     query = "SELECT subject, predicate, timestamp, value FROM tbl"
     for sub, pred, ts, val in self.Execute(query):
-      print "(%s, %s, %s) = %s" % (sub, pred, ts, val)
-    print "---------------------------------"
+      print("(%s, %s, %s) = %s" % (sub, pred, ts, val))
+    print("---------------------------------")
 
   def __enter__(self):
     self.lock.acquire()
@@ -537,7 +541,7 @@ class SqliteConnection(object):
         self.deleted = 0
         self.next_vacuum_check = max(
             config.CONFIG["SqliteDatastore.vacuum_check"],
-            self.next_vacuum_check / 2)
+            self.next_vacuum_check // 2)
       else:
         # Back-off a bit.
         self.next_vacuum_check *= 2
@@ -558,7 +562,7 @@ class SqliteConnection(object):
     free_pages = int(free_pages_result[0])
     # Return true if ratio of free pages is high enough.
     vacuum_ratio = config.CONFIG["SqliteDatastore.vacuum_ratio"]
-    return 100.0 * float(free_pages) / float(pages) >= vacuum_ratio
+    return 100.0 * free_pages / pages >= vacuum_ratio
 
   def _HasRecentVacuum(self):
     """Check if a vacuum operation has been performed recently."""
@@ -678,7 +682,7 @@ class SqliteDataStore(data_store.DataStore):
           if element_timestamp is None:
             element_timestamp = timestamp
 
-          element_timestamp = long(element_timestamp)
+          element_timestamp = int(element_timestamp)
           value = self._Encode(v)
           sqlite_connection.SetAttribute(subject, attribute, value,
                                          element_timestamp)
@@ -706,7 +710,7 @@ class SqliteDataStore(data_store.DataStore):
         # This code path is taken when we have a timestamp range.
         start = start or 0
         if end is None:
-          end = (2**63) - 1  # sys.maxint
+          end = (2**63) - 1  # sys.maxsize
         for attribute in list(attributes):
           sqlite_connection.DeleteAttributeRange(subject, attribute, start, end)
 

@@ -9,17 +9,29 @@ WIP, will eventually replace datastore.py.
 """
 import abc
 
-from grr.lib import rdfvalue
-from grr.lib import utils
-from grr.lib.rdfvalues import client as rdf_client
-from grr.lib.rdfvalues import crypto as rdf_crypto
-from grr.lib.rdfvalues import events as rdf_events
-from grr.lib.rdfvalues import objects as rdf_objects
-from grr.server.grr_response_server import foreman_rules
+
+from future.utils import with_metaclass
+
+from grr_response_core.lib import rdfvalue
+from grr_response_core.lib import utils
+from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_core.lib.rdfvalues import crypto as rdf_crypto
+from grr_response_core.lib.rdfvalues import events as rdf_events
+from grr_response_core.lib.rdfvalues import flows as rdf_flows
+from grr_response_server import foreman_rules
+from grr_response_server.rdfvalues import cronjobs as rdf_cronjobs
+from grr_response_server.rdfvalues import objects as rdf_objects
 
 
 class Error(Exception):
-  pass
+
+  def __init__(self, message="", cause=None):
+    if cause is not None:
+      message += ": %s" % cause
+
+    super(Error, self).__init__(message)
+
+    self.cause = cause
 
 
 class NotFoundError(Error):
@@ -37,12 +49,9 @@ class UnknownClientError(NotFoundError):
 
   def __init__(self, client_id, cause=None):
     message = "Client with id '%s' does not exist" % client_id
-    if cause is not None:
-      message += ": %s" % cause
-    super(UnknownClientError, self).__init__(message)
+    super(UnknownClientError, self).__init__(message, cause=cause)
 
     self.client_id = client_id
-    self.cause = cause
 
 
 class UnknownPathError(NotFoundError):
@@ -57,13 +66,24 @@ class UnknownPathError(NotFoundError):
   def __init__(self, client_id, path_type, path_id, cause=None):
     message = "Path of type '%s' with id '%s' on client '%s' does not exist"
     message %= (path_type, path_id, client_id)
-    if cause is not None:
-      message += ": %s" % cause
-    super(UnknownPathError, self).__init__(message)
+    super(UnknownPathError, self).__init__(message, cause=cause)
 
     self.client_id = client_id
     self.path_type = path_type
     self.path_id = path_id
+
+
+class AtLeastOneUnknownPathError(NotFoundError):
+  """An exception class raised when one of a set of paths is unknown."""
+
+  def __init__(self, client_path_ids, cause=None):
+    message = "At least one of client path ids does not exist: "
+    message += ", ".join(utils.SmartStr(cpid) for cpid in client_path_ids)
+    if cause is not None:
+      message += ": %s" % cause
+    super(AtLeastOneUnknownPathError, self).__init__(message)
+
+    self.client_path_ids = client_path_ids
     self.cause = cause
 
 
@@ -83,9 +103,12 @@ class UnknownCronjobError(NotFoundError):
   pass
 
 
-class Database(object):
+class UnknownCronjobRunError(NotFoundError):
+  pass
+
+
+class Database(with_metaclass(abc.ABCMeta, object)):
   """The GRR relational database abstraction."""
-  __metaclass__ = abc.ABCMeta
 
   unchanged = "__unchanged__"
 
@@ -578,6 +601,96 @@ class Database(object):
         if snapshot:
           yield snapshot
 
+  def ReadPathInfo(self, client_id, path_type, components, timestamp=None):
+    """Retrieves a path info record for a given path.
+
+    The `timestamp` parameter specifies for what moment in time the path
+    information is to be retrieved. For example, if (using abstract time units)
+    at time 1 the path was in state A, at time 5 it was observed to be in state
+    B and at time 8 it was in state C one wants to retrieve information at time
+    6 the result is going to be B.
+
+    Args:
+      client_id: An identifier string for a client.
+      path_type: A type of a path to retrieve path information for.
+      components: A tuple of path components of a path to retrieve path
+                  information for.
+      timestamp: A moment in time for which we want to retrieve the information.
+                 If none is provided, the latest known path information is
+                 returned.
+
+    Returns:
+      An `rdf_objects.PathInfo` instance.
+    """
+    path_id = rdf_objects.PathID.FromComponents(components)
+    return self.FindPathInfoByPathID(
+        client_id, path_type, path_id, timestamp=timestamp)
+
+  def ReadPathInfos(self, client_id, path_type, components_list):
+    """Retrieves path info records for given paths.
+
+    Args:
+      client_id: An identifier string for a client.
+      path_type: A type of a path to retrieve path information for.
+      components_list: An iterable of tuples of path components corresponding to
+                       paths to retrieve path information for.
+
+    Returns:
+      A dictionary mapping path components to `rdf_objects.PathInfo` instances.
+    """
+    path_ids = dict()
+    for components in components_list:
+      path_ids[rdf_objects.PathID.FromComponents(components)] = components
+
+    by_path_id = self.FindPathInfosByPathIDs(client_id, path_type, path_ids)
+
+    by_components = dict()
+    for path_id, path_info in by_path_id.iteritems():
+      by_components[path_ids[path_id]] = path_info
+    return by_components
+
+  def ListChildPathInfos(self, client_id, path_type, components):
+    """Lists path info records that correspond to children of given path.
+
+    Args:
+      client_id: An identifier string for a client.
+      path_type: A type of a path to retrieve path information for.
+      components: A tuple of path components of a path to retrieve child path
+                  information for.
+
+    Returns:
+      A list of `rdf_objects.PathInfo` instances sorted by path components.
+    """
+    return self.ListDescendentPathInfos(
+        client_id, path_type, components, max_depth=1)
+
+  def ListDescendentPathInfos(self,
+                              client_id,
+                              path_type,
+                              components,
+                              max_depth=None):
+    """Lists path info records that are correspond to descendants of given path.
+
+    Args:
+      client_id: An identifier string for a client.
+      path_type: A type of a path to retrieve path information for.
+      components: A tuple of path components of a path to retrieve descendent
+                  path information for.
+      max_depth: If set, the maximum number of generations to descend, otherwise
+                 unlimited.
+
+    Returns:
+      A list of `rdf_objects.PathInfo` instances sorted by path components.
+    """
+    path_id = rdf_objects.PathID.FromComponents(components)
+
+    result_path_ids = self.FindDescendentPathIDs(
+        client_id, path_type, path_id, max_depth=max_depth)
+    result_path_infos = self.FindPathInfosByPathIDs(client_id, path_type,
+                                                    result_path_ids).values()
+
+    return sorted(result_path_infos, key=lambda _: tuple(_.components))
+
   @abc.abstractmethod
   def FindPathInfoByPathID(self, client_id, path_type, path_id, timestamp=None):
     """Returns path info record for a particular path on a particular client.
@@ -640,6 +753,56 @@ class Database(object):
       path_infos: A list of rdfvalue.objects.PathInfo records.
     """
 
+  # TODO(hanuszczak): Having a dictionary with mutable key as an argument is not
+  # a good idea. The signature should be changed to something saner.
+  @abc.abstractmethod
+  def MultiWritePathHistory(self, client_id, stat_entries, hash_entries):
+    """Writes a collection of hash and stat entries observed for given paths.
+
+    Args:
+      client_id: A client for which we want to write the history.
+      stat_entries: An dictionary mapping path info to stat entries.
+      hash_entries: An dictionary mapping path info to hash entries.
+    """
+
+  def WritePathStatHistory(self, client_id, path_info, stat_entries):
+    """Writes a collection of `StatEntry` observed for particular path.
+
+    Args:
+      client_id: A client for which we want to write stat entries.
+      path_info: Information about the path to write stat entries for. Note that
+                 if `path_info` has some associated stat entry, it is simply
+                 ignored.
+      stat_entries: A dictionary with timestamps as keys and `StatEntry`
+                    instances as values.
+    """
+    rstat_entries = {}
+    for timestamp, stat_entry in stat_entries.iteritems():
+      rpath_info = path_info.Copy()
+      rpath_info.timestamp = timestamp
+      rstat_entries[rpath_info] = stat_entry
+
+    self.MultiWritePathHistory(client_id, rstat_entries, {})
+
+  def WritePathHashHistory(self, client_id, path_info, hash_entries):
+    """Writes a collection of `Hash` observed for particular path.
+
+    Args:
+      client_id: A client for which we want to write hash entries.
+      path_info: Information about the path to write stat entries for. Note that
+                 if `path_info` has some associated hash entry, it is simply
+                 ignored.
+      hash_entries: A dictionary with timestamps as keys and `Hash` instances
+                    as values.
+    """
+    rhash_entries = {}
+    for timestamp, hash_entry in hash_entries.iteritems():
+      rpath_info = path_info.Copy()
+      rpath_info.timestamp = timestamp
+      rhash_entries[rpath_info] = hash_entry
+
+    self.MultiWritePathHistory(client_id, {}, rhash_entries)
+
   @abc.abstractmethod
   def WriteUserNotification(self, notification):
     """Writes a notification for a given user.
@@ -701,7 +864,7 @@ class Database(object):
     """Writes a list of message handler requests to the database.
 
     Args:
-      requests: List of requests.
+      requests: List of objects.MessageHandlerRequest.
     """
 
   @abc.abstractmethod
@@ -718,21 +881,25 @@ class Database(object):
     """Deletes a list of message handler requests from the database.
 
     Args:
-      requests: List of requests.
+      requests: List of objects.MessageHandlerRequest.
     """
 
   @abc.abstractmethod
-  def LeaseMessageHandlerRequests(self, lease_time=None, limit=1000):
-    """Leases a number of message handler requests up to the indicated limit.
+  def RegisterMessageHandler(self, handler, lease_time, limit=1000):
+    """Registers a message handler to receive batches of messages.
 
     Args:
+      handler: Method, which will be called repeatedly with lists of leased
+               objects.MessageHandlerRequest. Required.
       lease_time: rdfvalue.Duration indicating how long the lease should be
-                  valid.
-      limit: Limit for the number of leased requests in one call.
-
-    Returns:
-      A list of objects.MessageHandlerRequest, the leased requests.
+                  valid. Required.
+      limit: Limit for the number of leased requests to give one execution of
+             handler.
     """
+
+  @abc.abstractmethod
+  def UnregisterMessageHandler(self):
+    """Unregisters any registered message handler."""
 
   @abc.abstractmethod
   def WriteCronJob(self, cronjob):
@@ -811,7 +978,8 @@ class Database(object):
                     last_run_status=unchanged,
                     last_run_time=unchanged,
                     current_run_id=unchanged,
-                    state=unchanged):
+                    state=unchanged,
+                    forced_run_requested=unchanged):
     """Updates run information for an existing cron job.
 
     Args:
@@ -820,7 +988,8 @@ class Database(object):
       last_run_time: The last time a run was started for this cron job.
       current_run_id: The id of the currently active run.
       state: The state dict for stateful cron jobs.
-
+      forced_run_requested: A boolean indicating if a forced run is pending
+                            for this job.
     Raises:
       UnknownCronjobError: A cron job with the given id does not exist.
     """
@@ -850,6 +1019,142 @@ class Database(object):
       ValueError: If not all of the cronjobs are leased.
     """
 
+  @abc.abstractmethod
+  def WriteCronJobRun(self, run_object):
+    """Stores a cron job run object in the database.
+
+    Args:
+      run_object: A rdf_cronjobs.CronJobRun object to store.
+    """
+
+  @abc.abstractmethod
+  def ReadCronJobRuns(self, job_id):
+    """Reads all cron job runs for a given job id.
+
+    Args:
+      job_id: Runs will be returned for the job with the given id.
+
+    Returns:
+      A list of rdf_cronjobs.CronJobRun objects.
+    """
+
+  @abc.abstractmethod
+  def ReadCronJobRun(self, job_id, run_id):
+    """Reads a single cron job run from the db.
+
+    Args:
+      job_id: The job_id of the run to be read.
+      run_id: The run_id of the run to be read.
+
+    Returns:
+      An rdf_cronjobs.CronJobRun object.
+    """
+
+  @abc.abstractmethod
+  def DeleteOldCronJobRuns(self, cutoff_timestamp):
+    """Deletes cron job runs that are older than cutoff_timestamp.
+
+    Args:
+      cutoff_timestamp: This method deletes all runs that were started before
+                        cutoff_timestamp.
+    Returns:
+      The number of deleted runs.
+    """
+
+  @abc.abstractmethod
+  def WriteClientPathBlobReferences(self, references_by_client_path_id):
+    """Writes blob references for given client path ids.
+
+    Args:
+      references_by_client_path_id: Dictionary of
+          ClientPathID -> [BlobReference].
+
+    Raises:
+      AtLeastOneUnknownPathError: if one or more ClientPathIDs are not known
+      to the database.
+    """
+
+  @abc.abstractmethod
+  def ReadClientPathBlobReferences(self, client_path_ids):
+    """Reads blob references of given client path ids.
+
+    Args:
+      client_path_ids: A list of ClientPathIDs.
+
+    Returns:
+      Dictionary of ClientPathID -> [BlobReference]. Every path id from
+      the path_ids argument will be present in the result. "No blob references"
+      will be expressed as empty list.
+    """
+
+  @abc.abstractmethod
+  def WriteBlobs(self, blob_id_data_pairs):
+    """Writes given blobs.
+
+    Args:
+      blob_id_data_pairs: An iterable of (blob_id, blob_data) tuples. Each
+                          blob_id should be a blob hash (i.e. uniquely
+                          idenitify the blob) expressed as bytes. blob_data
+                          should be expressed in bytes.
+
+    Raises:
+      ValueError: If anything but a tuple of 2 elements is encountered in
+                  blob_id_data_pairs.
+    """
+
+  @abc.abstractmethod
+  def ReadBlobs(self, blob_ids):
+    """Reads given blobs.
+
+    Args:
+      blob_ids: An iterable with blob hashes expressed as bytes.
+
+    Returns:
+      A map of {blob_id: blob_data} where blob_data is blob bytes previously
+      written with WriteBlobs. If blob_data for particular blob are not found,
+      blob_data is expressed as None.
+    """
+
+  @abc.abstractmethod
+  def WriteClientMessages(self, messages):
+    """Writes messages that should go to the client to the db.
+
+    Args:
+      messages: A list of GrrMessage objects to write.
+    """
+
+  @abc.abstractmethod
+  def LeaseClientMessages(self, client_id, lease_time=None, limit=None):
+    """Leases available client messages for the client with the given id.
+
+    Args:
+      client_id: The client for which the messages should be leased.
+      lease_time: rdfvalue.Duration indicating how long the lease should be
+                  valid.
+      limit: Lease at most <limit> messages.
+    Returns:
+      A list of GrrMessage objects.
+    """
+
+  @abc.abstractmethod
+  def ReadClientMessages(self, client_id):
+    """Reads all client messages available for a given client_id.
+
+    Args:
+      client_id: The client for which the messages should be read.
+
+    Returns:
+      A list of GrrMessage objects.
+    """
+
+  @abc.abstractmethod
+  def DeleteClientMessages(self, messages):
+    """Deletes a list of client messages from the db.
+
+    Args:
+      messages: A list of GrrMessage objects to delete.
+    """
+
 
 class DatabaseValidationWrapper(Database):
   """Database wrapper that validates the arguments."""
@@ -863,6 +1168,12 @@ class DatabaseValidationWrapper(Database):
     if not isinstance(value, expected_type):
       message = "Expected `%s` but got `%s` instead"
       raise TypeError(message % (expected_type, type(value)))
+
+  @staticmethod
+  def _ValidateEnumType(value, expected_enum_type):
+    if value not in expected_enum_type.reverse_enum:
+      message = "Expected one of `%s` but got `%s` instead"
+      raise TypeError(message % (expected_enum_type.reverse_enum, value))
 
   def _ValidateStringId(self, id_type, id_value):
     if not isinstance(id_value, basestring):
@@ -881,6 +1192,14 @@ class DatabaseValidationWrapper(Database):
   def _ValidateCronJobId(self, cron_job_id):
     self._ValidateStringId("cron_job_id", cron_job_id)
 
+  def _ValidateCronJobRunId(self, cron_job_id):
+    if cron_job_id is not None:
+      self._ValidateStringId("cron_job_id", cron_job_id)
+      # Raises TypeError if cron_job_id is not a valid hex number.
+      int(cron_job_id, 16)
+      if len(cron_job_id) != 8:
+        raise TypeError("Invalid cron job run id: %s" % cron_job_id)
+
   def _ValidateApprovalId(self, approval_id):
     self._ValidateStringId("approval_id", approval_id)
 
@@ -897,6 +1216,11 @@ class DatabaseValidationWrapper(Database):
     if not path_info.path_type:
       raise ValueError(
           "Expected path_type to be set, got: %s" % str(path_info.path_type))
+
+  def _ValidatePathComponents(self, components):
+    self._ValidateType(components, tuple)
+    for component in components:
+      self._ValidateType(component, (str, unicode))
 
   def _ValidateNotificationType(self, notification_type):
     if notification_type is None:
@@ -922,15 +1246,26 @@ class DatabaseValidationWrapper(Database):
       raise ValueError("Timerange should be a sequence with 2 items.")
 
     for i in timerange:
-      if not (i is None or isinstance(i, rdfvalue.RDFDatetime)):
-        raise TypeError(
-            "Timerange items should be None or rdfvalue.RDFDatetime")
+      if i:
+        self._ValidateTimestamp(i)
 
   def _ValidateDuration(self, duration):
     self._ValidateType(duration, rdfvalue.Duration)
 
   def _ValidateTimestamp(self, timestamp):
     self._ValidateType(timestamp, rdfvalue.RDFDatetime)
+
+  def _ValidateClientPathID(self, client_path_id):
+    self._ValidateType(client_path_id, rdf_objects.ClientPathID)
+
+  def _ValidateBlobReference(self, blob_ref):
+    self._ValidateType(blob_ref, rdf_objects.BlobReference)
+
+  def _ValidateBlobID(self, blob_id):
+    self._ValidateType(blob_id, rdf_objects.BlobID)
+
+  def _ValidateBytes(self, value):
+    self._ValidateType(value, bytes)
 
   def WriteClientMetadata(self,
                           client_id,
@@ -943,13 +1278,11 @@ class DatabaseValidationWrapper(Database):
                           last_foreman=None):
     self._ValidateClientId(client_id)
 
-    if certificate and not isinstance(certificate, rdf_crypto.RDFX509Cert):
-      raise TypeError("certificate must be rdf_crypto.RDFX509Cert, got: %s" %
-                      type(certificate))
+    if certificate:
+      self._ValidateType(certificate, rdf_crypto.RDFX509Cert)
 
-    if last_ip and not isinstance(last_ip, rdf_client.NetworkAddress):
-      raise TypeError(
-          "last_ip must be client.NetworkAddress, got: %s" % type(last_ip))
+    if last_ip:
+      self._ValidateType(last_ip, rdf_client.NetworkAddress)
 
     return self.delegate.WriteClientMetadata(
         client_id,
@@ -968,10 +1301,7 @@ class DatabaseValidationWrapper(Database):
     return self.delegate.MultiReadClientMetadata(client_ids)
 
   def WriteClientSnapshot(self, client):
-    if not isinstance(client, rdf_objects.ClientSnapshot):
-      raise TypeError(
-          "Expected `rdfvalues.objects.ClientSnapshot`, got: %s" % type(client))
-
+    self._ValidateType(client, rdf_objects.ClientSnapshot)
     return self.delegate.WriteClientSnapshot(client)
 
   def MultiReadClientSnapshot(self, client_ids):
@@ -996,9 +1326,7 @@ class DatabaseValidationWrapper(Database):
 
     client_id = None
     for client in clients:
-      if not isinstance(client, rdf_objects.ClientSnapshot):
-        message = "Unexpected '%s' instead of client instance"
-        raise TypeError(message % client.__class__)
+      self._ValidateType(client, rdf_objects.ClientSnapshot)
 
       if client.timestamp is None:
         raise AttributeError("Client without a `timestamp` attribute")
@@ -1018,11 +1346,7 @@ class DatabaseValidationWrapper(Database):
         client_id, timerange=timerange)
 
   def WriteClientStartupInfo(self, client_id, startup_info):
-    if not isinstance(startup_info, rdf_client.StartupInfo):
-      raise TypeError(
-          "WriteClientStartupInfo requires rdf_client.StartupInfo, got: %s" %
-          type(startup_info))
-
+    self._ValidateType(startup_info, rdf_client.StartupInfo)
     self._ValidateClientId(client_id)
 
     return self.delegate.WriteClientStartupInfo(client_id, startup_info)
@@ -1040,11 +1364,7 @@ class DatabaseValidationWrapper(Database):
         client_id, timerange=timerange)
 
   def WriteClientCrashInfo(self, client_id, crash_info):
-    if not isinstance(crash_info, rdf_client.ClientCrash):
-      raise TypeError(
-          "WriteClientCrashInfo requires rdf_client.ClientCrash, got: %s" %
-          type(crash_info))
-
+    self._ValidateType(crash_info, rdf_client.ClientCrash)
     self._ValidateClientId(client_id)
 
     return self.delegate.WriteClientCrashInfo(client_id, crash_info)
@@ -1072,9 +1392,8 @@ class DatabaseValidationWrapper(Database):
       raise ValueError("Multiple keywords map to the same string "
                        "representation.")
 
-    if start_time and not isinstance(start_time, rdfvalue.RDFDatetime):
-      raise TypeError(
-          "Time value must be rdfvalue.RDFDatetime, got: %s" % type(start_time))
+    if start_time:
+      self._ValidateTimestamp(start_time)
 
     return self.delegate.ListClientsForKeywords(keywords, start_time=start_time)
 
@@ -1109,8 +1428,7 @@ class DatabaseValidationWrapper(Database):
     return self.delegate.ReadAllClientLabels()
 
   def WriteForemanRule(self, rule):
-    if not isinstance(rule, foreman_rules.ForemanCondition):
-      raise TypeError("Expected ForemanCondition, got %s" % type(rule))
+    self._ValidateType(rule, foreman_rules.ForemanCondition)
 
     if not rule.hunt_id:
       raise ValueError("Foreman rule has no hunt_id: %s" % rule)
@@ -1151,10 +1469,7 @@ class DatabaseValidationWrapper(Database):
     return self.delegate.ReadAllGRRUsers()
 
   def WriteApprovalRequest(self, approval_request):
-    if not isinstance(approval_request, rdf_objects.ApprovalRequest):
-      raise TypeError(
-          "ApprovalRequest object expected, got %s" % type(approval_request))
-
+    self._ValidateType(approval_request, rdf_objects.ApprovalRequest)
     self._ValidateUsername(approval_request.requestor_username)
     self._ValidateApprovalType(approval_request.approval_type)
 
@@ -1191,6 +1506,44 @@ class DatabaseValidationWrapper(Database):
     return self.delegate.GrantApproval(requestor_username, approval_id,
                                        grantor_username)
 
+  def ReadPathInfo(self, client_id, path_type, components, timestamp=None):
+    self._ValidateClientId(client_id)
+    self._ValidateEnumType(path_type, rdf_objects.PathInfo.PathType)
+    self._ValidatePathComponents(components)
+
+    if timestamp is not None:
+      self._ValidateTimestamp(timestamp)
+
+    return self.delegate.ReadPathInfo(
+        client_id, path_type, components, timestamp=timestamp)
+
+  def ReadPathInfos(self, client_id, path_type, components_list):
+    self._ValidateClientId(client_id)
+    self._ValidateEnumType(path_type, rdf_objects.PathInfo.PathType)
+    for components in components_list:
+      self._ValidatePathComponents(components)
+
+    return self.delegate.ReadPathInfos(client_id, path_type, components_list)
+
+  def ListChildPathInfos(self, client_id, path_type, components):
+    self._ValidateClientId(client_id)
+    self._ValidateEnumType(path_type, rdf_objects.PathInfo.PathType)
+    self._ValidatePathComponents(components)
+
+    return self.delegate.ListChildPathInfos(client_id, path_type, components)
+
+  def ListDescendentPathInfos(self,
+                              client_id,
+                              path_type,
+                              components,
+                              max_depth=None):
+    self._ValidateClientId(client_id)
+    self._ValidateEnumType(path_type, rdf_objects.PathInfo.PathType)
+    self._ValidatePathComponents(components)
+
+    return self.delegate.ListDescendentPathInfos(
+        client_id, path_type, components, max_depth=max_depth)
+
   def FindPathInfoByPathID(self, client_id, path_type, path_id, timestamp=None):
     self._ValidateClientId(client_id)
 
@@ -1214,11 +1567,28 @@ class DatabaseValidationWrapper(Database):
 
       path_key = (path_info.path_type, path_info.GetPathID())
       if path_key in validated:
-        raise ValueError("Conflicting writes for: %s" % (path_key,))
+        message = "Conflicting writes for path: '{path}' ({path_type})"
+        raise ValueError(
+            message.format(
+                path="/".join(path_info.components),
+                path_type=path_info.path_type))
 
       validated.add(path_key)
 
     return self.delegate.WritePathInfos(client_id, path_infos)
+
+  def MultiWritePathHistory(self, client_id, stat_entries, hash_entries):
+    self._ValidateClientId(client_id)
+
+    for path_info, stat_entry in stat_entries.iteritems():
+      self._ValidateType(path_info, rdf_objects.PathInfo)
+      self._ValidateType(stat_entry, rdf_client.StatEntry)
+
+    for path_info, hash_entry in hash_entries.iteritems():
+      self._ValidateType(path_info, rdf_objects.PathInfo)
+      self._ValidateType(hash_entry, rdf_crypto.Hash)
+
+    self.delegate.MultiWritePathHistory(client_id, stat_entries, hash_entries)
 
   def FindDescendentPathIDs(self, client_id, path_type, path_id,
                             max_depth=None):
@@ -1228,11 +1598,7 @@ class DatabaseValidationWrapper(Database):
         client_id, path_type, path_id, max_depth=max_depth)
 
   def WriteUserNotification(self, notification):
-    if not isinstance(notification, rdf_objects.UserNotification):
-      raise TypeError(
-          "WriteUserNotification requires rdfvalues.objects.UserNotification, "
-          "got: %s" % type(notification))
-
+    self._ValidateType(notification, rdf_objects.UserNotification)
     self._ValidateUsername(notification.username)
     self._ValidateNotificationType(notification.notification_type)
     self._ValidateNotificationState(notification.state)
@@ -1258,10 +1624,7 @@ class DatabaseValidationWrapper(Database):
     return self.delegate.ReadAllAuditEvents()
 
   def WriteAuditEvent(self, event):
-    if not isinstance(event, rdf_events.AuditEvent):
-      message = "expected `%s` but received `%s`"
-      raise TypeError(message % (rdf_events.AuditEvent, type(event)))
-
+    self._ValidateType(event, rdf_events.AuditEvent)
     return self.delegate.WriteAuditEvent(event)
 
   def WriteMessageHandlerRequests(self, requests):
@@ -1273,27 +1636,41 @@ class DatabaseValidationWrapper(Database):
   def ReadMessageHandlerRequests(self):
     return self.delegate.ReadMessageHandlerRequests()
 
-  def LeaseMessageHandlerRequests(self, lease_time=None, limit=1000):
+  def RegisterMessageHandler(self, handler, lease_time, limit=1000):
+    if handler is None:
+      raise ValueError("handler must be provided")
+
     self._ValidateDuration(lease_time)
-    return self.delegate.LeaseMessageHandlerRequests(
-        lease_time=lease_time, limit=limit)
+    return self.delegate.RegisterMessageHandler(
+        handler, lease_time, limit=limit)
+
+  def UnregisterMessageHandler(self):
+    return self.delegate.UnregisterMessageHandler()
 
   def WriteCronJob(self, cronjob):
+    self._ValidateType(cronjob, rdf_cronjobs.CronJob)
     return self.delegate.WriteCronJob(cronjob)
 
   def ReadCronJob(self, cronjob_id):
+    self._ValidateCronJobId(cronjob_id)
     return self.delegate.ReadCronJob(cronjob_id)
 
   def ReadCronJobs(self, cronjob_ids=None):
+    if cronjob_ids:
+      for cronjob_id in cronjob_ids:
+        self._ValidateCronJobId(cronjob_id)
     return self.delegate.ReadCronJobs(cronjob_ids=cronjob_ids)
 
   def EnableCronJob(self, cronjob_id):
+    self._ValidateCronJobId(cronjob_id)
     return self.delegate.EnableCronJob(cronjob_id)
 
   def DisableCronJob(self, cronjob_id):
+    self._ValidateCronJobId(cronjob_id)
     return self.delegate.DisableCronJob(cronjob_id)
 
   def DeleteCronJob(self, cronjob_id):
+    self._ValidateCronJobId(cronjob_id)
     return self.delegate.DeleteCronJob(cronjob_id)
 
   def UpdateCronJob(self,
@@ -1301,17 +1678,92 @@ class DatabaseValidationWrapper(Database):
                     last_run_status=Database.unchanged,
                     last_run_time=Database.unchanged,
                     current_run_id=Database.unchanged,
-                    state=Database.unchanged):
+                    state=Database.unchanged,
+                    forced_run_requested=Database.unchanged):
+    self._ValidateCronJobId(cronjob_id)
+    if current_run_id != Database.unchanged:
+      self._ValidateCronJobRunId(current_run_id)
     return self.delegate.UpdateCronJob(
         cronjob_id,
         last_run_status=last_run_status,
         last_run_time=last_run_time,
         current_run_id=current_run_id,
-        state=state)
+        state=state,
+        forced_run_requested=forced_run_requested)
 
   def LeaseCronJobs(self, cronjob_ids=None, lease_time=None):
+    if cronjob_ids:
+      for cronjob_id in cronjob_ids:
+        self._ValidateCronJobId(cronjob_id)
+    self._ValidateDuration(lease_time)
     return self.delegate.LeaseCronJobs(
         cronjob_ids=cronjob_ids, lease_time=lease_time)
 
   def ReturnLeasedCronJobs(self, jobs):
+    for job in jobs:
+      self._ValidateType(job, rdf_cronjobs.CronJob)
     return self.delegate.ReturnLeasedCronJobs(jobs)
+
+  def WriteCronJobRun(self, run_object):
+    self._ValidateType(run_object, rdf_cronjobs.CronJobRun)
+    return self.delegate.WriteCronJobRun(run_object)
+
+  def ReadCronJobRun(self, job_id, run_id):
+    self._ValidateCronJobId(job_id)
+    self._ValidateCronJobRunId(run_id)
+    return self.delegate.ReadCronJobRun(job_id, run_id)
+
+  def ReadCronJobRuns(self, job_id):
+    self._ValidateCronJobId(job_id)
+    return self.delegate.ReadCronJobRuns(job_id)
+
+  def DeleteOldCronJobRuns(self, cutoff_timestamp):
+    self._ValidateTimestamp(cutoff_timestamp)
+    return self.delegate.DeleteOldCronJobRuns(cutoff_timestamp)
+
+  def WriteClientPathBlobReferences(self, references_by_client_path_id):
+    for client_path_id, refs in references_by_client_path_id.iteritems():
+      self._ValidateClientPathID(client_path_id)
+      for ref in refs:
+        self._ValidateBlobReference(ref)
+
+    self.delegate.WriteClientPathBlobReferences(references_by_client_path_id)
+
+  def ReadClientPathBlobReferences(self, client_path_ids):
+    for p in client_path_ids:
+      self._ValidateClientPathID(p)
+
+    return self.delegate.ReadClientPathBlobReferences(client_path_ids)
+
+  def WriteBlobs(self, blob_id_data_pairs):
+    for bid, data in blob_id_data_pairs.items():
+      self._ValidateBlobID(bid)
+      self._ValidateBytes(data)
+
+    return self.delegate.WriteBlobs(blob_id_data_pairs)
+
+  def ReadBlobs(self, blob_ids):
+    for bid in blob_ids:
+      self._ValidateBlobID(bid)
+
+    return self.delegate.ReadBlobs(blob_ids)
+
+  def WriteClientMessages(self, messages):
+    for message in messages:
+      self._ValidateType(message, rdf_flows.GrrMessage)
+    return self.delegate.WriteClientMessages(messages)
+
+  def LeaseClientMessages(self, client_id, lease_time=None, limit=1000000):
+    self._ValidateClientId(client_id)
+    self._ValidateDuration(lease_time)
+    return self.delegate.LeaseClientMessages(
+        client_id, lease_time=lease_time, limit=limit)
+
+  def ReadClientMessages(self, client_id):
+    self._ValidateClientId(client_id)
+    return self.delegate.ReadClientMessages(client_id)
+
+  def DeleteClientMessages(self, messages):
+    for message in messages:
+      self._ValidateType(message, rdf_flows.GrrMessage)
+    return self.delegate.DeleteClientMessages(messages)

@@ -1,23 +1,23 @@
 #!/usr/bin/env python
 """This module contains regression tests for user API handlers."""
 
-from grr.lib import flags
-from grr.lib import rdfvalue
+from grr_response_core.lib import flags
+from grr_response_core.lib import rdfvalue
 
-from grr.lib.rdfvalues import cronjobs as rdf_cronjobs
-from grr.lib.rdfvalues import hunts as rdf_hunts
-from grr.lib.rdfvalues import objects as rdf_objects
-from grr.server.grr_response_server import aff4
-from grr.server.grr_response_server import data_store
-from grr.server.grr_response_server import flow
-from grr.server.grr_response_server import notification
-from grr.server.grr_response_server.aff4_objects import cronjobs as aff4_cronjobs
-from grr.server.grr_response_server.aff4_objects import users as aff4_users
-from grr.server.grr_response_server.flows.general import discovery
-from grr.server.grr_response_server.gui import api_regression_test_lib
-from grr.server.grr_response_server.gui.api_plugins import user as user_plugin
-from grr.server.grr_response_server.hunts import implementation
-from grr.server.grr_response_server.hunts import standard
+from grr_response_server import aff4
+from grr_response_server import data_store
+from grr_response_server import flow
+from grr_response_server import notification
+from grr_response_server.aff4_objects import cronjobs as aff4_cronjobs
+from grr_response_server.aff4_objects import users as aff4_users
+from grr_response_server.flows.general import discovery
+from grr_response_server.gui import api_regression_test_lib
+from grr_response_server.gui.api_plugins import user as user_plugin
+from grr_response_server.hunts import implementation
+from grr_response_server.hunts import standard
+from grr_response_server.rdfvalues import cronjobs as rdf_cronjobs
+from grr_response_server.rdfvalues import hunts as rdf_hunts
+from grr_response_server.rdfvalues import objects as rdf_objects
 
 from grr.test_lib import acl_test_lib
 from grr.test_lib import hunt_test_lib
@@ -297,7 +297,7 @@ class ApiGetHuntApprovalHandlerRegressionTest(
       self.CreateAdminUser("approver")
 
       client_urn = self.SetupClient(0)
-      flow_urn = flow.GRRFlow.StartFlow(
+      flow_urn = flow.StartFlow(
           flow_name=discovery.Interrogate.__name__,
           client_id=client_urn,
           token=self.token)
@@ -409,7 +409,7 @@ class ApiListHuntApprovalsHandlerRegressionTest(
     with test_lib.FakeTime(42):
       self.CreateAdminUser("approver")
 
-      hunt = implementation.GRRHunt.StartHunt(
+      hunt = implementation.StartHunt(
           hunt_name=standard.GenericHunt.__name__, token=self.token)
 
     with test_lib.FakeTime(43):
@@ -440,8 +440,9 @@ class ApiGetCronJobApprovalHandlerRegressionTest(
       self.CreateAdminUser("approver")
 
       cron_manager = aff4_cronjobs.GetCronManager()
-      cron_args = rdf_cronjobs.CreateCronJobFlowArgs(
-          periodicity="1d", allow_overruns=False)
+      cron_args = rdf_cronjobs.CreateCronJobArgs(
+          frequency="1d", allow_overruns=False)
+
       cron1_id = cron_manager.CreateJob(cron_args=cron_args, token=self.token)
       cron2_id = cron_manager.CreateJob(cron_args=cron_args, token=self.token)
 
@@ -492,8 +493,8 @@ class ApiGrantCronJobApprovalHandlerRegressionTest(
       self.CreateAdminUser("requestor")
 
       cron_manager = aff4_cronjobs.GetCronManager()
-      cron_args = rdf_cronjobs.CreateCronJobFlowArgs(
-          periodicity="1d", allow_overruns=False)
+      cron_args = rdf_cronjobs.CreateCronJobArgs(
+          frequency="1d", allow_overruns=False)
       cron_id = cron_manager.CreateJob(cron_args=cron_args, token=self.token)
 
     with test_lib.FakeTime(44):
@@ -528,8 +529,8 @@ class ApiCreateCronJobApprovalHandlerRegressionTest(
       self.CreateUser("approver")
 
     cron_manager = aff4_cronjobs.GetCronManager()
-    cron_args = rdf_cronjobs.CreateCronJobFlowArgs(
-        periodicity="1d", allow_overruns=False)
+    cron_args = rdf_cronjobs.CreateCronJobArgs(
+        frequency="1d", allow_overruns=False)
     cron_id = cron_manager.CreateJob(cron_args=cron_args, token=self.token)
 
     def ReplaceCronAndApprovalIds():
@@ -609,14 +610,10 @@ class ApiGetPendingUserNotificationsCountHandlerRegressionTest(
   api_method = "GetPendingUserNotificationsCount"
   handler = user_plugin.ApiGetPendingUserNotificationsCountHandler
 
-  def setUp(self):
-    super(ApiGetPendingUserNotificationsCountHandlerRegressionTest,
-          self).setUp()
-    self.client_id = self.SetupClient(0)
-    self.CreateUser(self.token.username)
-
   def Run(self):
-    _SendNotifications(self.token.username, self.client_id)
+    client_id = self.SetupClient(0)
+    self.CreateUser(self.token.username)
+    _SendNotifications(self.token.username, client_id)
 
     self.Check("GetPendingUserNotificationsCount")
 
@@ -628,13 +625,11 @@ class ApiListPendingUserNotificationsHandlerRegressionTest(
   api_method = "ListPendingUserNotifications"
   handler = user_plugin.ApiListPendingUserNotificationsHandler
 
-  def setUp(self):
-    super(ApiListPendingUserNotificationsHandlerRegressionTest, self).setUp()
-    self.client_id = self.SetupClient(0)
+  def Run(self):
+    client_id = self.SetupClient(0)
     self.CreateUser(self.token.username)
 
-  def Run(self):
-    _SendNotifications(self.token.username, self.client_id)
+    _SendNotifications(self.token.username, client_id)
 
     self.Check(
         "ListPendingUserNotifications",
@@ -643,6 +638,10 @@ class ApiListPendingUserNotificationsHandlerRegressionTest(
         "ListPendingUserNotifications",
         args=user_plugin.ApiListPendingUserNotificationsArgs(
             timestamp=43000000))
+    self.Check(
+        "ListPendingUserNotifications",
+        args=user_plugin.ApiListPendingUserNotificationsArgs(
+            timestamp=44000000))
 
 
 class ApiListAndResetUserNotificationsHandlerRegressionTest(
@@ -652,13 +651,10 @@ class ApiListAndResetUserNotificationsHandlerRegressionTest(
   api_method = "ListAndResetUserNotifications"
   handler = user_plugin.ApiListAndResetUserNotificationsHandler
 
-  def setUp(self):
-    super(ApiListAndResetUserNotificationsHandlerRegressionTest, self).setUp()
-    self.client_id = self.SetupClient(0)
-    self.CreateUser(self.token.username)
-
   def Run(self):
-    _SendNotifications(self.token.username, self.client_id)
+    client_id = self.SetupClient(0)
+    self.CreateUser(self.token.username)
+    _SendNotifications(self.token.username, client_id)
 
     # _SendNotifications schedule notifications at timestamp 42 and 44.
     # REL_DB-based ListAndResetUserNotifications implementation only

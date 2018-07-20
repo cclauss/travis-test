@@ -2,8 +2,6 @@
 """Stats server implementation."""
 
 
-import BaseHTTPServer
-
 import collections
 import json
 import logging
@@ -11,10 +9,12 @@ import socket
 import threading
 
 
-from grr import config
-from grr.lib import registry
-from grr.lib import stats
-from grr.lib import utils
+from http import server as http_server
+
+from grr_response_core import config
+from grr_response_core.lib import registry
+from grr_response_core.lib import stats
+from grr_response_core.lib import utils
 
 
 def _JSONMetricValue(metric_info, value):
@@ -62,7 +62,7 @@ def BuildVarzJsonString():
   return encoder.encode(results)
 
 
-class StatsServerHandler(BaseHTTPServer.BaseHTTPRequestHandler):
+class StatsServerHandler(http_server.BaseHTTPRequestHandler):
   """Default stats server implementation."""
 
   def do_GET(self):  # pylint: disable=g-bad-name
@@ -94,7 +94,7 @@ class StatsServer(object):
     for port in range(self.port, max_port + 1):
       # Make a simple reference implementation WSGI server
       try:
-        server = BaseHTTPServer.HTTPServer(("", port), StatsServerHandler)
+        server = http_server.HTTPServer(("", port), StatsServerHandler)
         break
       except socket.error as e:
         if e.errno == socket.errno.EADDRINUSE and port < max_port:
@@ -125,7 +125,7 @@ class StatsServerInit(registry.InitHook):
       logging.info("Starting monitoring server on port %d.", port)
       try:
         # pylint: disable=g-import-not-at-top
-        from grr.server.grr_response_server.local import stats_server
+        from grr_response_server.local import stats_server
         # pylint: enable=g-import-not-at-top
         server_obj = stats_server.StatsServer(port)
         logging.debug("Using local StatsServer")

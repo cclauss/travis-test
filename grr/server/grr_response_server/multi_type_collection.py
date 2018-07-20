@@ -1,12 +1,12 @@
 #!/usr/bin/env python
 """MultiTypeCollection implementation."""
 
-from grr.lib import rdfvalue
-from grr.lib.rdfvalues import flows as rdf_flows
+from grr_response_core.lib import rdfvalue
+from grr_response_core.lib.rdfvalues import flows as rdf_flows
 
-from grr.server.grr_response_server import data_store
+from grr_response_server import data_store
 
-from grr.server.grr_response_server import sequential_collection
+from grr_response_server import sequential_collection
 
 
 class MultiTypeCollection(object):

@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 """A library for tests."""
+from __future__ import division
 
 import codecs
 import datetime
@@ -9,7 +10,6 @@ import logging
 import os
 import pdb
 import platform
-import re
 import shutil
 import socket
 import sys
@@ -21,32 +21,31 @@ import unittest
 
 import mock
 import pkg_resources
-import yaml
 
 import unittest
 
-from grr import config
-
 from grr_response_client import comms
-from grr.lib import rdfvalue
-from grr.lib import utils
 
-from grr.lib.rdfvalues import client as rdf_client
-from grr.lib.rdfvalues import crypto as rdf_crypto
-from grr.lib.rdfvalues import objects
+from grr_response_core import config
+from grr_response_core.lib import rdfvalue
+from grr_response_core.lib import utils
 
-from grr.server.grr_response_server import access_control
-from grr.server.grr_response_server import aff4
-from grr.server.grr_response_server import artifact
-from grr.server.grr_response_server import client_index
-from grr.server.grr_response_server import data_store
-from grr.server.grr_response_server import email_alerts
-from grr.server.grr_response_server.aff4_objects import aff4_grr
-from grr.server.grr_response_server.aff4_objects import filestore
-from grr.server.grr_response_server.aff4_objects import users
+from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_core.lib.rdfvalues import crypto as rdf_crypto
+from grr_response_server import access_control
 
-from grr.server.grr_response_server.flows.general import audit
-from grr.server.grr_response_server.hunts import results as hunts_results
+from grr_response_server import aff4
+from grr_response_server import artifact
+from grr_response_server import client_index
+from grr_response_server import data_store
+from grr_response_server import email_alerts
+from grr_response_server.aff4_objects import aff4_grr
+from grr_response_server.aff4_objects import filestore
+from grr_response_server.aff4_objects import users
+from grr_response_server.flows.general import audit
+
+from grr_response_server.hunts import results as hunts_results
+from grr_response_server.rdfvalues import objects as rdf_objects
 
 from grr.test_lib import testing_startup
 
@@ -409,7 +408,7 @@ class GRRBaseTest(unittest.TestCase):
     """Prepares a test client object."""
     client_id = "C.1%015x" % client_nr
 
-    client = objects.ClientSnapshot(client_id=client_id)
+    client = rdf_objects.ClientSnapshot(client_id=client_id)
     client.startup_info.client_info = self._TestClientInfo()
     if last_boot_time is not None:
       client.startup_info.boot_time = last_boot_time
@@ -531,7 +530,7 @@ class FakeTime(object):
 
   def __init__(self, fake_time, increment=0):
     if isinstance(fake_time, rdfvalue.RDFDatetime):
-      self.time = fake_time / 1e6
+      self.time = fake_time.AsMicrosecondsSinceEpoch() / 1e6
     else:
       self.time = fake_time
     self.increment = increment
@@ -988,25 +987,6 @@ class AutoTempFilePath(object):
     del traceback  # Unused.
 
     os.remove(self.path)
-
-
-class PrivateKeyNotFoundException(Exception):
-
-  def __init__(self):
-    super(PrivateKeyNotFoundException,
-          self).__init__("Private key not found in config file.")
-
-
-def GetClientId(writeback_file):
-  """Given the path to a client's writeback file, returns its client id."""
-  with open(writeback_file) as f:
-    parsed_yaml = yaml.safe_load(f.read()) or {}
-  serialized_pkey = parsed_yaml.get("Client.private_key", None)
-  if serialized_pkey is None:
-    raise PrivateKeyNotFoundException
-  pkey = rdf_crypto.RSAPrivateKey(serialized_pkey)
-  client_urn = comms.ClientCommunicator(private_key=pkey).common_name
-  return re.compile(r"^aff4:/").sub("", client_urn.SerializeToString())
 
 
 def main(argv=None):

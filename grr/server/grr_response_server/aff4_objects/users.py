@@ -5,13 +5,13 @@ import hashlib
 import itertools
 import time
 
-from grr.lib import rdfvalue
-from grr.lib import utils
-from grr.lib.rdfvalues import flows as rdf_flows
-from grr.lib.rdfvalues import structs as rdf_structs
+from grr_response_core.lib import rdfvalue
+from grr_response_core.lib import utils
+from grr_response_core.lib.rdfvalues import flows as rdf_flows
+from grr_response_core.lib.rdfvalues import structs as rdf_structs
 from grr_response_proto import jobs_pb2
 from grr_response_proto import user_pb2
-from grr.server.grr_response_server import aff4
+from grr_response_server import aff4
 
 
 class Error(Exception):
@@ -238,7 +238,7 @@ class GRRUser(aff4.AFF4Object):
         subject=subject,
         message=msg,
         source=source,
-        timestamp=long(time.time() * 1e6))
+        timestamp=int(time.time() * 1e6))
 
     # Limit the notification to 50, expiring older notifications.
     while len(pending) > 50:

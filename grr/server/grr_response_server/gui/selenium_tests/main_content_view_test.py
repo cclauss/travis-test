@@ -2,11 +2,11 @@
 """Main content view notitification tests."""
 
 import unittest
-from grr.lib import flags
+from grr_response_core.lib import flags
 
-from grr.server.grr_response_server import aff4
-from grr.server.grr_response_server.aff4_objects import users as aff4_users
-from grr.server.grr_response_server.gui import gui_test_lib
+from grr_response_server import aff4
+from grr_response_server.aff4_objects import users as aff4_users
+from grr_response_server.gui import gui_test_lib
 from grr.test_lib import db_test_lib
 
 

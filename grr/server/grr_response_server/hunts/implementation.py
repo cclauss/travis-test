@@ -5,40 +5,105 @@ A hunt is a mechanism for automatically scheduling flows on a selective subset
 of clients, managing these flows, collecting and presenting the combined results
 of all these flows.
 """
+from __future__ import division
+
 import logging
 import threading
 import traceback
 
-from grr.lib import rdfvalue
-from grr.lib import registry
-from grr.lib import stats
-from grr.lib import type_info
-from grr.lib import utils
-from grr.lib.rdfvalues import client as rdf_client
-from grr.lib.rdfvalues import events as rdf_events
-from grr.lib.rdfvalues import flows as rdf_flows
-from grr.lib.rdfvalues import hunts as rdf_hunts
-from grr.lib.rdfvalues import objects as rdf_objects
-from grr.lib.rdfvalues import protodict as rdf_protodict
-from grr.lib.rdfvalues import stats as rdf_stats
-from grr.server.grr_response_server import access_control
-from grr.server.grr_response_server import aff4
-from grr.server.grr_response_server import data_store
-from grr.server.grr_response_server import events as events_lib
-from grr.server.grr_response_server import flow
-from grr.server.grr_response_server import flow_runner
-from grr.server.grr_response_server import foreman_rules
-from grr.server.grr_response_server import grr_collections
-from grr.server.grr_response_server import multi_type_collection
-from grr.server.grr_response_server import notification as notification_lib
-from grr.server.grr_response_server import output_plugin as output_plugin_lib
-from grr.server.grr_response_server import queue_manager
-from grr.server.grr_response_server.aff4_objects import aff4_grr
-from grr.server.grr_response_server.hunts import results as hunts_results
+from grr_response_core.lib import rdfvalue
+from grr_response_core.lib import registry
+from grr_response_core.lib import stats
+from grr_response_core.lib import type_info
+from grr_response_core.lib import utils
+from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_core.lib.rdfvalues import events as rdf_events
+from grr_response_core.lib.rdfvalues import flows as rdf_flows
+from grr_response_core.lib.rdfvalues import protodict as rdf_protodict
+from grr_response_core.lib.rdfvalues import stats as rdf_stats
+from grr_response_server import access_control
+from grr_response_server import aff4
+from grr_response_server import data_store
+from grr_response_server import events as events_lib
+from grr_response_server import flow
+from grr_response_server import flow_runner
+from grr_response_server import foreman_rules
+from grr_response_server import grr_collections
+from grr_response_server import multi_type_collection
+from grr_response_server import notification as notification_lib
+from grr_response_server import output_plugin as output_plugin_lib
+from grr_response_server import queue_manager
+from grr_response_server.aff4_objects import aff4_grr
+from grr_response_server.hunts import results as hunts_results
+from grr_response_server.rdfvalues import flow_runner as rdf_flow_runner
+from grr_response_server.rdfvalues import hunts as rdf_hunts
+from grr_response_server.rdfvalues import objects as rdf_objects
 
 
 class HuntRunnerError(Exception):
   """Raised when there is an error during state transitions."""
+
+
+def StartHunt(args=None, runner_args=None, token=None, **kwargs):
+  """This class method creates new hunts."""
+  # If no token is specified, raise.
+  if not token:
+    raise access_control.UnauthorizedAccess("A token must be specified.")
+
+  # Build the runner args from the keywords.
+  if runner_args is None:
+    runner_args = rdf_hunts.HuntRunnerArgs()
+
+  flow.FilterArgsFromSemanticProtobuf(runner_args, kwargs)
+
+  # Is the required hunt a known hunt?
+  hunt_cls = GRRHunt.classes.get(runner_args.hunt_name)
+  if not hunt_cls or not aff4.issubclass(hunt_cls, GRRHunt):
+    raise RuntimeError("Unable to locate hunt %s" % runner_args.hunt_name)
+
+  # Make a new hunt object and initialize its runner.
+  hunt_obj = aff4.FACTORY.Create(None, hunt_cls, mode="w", token=token)
+
+  # Hunt is called using keyword args. We construct an args proto from the
+  # kwargs.
+  if hunt_obj.args_type and args is None:
+    args = hunt_obj.args_type()
+    flow.FilterArgsFromSemanticProtobuf(args, kwargs)
+
+  if hunt_obj.args_type and not isinstance(args, hunt_obj.args_type):
+    raise RuntimeError("Hunt args must be instance of %s" % hunt_obj.args_type)
+
+  if kwargs:
+    raise type_info.UnknownArg("Unknown parameters to StartHunt: %s" % kwargs)
+
+  # Store the hunt args.
+  hunt_obj.args = args
+  hunt_obj.runner_args = runner_args
+
+  # Hunts are always created in the paused state. The runner method Start
+  # should be called to start them.
+  hunt_obj.Set(hunt_obj.Schema.STATE("PAUSED"))
+
+  runner = hunt_obj.CreateRunner(runner_args=runner_args)
+  # Allow the hunt to do its own initialization.
+  runner.RunStateMethod("Start")
+
+  hunt_obj.Flush()
+
+  try:
+    flow_name = args.flow_runner_args.flow_name
+  except AttributeError:
+    flow_name = ""
+
+  event = rdf_events.AuditEvent(
+      user=token.username,
+      action="HUNT_CREATED",
+      urn=hunt_obj.urn,
+      flow_name=flow_name,
+      description=runner_args.description)
+  events_lib.Events.PublishEvent("Audit", event, token=token)
+
+  return hunt_obj
 
 
 class HuntResultsMetadata(aff4.AFF4Object):
@@ -140,8 +205,7 @@ class HuntRunner(object):
         # Requests which are not destined to clients have no embedded request
         # message.
         if request.HasField("request"):
-          manager.DeQueueClientRequest(request.client_id,
-                                       request.request.task_id)
+          manager.DeQueueClientRequest(request.request)
 
     processing = []
     while True:
@@ -316,7 +380,7 @@ class HuntRunner(object):
     # and the stated next_state. Note however, that there is no
     # client_id or actual request message here because we directly
     # invoke the child flow rather than queue anything for it.
-    state = rdf_flows.RequestState(
+    state = rdf_flow_runner.RequestState(
         id=self.GetNextOutboundId(),
         session_id=utils.SmartUnicode(self.session_id),
         client_id=client_id,
@@ -828,7 +892,7 @@ class HuntRunner(object):
     # Now we construct a special response which will be sent to the hunt
     # flow. Randomize the request_id so we do not overwrite other messages in
     # the queue.
-    request_state = rdf_flows.RequestState(
+    request_state = rdf_flow_runner.RequestState(
         id=utils.PRNG.GetUInt32(),
         session_id=self.context.session_id,
         client_id=client_id,
@@ -1163,70 +1227,6 @@ class GRRHunt(flow.FlowBase):
     """
 
   @classmethod
-  def StartHunt(cls, args=None, runner_args=None, token=None, **kwargs):
-    """This class method creates new hunts."""
-    # If no token is specified, raise.
-    if not token:
-      raise access_control.UnauthorizedAccess("A token must be specified.")
-
-    # Build the runner args from the keywords.
-    if runner_args is None:
-      runner_args = rdf_hunts.HuntRunnerArgs()
-
-    cls.FilterArgsFromSemanticProtobuf(runner_args, kwargs)
-
-    # Is the required flow a known flow?
-    if (runner_args.hunt_name not in cls.classes or
-        not aff4.issubclass(cls.classes[runner_args.hunt_name], GRRHunt)):
-      raise RuntimeError("Unable to locate hunt %s" % runner_args.hunt_name)
-
-    # Make a new hunt object and initialize its runner.
-    hunt_obj = aff4.FACTORY.Create(
-        None, cls.classes[runner_args.hunt_name], mode="w", token=token)
-
-    # Hunt is called using keyword args. We construct an args proto from the
-    # kwargs.
-    if hunt_obj.args_type and args is None:
-      args = hunt_obj.args_type()
-      cls.FilterArgsFromSemanticProtobuf(args, kwargs)
-
-    if hunt_obj.args_type and not isinstance(args, hunt_obj.args_type):
-      raise RuntimeError(
-          "Hunt args must be instance of %s" % hunt_obj.args_type)
-
-    if kwargs:
-      raise type_info.UnknownArg("Unknown parameters to StartHunt: %s" % kwargs)
-
-    # Store the hunt args.
-    hunt_obj.args = args
-    hunt_obj.runner_args = runner_args
-
-    # Hunts are always created in the paused state. The runner method Start
-    # should be called to start them.
-    hunt_obj.Set(hunt_obj.Schema.STATE("PAUSED"))
-
-    runner = hunt_obj.CreateRunner(runner_args=runner_args)
-    # Allow the hunt to do its own initialization.
-    runner.RunStateMethod("Start")
-
-    hunt_obj.Flush()
-
-    try:
-      flow_name = args.flow_runner_args.flow_name
-    except AttributeError:
-      flow_name = ""
-
-    event = rdf_events.AuditEvent(
-        user=token.username,
-        action="HUNT_CREATED",
-        urn=hunt_obj.urn,
-        flow_name=flow_name,
-        description=runner_args.description)
-    events_lib.Events.PublishEvent("Audit", event, token=token)
-
-    return hunt_obj
-
-  @classmethod
   def StartClients(cls, hunt_id, client_ids, token=None):
     """This method is called by the foreman for each client it discovers.
 
@@ -1245,7 +1245,7 @@ class GRRHunt(flow.FlowBase):
         # Now we construct a special response which will be sent to the hunt
         # flow. Randomize the request_id so we do not overwrite other messages
         # in the queue.
-        state = rdf_flows.RequestState(
+        state = rdf_flow_runner.RequestState(
             id=utils.PRNG.GetUInt32(),
             session_id=hunt_id,
             client_id=client_id,
@@ -1293,8 +1293,7 @@ class GRRHunt(flow.FlowBase):
     # Check average per-client results count limit.
     if self.runner_args.avg_results_per_client_limit:
       avg_results_per_client = (
-          self.context.results_count / float(
-              self.context.completed_clients_count))
+          self.context.results_count / self.context.completed_clients_count)
       if (avg_results_per_client >
           self.runner_args.avg_results_per_client_limit):
         # Stop the hunt since we get too many results per client.
@@ -1308,8 +1307,8 @@ class GRRHunt(flow.FlowBase):
     if self.runner_args.avg_cpu_seconds_per_client_limit:
       avg_cpu_seconds_per_client = (
           (self.context.client_resources.cpu_usage.user_cpu_time +
-           self.context.client_resources.cpu_usage.system_cpu_time) / float(
-               self.context.completed_clients_count))
+           self.context.client_resources.cpu_usage.system_cpu_time) /
+          self.context.completed_clients_count)
       if (avg_cpu_seconds_per_client >
           self.runner_args.avg_cpu_seconds_per_client_limit):
         # Stop the hunt since we use too many CPUs per client.
@@ -1322,8 +1321,8 @@ class GRRHunt(flow.FlowBase):
     # Check average per-client network bytes limit.
     if self.runner_args.avg_network_bytes_per_client_limit:
       avg_network_bytes_per_client = (
-          self.context.network_bytes_sent / float(
-              self.context.completed_clients_count))
+          self.context.network_bytes_sent /
+          self.context.completed_clients_count)
       if (avg_network_bytes_per_client >
           self.runner_args.avg_network_bytes_per_client_limit):
         # Stop the hunt since we use too many network bytes sent
@@ -1404,7 +1403,7 @@ class GRRHunt(flow.FlowBase):
   def HeartBeat(self):
     if self.locked:
       lease_time = self.transaction.lease_time
-      if self.CheckLease() < lease_time / 2:
+      if self.CheckLease() < lease_time // 2:
         logging.debug("%s: Extending Lease", self.session_id)
         self.UpdateLease(lease_time)
     else:

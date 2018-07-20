@@ -4,60 +4,54 @@
 import logging
 import operator
 
-from grr.lib import rdfvalue
-from grr.lib import registry
-from grr.lib import stats
-from grr.lib import utils
-from grr.lib.rdfvalues import client as rdf_client
-from grr.lib.rdfvalues import events as rdf_events
-from grr.lib.rdfvalues import flows as rdf_flows
-from grr.lib.rdfvalues import hunts as rdf_hunts
-from grr.lib.rdfvalues import paths as rdf_paths
-from grr.lib.rdfvalues import structs as rdf_structs
+from grr_response_core.lib import rdfvalue
+from grr_response_core.lib import registry
+from grr_response_core.lib import stats
+from grr_response_core.lib import utils
+from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_core.lib.rdfvalues import events as rdf_events
+from grr_response_core.lib.rdfvalues import paths as rdf_paths
+from grr_response_core.lib.rdfvalues import structs as rdf_structs
 from grr_response_proto import flows_pb2
-from grr.server.grr_response_server import aff4
-from grr.server.grr_response_server import data_store
-from grr.server.grr_response_server import events
-from grr.server.grr_response_server import flow
-from grr.server.grr_response_server import grr_collections
-from grr.server.grr_response_server import output_plugin
-from grr.server.grr_response_server import queue_manager
-from grr.server.grr_response_server.aff4_objects import cronjobs
-from grr.server.grr_response_server.flows.general import transfer
-from grr.server.grr_response_server.hunts import implementation
+from grr_response_server import access_control
+from grr_response_server import aff4
+from grr_response_server import cronjobs
+from grr_response_server import data_store
+from grr_response_server import events
+from grr_response_server import flow
+from grr_response_server import grr_collections
+from grr_response_server import output_plugin
+from grr_response_server import queue_manager
+from grr_response_server.aff4_objects import cronjobs as aff4_cronjobs
+from grr_response_server.flows.general import transfer
+from grr_response_server.hunts import implementation
+from grr_response_server.rdfvalues import flow_runner as rdf_flow_runner
+from grr_response_server.rdfvalues import hunts as rdf_hunts
+from grr_response_server.rdfvalues import output_plugin as rdf_output_plugin
 
 
 class Error(Exception):
   pass
 
 
-class GenericHuntArgs(rdf_structs.RDFProtoStruct):
-  """Arguments to the generic hunt."""
-  protobuf = flows_pb2.GenericHuntArgs
-  rdf_deps = [
-      rdf_flows.FlowRunnerArgs,
-      output_plugin.OutputPluginDescriptor,
-  ]
+class RunHunt(cronjobs.CronJobBase):
+  """A cron job that starts a hunt."""
 
-  def Validate(self):
-    self.flow_runner_args.Validate()
-    self.flow_args.Validate()
+  def Run(self):
+    action = self.job.args.hunt_cron_action
+    token = access_control.ACLToken(username="Cron")
 
-  def GetFlowArgsClass(self):
-    if self.flow_runner_args.flow_name:
-      flow_cls = registry.FlowRegistry.FlowClassByName(
-          self.flow_runner_args.flow_name)
+    hunt_args = rdf_hunts.GenericHuntArgs(
+        flow_args=action.flow_args,
+        flow_runner_args=rdf_flow_runner.FlowRunnerArgs(
+            flow_name=action.flow_name))
+    with implementation.StartHunt(
+        hunt_name=GenericHunt.__name__,
+        args=hunt_args,
+        runner_args=action.hunt_runner_args,
+        token=token) as hunt:
 
-      # The required protobuf for this class is in args_type.
-      return flow_cls.args_type
-
-
-class CreateGenericHuntFlowArgs(rdf_structs.RDFProtoStruct):
-  protobuf = flows_pb2.CreateGenericHuntFlowArgs
-  rdf_deps = [
-      GenericHuntArgs,
-      rdf_hunts.HuntRunnerArgs,
-  ]
+      hunt.Run()
 
 
 class CreateGenericHuntFlow(flow.GRRFlow):
@@ -68,14 +62,14 @@ class CreateGenericHuntFlow(flow.GRRFlow):
   access control manager.
   """
 
-  args_type = CreateGenericHuntFlowArgs
+  args_type = rdf_hunts.CreateGenericHuntFlowArgs
 
   @flow.StateHandler()
   def Start(self):
     """Create the hunt, in the paused state."""
     # Anyone can create the hunt but it will be created in the paused
     # state. Permissions are required to actually start it.
-    with implementation.GRRHunt.StartHunt(
+    with implementation.StartHunt(
         runner_args=self.args.hunt_runner_args,
         args=self.args.hunt_args,
         token=self.token) as hunt:
@@ -90,18 +84,14 @@ class CreateAndRunGenericHuntFlow(flow.GRRFlow):
   """Create and run a GenericHunt with the given name, args and rules.
 
   This flow is different to the CreateGenericHuntFlow in that it
-  immediately runs the hunt it created. This functionality cannot be
-  offered in a SUID flow or every user could run any flow on any
-  client without approval by just running a hunt on just that single
-  client. Thus, this flow must *not* be SUID.
-  """
+  immediately runs the hunt it created. """
 
-  args_type = CreateGenericHuntFlowArgs
+  args_type = rdf_hunts.CreateGenericHuntFlowArgs
 
   @flow.StateHandler()
   def Start(self):
     """Create the hunt and run it."""
-    with implementation.GRRHunt.StartHunt(
+    with implementation.StartHunt(
         runner_args=self.args.hunt_runner_args,
         args=self.args.hunt_args,
         token=self.token) as hunt:
@@ -187,20 +177,11 @@ class MultiHuntVerificationSummaryError(HuntVerificationError):
     return "\n".join(str(error) for error in self.errors)
 
 
-class VerifyHuntOutputPluginsCronFlowArgs(rdf_structs.RDFProtoStruct):
-  protobuf = flows_pb2.VerifyHuntOutputPluginsCronFlowArgs
-  rdf_deps = [
-      rdfvalue.Duration,
-  ]
-
-
-class VerifyHuntOutputPluginsCronFlow(cronjobs.SystemCronFlow):
+class VerifyHuntOutputPluginsCronFlow(aff4_cronjobs.SystemCronFlow):
   """Runs Verify() method of output plugins of active hunts."""
 
   frequency = rdfvalue.Duration("4h")
   lifetime = rdfvalue.Duration("4h")
-
-  args_type = VerifyHuntOutputPluginsCronFlowArgs
 
   NON_VERIFIABLE = "NON_VERIFIABLE"
 
@@ -244,7 +225,9 @@ class VerifyHuntOutputPluginsCronFlow(cronjobs.SystemCronFlow):
           mdata.Schema.OUTPUT_PLUGINS, {}).items():
 
         plugin_obj = plugin_descriptor.GetPluginForState(plugin_state)
-        plugin_verifiers_classes = plugin_descriptor.GetPluginVerifiersClasses()
+        opv = output_plugin.OutputPluginVerifier
+        plugin_verifiers_classes = opv.VerifierClassesForPlugin(
+            plugin_descriptor.plugin_name)
 
         if not plugin_verifiers_classes:
           results.setdefault(self.NON_VERIFIABLE, []).append(
@@ -325,12 +308,10 @@ class VerifyHuntOutputPluginsCronFlow(cronjobs.SystemCronFlow):
   def Start(self):
     hunts_root = aff4.FACTORY.Open("aff4:/hunts", token=self.token)
 
-    if not self.args.check_range:
-      self.args.check_range = rdfvalue.Duration(
-          "%ds" % int(self.__class__.frequency.seconds * 2))
+    check_range = self.frequency * 2
 
     range_end = rdfvalue.RDFDatetime.Now()
-    range_start = rdfvalue.RDFDatetime.Now() - self.args.check_range
+    range_start = rdfvalue.RDFDatetime.Now() - check_range
 
     children_urns = list(hunts_root.ListChildren(age=(range_start, range_end)))
     children_urns.sort(key=operator.attrgetter("age"), reverse=True)
@@ -354,7 +335,7 @@ class VerifyHuntOutputPluginsCronFlow(cronjobs.SystemCronFlow):
 class GenericHunt(implementation.GRRHunt):
   """This is a hunt to start any flow on multiple clients."""
 
-  args_type = GenericHuntArgs
+  args_type = rdf_hunts.GenericHuntArgs
 
   def _CreateAuditEvent(self, event_action):
     flow_name = self.hunt_obj.args.flow_runner_args.flow_name
@@ -463,7 +444,7 @@ class FlowRequest(rdf_structs.RDFProtoStruct):
   protobuf = flows_pb2.FlowRequest
   rdf_deps = [
       rdf_client.ClientURN,
-      rdf_flows.FlowRunnerArgs,
+      rdf_flow_runner.FlowRunnerArgs,
   ]
 
   def GetFlowArgsClass(self):
@@ -479,7 +460,7 @@ class VariableGenericHuntArgs(rdf_structs.RDFProtoStruct):
   protobuf = flows_pb2.VariableGenericHuntArgs
   rdf_deps = [
       FlowRequest,
-      output_plugin.OutputPluginDescriptor,
+      rdf_output_plugin.OutputPluginDescriptor,
   ]
 
 
@@ -526,6 +507,7 @@ class VariableGenericHunt(GenericHunt):
 
 
 class StandardHuntInitHook(registry.InitHook):
+  """Init hook for hunt related stats."""
 
   def RunOnce(self):
     """Register standard hunt-related stats."""

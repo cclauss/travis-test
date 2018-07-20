@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 """Helper functionality for gui testing."""
+from __future__ import division
 
 import atexit
 import functools
@@ -7,8 +8,9 @@ import logging
 import os
 import threading
 import time
-import urlparse
 
+
+from future.moves.urllib import parse as urlparse
 import portpicker
 from selenium import webdriver
 from selenium.common import exceptions
@@ -16,37 +18,38 @@ from selenium.webdriver.common import action_chains
 from selenium.webdriver.common import keys
 from selenium.webdriver.support import select
 
-from grr.lib import flags
-from grr.lib import rdfvalue
-from grr.lib import utils
-from grr.lib.rdfvalues import client as rdf_client
+from grr_response_core.lib import flags
+from grr_response_core.lib import rdfvalue
+from grr_response_core.lib import utils
+from grr_response_core.lib.rdfvalues import client as rdf_client
 
-from grr.lib.rdfvalues import crypto as rdf_crypto
-from grr.lib.rdfvalues import flows as rdf_flows
-from grr.lib.rdfvalues import objects as rdf_objects
-from grr.lib.rdfvalues import paths as rdf_paths
-from grr.lib.rdfvalues import structs as rdf_structs
+from grr_response_core.lib.rdfvalues import crypto as rdf_crypto
+from grr_response_core.lib.rdfvalues import flows as rdf_flows
+from grr_response_core.lib.rdfvalues import paths as rdf_paths
+from grr_response_core.lib.rdfvalues import structs as rdf_structs
 from grr_response_proto import tests_pb2
-from grr.server.grr_response_server import aff4
-from grr.server.grr_response_server import data_store
-from grr.server.grr_response_server import flow
-from grr.server.grr_response_server import foreman
-from grr.server.grr_response_server import foreman_rules
-from grr.server.grr_response_server import output_plugin
-from grr.server.grr_response_server.aff4_objects import aff4_grr
-from grr.server.grr_response_server.aff4_objects import standard as aff4_standard
-from grr.server.grr_response_server.aff4_objects import users
-from grr.server.grr_response_server.flows.general import processes
-from grr.server.grr_response_server.flows.general import transfer
-from grr.server.grr_response_server.gui import api_auth_manager
-from grr.server.grr_response_server.gui import api_call_router_with_approval_checks
-from grr.server.grr_response_server.gui import webauth
-from grr.server.grr_response_server.gui import wsgiapp_testlib
-from grr.server.grr_response_server.hunts import implementation
-from grr.server.grr_response_server.hunts import standard
+from grr_response_server import aff4
+from grr_response_server import data_store
+from grr_response_server import flow
+from grr_response_server import foreman
+from grr_response_server import foreman_rules
+from grr_response_server import output_plugin
+from grr_response_server.aff4_objects import aff4_grr
+from grr_response_server.aff4_objects import standard as aff4_standard
+from grr_response_server.aff4_objects import users
+from grr_response_server.flows.general import processes
+from grr_response_server.flows.general import transfer
+from grr_response_server.gui import api_auth_manager
+from grr_response_server.gui import api_call_router_with_approval_checks
+from grr_response_server.gui import webauth
+from grr_response_server.gui import wsgiapp_testlib
+from grr_response_server.hunts import implementation
+from grr_response_server.hunts import standard
+from grr_response_server.rdfvalues import flow_runner as rdf_flow_runner
+from grr_response_server.rdfvalues import objects as rdf_objects
 from grr.test_lib import acl_test_lib
 from grr.test_lib import action_mocks
-from grr.test_lib import artifact_test_lib
+from grr.test_lib import artifact_test_lib as ar_test_lib
 from grr.test_lib import hunt_test_lib
 from grr.test_lib import test_lib
 
@@ -494,7 +497,8 @@ class GRRSeleniumTest(test_lib.GRRBaseTest, acl_test_lib.AclTestMixin):
   def _WaitForAjaxCompleted(self):
     self.WaitUntilEqual(
         [], self.GetJavaScriptValue,
-        "return $('body').injector().get('$http').pendingRequests")
+        "return (window.$ && $('body') && $('body').injector && "
+        "$('body').injector().get('$http').pendingRequests) || []")
 
   @SeleniumAction
   def Type(self, target, text, end_with_enter=False):
@@ -633,7 +637,7 @@ class GRRSeleniumTest(test_lib.GRRBaseTest, acl_test_lib.AclTestMixin):
       data_store.REL_DB.WriteGRRUser(
           self.token.username, ui_mode=users.GUISettings.UIMode.ADVANCED)
 
-    self._artifact_patcher = artifact_test_lib.PatchDefaultArtifactRegistry()
+    self._artifact_patcher = ar_test_lib.PatchDatastoreOnlyArtifactRegistry()
     self._artifact_patcher.start()
 
     self.InstallACLChecks()
@@ -704,9 +708,9 @@ class GRRSeleniumHuntTest(GRRSeleniumTest, hunt_test_lib.StandardHuntTestMixin):
     token = token or self.token
     self.client_ids = self.SetupClients(client_count)
 
-    with implementation.GRRHunt.StartHunt(
+    with implementation.StartHunt(
         hunt_name=standard.GenericHunt.__name__,
-        flow_runner_args=rdf_flows.FlowRunnerArgs(
+        flow_runner_args=rdf_flow_runner.FlowRunnerArgs(
             flow_name=transfer.GetFile.__name__),
         flow_args=transfer.GetFileArgs(
             pathspec=rdf_paths.PathSpec(
@@ -742,7 +746,7 @@ class GRRSeleniumHuntTest(GRRSeleniumTest, hunt_test_lib.StandardHuntTestMixin):
           rdfvalue.RDFURN("aff4:/sample/3")
       ]
 
-    with implementation.GRRHunt.StartHunt(
+    with implementation.StartHunt(
         hunt_name=standard.GenericHunt.__name__,
         client_rule_set=self._CreateForemanClientRuleSet(),
         output_plugins=[],
@@ -764,7 +768,7 @@ class GRRSeleniumHuntTest(GRRSeleniumTest, hunt_test_lib.StandardHuntTestMixin):
 class SearchClientTestBase(GRRSeleniumTest):
 
   def CreateSampleHunt(self, description, token=None):
-    return implementation.GRRHunt.StartHunt(
+    return implementation.StartHunt(
         hunt_name=standard.GenericHunt.__name__,
         description=description,
         token=token)

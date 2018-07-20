@@ -5,17 +5,18 @@ import hashlib
 import os
 import shutil
 
-from grr import config
-from grr.lib import rdfvalue
-from grr.lib import registry
-from grr.server.grr_response_server import aff4
-from grr.server.grr_response_server.aff4_objects import standard
+
+from future.utils import with_metaclass
+
+from grr_response_core import config
+from grr_response_core.lib import rdfvalue
+from grr_response_core.lib import registry
+from grr_response_server import aff4
+from grr_response_server.aff4_objects import standard
 
 
-class UploadFileStore(object):
+class UploadFileStore(with_metaclass(registry.MetaclassRegistry, object)):
   """A class to manage writing to a file location."""
-
-  __metaclass__ = registry.MetaclassRegistry
 
   def CreateFileStoreFile(self):
     """Creates a new file for writing."""

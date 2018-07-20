@@ -1,17 +1,18 @@
 #!/usr/bin/env python
 """Tests for the Rekall profile server."""
 
-import urllib2
 import zlib
 
 
-from grr import config
-from grr.lib import flags
-from grr.lib import rdfvalue
-from grr.lib import utils
-from grr.server.grr_response_server import aff4
-from grr.server.grr_response_server import rekall_profile_server
-from grr.server.grr_response_server import server_stubs
+from future.moves.urllib import request as urlrequest
+
+from grr_response_core import config
+from grr_response_core.lib import flags
+from grr_response_core.lib import rdfvalue
+from grr_response_core.lib import utils
+from grr_response_server import aff4
+from grr_response_server import rekall_profile_server
+from grr_response_server import server_stubs
 from grr.test_lib import rekall_test_lib
 from grr.test_lib import test_lib
 
@@ -56,7 +57,7 @@ class ProfileServerTest(test_lib.GRRBaseTest):
 
     FakeHandle.read_count = 0
 
-    with utils.Stubber(urllib2, "urlopen", FakeOpen):
+    with utils.Stubber(urlrequest, "urlopen", FakeOpen):
       profile = self.server.GetProfileByName(
           profile_name, version=server_stubs.REKALL_PROFILE_REPOSITORY_VERSION)
       uncompressed = zlib.decompress(profile.data, 16 + zlib.MAX_WBITS)
@@ -65,7 +66,7 @@ class ProfileServerTest(test_lib.GRRBaseTest):
     # We issued one http request.
     self.assertEqual(FakeHandle.read_count, 1)
 
-    with utils.Stubber(urllib2, "urlopen", FakeOpen):
+    with utils.Stubber(urlrequest, "urlopen", FakeOpen):
       profile = self.server.GetProfileByName(
           profile_name, version=server_stubs.REKALL_PROFILE_REPOSITORY_VERSION)
 
@@ -73,7 +74,7 @@ class ProfileServerTest(test_lib.GRRBaseTest):
     self.assertEqual(FakeHandle.read_count, 1)
 
   def testGzExtension(self):
-    with utils.Stubber(urllib2, "urlopen", FakeOpen):
+    with utils.Stubber(urlrequest, "urlopen", FakeOpen):
       profile = self.server.GetProfileByName("pe")
       # We received compressed data.
       zlib.decompress(profile.data, 16 + zlib.MAX_WBITS)

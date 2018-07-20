@@ -8,15 +8,17 @@ import time
 import traceback
 
 
+from future.utils import with_metaclass
+
 import psutil
 
-from grr import config
 from grr_response_client import client_utils
-from grr.lib import flags
-from grr.lib import rdfvalue
-from grr.lib import registry
-from grr.lib import utils
-from grr.lib.rdfvalues import flows as rdf_flows
+from grr_response_core import config
+from grr_response_core.lib import flags
+from grr_response_core.lib import rdfvalue
+from grr_response_core.lib import registry
+from grr_response_core.lib import utils
+from grr_response_core.lib.rdfvalues import flows as rdf_flows
 
 # Our first response in the session is this:
 INITIAL_RESPONSE_ID = 1
@@ -34,7 +36,7 @@ class NetworkBytesExceededError(Error):
   """Exceeded the maximum number of bytes allowed to be sent for this action."""
 
 
-class ActionPlugin(object):
+class ActionPlugin(with_metaclass(registry.MetaclassRegistry, object)):
   """Baseclass for plugins.
 
   An action is a plugin abstraction which receives an rdfvalue and
@@ -62,8 +64,6 @@ class ActionPlugin(object):
 
   # Authentication Required for this Action:
   _authentication_required = True
-
-  __metaclass__ = registry.MetaclassRegistry
 
   __abstract = True  # pylint: disable=invalid-name
 
@@ -309,6 +309,21 @@ class ActionPlugin(object):
       self.nanny_controller.nanny.Stop()
     except AttributeError:
       logging.info("Can't disable Nanny on this OS.")
+
+  @classmethod
+  def Start(cls, args):
+    """Executes the client action.
+
+    Contains the functionality to perform a client action without having to
+    instantiate an Action object. It takes as input an in_rdfvalue object and
+    yields out_rdfvalue objects. This method is used by the Run method which
+    sends the generated objects to the server and by the ClientArtifactCollector
+    which collects several results before sending them.
+
+    Args:
+      args: An in_rdfvalue object specific to the Action.
+    """
+    pass
 
   @property
   def session_id(self):

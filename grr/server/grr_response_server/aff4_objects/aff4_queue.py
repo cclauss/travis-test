@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 """A simple message queue synchronized through data store locks.
 """
-from grr.lib import rdfvalue
-from grr.server.grr_response_server import aff4
-from grr.server.grr_response_server import data_store
+from grr_response_core.lib import rdfvalue
+from grr_response_server import aff4
+from grr_response_server import data_store
 
 
 class Queue(aff4.AFF4Object):

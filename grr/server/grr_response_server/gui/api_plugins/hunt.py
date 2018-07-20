@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 """API handlers for accessing hunts."""
+from __future__ import division
 
 import functools
 import itertools
@@ -7,34 +8,37 @@ import logging
 import operator
 import re
 
-from grr import config
-from grr.lib import rdfvalue
-from grr.lib import registry
-from grr.lib import utils
-from grr.lib.rdfvalues import client as rdf_client
-from grr.lib.rdfvalues import events as rdf_events
-from grr.lib.rdfvalues import hunts as rdf_hunts
-from grr.lib.rdfvalues import objects as rdf_objects
-from grr.lib.rdfvalues import stats as rdf_stats
 
-from grr.lib.rdfvalues import structs as rdf_structs
+from builtins import zip  # pylint: disable=redefined-builtin
+
+from grr_response_core import config
+from grr_response_core.lib import rdfvalue
+from grr_response_core.lib import registry
+from grr_response_core.lib import utils
+from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_core.lib.rdfvalues import events as rdf_events
+from grr_response_core.lib.rdfvalues import stats as rdf_stats
+from grr_response_core.lib.rdfvalues import structs as rdf_structs
 from grr_response_proto.api import hunt_pb2
-from grr.server.grr_response_server import aff4
-from grr.server.grr_response_server import events
-from grr.server.grr_response_server import foreman_rules
-from grr.server.grr_response_server import instant_output_plugin
-from grr.server.grr_response_server import notification
-from grr.server.grr_response_server import output_plugin
-from grr.server.grr_response_server.flows.general import export
-from grr.server.grr_response_server.gui import api_call_handler_base
-from grr.server.grr_response_server.gui import api_call_handler_utils
-from grr.server.grr_response_server.gui.api_plugins import client as api_client
-from grr.server.grr_response_server.gui.api_plugins import flow as api_flow
-from grr.server.grr_response_server.gui.api_plugins import output_plugin as api_output_plugin
-from grr.server.grr_response_server.gui.api_plugins import vfs as api_vfs
 
-from grr.server.grr_response_server.hunts import implementation
-from grr.server.grr_response_server.hunts import standard
+from grr_response_server import aff4
+from grr_response_server import events
+from grr_response_server import foreman_rules
+from grr_response_server import instant_output_plugin
+from grr_response_server import notification
+from grr_response_server import output_plugin
+from grr_response_server.flows.general import export
+from grr_response_server.gui import api_call_handler_base
+from grr_response_server.gui import api_call_handler_utils
+from grr_response_server.gui.api_plugins import client as api_client
+from grr_response_server.gui.api_plugins import flow as api_flow
+from grr_response_server.gui.api_plugins import output_plugin as api_output_plugin
+from grr_response_server.gui.api_plugins import vfs as api_vfs
+from grr_response_server.hunts import implementation
+from grr_response_server.hunts import standard
+
+from grr_response_server.rdfvalues import hunts as rdf_hunts
+from grr_response_server.rdfvalues import objects as rdf_objects
 
 HUNTS_ROOT_PATH = rdfvalue.RDFURN("aff4:/hunts")
 
@@ -828,8 +832,8 @@ class ApiGetHuntClientCompletionStatsHandler(
     for client in completed_clients:
       fdict.setdefault(client, []).append(client.age)
 
-    cl_age = [int(min(x) / 1e6) for x in cdict.values()]
-    fi_age = [int(min(x) / 1e6) for x in fdict.values()]
+    cl_age = [min(x).AsSecondsSinceEpoch() for x in cdict.itervalues()]
+    fi_age = [min(x).AsSecondsSinceEpoch() for x in fdict.itervalues()]
 
     cl_hist = {}
     fi_hist = {}
@@ -861,7 +865,7 @@ class ApiGetHuntClientCompletionStatsHandler(
 
     # Convert to hours, starting from 0.
     times = [(t - t0) / 3600.0 for t in times]
-    return (zip(times, cl), zip(times, fi))
+    return (list(zip(times, cl)), list(zip(times, fi)))
 
   def _Resample(self, stats, target_size):
     """Resamples the stats to have a specific number of data points."""
@@ -1139,8 +1143,7 @@ class ApiGetHuntContextResult(rdf_structs.RDFProtoStruct):
     if hunt_name:
       hunt_cls = implementation.GRRHunt.classes.get(hunt_name)
       if hunt_cls is None:
-        raise ValueError(
-            "Hunt %s not known by this implementation." % hunt_name)
+        raise ValueError("Hunt %s not known." % hunt_name)
 
       # The required protobuf for this class is in args_type.
       return hunt_cls.args_type
@@ -1177,6 +1180,7 @@ class ApiGetHuntContextHandler(api_call_handler_base.ApiCallHandler):
 
 
 class ApiCreateHuntArgs(rdf_structs.RDFProtoStruct):
+  """Args for the ApiCreateHuntHandler."""
   protobuf = hunt_pb2.ApiCreateHuntArgs
   rdf_deps = [
       rdf_hunts.HuntRunnerArgs,
@@ -1202,7 +1206,7 @@ class ApiCreateHuntHandler(api_call_handler_base.ApiCallHandler):
     """Creates a new hunt."""
 
     # We only create generic hunts with /hunts/create requests.
-    generic_hunt_args = standard.GenericHuntArgs()
+    generic_hunt_args = rdf_hunts.GenericHuntArgs()
     generic_hunt_args.flow_runner_args.flow_name = args.flow_name
     generic_hunt_args.flow_args = args.flow_args
 
@@ -1232,7 +1236,7 @@ class ApiCreateHuntHandler(api_call_handler_base.ApiCallHandler):
 
     # Anyone can create the hunt but it will be created in the paused
     # state. Permissions are required to actually start it.
-    with implementation.GRRHunt.StartHunt(
+    with implementation.StartHunt(
         runner_args=args.hunt_runner_args, args=generic_hunt_args,
         token=token) as hunt:
 

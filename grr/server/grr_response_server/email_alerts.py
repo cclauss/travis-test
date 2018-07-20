@@ -12,15 +12,16 @@ import re
 import smtplib
 import socket
 
-from grr import config
-from grr.lib import registry
-from grr.lib.rdfvalues import standard as rdf_standard
+
+from future.utils import with_metaclass
+
+from grr_response_core import config
+from grr_response_core.lib import registry
+from grr_response_core.lib.rdfvalues import standard as rdf_standard
 
 
-class EmailAlerterBase(object):
+class EmailAlerterBase(with_metaclass(registry.MetaclassRegistry, object)):
   """The email alerter base class."""
-
-  __metaclass__ = registry.MetaclassRegistry
 
   def RemoveHtmlTags(self, data):
     p = re.compile(r"<.*?>")

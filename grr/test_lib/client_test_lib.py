@@ -7,26 +7,27 @@ import subprocess
 import types
 import unittest
 
+
+from future.utils import with_metaclass
 import pytest
 
 from grr_response_client import actions
 from grr_response_client.client_actions import standard
 
-from grr.lib import registry
-from grr.lib import utils
-from grr.lib.rdfvalues import flows as rdf_flows
-from grr.lib.rdfvalues import protodict as rdf_protodict
-from grr.server.grr_response_server import server_stubs
+from grr_response_core.lib import registry
+from grr_response_core.lib import utils
+from grr_response_core.lib.rdfvalues import flows as rdf_flows
+from grr_response_core.lib.rdfvalues import protodict as rdf_protodict
+from grr_response_server import server_stubs
 
 from grr.test_lib import test_lib
 from grr.test_lib import worker_mocks
 
 
 @pytest.mark.small
-class EmptyActionTest(test_lib.GRRBaseTest):
+class EmptyActionTest(
+    with_metaclass(registry.MetaclassRegistry, test_lib.GRRBaseTest)):
   """Test the client Actions."""
-
-  __metaclass__ = registry.MetaclassRegistry
 
   def RunAction(self, action_cls, arg=None, grr_worker=None):
     if arg is None:

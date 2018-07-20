@@ -12,17 +12,21 @@ import logging
 import re
 import time
 
-from grr.lib import rdfvalue
-from grr.lib import registry
-from grr.lib import utils
-from grr.lib.rdfvalues import client as rdf_client
-from grr.lib.rdfvalues import paths as rdf_paths
-from grr.lib.rdfvalues import protodict as rdf_protodict
-from grr.lib.rdfvalues import structs as rdf_structs
+
+from future.utils import with_metaclass
+
+from grr_response_core.lib import rdfvalue
+from grr_response_core.lib import registry
+from grr_response_core.lib import utils
+from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_core.lib.rdfvalues import paths as rdf_paths
+from grr_response_core.lib.rdfvalues import protodict as rdf_protodict
+from grr_response_core.lib.rdfvalues import structs as rdf_structs
 from grr_response_proto import export_pb2
-from grr.server.grr_response_server import aff4
-from grr.server.grr_response_server.aff4_objects import filestore
-from grr.server.grr_response_server.flows.general import collectors as flow_collectors
+from grr_response_server import aff4
+from grr_response_server import data_store_utils
+from grr_response_server.aff4_objects import filestore
+from grr_response_server.flows.general import collectors as flow_collectors
 
 try:
   # pylint: disable=g-import-not-at-top
@@ -192,7 +196,7 @@ class ExportedYaraProcessScanMatch(rdf_structs.RDFProtoStruct):
   rdf_deps = [ExportedProcess, ExportedMetadata]
 
 
-class ExportConverter(object):
+class ExportConverter(with_metaclass(registry.MetaclassRegistry, object)):
   """Base ExportConverter class.
 
   ExportConverters are used to convert RDFValues to export-friendly RDFValues.
@@ -207,8 +211,6 @@ class ExportConverter(object):
   the same input_rdf_type value. They will be applied sequentially and their
   cumulative results will be returned.
   """
-
-  __metaclass__ = registry.MetaclassRegistry
 
   # Type of values that this converter accepts.
   input_rdf_type = None
@@ -530,7 +532,7 @@ class StatEntryToExportedFileConverter(ExportConverter):
   def _ExportHash(self, aff4_object, result):
     """Add hashes from aff4_object to result."""
     if self.options.export_files_hashes:
-      hash_obj = aff4_object.Get(aff4_object.Schema.HASH)
+      hash_obj = data_store_utils.GetFileHashEntry(aff4_object)
       if hash_obj:
         self.ParseFileHash(hash_obj, result)
 
@@ -960,7 +962,7 @@ class VFSFileToExportedFileConverter(ExportConverter):
         st_rdev=stat_entry.st_rdev,
         symlink=stat_entry.symlink)
 
-    hash_obj = vfs_file.Get(vfs_file.Schema.HASH)
+    hash_obj = data_store_utils.GetFileHashEntry(vfs_file)
     if hash_obj:
       StatEntryToExportedFileConverter.ParseFileHash(hash_obj, result)
 

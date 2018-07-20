@@ -4,8 +4,8 @@
 import logging
 import sys
 
-from grr.lib import utils
-from grr.lib.rdfvalues import client as rdf_client
+from grr_response_core.lib import utils
+from grr_response_core.lib.rdfvalues import client as rdf_client
 
 # pylint: disable=g-import-not-at-top
 if sys.platform == "win32":
@@ -71,7 +71,7 @@ def StatEntryFromStat(stat, pathspec, ext_attrs=True):
       continue
 
     # TODO(hanuszczak): Why are we doing this?
-    value = long(value)
+    value = int(value)
     if value < 0:
       value &= 0xFFFFFFFF
 

@@ -2,12 +2,12 @@
 """Test the flow_management interface."""
 
 import unittest
-from grr.lib import flags
+from grr_response_core.lib import flags
 
-from grr.server.grr_response_server import foreman
-from grr.server.grr_response_server.gui import gui_test_lib
-from grr.server.grr_response_server.hunts import implementation
-from grr.server.grr_response_server.hunts import standard
+from grr_response_server import foreman
+from grr_response_server.gui import gui_test_lib
+from grr_response_server.hunts import implementation
+from grr_response_server.hunts import standard
 from grr.test_lib import db_test_lib
 from grr.test_lib import flow_test_lib
 from grr.test_lib import hunt_test_lib
@@ -82,7 +82,7 @@ class TestCrashView(gui_test_lib.GRRSeleniumHuntTest):
     # Make this not match anything.
     client_rule_set.rules[0].regex.attribute_regex = ""
 
-    with implementation.GRRHunt.StartHunt(
+    with implementation.StartHunt(
         hunt_name=standard.SampleHunt.__name__,
         client_rule_set=client_rule_set,
         client_rate=0,

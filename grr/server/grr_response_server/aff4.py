@@ -3,28 +3,33 @@
 
 This contains an AFF4 data model implementation.
 """
+from __future__ import division
+
 import __builtin__
 import abc
+import io
 import itertools
 import logging
-import StringIO
 import threading
 import time
 import zlib
 
 
-from grr import config
-from grr.lib import lexer
-from grr.lib import rdfvalue
-from grr.lib import registry
-from grr.lib import type_info
-from grr.lib import utils
-from grr.lib.rdfvalues import aff4_rdfvalues
-from grr.lib.rdfvalues import crypto as rdf_crypto
-from grr.lib.rdfvalues import paths as rdf_paths
-from grr.lib.rdfvalues import protodict as rdf_protodict
-from grr.server.grr_response_server import access_control
-from grr.server.grr_response_server import data_store
+from builtins import zip  # pylint: disable=redefined-builtin
+from future.utils import with_metaclass
+
+from grr_response_core import config
+from grr_response_core.lib import lexer
+from grr_response_core.lib import rdfvalue
+from grr_response_core.lib import registry
+from grr_response_core.lib import type_info
+from grr_response_core.lib import utils
+from grr_response_core.lib.rdfvalues import crypto as rdf_crypto
+from grr_response_core.lib.rdfvalues import paths as rdf_paths
+from grr_response_core.lib.rdfvalues import protodict as rdf_protodict
+from grr_response_server import access_control
+from grr_response_server import data_store
+from grr_response_server.rdfvalues import aff4 as rdf_aff4
 
 # Factor to convert from seconds to microseconds
 MICROSECONDS = 1000000
@@ -878,7 +883,7 @@ class Factory(object):
 
     if diffs_only:
       versions.insert(0, rdfvalue.RDFDatetime(0))
-      pairs = zip(versions, versions[1:])
+      pairs = list(zip(versions, versions[1:]))
     else:
       pairs = [(rdfvalue.RDFDatetime(0), v) for v in versions]
 
@@ -1512,11 +1517,8 @@ class LazyDecoder(object):
     return self.serialized
 
 
-class AFF4Object(object):
+class AFF4Object(with_metaclass(registry.MetaclassRegistry, object)):
   """Base class for all objects."""
-
-  # We are a registered class.
-  __metaclass__ = registry.MetaclassRegistry
 
   # This property is used in GUIs to define behaviours. These can take arbitrary
   # values as needed. Behaviours are read only and set in the class definition.
@@ -1569,7 +1571,7 @@ class AFF4Object(object):
     # the AddLabels method.
     LABELS = Attribute(
         "aff4:labels_list",
-        aff4_rdfvalues.AFF4ObjectLabelsList,
+        rdf_aff4.AFF4ObjectLabelsList,
         "Any object can have labels applied to it.",
         "Labels",
         creates_new_object_version=False,
@@ -2243,7 +2245,7 @@ class AFF4Object(object):
 
     current_labels = self.Get(self.Schema.LABELS, self.Schema.LABELS())
     for label_name in labels_names:
-      label = aff4_rdfvalues.AFF4ObjectLabel(
+      label = rdf_aff4.AFF4ObjectLabel(
           name=label_name, owner=owner, timestamp=rdfvalue.RDFDatetime.Now())
       current_labels.AddLabel(label)
 
@@ -2264,7 +2266,7 @@ class AFF4Object(object):
 
     current_labels = self.Get(self.Schema.LABELS)
     for label_name in labels_names:
-      label = aff4_rdfvalues.AFF4ObjectLabel(name=label_name, owner=owner)
+      label = rdf_aff4.AFF4ObjectLabel(name=label_name, owner=owner)
       current_labels.RemoveLabel(label)
 
     self.Set(self.Schema.LABELS, current_labels)
@@ -2280,14 +2282,13 @@ class AFF4Object(object):
     return self.SetLabels([label], owner=owner)
 
   def ClearLabels(self):
-    self.Set(self.Schema.LABELS, aff4_rdfvalues.AFF4ObjectLabelsList())
+    self.Set(self.Schema.LABELS, rdf_aff4.AFF4ObjectLabelsList())
 
   def GetLabels(self):
-    return self.Get(self.Schema.LABELS,
-                    aff4_rdfvalues.AFF4ObjectLabelsList()).labels
+    return self.Get(self.Schema.LABELS, rdf_aff4.AFF4ObjectLabelsList()).labels
 
   def GetLabelsNames(self, owner=None):
-    labels = self.Get(self.Schema.LABELS, aff4_rdfvalues.AFF4ObjectLabelsList())
+    labels = self.Get(self.Schema.LABELS, rdf_aff4.AFF4ObjectLabelsList())
     return labels.GetLabelNames(owner=owner)
 
 
@@ -2473,9 +2474,8 @@ class AFF4Symlink(AFF4Object):
       raise ValueError("Unable to open symlink, clone is None.")
 
 
-class AFF4Stream(AFF4Object):
+class AFF4Stream(with_metaclass(abc.ABCMeta, AFF4Object)):
   """An abstract stream for reading data."""
-  __metaclass__ = abc.ABCMeta
 
   # The read pointer offset.
   offset = 0
@@ -2606,24 +2606,24 @@ class AFF4MemoryStreamBase(AFF4Stream):
   def Initialize(self):
     """Try to load the data from the store."""
     super(AFF4MemoryStreamBase, self).Initialize()
-    contents = ""
+    contents = b""
 
     if "r" in self.mode:
-      contents = self.Get(self.Schema.CONTENT)
+      contents = self.Get(self.Schema.CONTENT).AsBytes()
       try:
         if contents is not None:
-          contents = zlib.decompress(utils.SmartStr(contents))
+          contents = zlib.decompress(contents)
       except zlib.error:
         pass
 
-    self.fd = StringIO.StringIO(contents)
+    self.fd = io.BytesIO(contents)
     self.size = len(contents)
     self.offset = 0
 
   def Truncate(self, offset=None):
     if offset is None:
       offset = self.offset
-    self.fd = StringIO.StringIO(self.fd.getvalue()[:offset])
+    self.fd = io.BytesIO(self.fd.getvalue()[:offset])
     self.size.Set(offset)
 
   def Read(self, length):
@@ -2758,7 +2758,7 @@ class AFF4ImageBase(AFF4Stream):
   @classmethod
   def _GenerateChunkPaths(cls, fds):
     for fd in fds:
-      num_chunks = fd.size / fd.chunksize + 1
+      num_chunks = fd.size // fd.chunksize + 1
       for chunk in xrange(num_chunks):
         yield fd.urn.Add(fd.CHUNK_ID_TEMPLATE % chunk), fd
 
@@ -2848,7 +2848,7 @@ class AFF4ImageBase(AFF4Stream):
     elif whence == 1:
       self.offset += offset
     elif whence == 2:
-      self.offset = long(self.size) + offset
+      self.offset = self.size + offset
 
   def Tell(self):
     return self.offset
@@ -2870,7 +2870,7 @@ class AFF4ImageBase(AFF4Stream):
     for child in FACTORY.MultiOpen(
         chunk_names, mode="rw", token=self.token, age=self.age_policy):
       if isinstance(child, AFF4Stream):
-        fd = StringIO.StringIO(child.read())
+        fd = io.BytesIO(child.read())
         fd.dirty = False
         fd.chunk = chunk_names[child.urn]
         self.chunk_cache.Put(fd.chunk, fd)
@@ -2898,7 +2898,7 @@ class AFF4ImageBase(AFF4Stream):
     except KeyError:
       pass
 
-    fd = StringIO.StringIO()
+    fd = io.BytesIO()
     fd.chunk = chunk
     fd.dirty = True
     self.chunk_cache.Put(chunk, fd)
@@ -2929,7 +2929,7 @@ class AFF4ImageBase(AFF4Stream):
 
   def _ReadPartial(self, length):
     """Read as much as possible, but not more than length."""
-    chunk = self.offset / self.chunksize
+    chunk = self.offset // self.chunksize
     chunk_offset = self.offset % self.chunksize
 
     available_to_read = min(length, self.chunksize - chunk_offset)
@@ -2976,7 +2976,7 @@ class AFF4ImageBase(AFF4Stream):
   def _WritePartial(self, data):
     """Writes at most one chunk of data."""
 
-    chunk = self.offset / self.chunksize
+    chunk = self.offset // self.chunksize
     chunk_offset = self.offset % self.chunksize
     data = utils.SmartStr(data)
 
@@ -3057,9 +3057,8 @@ class AFF4InitHook(registry.InitHook):
     FACTORY = Factory()  # pylint: disable=g-bad-name
 
 
-class AFF4Filter(object):
+class AFF4Filter(with_metaclass(registry.MetaclassRegistry, object)):
   """A simple filtering system to be used with Query()."""
-  __metaclass__ = registry.MetaclassRegistry
 
   def __init__(self, *args):
     self.args = args

@@ -1,12 +1,12 @@
 #!/usr/bin/env python
 """Client startup routines."""
 
-from grr import config
 from grr_response_client import client_logging
-from grr.config import contexts
-from grr.lib import config_lib
-from grr.lib import registry
-from grr.lib import stats
+from grr_response_core import config
+from grr_response_core.config import contexts
+from grr_response_core.lib import config_lib
+from grr_response_core.lib import registry
+from grr_response_core.lib import stats
 
 
 def ClientInit():

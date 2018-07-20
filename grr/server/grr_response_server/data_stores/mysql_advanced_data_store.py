@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- mode: python; encoding: utf-8 -*-
 """An implementation of a data store based on mysql."""
+from __future__ import division
 
 import logging
 import os
@@ -13,12 +14,13 @@ from warnings import filterwarnings
 
 import MySQLdb
 from MySQLdb import cursors
+from past.builtins import long
 
-from grr import config
-from grr.lib import rdfvalue
-from grr.lib import utils
-from grr.server.grr_response_server import aff4
-from grr.server.grr_response_server import data_store
+from grr_response_core import config
+from grr_response_core.lib import rdfvalue
+from grr_response_core.lib import utils
+from grr_response_server import aff4
+from grr_response_server import data_store
 
 # We use INSERT IGNOREs which generate useless duplicate entry warnings.
 filterwarnings("ignore", category=MySQLdb.Warning, message=r"Duplicate entry.*")
@@ -513,7 +515,7 @@ class MySQLAdvancedDataStore(data_store.DataStore):
                 "(unhex(md5(%s)), unhex(md5(%s)), "
                 "if(%s is NULL,floor(unix_timestamp(now(6))*1000000),%s), "
                 "unhex(%s))"
-            ] * (len(args) / 5))
+            ] * (len(args) // 5))
 
   def _BuildInserts(self, values):
     subjects_q = {}
@@ -559,10 +561,10 @@ class MySQLAdvancedDataStore(data_store.DataStore):
               query=self._BuildAff4InsertQuery(current_args),
               args=current_args))
 
-    subjects_q["query"] += ", ".join(["(unhex(md5(%s)), %s)"] *
-                                     (len(subjects_q["args"]) / 2))
-    attributes_q["query"] += ", ".join(["(unhex(md5(%s)), %s)"] *
-                                       (len(attributes_q["args"]) / 2))
+    subjects_q["query"] += ", ".join(
+        ["(unhex(md5(%s)), %s)"] * (len(subjects_q["args"]) // 2))
+    attributes_q["query"] += ", ".join(
+        ["(unhex(md5(%s)), %s)"] * (len(attributes_q["args"]) // 2))
     result_queries.extend([attributes_q, subjects_q])
     return result_queries
 

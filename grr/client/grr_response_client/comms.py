@@ -68,6 +68,8 @@ Examples:
 
 """
 
+from __future__ import division
+
 import collections
 import itertools
 import logging
@@ -87,24 +89,24 @@ import requests
 
 from google.protobuf import json_format
 
-from grr import config
 from grr_response_client import actions
 from grr_response_client import client_stats
 from grr_response_client import client_utils
 from grr_response_client.client_actions import admin
-from grr.lib import communicator
-from grr.lib import flags
-from grr.lib import queues
-from grr.lib import rdfvalue
-from grr.lib import registry
-from grr.lib import stats
-from grr.lib import type_info
-from grr.lib import utils
-from grr.lib.rdfvalues import client as rdf_client
-from grr.lib.rdfvalues import crypto as rdf_crypto
-from grr.lib.rdfvalues import flows as rdf_flows
-from grr.lib.rdfvalues import protodict as rdf_protodict
-from grr.lib.rdfvalues import rekall_types as rdf_rekall_types
+from grr_response_core import config
+from grr_response_core.lib import communicator
+from grr_response_core.lib import flags
+from grr_response_core.lib import queues
+from grr_response_core.lib import rdfvalue
+from grr_response_core.lib import registry
+from grr_response_core.lib import stats
+from grr_response_core.lib import type_info
+from grr_response_core.lib import utils
+from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_core.lib.rdfvalues import crypto as rdf_crypto
+from grr_response_core.lib.rdfvalues import flows as rdf_flows
+from grr_response_core.lib.rdfvalues import protodict as rdf_protodict
+from grr_response_core.lib.rdfvalues import rekall_types as rdf_rekall_types
 
 
 class HTTPObject(object):
@@ -368,8 +370,7 @@ class HTTPManager(object):
       **request_args: Args to the requests.request call.
 
     Returns:
-      a tuple of duration, urllib2.urlopen response.
-
+      a tuple of duration, urllib.request.urlopen response.
     """
     while True:
       try:
@@ -531,8 +532,6 @@ class GRRClientWorker(threading.Thread):
 
     self.heart_beat_cb = heart_beat_cb
 
-    self.StartStatsCollector()
-
     self.lock = threading.RLock()
 
     # The worker may communicate over HTTP independently from the comms
@@ -552,6 +551,9 @@ class GRRClientWorker(threading.Thread):
       self._out_queue = SizeLimitedQueue(
           maxsize=config.CONFIG["Client.max_out_queue"],
           heart_beat_cb=heart_beat_cb)
+
+    # Only start this thread after the _out_queue is ready to send.
+    self.StartStatsCollector()
 
     self.daemon = True
 
@@ -742,7 +744,7 @@ class GRRClientWorker(threading.Thread):
   def MemoryExceeded(self):
     """Returns True if our memory footprint is too large."""
     rss_size = self.proc.memory_info().rss
-    return rss_size / 1024 / 1024 > config.CONFIG["Client.rss_max"]
+    return rss_size // 1024 // 1024 > config.CONFIG["Client.rss_max"]
 
   def IsActive(self):
     """Returns True if worker is currently handling a message."""

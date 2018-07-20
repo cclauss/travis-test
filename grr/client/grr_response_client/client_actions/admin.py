@@ -9,6 +9,7 @@ import time
 import traceback
 
 
+from builtins import map  # pylint: disable=redefined-builtin
 import cryptography
 from cryptography.hazmat.backends import openssl
 
@@ -16,17 +17,17 @@ import pkg_resources
 import psutil
 import pytsk3
 
-from grr import config
 from grr_response_client import actions
 from grr_response_client.client_actions import tempfiles
-from grr.lib import config_lib
-from grr.lib import queues
-from grr.lib import rdfvalue
-from grr.lib import stats
-from grr.lib import utils
-from grr.lib.rdfvalues import client as rdf_client
-from grr.lib.rdfvalues import flows as rdf_flows
-from grr.lib.rdfvalues import protodict as rdf_protodict
+from grr_response_core import config
+from grr_response_core.lib import config_lib
+from grr_response_core.lib import queues
+from grr_response_core.lib import rdfvalue
+from grr_response_core.lib import stats
+from grr_response_core.lib import utils
+from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_core.lib.rdfvalues import flows as rdf_flows
+from grr_response_core.lib.rdfvalues import protodict as rdf_protodict
 
 
 class Echo(actions.ActionPlugin):
@@ -40,10 +41,17 @@ class Echo(actions.ActionPlugin):
 
 class GetHostname(actions.ActionPlugin):
   """Retrieves the host name of the client."""
+
   out_rdfvalues = [rdf_protodict.DataBlob]
 
-  def Run(self, unused_args):
-    self.SendReply(rdf_protodict.DataBlob(string=socket.gethostname()))
+  def Run(self, args):
+    for res in self.Start(args):
+      self.SendReply(res)
+
+  @classmethod
+  def Start(cls, args):
+    del args  # Unused.
+    yield rdf_protodict.DataBlob(string=socket.gethostname())
 
 
 class GetPlatformInfo(actions.ActionPlugin):

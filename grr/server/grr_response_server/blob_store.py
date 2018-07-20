@@ -1,13 +1,14 @@
 #!/usr/bin/env python
 """The blob store abstraction."""
 
-from grr.lib import registry
+
+from future.utils import with_metaclass
+
+from grr_response_core.lib import registry
 
 
-class Blobstore(object):
+class Blobstore(with_metaclass(registry.MetaclassRegistry, object)):
   """The blob store base class."""
-
-  __metaclass__ = registry.MetaclassRegistry
 
   def StoreBlob(self, content, token=None):
     return self.StoreBlobs([content], token=token)[0]

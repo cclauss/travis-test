@@ -2,10 +2,10 @@
 """Tests for the RegistryFinder flow."""
 
 
-from grr.lib import flags
-from grr.lib import utils
-from grr.server.grr_response_server import flow
-from grr.server.grr_response_server.flows.general import registry as flow_registry
+from grr_response_core.lib import flags
+from grr_response_core.lib import utils
+from grr_response_server import flow
+from grr_response_server.flows.general import registry as flow_registry
 from grr.test_lib import action_mocks
 from grr.test_lib import flow_test_lib
 from grr.test_lib import test_lib

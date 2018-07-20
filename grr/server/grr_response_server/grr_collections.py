@@ -1,13 +1,13 @@
 #!/usr/bin/env python
 """Some collections used in multiple places."""
 
-from grr.lib import rdfvalue
-from grr.lib.rdfvalues import client as rdf_client
-from grr.lib.rdfvalues import crypto as rdf_crypto
-from grr.lib.rdfvalues import flows as rdf_flows
-from grr.lib.rdfvalues import hunts as rdf_hunts
-from grr.server.grr_response_server import output_plugin
-from grr.server.grr_response_server import sequential_collection
+from grr_response_core.lib import rdfvalue
+from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_core.lib.rdfvalues import crypto as rdf_crypto
+from grr_response_core.lib.rdfvalues import flows as rdf_flows
+from grr_response_server import output_plugin
+from grr_response_server import sequential_collection
+from grr_response_server.rdfvalues import hunts as rdf_hunts
 
 
 class LogCollection(sequential_collection.IndexedSequentialCollection):

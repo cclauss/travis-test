@@ -1,15 +1,15 @@
 #!/usr/bin/env python
 """Tests for API client and hunts-related API calls."""
 
-import StringIO
+import io
 import zipfile
 
 
-from grr.lib import flags
-from grr.lib.rdfvalues import client as rdf_client
-from grr.server.grr_response_server import aff4
-from grr.server.grr_response_server.gui import api_e2e_test_lib
-from grr.server.grr_response_server.output_plugins import csv_plugin
+from grr_response_core.lib import flags
+from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_server import aff4
+from grr_response_server.gui import api_e2e_test_lib
+from grr_response_server.output_plugins import csv_plugin
 from grr.test_lib import flow_test_lib
 from grr.test_lib import hunt_test_lib
 from grr.test_lib import test_lib
@@ -190,7 +190,7 @@ class ApiClientLibHuntTest(api_e2e_test_lib.ApiE2ETest,
     self.assertEqual(len(stats.worst_performers), 5)
 
   def testGetFilesArchive(self):
-    zip_stream = StringIO.StringIO()
+    zip_stream = io.BytesIO()
     self.api.Hunt(self.hunt_obj.urn.Basename()).GetFilesArchive().WriteToStream(
         zip_stream)
     zip_fd = zipfile.ZipFile(zip_stream)
@@ -199,7 +199,7 @@ class ApiClientLibHuntTest(api_e2e_test_lib.ApiE2ETest,
     self.assertTrue(namelist)
 
   def testExportedResults(self):
-    zip_stream = StringIO.StringIO()
+    zip_stream = io.BytesIO()
     self.api.Hunt(self.hunt_obj.urn.Basename()).GetExportedResults(
         csv_plugin.CSVInstantOutputPlugin.plugin_name).WriteToStream(zip_stream)
     zip_fd = zipfile.ZipFile(zip_stream)

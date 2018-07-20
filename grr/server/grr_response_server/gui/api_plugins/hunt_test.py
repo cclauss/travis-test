@@ -1,33 +1,34 @@
 #!/usr/bin/env python
 """This modules contains tests for hunts API handlers."""
 
+import io
 import os
-import StringIO
 import tarfile
 import zipfile
 
 
 import yaml
 
-from grr.lib import flags
+from grr_response_core.lib import flags
 
-from grr.lib import rdfvalue
-from grr.lib import utils
+from grr_response_core.lib import rdfvalue
+from grr_response_core.lib import utils
 
-from grr.lib.rdfvalues import file_finder as rdf_file_finder
-from grr.lib.rdfvalues import flows as rdf_flows
-from grr.lib.rdfvalues import test_base as rdf_test_base
-from grr.server.grr_response_server import access_control
-from grr.server.grr_response_server import aff4
-from grr.server.grr_response_server import data_store
-from grr.server.grr_response_server import output_plugin
-from grr.server.grr_response_server.aff4_objects import aff4_grr
-from grr.server.grr_response_server.flows.general import file_finder
-from grr.server.grr_response_server.gui import api_test_lib
-from grr.server.grr_response_server.gui.api_plugins import hunt as hunt_plugin
-from grr.server.grr_response_server.hunts import implementation
-from grr.server.grr_response_server.hunts import standard
-from grr.server.grr_response_server.output_plugins import test_plugins
+from grr_response_core.lib.rdfvalues import file_finder as rdf_file_finder
+from grr_response_core.lib.rdfvalues import flows as rdf_flows
+from grr_response_core.lib.rdfvalues import test_base as rdf_test_base
+from grr_response_server import access_control
+from grr_response_server import aff4
+from grr_response_server import data_store
+from grr_response_server.aff4_objects import aff4_grr
+from grr_response_server.flows.general import file_finder
+from grr_response_server.gui import api_test_lib
+from grr_response_server.gui.api_plugins import hunt as hunt_plugin
+from grr_response_server.hunts import implementation
+from grr_response_server.hunts import standard
+from grr_response_server.output_plugins import test_plugins
+from grr_response_server.rdfvalues import flow_runner as rdf_flow_runner
+from grr_response_server.rdfvalues import output_plugin as rdf_output_plugin
 from grr.test_lib import action_mocks
 from grr.test_lib import flow_test_lib
 from grr.test_lib import hunt_test_lib
@@ -245,9 +246,9 @@ class ApiGetHuntFilesArchiveHandlerTest(api_test_lib.ApiCallHandlerTest,
 
     self.handler = hunt_plugin.ApiGetHuntFilesArchiveHandler()
 
-    self.hunt = implementation.GRRHunt.StartHunt(
+    self.hunt = implementation.StartHunt(
         hunt_name=standard.GenericHunt.__name__,
-        flow_runner_args=rdf_flows.FlowRunnerArgs(
+        flow_runner_args=rdf_flow_runner.FlowRunnerArgs(
             flow_name=file_finder.FileFinder.__name__),
         flow_args=rdf_file_finder.FileFinderArgs(
             paths=[os.path.join(self.base_path, "test.plist")],
@@ -268,7 +269,7 @@ class ApiGetHuntFilesArchiveHandlerTest(api_test_lib.ApiCallHandlerTest,
             hunt_id=self.hunt.urn.Basename(), archive_format="ZIP"),
         token=self.token)
 
-    out_fd = StringIO.StringIO()
+    out_fd = io.BytesIO()
     for chunk in result.GenerateContent():
       out_fd.write(chunk)
 
@@ -323,9 +324,9 @@ class ApiGetHuntFileHandlerTest(api_test_lib.ApiCallHandlerTest,
     self.handler = hunt_plugin.ApiGetHuntFileHandler()
 
     self.file_path = os.path.join(self.base_path, "test.plist")
-    self.hunt = implementation.GRRHunt.StartHunt(
+    self.hunt = implementation.StartHunt(
         hunt_name=standard.GenericHunt.__name__,
-        flow_runner_args=rdf_flows.FlowRunnerArgs(
+        flow_runner_args=rdf_flow_runner.FlowRunnerArgs(
             flow_name=file_finder.FileFinder.__name__),
         flow_args=rdf_file_finder.FileFinderArgs(
             paths=[self.file_path],
@@ -499,11 +500,11 @@ class ApiListHuntOutputPluginLogsHandlerTest(
     self.client_ids = self.SetupClients(5)
     self.handler = hunt_plugin.ApiListHuntOutputPluginLogsHandler()
     self.output_plugins = [
-        output_plugin.OutputPluginDescriptor(
+        rdf_output_plugin.OutputPluginDescriptor(
             plugin_name=test_plugins.DummyHuntTestOutputPlugin.__name__,
             plugin_args=test_plugins.DummyHuntTestOutputPlugin.args_type(
                 filename_regex="foo")),
-        output_plugin.OutputPluginDescriptor(
+        rdf_output_plugin.OutputPluginDescriptor(
             plugin_name=test_plugins.DummyHuntTestOutputPlugin.__name__,
             plugin_args=test_plugins.DummyHuntTestOutputPlugin.args_type(
                 filename_regex="bar"))
@@ -706,9 +707,9 @@ class ApiGetExportedHuntResultsHandlerTest(test_lib.GRRBaseTest,
 
     self.handler = hunt_plugin.ApiGetExportedHuntResultsHandler()
 
-    self.hunt = implementation.GRRHunt.StartHunt(
+    self.hunt = implementation.StartHunt(
         hunt_name=standard.GenericHunt.__name__,
-        flow_runner_args=rdf_flows.FlowRunnerArgs(
+        flow_runner_args=rdf_flow_runner.FlowRunnerArgs(
             flow_name=flow_test_lib.DummyFlowWithSingleReply.__name__),
         client_rate=0,
         token=self.token)

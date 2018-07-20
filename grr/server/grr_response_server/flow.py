@@ -41,37 +41,42 @@ self.runner_args: The flow runners args. This is an instance of
   FlowRunnerArgs() which may be build from keyword args.
 
 """
+from __future__ import division
+from __future__ import print_function
 
 import functools
 import logging
 import operator
 
 
-from grr.lib import queues
-from grr.lib import rdfvalue
-from grr.lib import registry
-from grr.lib import stats
-from grr.lib import type_info
-from grr.lib import utils
-from grr.lib.rdfvalues import client as rdf_client
-from grr.lib.rdfvalues import events as rdf_events
-from grr.lib.rdfvalues import flows as rdf_flows
-from grr.lib.rdfvalues import objects as rdf_objects
-from grr.lib.rdfvalues import protodict as rdf_protodict
-from grr.lib.rdfvalues import structs as rdf_structs
+from future.utils import with_metaclass
+
+from grr_response_core.lib import queues
+from grr_response_core.lib import rdfvalue
+from grr_response_core.lib import registry
+from grr_response_core.lib import stats
+from grr_response_core.lib import type_info
+from grr_response_core.lib import utils
+from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_core.lib.rdfvalues import events as rdf_events
+from grr_response_core.lib.rdfvalues import flows as rdf_flows
+from grr_response_core.lib.rdfvalues import protodict as rdf_protodict
+from grr_response_core.lib.rdfvalues import structs as rdf_structs
 from grr_response_proto import jobs_pb2
-from grr.server.grr_response_server import access_control
-from grr.server.grr_response_server import aff4
-from grr.server.grr_response_server import data_store
-from grr.server.grr_response_server import data_store_utils
-from grr.server.grr_response_server import events
-from grr.server.grr_response_server import flow_runner
-from grr.server.grr_response_server import grr_collections
-from grr.server.grr_response_server import multi_type_collection
-from grr.server.grr_response_server import notification as notification_lib
-from grr.server.grr_response_server import queue_manager
-from grr.server.grr_response_server import sequential_collection
-from grr.server.grr_response_server import server_stubs
+from grr_response_server import access_control
+from grr_response_server import aff4
+from grr_response_server import data_store
+from grr_response_server import data_store_utils
+from grr_response_server import events
+from grr_response_server import flow_runner
+from grr_response_server import grr_collections
+from grr_response_server import multi_type_collection
+from grr_response_server import notification as notification_lib
+from grr_response_server import queue_manager
+from grr_response_server import sequential_collection
+from grr_response_server import server_stubs
+from grr_response_server.rdfvalues import flow_runner as rdf_flow_runner
+from grr_response_server.rdfvalues import objects as rdf_objects
 
 
 class FlowResultCollection(sequential_collection.GrrMessageCollection):
@@ -377,10 +382,147 @@ RESULTS_PER_TYPE_SUFFIX = "ResultsPerType"
 LOGS_SUFFIX = "Logs"
 
 
-class FlowBase(aff4.AFF4Volume):
-  """The base class for Flows and Hunts."""
+def FilterArgsFromSemanticProtobuf(protobuf, kwargs):
+  """Assign kwargs to the protobuf, and remove them from the kwargs dict."""
+  for descriptor in protobuf.type_infos:
+    value = kwargs.pop(descriptor.name, None)
+    if value is not None:
+      setattr(protobuf, descriptor.name, value)
 
-  __metaclass__ = registry.FlowRegistry
+
+def StartFlow(args=None,
+              runner_args=None,
+              parent_flow=None,
+              sync=True,
+              token=None,
+              **kwargs):
+  """The main factory function for creating and executing a new flow.
+
+  Args:
+
+    args: An arg protocol buffer which is an instance of the required flow's
+      args_type class attribute.
+
+    runner_args: an instance of FlowRunnerArgs() protocol buffer which is used
+      to initialize the runner for this flow.
+
+    parent_flow: A parent flow or None if this is a top level flow.
+
+    sync: If True, the Start method of this flow will be called
+       inline. Otherwise we schedule the starting of this flow on another
+       worker.
+
+    token: Security credentials token identifying the user.
+
+    **kwargs: If args or runner_args are not specified, we construct these
+      protobufs from these keywords.
+
+  Returns:
+    the session id of the flow.
+
+  Raises:
+    RuntimeError: Unknown or invalid parameters were provided.
+  """
+  # Build the runner args from the keywords.
+  if runner_args is None:
+    runner_args = rdf_flow_runner.FlowRunnerArgs()
+
+  FilterArgsFromSemanticProtobuf(runner_args, kwargs)
+
+  # When asked to run a flow in the future this implied it will run
+  # asynchronously.
+  if runner_args.start_time:
+    sync = False
+
+  # Is the required flow a known flow?
+  try:
+    flow_cls = registry.FlowRegistry.FlowClassByName(runner_args.flow_name)
+  except ValueError:
+    stats.STATS.IncrementCounter("grr_flow_invalid_flow_count")
+    raise RuntimeError("Unable to locate flow %s" % runner_args.flow_name)
+
+  # If no token is specified, raise.
+  if not token:
+    raise access_control.UnauthorizedAccess("A token must be specified.")
+
+  # For the flow itself we use a supervisor token.
+  token = token.SetUID()
+
+  # Extend the expiry time of this token indefinitely. Python on Windows only
+  # supports dates up to the year 3000.
+  token.expiry = rdfvalue.RDFDatetime.FromHumanReadable("2997-01-01")
+
+  if flow_cls.category and not runner_args.client_id:
+    raise RuntimeError("Flow with category (user-visible flow) has to be "
+                       "started on a client, but runner_args.client_id "
+                       "is missing.")
+
+  # We create an anonymous AFF4 object first, The runner will then generate
+  # the appropriate URN.
+  flow_obj = aff4.FACTORY.Create(None, flow_cls, token=token)
+
+  # Now parse the flow args into the new object from the keywords.
+  if args is None:
+    args = flow_obj.args_type()
+
+  FilterArgsFromSemanticProtobuf(args, kwargs)
+
+  # Check that the flow args are valid.
+  args.Validate()
+
+  # Store the flow args.
+  flow_obj.args = args
+  flow_obj.runner_args = runner_args
+
+  # At this point we should exhaust all the keyword args. If any are left
+  # over, we do not know what to do with them so raise.
+  if kwargs:
+    raise type_info.UnknownArg("Unknown parameters to StartFlow: %s" % kwargs)
+
+  # Create a flow runner to run this flow with.
+  if parent_flow:
+    parent_runner = parent_flow.runner
+  else:
+    parent_runner = None
+
+  runner = flow_obj.CreateRunner(
+      parent_runner=parent_runner, runner_args=runner_args)
+
+  logging.info(u"Scheduling %s(%s) on %s", flow_obj.urn, runner_args.flow_name,
+               runner_args.client_id)
+
+  if sync:
+    # Just run the first state inline. NOTE: Running synchronously means
+    # that this runs on the thread that starts the flow. The advantage is
+    # that that Start method can raise any errors immediately.
+    flow_obj.Start()
+  else:
+    # Running Asynchronously: Schedule the start method on another worker.
+    runner.CallState(next_state="Start", start_time=runner_args.start_time)
+
+  # The flow does not need to actually remain running.
+  if not runner.OutstandingRequests():
+    flow_obj.Terminate()
+
+  flow_obj.Close()
+
+  # Publish an audit event, only for top level flows.
+  if parent_flow is None:
+    events.Events.PublishEvent(
+        "Audit",
+        rdf_events.AuditEvent(
+            user=token.username,
+            action="RUN_FLOW",
+            flow_name=runner_args.flow_name,
+            urn=flow_obj.urn,
+            client=runner_args.client_id),
+        token=token)
+
+  return flow_obj.urn
+
+
+class FlowBase(with_metaclass(registry.FlowRegistry, aff4.AFF4Volume)):
+  """The base class for Flows and Hunts."""
 
   # Alternatively we can specify a single semantic protobuf that will be used to
   # provide the args.
@@ -396,14 +538,6 @@ class FlowBase(aff4.AFF4Volume):
     self.runner = None
 
     self.args = None
-
-  @classmethod
-  def FilterArgsFromSemanticProtobuf(cls, protobuf, kwargs):
-    """Assign kwargs to the protobuf, and remove them from the kwargs dict."""
-    for descriptor in protobuf.type_infos:
-      value = kwargs.pop(descriptor.name, None)
-      if value is not None:
-        setattr(protobuf, descriptor.name, value)
 
   def CreateRunner(self, **kw):
     """Make a new runner."""
@@ -506,137 +640,8 @@ class FlowBase(aff4.AFF4Volume):
     Load().
     """
 
-  @classmethod
-  def StartFlow(cls,
-                args=None,
-                runner_args=None,
-                parent_flow=None,
-                sync=True,
-                token=None,
-                **kwargs):
-    """The main factory function for Creating and executing a new flow.
-
-    Args:
-
-      args: An arg protocol buffer which is an instance of the required flow's
-        args_type class attribute.
-
-      runner_args: an instance of FlowRunnerArgs() protocol buffer which is used
-        to initialize the runner for this flow.
-
-      parent_flow: A parent flow or None if this is a top level flow.
-
-      sync: If True, the Start method of this flow will be called
-         inline. Otherwise we schedule the starting of this flow on another
-         worker.
-
-      token: Security credentials token identifying the user.
-
-      **kwargs: If args or runner_args are not specified, we construct these
-        protobufs from these keywords.
-
-    Returns:
-      the session id of the flow.
-
-    Raises:
-      RuntimeError: Unknown or invalid parameters were provided.
-    """
-    # Build the runner args from the keywords.
-    if runner_args is None:
-      runner_args = rdf_flows.FlowRunnerArgs()
-
-    cls.FilterArgsFromSemanticProtobuf(runner_args, kwargs)
-
-    # When asked to run a flow in the future this implied it will run
-    # asynchronously.
-    if runner_args.start_time:
-      sync = False
-
-    # Is the required flow a known flow?
-    try:
-      flow_cls = registry.FlowRegistry.FlowClassByName(runner_args.flow_name)
-    except ValueError:
-      stats.STATS.IncrementCounter("grr_flow_invalid_flow_count")
-      raise RuntimeError("Unable to locate flow %s" % runner_args.flow_name)
-
-    # If no token is specified, raise.
-    if not token:
-      raise access_control.UnauthorizedAccess("A token must be specified.")
-
-    # For the flow itself we use a supervisor token.
-    token = token.SetUID()
-
-    # Extend the expiry time of this token indefinitely. Python on Windows only
-    # supports dates up to the year 3000.
-    token.expiry = rdfvalue.RDFDatetime.FromHumanReadable("2997-01-01")
-
-    if flow_cls.category and not runner_args.client_id:
-      raise RuntimeError("Flow with category (user-visible flow) has to be "
-                         "started on a client, but runner_args.client_id "
-                         "is missing.")
-
-    # We create an anonymous AFF4 object first, The runner will then generate
-    # the appropriate URN.
-    flow_obj = aff4.FACTORY.Create(None, flow_cls, token=token)
-
-    # Now parse the flow args into the new object from the keywords.
-    if args is None:
-      args = flow_obj.args_type()
-
-    cls.FilterArgsFromSemanticProtobuf(args, kwargs)
-
-    # Check that the flow args are valid.
-    args.Validate()
-
-    # Store the flow args.
-    flow_obj.args = args
-    flow_obj.runner_args = runner_args
-
-    # At this point we should exhaust all the keyword args. If any are left
-    # over, we do not know what to do with them so raise.
-    if kwargs:
-      raise type_info.UnknownArg("Unknown parameters to StartFlow: %s" % kwargs)
-
-    # Create a flow runner to run this flow with.
-    if parent_flow:
-      parent_runner = parent_flow.runner
-    else:
-      parent_runner = None
-
-    runner = flow_obj.CreateRunner(
-        parent_runner=parent_runner, runner_args=runner_args)
-
-    logging.info(u"Scheduling %s(%s) on %s", flow_obj.urn,
-                 runner_args.flow_name, runner_args.client_id)
-
-    if sync:
-      # Just run the first state inline. NOTE: Running synchronously means
-      # that this runs on the thread that starts the flow. The advantage is
-      # that that Start method can raise any errors immediately.
-      flow_obj.Start()
-    else:
-      # Running Asynchronously: Schedule the start method on another worker.
-      runner.CallState(next_state="Start", start_time=runner_args.start_time)
-
-    # The flow does not need to actually remain running.
-    if not runner.OutstandingRequests():
-      flow_obj.Terminate()
-
-    flow_obj.Close()
-
-    # Publish an audit event, only for top level flows.
-    if parent_flow is None:
-      events.Events.PublishEvent(
-          "Audit",
-          rdf_events.AuditEvent(
-              user=token.username,
-              action="RUN_FLOW",
-              flow_name=runner_args.flow_name,
-              urn=flow_obj.urn,
-              client=runner_args.client_id),
-          token=token)
-
-    return flow_obj.urn
+  def StartFlow(self, *args, **kw):
+    return StartFlow(*args, **kw)
 
   @property
   def session_id(self):
@@ -716,7 +721,7 @@ class GRRFlow(FlowBase):
 
   Note: Usually this object can not be created by users using the regular
   aff4.FACTORY.Create() method since it requires elevated permissions. This
-  object can instead be created using the flow.GRRFlow.StartFlow() method.
+  object can instead be created using the flow.StartFlow() method.
 
   After creation, access to the flow object can still be obtained through
   the usual aff4.FACTORY.Open() method.
@@ -757,7 +762,7 @@ class GRRFlow(FlowBase):
 
     FLOW_CONTEXT = aff4.Attribute(
         "aff4:flow_context",
-        rdf_flows.FlowContext,
+        rdf_flow_runner.FlowContext,
         "The metadata for this flow.",
         "FlowContext",
         versioned=False,
@@ -765,7 +770,7 @@ class GRRFlow(FlowBase):
 
     FLOW_RUNNER_ARGS = aff4.Attribute(
         "aff4:flow_runner_args",
-        rdf_flows.FlowRunnerArgs,
+        rdf_flow_runner.FlowRunnerArgs,
         "The runner arguments used for this flow.",
         "FlowRunnerArgs",
         versioned=False,
@@ -843,7 +848,7 @@ class GRRFlow(FlowBase):
   def HeartBeat(self):
     if self.locked:
       lease_time = self.transaction.lease_time
-      if self.CheckLease() < lease_time / 2:
+      if self.CheckLease() < lease_time // 2:
         logging.debug("%s: Extending Lease", self.session_id)
         self.UpdateLease(lease_time)
 
@@ -979,7 +984,7 @@ class GRRFlow(FlowBase):
 
   @classmethod
   def PrintArgsHelp(cls):
-    print cls.GetArgsHelpAsString()
+    print(cls.GetArgsHelpAsString())
 
   @classmethod
   def _ClsHelpEpilog(cls):
@@ -989,7 +994,7 @@ class GRRFlow(FlowBase):
   def GetCallingPrototypeAsString(cls):
     """Get a description of the calling prototype for this flow."""
     output = []
-    output.append("flow.GRRFlow.StartFlow(client_id=client_id, ")
+    output.append("flow.StartFlow(client_id=client_id, ")
     output.append("flow_name=\"%s\", " % cls.__name__)
     prototypes = []
     if cls.args_type:

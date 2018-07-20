@@ -2,33 +2,36 @@
 """API handlers for dealing with files in a client's virtual file system."""
 
 import csv
+import io
 import logging
 import os
 import re
-import StringIO
 import zipfile
 
-from grr import config
-from grr.lib import rdfvalue
 
-from grr.lib import utils
-from grr.lib.rdfvalues import client as rdf_client
-from grr.lib.rdfvalues import crypto
-from grr.lib.rdfvalues import flows as rdf_flows
-from grr.lib.rdfvalues import objects as rdf_objects
-from grr.lib.rdfvalues import structs as rdf_structs
+from builtins import filter  # pylint: disable=redefined-builtin
+
+from grr_response_core import config
+from grr_response_core.lib import rdfvalue
+
+from grr_response_core.lib import utils
+from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_core.lib.rdfvalues import crypto as rdf_crypto
+from grr_response_core.lib.rdfvalues import flows as rdf_flows
+from grr_response_core.lib.rdfvalues import structs as rdf_structs
 from grr_response_proto.api import vfs_pb2
-from grr.server.grr_response_server import aff4
-from grr.server.grr_response_server import data_store
-from grr.server.grr_response_server import data_store_utils
-from grr.server.grr_response_server import flow
-from grr.server.grr_response_server.aff4_objects import aff4_grr
-from grr.server.grr_response_server.aff4_objects import standard as aff4_standard
-from grr.server.grr_response_server.flows.general import filesystem
-from grr.server.grr_response_server.flows.general import transfer
-from grr.server.grr_response_server.gui import api_call_handler_base
+from grr_response_server import aff4
+from grr_response_server import data_store
+from grr_response_server import data_store_utils
+from grr_response_server import flow
+from grr_response_server.aff4_objects import aff4_grr
+from grr_response_server.aff4_objects import standard as aff4_standard
+from grr_response_server.flows.general import filesystem
+from grr_response_server.flows.general import transfer
+from grr_response_server.gui import api_call_handler_base
+from grr_response_server.gui.api_plugins import client
 
-from grr.server.grr_response_server.gui.api_plugins import client
+from grr_response_server.rdfvalues import objects as rdf_objects
 
 # Files can only be accessed if their first path component is from this list.
 ROOT_FILES_WHITELIST = ["fs", "registry", "temp"]
@@ -43,9 +46,9 @@ def ValidateVfsPath(path):
         "Empty path is not a valid path: %s." % utils.SmartStr(path))
 
   if components[0] not in ROOT_FILES_WHITELIST:
-    raise ValueError("First path component was '%s', but has to be one of %s" %
-                     (utils.SmartStr(components[0]),
-                      ", ".join(ROOT_FILES_WHITELIST)))
+    raise ValueError(
+        "First path component was '%s', but has to be one of %s" %
+        (utils.SmartStr(components[0]), ", ".join(ROOT_FILES_WHITELIST)))
 
   return True
 
@@ -196,17 +199,23 @@ class ApiFile(rdf_structs.RDFProtoStruct):
   protobuf = vfs_pb2.ApiFile
   rdf_deps = [
       ApiAff4ObjectRepresentation,
-      crypto.Hash,
+      rdf_crypto.Hash,
       rdfvalue.RDFDatetime,
       rdf_client.StatEntry,
   ]
 
-  def InitFromAff4Object(self, file_obj, stat_entry=None, with_details=False):
+  def InitFromAff4Object(self,
+                         file_obj,
+                         stat_entry=None,
+                         hash_entry=None,
+                         with_details=False):
     """Initializes the current instance from an Aff4Stream.
 
     Args:
       file_obj: An Aff4Stream representing a file.
-      stat_entry: An optional stat entry object to be use. If none is provided,
+      stat_entry: An optional stat entry object to be used. If none is provided,
+        the one stored in the AFF4 data store is used.
+      hash_entry: An optional hash entry object to be used. If none is provided,
         the one stored in the AFF4 data store is used.
       with_details: True if all details of the Aff4Object should be included,
         false otherwise.
@@ -217,15 +226,9 @@ class ApiFile(rdf_structs.RDFProtoStruct):
     self.name = file_obj.urn.Basename()
     self.path = "/".join(file_obj.urn.Path().split("/")[2:])
     self.is_directory = "Container" in file_obj.behaviours
-    self.hash = file_obj.Get(file_obj.Schema.HASH, None)
 
-    if stat_entry is not None:
-      stat = stat_entry
-    else:
-      stat = file_obj.Get(file_obj.Schema.STAT)
-
-    if stat:
-      self.stat = stat
+    self.stat = stat_entry or file_obj.Get(file_obj.Schema.STAT)
+    self.hash = hash_entry or file_obj.Get(file_obj.Schema.HASH, None)
 
     if not self.is_directory:
       try:
@@ -307,19 +310,24 @@ class ApiGetFileDetailsHandler(api_call_handler_base.ApiCallHandler):
 
       # TODO(hanuszczak): The tests passed even without support for timestamp
       # filtering. The test suite should be probably improved in that regard.
-      path_id = rdf_objects.PathID(components)
-      path_info = data_store.REL_DB.FindPathInfoByPathID(
-          str(args.client_id), path_type, path_id, timestamp=args.timestamp)
+      path_info = data_store.REL_DB.ReadPathInfo(
+          str(args.client_id), path_type, components, timestamp=args.timestamp)
 
       if path_info:
         stat_entry = path_info.stat_entry
+        hash_entry = path_info.hash_entry
       else:
         stat_entry = rdf_client.StatEntry()
+        hash_entry = rdf_crypto.Hash()
     else:
       stat_entry = None
+      hash_entry = None
 
     return ApiGetFileDetailsResult(file=ApiFile().InitFromAff4Object(
-        file_obj, stat_entry=stat_entry, with_details=True))
+        file_obj,
+        stat_entry=stat_entry,
+        hash_entry=hash_entry,
+        with_details=True))
 
 
 class ApiListFilesArgs(rdf_structs.RDFProtoStruct):
@@ -406,18 +414,11 @@ class ApiListFilesHandler(api_call_handler_base.ApiCallHandler):
       return self._GetFilesystemChildren(args)
 
     path_type, components = rdf_objects.ParseCategorizedPath(args.file_path)
-    path_id = rdf_objects.PathID(components)
 
-    child_path_ids = data_store.REL_DB.FindDescendentPathIDs(
+    child_path_infos = data_store.REL_DB.ListChildPathInfos(
         client_id=client_id.Basename(),
         path_type=path_type,
-        path_id=path_id,
-        max_depth=1)
-
-    child_path_infos = data_store.REL_DB.FindPathInfosByPathIDs(
-        client_id=client_id.Basename(),
-        path_type=path_type,
-        path_ids=child_path_ids).values()
+        components=components)
 
     items = []
 
@@ -457,7 +458,7 @@ class ApiListFilesHandler(api_call_handler_base.ApiCallHandler):
     if args.filter:
       pattern = re.compile(args.filter, re.IGNORECASE)
       is_matching = lambda item: pattern.search(item.name)
-      items = filter(is_matching, items)
+      items = list(filter(is_matching, items))
 
     items.sort(key=lambda item: item.path)
 
@@ -487,8 +488,8 @@ class ApiListFilesHandler(api_call_handler_base.ApiCallHandler):
       age = aff4.NEWEST_TIME
 
     directory = aff4.FACTORY.Open(
-        args.client_id.ToClientURN().Add(path), mode="r", token=token).Upgrade(
-            aff4_standard.VFSDirectory)
+        args.client_id.ToClientURN().Add(path), mode="r",
+        token=token).Upgrade(aff4_standard.VFSDirectory)
 
     if args.directories_only:
       children = [
@@ -805,7 +806,7 @@ class ApiCreateVfsRefreshOperationHandler(api_call_handler_base.ApiCallHandler):
     if args.max_depth == 1:
       flow_args = filesystem.ListDirectoryArgs(pathspec=fd.real_pathspec)
 
-      flow_urn = flow.GRRFlow.StartFlow(
+      flow_urn = flow.StartFlow(
           client_id=args.client_id.ToClientURN(),
           flow_name=filesystem.ListDirectory.__name__,
           args=flow_args,
@@ -816,7 +817,7 @@ class ApiCreateVfsRefreshOperationHandler(api_call_handler_base.ApiCallHandler):
       flow_args = filesystem.RecursiveListDirectoryArgs(
           pathspec=fd.real_pathspec, max_depth=args.max_depth)
 
-      flow_urn = flow.GRRFlow.StartFlow(
+      flow_urn = flow.StartFlow(
           client_id=args.client_id.ToClientURN(),
           flow_name=filesystem.RecursiveListDirectory.__name__,
           args=flow_args,
@@ -849,8 +850,9 @@ class ApiGetVfsRefreshOperationStateHandler(
   def Handle(self, args, token=None):
     flow_obj = aff4.FACTORY.Open(args.operation_id, token=token)
 
-    if not isinstance(flow_obj, (filesystem.RecursiveListDirectory,
-                                 filesystem.ListDirectory)):
+    if not isinstance(
+        flow_obj,
+        (filesystem.RecursiveListDirectory, filesystem.ListDirectory)):
       raise VfsRefreshOperationNotFoundError(
           "Operation with id %s not found" % args.operation_id)
 
@@ -965,7 +967,7 @@ class ApiGetVfsTimelineAsCsvHandler(api_call_handler_base.ApiCallHandler):
   CHUNK_SIZE = 1000
 
   def _GenerateExport(self, items):
-    fd = StringIO.StringIO()
+    fd = io.BytesIO()
     writer = csv.writer(fd)
 
     # Write header. Since we do not stick to a specific timeline format, we
@@ -980,7 +982,9 @@ class ApiGetVfsTimelineAsCsvHandler(api_call_handler_base.ApiCallHandler):
         ])
 
       yield fd.getvalue()
-      fd.truncate(size=0)
+
+      fd.seek(0)
+      fd.truncate()
 
   def Handle(self, args, token=None):
     ValidateVfsPath(args.file_path)
@@ -989,8 +993,8 @@ class ApiGetVfsTimelineAsCsvHandler(api_call_handler_base.ApiCallHandler):
     items = ApiGetVfsTimelineHandler.GetTimelineItems(folder_urn, token=token)
 
     return api_call_handler_base.ApiBinaryStream(
-        "%s_%s_timeline" % (args.client_id,
-                            utils.SmartStr(folder_urn.Basename())),
+        "%s_%s_timeline" % (args.client_id, utils.SmartStr(
+            folder_urn.Basename())),
         content_generator=self._GenerateExport(items))
 
 
@@ -1096,7 +1100,7 @@ class ApiGetVfsFilesArchiveHandler(api_call_handler_base.ApiCallHandler):
         # Skipping first component: client id.
         content_path = os.path.join(prefix, *components[1:])
         # TODO(user): Export meaningful file metadata.
-        st = os.stat_result((0644, 0, 0, 0, 0, 0, fd.size, 0, 0, 0))
+        st = os.stat_result((0o644, 0, 0, 0, 0, 0, fd.size, 0, 0, 0))
         yield archive_generator.WriteFileHeader(content_path, st=st)
 
       yield archive_generator.WriteFileChunk(chunk)

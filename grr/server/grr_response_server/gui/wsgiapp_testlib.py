@@ -7,9 +7,9 @@ import threading
 
 from werkzeug import serving
 
-from grr import config
-from grr.lib import utils
-from grr.server.grr_response_server.gui import wsgiapp
+from grr_response_core import config
+from grr_response_core.lib import utils
+from grr_response_server.gui import wsgiapp
 
 
 class ServerThread(threading.Thread):

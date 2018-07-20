@@ -6,16 +6,16 @@ import os
 import psutil
 import requests
 
-from grr import config
 from grr_response_client import client_stats
 from grr_response_client import comms
 from grr_response_client.client_actions import admin
-from grr.lib import flags
-from grr.lib import rdfvalue
-from grr.lib import stats
-from grr.lib import utils
-from grr.lib.rdfvalues import client as rdf_client
-from grr.lib.rdfvalues import protodict as rdf_protodict
+from grr_response_core import config
+from grr_response_core.lib import flags
+from grr_response_core.lib import rdfvalue
+from grr_response_core.lib import stats
+from grr_response_core.lib import utils
+from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_core.lib.rdfvalues import protodict as rdf_protodict
 from grr.test_lib import client_test_lib
 from grr.test_lib import test_lib
 
@@ -211,7 +211,7 @@ class GetClientStatsActionTest(client_test_lib.EmptyActionTest):
       self.assertEqual(response.io_samples[i].read_bytes, 100 * (i + 1))
       self.assertEqual(response.io_samples[i].write_bytes, 100 * (i + 1))
 
-    self.assertEqual(response.boot_time, long(100 * 1e6))
+    self.assertEqual(response.boot_time, 100 * 1e6)
 
   def testFiltersDataPointsByStartTime(self):
     start_time = rdfvalue.RDFDatetime.FromSecondsSinceEpoch(117)

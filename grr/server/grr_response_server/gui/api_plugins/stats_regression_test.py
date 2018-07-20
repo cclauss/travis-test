@@ -2,16 +2,16 @@
 """This module contains regression tests for stats API handlers."""
 
 
-from grr.lib import flags
-from grr.lib import rdfvalue
-from grr.lib import stats
+from grr_response_core.lib import flags
+from grr_response_core.lib import rdfvalue
+from grr_response_core.lib import stats
 
-from grr.lib import utils
-from grr.server.grr_response_server import aff4
-from grr.server.grr_response_server.aff4_objects import stats_store as aff4_stats_store
-from grr.server.grr_response_server.gui import api_regression_test_lib
-from grr.server.grr_response_server.gui.api_plugins import stats as stats_plugin
-from grr.server.grr_response_server.gui.api_plugins.report_plugins import report_plugins_test_mocks
+from grr_response_core.lib import utils
+from grr_response_server import aff4
+from grr_response_server.aff4_objects import stats_store as aff4_stats_store
+from grr_response_server.gui import api_regression_test_lib
+from grr_response_server.gui.api_plugins import stats as stats_plugin
+from grr_response_server.gui.api_plugins.report_plugins import report_plugins_test_mocks
 
 from grr.test_lib import test_lib
 

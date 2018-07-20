@@ -12,13 +12,17 @@ import logging
 import os
 import sys
 
-from grr import config
-from grr.config import contexts
-from grr.lib import flags
-from grr.lib import registry
+
+from future.utils import with_metaclass
+
+from grr_response_core import config
+from grr_response_core.config import contexts
+from grr_response_core.lib import flags
+from grr_response_core.lib import registry
 
 
-class Installer(registry.HookRegistry):
+class Installer(
+    with_metaclass(registry.MetaclassRegistry, registry.HookRegistry)):
   """A GRR installer plugin.
 
   Modules can register special actions which only run on installation
@@ -26,8 +30,6 @@ class Installer(registry.HookRegistry):
   the same mechanism provided by HookRegistry - i.e. by declaring
   "pre" and "order" attributes.
   """
-
-  __metaclass__ = registry.MetaclassRegistry
 
 
 def RunInstaller():

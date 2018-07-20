@@ -2,9 +2,12 @@
 import os
 import shutil
 
+
+from builtins import zip  # pylint: disable=redefined-builtin
+
 import unittest
 from grr_response_client.client_actions.file_finder_utils import globbing
-from grr.lib import flags
+from grr_response_core.lib import flags
 from grr.test_lib import test_lib
 
 # TODO(hanuszczak): Consider refactoring these tests with `pyfakefs`.

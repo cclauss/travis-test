@@ -3,21 +3,21 @@
 
 import logging
 
-from grr import config
-from grr.lib import config_lib
+from grr_response_core import config
+from grr_response_core.lib import config_lib
 
-from grr.lib import rdfvalue
-from grr.lib import type_info
-from grr.lib.rdfvalues import crypto as rdf_crypto
-from grr.lib.rdfvalues import structs as rdf_structs
+from grr_response_core.lib import rdfvalue
+from grr_response_core.lib import type_info
+from grr_response_core.lib.rdfvalues import crypto as rdf_crypto
+from grr_response_core.lib.rdfvalues import structs as rdf_structs
 from grr_response_proto.api import config_pb2
-from grr.server.grr_response_server import aff4
+from grr_response_server import aff4
 
-from grr.server.grr_response_server.aff4_objects import collects as aff4_collects
+from grr_response_server.aff4_objects import collects as aff4_collects
 
-from grr.server.grr_response_server.gui import api_call_handler_base
+from grr_response_server.gui import api_call_handler_base
 
-from grr.server.grr_response_server.gui import api_call_handler_utils
+from grr_response_server.gui import api_call_handler_utils
 
 # TODO(user): sensitivity of config options and sections should
 # probably be defined together with the options themselves. Keeping

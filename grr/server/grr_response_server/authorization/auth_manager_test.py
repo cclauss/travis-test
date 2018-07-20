@@ -2,10 +2,10 @@
 """Tests for AuthorizationManager."""
 
 
-from grr.lib import flags
-from grr.lib import utils
-from grr.server.grr_response_server.authorization import auth_manager
-from grr.server.grr_response_server.authorization import groups
+from grr_response_core.lib import flags
+from grr_response_core.lib import utils
+from grr_response_server.authorization import auth_manager
+from grr_response_server.authorization import groups
 from grr.test_lib import test_lib
 
 

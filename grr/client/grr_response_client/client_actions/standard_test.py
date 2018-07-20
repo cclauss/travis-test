@@ -7,15 +7,15 @@ import os
 import time
 
 
-from grr import config
 from grr_response_client.client_actions import standard
-from grr.lib import flags
-from grr.lib import utils
-from grr.lib.rdfvalues import client as rdf_client
-from grr.lib.rdfvalues import crypto as rdf_crypto
-from grr.lib.rdfvalues import flows as rdf_flows
-from grr.lib.rdfvalues import paths as rdf_paths
-from grr.lib.rdfvalues import protodict as rdf_protodict
+from grr_response_core import config
+from grr_response_core.lib import flags
+from grr_response_core.lib import utils
+from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_core.lib.rdfvalues import crypto as rdf_crypto
+from grr_response_core.lib.rdfvalues import flows as rdf_flows
+from grr_response_core.lib.rdfvalues import paths as rdf_paths
+from grr_response_core.lib.rdfvalues import protodict as rdf_protodict
 from grr.test_lib import action_mocks
 from grr.test_lib import client_test_lib
 from grr.test_lib import test_lib
@@ -46,14 +46,14 @@ class TestExecutePython(client_test_lib.EmptyActionTest):
     """Test the basic ExecutePython action."""
 
     python_code = """
-import StringIO
+import io
 import uu
 
 def decode(encoded):
   # Use the import (uu) inside a function. This will fail if the environment
   # for exec is not set up properly.
-  i = StringIO.StringIO(s)
-  o = StringIO.StringIO()
+  i = io.BytesIO(s)
+  o = io.BytesIO()
   uu.decode(i, o)
   return o.getvalue()
 
@@ -74,11 +74,11 @@ magic_return_str = decode(s)
     python_code = """
 
 def f(n):
-    print "F called:", n
+    print("F called:", n)
 
-print "Calling f."
+print("Calling f.")
 f(1)
-print "Done."
+print("Done.")
 """
     signed_blob = rdf_crypto.SignedBlob()
     signed_blob.Sign(python_code, self.signing_key)
@@ -97,7 +97,7 @@ def f():
 
 f()
 Progress()
-print "Done."
+print("Done.")
 """
     signed_blob = rdf_crypto.SignedBlob()
     signed_blob.Sign(python_code, self.signing_key)

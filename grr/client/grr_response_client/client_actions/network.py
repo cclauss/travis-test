@@ -6,7 +6,7 @@ import logging
 import psutil
 
 from grr_response_client import actions
-from grr.lib.rdfvalues import client as rdf_client
+from grr_response_core.lib.rdfvalues import client as rdf_client
 
 
 class ListNetworkConnections(actions.ActionPlugin):
@@ -14,7 +14,8 @@ class ListNetworkConnections(actions.ActionPlugin):
   in_rdfvalue = rdf_client.ListNetworkConnectionsArgs
   out_rdfvalues = [rdf_client.NetworkConnection]
 
-  def Run(self, args):
+  @classmethod
+  def Start(cls, args):
     for proc in psutil.process_iter():
       try:
         connections = proc.connections()
@@ -41,4 +42,8 @@ class ListNetworkConnections(actions.ActionPlugin):
         if conn.raddr:
           res.remote_address.ip, res.remote_address.port = conn.raddr
 
-        self.SendReply(res)
+        yield res
+
+  def Run(self, args):
+    for res in self.Start(args):
+      self.SendReply(res)

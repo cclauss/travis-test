@@ -10,19 +10,22 @@ import os
 import mock
 import psutil
 
-from grr import config
+from grr_response_client.client_actions import artifact_collector
 from grr_response_client.client_actions import standard
-from grr.lib import flags
-from grr.lib import utils
-from grr.lib.rdfvalues import client as rdf_client
-from grr.lib.rdfvalues import paths as rdf_paths
-from grr.server.grr_response_server import aff4
-from grr.server.grr_response_server import artifact
-from grr.server.grr_response_server import artifact_registry
-from grr.server.grr_response_server import artifact_utils
-from grr.server.grr_response_server import flow
-from grr.server.grr_response_server import sequential_collection
-from grr.server.grr_response_server.flows.general import collectors
+from grr_response_core import config
+from grr_response_core.lib import artifact_utils
+from grr_response_core.lib import flags
+from grr_response_core.lib import parser
+from grr_response_core.lib import utils
+from grr_response_core.lib.rdfvalues import artifacts as rdf_artifacts
+from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_core.lib.rdfvalues import paths as rdf_paths
+from grr_response_server import aff4
+from grr_response_server import artifact
+from grr_response_server import artifact_registry
+from grr_response_server import flow
+from grr_response_server import sequential_collection
+from grr_response_server.flows.general import collectors
 from grr.test_lib import action_mocks
 from grr.test_lib import artifact_test_lib
 from grr.test_lib import client_test_lib
@@ -144,8 +147,8 @@ class TestArtifactCollectors(flow_test_lib.FlowTestsBaseclass):
       collect_flow.state["knowledge_base"] = kb
       collect_flow.current_artifact_name = "blah"
 
-      collector = artifact_registry.ArtifactSource(
-          type=artifact_registry.ArtifactSource.SourceType.GREP,
+      collector = rdf_artifacts.ArtifactSource(
+          type=rdf_artifacts.ArtifactSource.SourceType.GREP,
           attributes={
               "paths": ["/etc/passwd"],
               "content_regex_list": [r"^a%%users.username%%b$"]
@@ -168,8 +171,8 @@ class TestArtifactCollectors(flow_test_lib.FlowTestsBaseclass):
 
     # Dynamically add an ArtifactSource specifying the base path.
     file_path = os.path.join(self.base_path, "test_img.dd")
-    coll1 = artifact_registry.ArtifactSource(
-        type=artifact_registry.ArtifactSource.SourceType.FILE,
+    coll1 = rdf_artifacts.ArtifactSource(
+        type=rdf_artifacts.ArtifactSource.SourceType.FILE,
         attributes={"paths": [file_path]})
     self.fakeartifact.sources.append(coll1)
 
@@ -222,8 +225,8 @@ class TestArtifactCollectors(flow_test_lib.FlowTestsBaseclass):
       client.Set(client.Schema.SYSTEM("Linux"))
       client.Flush()
 
-      coll1 = artifact_registry.ArtifactSource(
-          type=artifact_registry.ArtifactSource.SourceType.GRR_CLIENT_ACTION,
+      coll1 = rdf_artifacts.ArtifactSource(
+          type=rdf_artifacts.ArtifactSource.SourceType.GRR_CLIENT_ACTION,
           attributes={"client_action": standard.ListProcesses.__name__})
       self.fakeartifact.sources.append(coll1)
       artifact_list = ["FakeArtifact"]
@@ -246,8 +249,8 @@ class TestArtifactCollectors(flow_test_lib.FlowTestsBaseclass):
       client.Set(client.Schema.SYSTEM("Linux"))
       client.Flush()
 
-      coll1 = artifact_registry.ArtifactSource(
-          type=artifact_registry.ArtifactSource.SourceType.GRR_CLIENT_ACTION,
+      coll1 = rdf_artifacts.ArtifactSource(
+          type=rdf_artifacts.ArtifactSource.SourceType.GRR_CLIENT_ACTION,
           attributes={"client_action": standard.ListProcesses.__name__})
       self.fakeartifact.sources.append(coll1)
       self.fakeartifact2.sources.append(coll1)
@@ -277,8 +280,8 @@ class TestArtifactCollectors(flow_test_lib.FlowTestsBaseclass):
     with utils.Stubber(psutil, "process_iter", ProcessIter):
       # Run with false condition.
       client_mock = action_mocks.ActionMock(standard.ListProcesses)
-      coll1 = artifact_registry.ArtifactSource(
-          type=artifact_registry.ArtifactSource.SourceType.GRR_CLIENT_ACTION,
+      coll1 = rdf_artifacts.ArtifactSource(
+          type=rdf_artifacts.ArtifactSource.SourceType.GRR_CLIENT_ACTION,
           attributes={"client_action": standard.ListProcesses.__name__},
           conditions=["os == 'Windows'"])
       self.fakeartifact.sources.append(coll1)
@@ -312,8 +315,8 @@ class TestArtifactCollectors(flow_test_lib.FlowTestsBaseclass):
                                      vfs_test_lib.FakeFullVFSHandler):
 
         client_mock = action_mocks.ActionMock(standard.GetFileStat)
-        coll1 = artifact_registry.ArtifactSource(
-            type=artifact_registry.ArtifactSource.SourceType.REGISTRY_VALUE,
+        coll1 = rdf_artifacts.ArtifactSource(
+            type=rdf_artifacts.ArtifactSource.SourceType.REGISTRY_VALUE,
             attributes={
                 "key_value_pairs": [{
                     "key": (r"HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet"
@@ -344,8 +347,8 @@ class TestArtifactCollectors(flow_test_lib.FlowTestsBaseclass):
                                      vfs_test_lib.FakeFullVFSHandler):
 
         client_mock = action_mocks.ActionMock(standard.GetFileStat)
-        coll1 = artifact_registry.ArtifactSource(
-            type=artifact_registry.ArtifactSource.SourceType.REGISTRY_VALUE,
+        coll1 = rdf_artifacts.ArtifactSource(
+            type=rdf_artifacts.ArtifactSource.SourceType.REGISTRY_VALUE,
             attributes={
                 "key_value_pairs": [{
                     "key": (r"HKEY_LOCAL_MACHINE/SOFTWARE/ListingTest"),
@@ -370,8 +373,8 @@ class TestArtifactCollectors(flow_test_lib.FlowTestsBaseclass):
     with utils.Stubber(psutil, "process_iter", ProcessIter):
       # Run with false condition.
       client_mock = action_mocks.ActionMock(standard.ListProcesses)
-      coll1 = artifact_registry.ArtifactSource(
-          type=artifact_registry.ArtifactSource.SourceType.GRR_CLIENT_ACTION,
+      coll1 = rdf_artifacts.ArtifactSource(
+          type=rdf_artifacts.ArtifactSource.SourceType.GRR_CLIENT_ACTION,
           attributes={"client_action": standard.ListProcesses.__name__},
           supported_os=["Windows"])
       self.fakeartifact.sources.append(coll1)
@@ -413,6 +416,305 @@ class TestArtifactCollectors(flow_test_lib.FlowTestsBaseclass):
         client_id=self.client_id)
 
     return flow.GRRFlow.ResultCollectionForFID(session_id)
+
+
+class MeetsConditionsTest(test_lib.GRRBaseTest):
+  """Test the module-level method `MeetsConditions`."""
+
+  def testSourceMeetsConditions(self):
+    """Test we can get a GRR client artifact with conditions."""
+    kb = rdf_client.KnowledgeBase()
+    kb.os = "Windows"
+
+    # Run with false condition.
+    source = rdf_artifacts.ArtifactSource(
+        type=rdf_artifacts.ArtifactSource.SourceType.GRR_CLIENT_ACTION,
+        attributes={"client_action": standard.ListProcesses.__name__},
+        conditions=["os == 'Linux'"])
+    self.assertFalse(collectors.MeetsConditions(kb, source))
+
+    # Run with matching or condition.
+    source = rdf_artifacts.ArtifactSource(
+        type=rdf_artifacts.ArtifactSource.SourceType.GRR_CLIENT_ACTION,
+        attributes={"client_action": standard.ListProcesses.__name__},
+        conditions=["os == 'Linux' or os == 'Windows'"])
+    self.assertTrue(collectors.MeetsConditions(kb, source))
+
+
+class GetArtifactCollectorArgsTest(test_lib.GRRBaseTest):
+
+  def setUp(self):
+    super(GetArtifactCollectorArgsTest, self).setUp()
+
+    self._patcher = artifact_test_lib.PatchDefaultArtifactRegistry()
+    self._patcher.start()
+
+    test_artifacts_file = os.path.join(config.CONFIG["Test.data_dir"],
+                                       "artifacts", "test_artifacts.json")
+    artifact_registry.REGISTRY.AddFileSource(test_artifacts_file)
+
+  def tearDown(self):
+    self._patcher.stop()
+    super(GetArtifactCollectorArgsTest, self).tearDown()
+
+  def testKnowledgeBase(self):
+    kb = rdf_client.KnowledgeBase()
+    kb.os = "Windows"
+
+    artifact_bundle = collectors.GetArtifactCollectorArgs(kb, set(), [])
+
+    self.assertEqual(artifact_bundle.knowledge_base.os, "Windows")
+
+  def testPrepareBasicArtifactBundle(self):
+    """Test we can prepare a basic artifact."""
+    artifact_list = ["TestCmdArtifact"]
+
+    kb = rdf_client.KnowledgeBase()
+    kb.os = "Linux"
+
+    artifact_bundle = collectors.GetArtifactCollectorArgs(
+        kb, set(), artifact_list)
+    artifacts_objects = list(artifact_bundle.artifacts)
+
+    art_obj = artifacts_objects[0]
+    source = list(art_obj.sources)[0]
+
+    self.assertEqual(art_obj.name, "TestCmdArtifact")
+    self.assertEqual(source.base_source.attributes["cmd"], "/usr/bin/dpkg")
+    self.assertEqual(source.base_source.attributes.get("args", []), ["--list"])
+
+  def testPrepareAggregatedArtifactBundle(self):
+    """Test we can prepare the source artifacts of an aggregation artifact."""
+    artifact_list = ["TestAggregationArtifact"]
+
+    kb = rdf_client.KnowledgeBase()
+    kb.os = "Windows"
+
+    artifact_bundle = collectors.GetArtifactCollectorArgs(
+        kb, set(), artifact_list)
+    artifacts_objects = list(artifact_bundle.artifacts)
+
+    self.assertEqual(len(artifact_bundle.artifacts), 1)
+
+    art_obj = artifacts_objects[0]
+    self.assertEqual(art_obj.name, "TestAggregationArtifact")
+    self.assertEqual(len(art_obj.sources), 2)
+
+    source = list(art_obj.sources)[0]
+    self.assertEqual(source.base_source.type, "GRR_CLIENT_ACTION")
+
+    source = list(art_obj.sources)[1]
+    self.assertEqual(source.base_source.type, "COMMAND")
+
+  def testPrepareMultipleArtifacts(self):
+    """Test we can prepare multiple artifacts of different types."""
+    artifact_list = [
+        "TestFilesArtifact", "DepsWindirRegex", "DepsProvidesMultiple",
+        "WMIActiveScriptEventConsumer"
+    ]
+
+    kb = rdf_client.KnowledgeBase()
+    kb.os = "Windows"
+
+    artifact_bundle = collectors.GetArtifactCollectorArgs(
+        kb, set(), artifact_list)
+    artifacts_objects = list(artifact_bundle.artifacts)
+
+    self.assertEqual(len(artifacts_objects), 3)
+    self.assertEqual(artifacts_objects[0].name, "DepsWindirRegex")
+    self.assertEqual(artifacts_objects[1].name, "DepsProvidesMultiple")
+    self.assertEqual(artifacts_objects[2].name, "WMIActiveScriptEventConsumer")
+
+    art_obj = artifacts_objects[2]
+    source = list(art_obj.sources)[0]
+    self.assertEqual(source.base_source.attributes["query"],
+                     "SELECT * FROM ActiveScriptEventConsumer")
+
+  def testDuplicationChecks(self):
+    """Test duplicated artifacts are only processed once."""
+    artifact_list = [
+        "TestAggregationArtifact", "TestFilesArtifact", "TestCmdArtifact",
+        "TestFilesArtifact"
+    ]
+
+    kb = rdf_client.KnowledgeBase()
+    kb.os = "Linux"
+
+    artifact_bundle = collectors.GetArtifactCollectorArgs(
+        kb, set(), artifact_list)
+    artifacts_objects = list(artifact_bundle.artifacts)
+
+    self.assertEqual(len(artifacts_objects), 2)
+
+
+class TestCmdParser(parser.CommandParser):
+
+  output_types = ["SoftwarePackage"]
+  supported_artifacts = ["TestEchoArtifact"]
+
+  def Parse(self, cmd, args, stdout, stderr, return_val, time_taken,
+            knowledge_base):
+    del cmd, args, stderr, return_val, time_taken, knowledge_base  # Unused
+    installed = rdf_client.SoftwarePackage.InstallState.INSTALLED
+    soft = rdf_client.SoftwarePackage(
+        name="Package",
+        description=stdout,
+        version="1",
+        architecture="amd64",
+        install_state=installed)
+    yield soft
+
+
+class ClientArtifactCollectorFlowTest(flow_test_lib.FlowTestsBaseclass):
+  """Test the clientside artifact collection test artifacts."""
+
+  def setUp(self):
+    super(ClientArtifactCollectorFlowTest, self).setUp()
+
+    self._patcher = artifact_test_lib.PatchDefaultArtifactRegistry()
+    self._patcher.start()
+
+    test_artifacts_file = os.path.join(config.CONFIG["Test.data_dir"],
+                                       "artifacts", "test_artifacts.json")
+    artifact_registry.REGISTRY.AddFileSource(test_artifacts_file)
+
+    self.client_id = self.SetupClient(0)
+
+  def tearDown(self):
+    self._patcher.stop()
+    super(ClientArtifactCollectorFlowTest, self).tearDown()
+
+  def _RunFlow(self, flow_cls, action, artifact_list, apply_parsers):
+    session_id = flow_test_lib.TestFlowHelper(
+        flow_cls.__name__,
+        action_mocks.ActionMock(action),
+        artifact_list=artifact_list,
+        token=self.token,
+        apply_parsers=apply_parsers,
+        client_id=self.client_id)
+    return flow.GRRFlow.ResultCollectionForFID(session_id)
+
+  def testClientArtifactCollector(self):
+    """Test artifact collector flow with a single artifact."""
+
+    client_test_lib.Command("/usr/bin/dpkg", args=["--list"], system="Linux")
+
+    artifact_list = ["TestCmdArtifact"]
+    results = self._RunFlow(
+        collectors.ClientArtifactCollector,
+        artifact_collector.ArtifactCollector,
+        artifact_list,
+        apply_parsers=False)
+    self.assertEqual(len(results), 1)
+
+    result = results[0]
+    self.assertIsInstance(result, rdf_artifacts.ClientArtifactCollectorResult)
+
+    self.assertEqual(len(result.collected_artifacts), 1)
+
+    collected_artifact = result.collected_artifacts[0]
+    self.assertEqual(collected_artifact.name, "TestCmdArtifact")
+    self.assertGreater(collected_artifact.action_results[0].value.time_used, 0)
+
+  def testClientArtifactCollectorWithMultipleArtifacts(self):
+    """Test artifact collector flow with a single artifact."""
+
+    client_test_lib.Command("/usr/bin/dpkg", args=["--list"], system="Linux")
+
+    artifact_list = ["TestCmdArtifact", "TestOSAgnostic"]
+    results = self._RunFlow(
+        collectors.ClientArtifactCollector,
+        artifact_collector.ArtifactCollector,
+        artifact_list,
+        apply_parsers=False)
+    self.assertEqual(len(results), 1)
+
+    result = results[0]
+    self.assertIsInstance(result, rdf_artifacts.ClientArtifactCollectorResult)
+
+    self.assertEqual(len(result.collected_artifacts), 2)
+
+    collected_artifact = result.collected_artifacts[0]
+    self.assertEqual(collected_artifact.name, "TestCmdArtifact")
+    self.assertGreater(collected_artifact.action_results[0].value.time_used, 0)
+
+    collected_artifact = result.collected_artifacts[1]
+    self.assertEqual(collected_artifact.name, "TestOSAgnostic")
+    self.assertTrue(collected_artifact.action_results[0].value.string)
+
+  @artifact_test_lib.PatchCleanArtifactRegistry
+  def testLinuxMountCmdArtifact(self, registry):
+    """Test that LinuxMountCmd artifact can be collected."""
+
+    artifact_list = ["LinuxMountCmd"]
+
+    source = rdf_artifacts.ArtifactSource(
+        type=rdf_artifacts.ArtifactSource.SourceType.COMMAND,
+        attributes={
+            "cmd": "/bin/mount",
+            "args": []
+        })
+    art_obj = rdf_artifacts.Artifact(
+        name="LinuxMountCmd",
+        doc="Linux output of mount",
+        sources=[source],
+        labels=["System"],
+        supported_os=["Linux"])
+    art_obj.sources.append(source)
+
+    registry.RegisterArtifact(art_obj)
+    self.assertTrue(artifact_registry.REGISTRY.GetArtifact("LinuxMountCmd"))
+
+    # Run the ArtifactCollector to get the expected result.
+    expected = self._RunFlow(
+        collectors.ArtifactCollectorFlow,
+        standard.ExecuteCommand,
+        artifact_list,
+        apply_parsers=False)
+    # The artifact collector receives the same result twice here.
+    # self.assertEqual(len(expected), 1)
+    expected = expected[0]
+    self.assertIsInstance(expected, rdf_client.ExecuteResponse)
+
+    # Run the ClientArtifactCollector to get the actual result.
+    result = self._RunFlow(
+        collectors.ClientArtifactCollector,
+        artifact_collector.ArtifactCollector,
+        artifact_list,
+        apply_parsers=False)[0]
+    self.assertEqual(len(result.collected_artifacts), 1)
+    result = result.collected_artifacts[0].action_results[0].value
+    self.assertIsInstance(result, rdf_client.ExecuteResponse)
+
+    self.assertEqual(result, expected)
+
+  def testCmdArtifactWithParser(self):
+
+    client_test_lib.Command("/bin/echo", args=["1"])
+
+    artifact_list = ["TestEchoArtifact"]
+
+    # Run the ArtifactCollector to get the expected result.
+    expected = self._RunFlow(
+        collectors.ArtifactCollectorFlow,
+        standard.ExecuteCommand,
+        artifact_list,
+        apply_parsers=True)
+    self.assertTrue(expected)
+    expected = expected[0]
+    self.assertIsInstance(expected, rdf_client.SoftwarePackage)
+
+    # Run the ClientArtifactCollector to get the actual result.
+    result = self._RunFlow(
+        collectors.ClientArtifactCollector,
+        artifact_collector.ArtifactCollector,
+        artifact_list,
+        apply_parsers=True)[0]
+    self.assertEqual(len(result.collected_artifacts), 1)
+    result = result.collected_artifacts[0].action_results[0].value
+    self.assertIsInstance(result, rdf_client.SoftwarePackage)
+
+    self.assertEqual(result, expected)
 
 
 def main(argv):

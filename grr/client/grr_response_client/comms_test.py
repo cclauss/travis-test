@@ -7,9 +7,9 @@ import mock
 import requests
 
 from grr_response_client import comms
-from grr.lib import flags
-from grr.lib import utils
-from grr.lib.rdfvalues import flows as rdf_flows
+from grr_response_core.lib import flags
+from grr_response_core.lib import utils
+from grr_response_core.lib.rdfvalues import flows as rdf_flows
 from grr.test_lib import test_lib
 
 
@@ -31,7 +31,7 @@ def _make_200(content):
 
 
 class RequestsInstrumentor(object):
-  """Instrument the urllib2 library."""
+  """Instrument the `requests` library."""
 
   def __init__(self):
     self.time = 0

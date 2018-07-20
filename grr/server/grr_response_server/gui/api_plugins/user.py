@@ -4,42 +4,43 @@
 import email
 import functools
 import itertools
+import logging
 
 import jinja2
 
-from grr import config
+from grr_response_core import config
 
-from grr.lib import rdfvalue
-from grr.lib import utils
+from grr_response_core.lib import rdfvalue
+from grr_response_core.lib import utils
 
-from grr.lib.rdfvalues import client as rdf_client
-from grr.lib.rdfvalues import objects as rdf_objects
-from grr.lib.rdfvalues import paths as rdf_paths
-from grr.lib.rdfvalues import structs as rdf_structs
-
+from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_core.lib.rdfvalues import paths as rdf_paths
+from grr_response_core.lib.rdfvalues import structs as rdf_structs
 from grr_response_proto.api import user_pb2
-from grr.server.grr_response_server import access_control
-from grr.server.grr_response_server import aff4
-from grr.server.grr_response_server import data_store
-from grr.server.grr_response_server import db
-from grr.server.grr_response_server import email_alerts
-from grr.server.grr_response_server import flow
-from grr.server.grr_response_server import notification as notification_lib
-from grr.server.grr_response_server.aff4_objects import aff4_grr
-from grr.server.grr_response_server.aff4_objects import cronjobs as aff4_cronjobs
-from grr.server.grr_response_server.aff4_objects import security as aff4_security
-from grr.server.grr_response_server.aff4_objects import users as aff4_users
-from grr.server.grr_response_server.flows.general import administrative
-from grr.server.grr_response_server.gui import api_call_handler_base
 
-from grr.server.grr_response_server.gui import approval_checks
+from grr_response_server import access_control
+from grr_response_server import aff4
+from grr_response_server import data_store
+from grr_response_server import db
+from grr_response_server import email_alerts
+from grr_response_server import flow
+from grr_response_server import notification as notification_lib
+from grr_response_server.aff4_objects import aff4_grr
+from grr_response_server.aff4_objects import cronjobs as aff4_cronjobs
+from grr_response_server.aff4_objects import security as aff4_security
+from grr_response_server.aff4_objects import users as aff4_users
+from grr_response_server.flows.general import administrative
+from grr_response_server.gui import api_call_handler_base
+from grr_response_server.gui import approval_checks
 
-from grr.server.grr_response_server.gui.api_plugins import client as api_client
-from grr.server.grr_response_server.gui.api_plugins import cron as api_cron
-from grr.server.grr_response_server.gui.api_plugins import flow as api_flow
-from grr.server.grr_response_server.gui.api_plugins import hunt as api_hunt
+from grr_response_server.gui.api_plugins import client as api_client
 
-from grr.server.grr_response_server.hunts import implementation
+from grr_response_server.gui.api_plugins import cron as api_cron
+from grr_response_server.gui.api_plugins import flow as api_flow
+from grr_response_server.gui.api_plugins import hunt as api_hunt
+from grr_response_server.hunts import implementation
+
+from grr_response_server.rdfvalues import objects as rdf_objects
 
 
 class GlobalNotificationNotFoundError(
@@ -742,10 +743,15 @@ here
 
   def CreateApprovalNotification(self, approval):
     for user in approval.notified_users:
-      notification_lib.Notify(
-          user.strip(), self.__class__.approval_notification_type,
-          "Please grant access to %s" % approval.subject_title,
-          approval.ObjectReference())
+      try:
+        notification_lib.Notify(
+            user.strip(), self.__class__.approval_notification_type,
+            "Please grant access to %s" % approval.subject_title,
+            approval.ObjectReference())
+      except db.UnknownGRRUserError:
+        # The relational db does not allow sending notifications to users that
+        # don't exist. This should happen rarely but we need to catch this case.
+        logging.error("Notification sent for unknown user %s!", user.strip())
 
   def Handle(self, args, token=None):
     if not args.approval.reason:
@@ -1029,6 +1035,7 @@ Please click <a href='{{ admin_ui }}/#/{{ subject_url }}'>here</a> to access it.
 
 
 class ApiClientApprovalArgsBase(rdf_structs.RDFProtoStruct):
+  """Base class for client approvals."""
 
   __abstract = True  # pylint: disable=g-bad-name
 
@@ -1069,7 +1076,7 @@ class ApiCreateClientApprovalHandler(ApiCreateApprovalHandlerBase):
         args, token=token)
 
     if args.keep_client_alive:
-      flow.GRRFlow.StartFlow(
+      flow.StartFlow(
           client_id=args.client_id.ToClientURN(),
           flow_name=administrative.KeepAlive.__name__,
           duration=3600,
@@ -1357,6 +1364,7 @@ class ApiListHuntApprovalsHandler(ApiListApprovalsHandlerBase):
 
 
 class ApiCronJobApprovalArgsBase(rdf_structs.RDFProtoStruct):
+  """Base class for Cron Job approvals."""
 
   __abstract = True  # pylint: disable=g-bad-name
 
@@ -1627,9 +1635,17 @@ class ApiListPendingUserNotificationsHandler(
         token.username,
         state=rdf_objects.UserNotification.State.STATE_PENDING,
         timerange=(args.timestamp, None))
+
     # TODO(user): after AFF4 migration, remove this, so that the order
     # is reversed.
     ns = sorted(ns, key=lambda x: x.timestamp)
+
+    # Make sure that only notifications with timestamp > args.timestamp
+    # are returned.
+    # Semantics of the API call (strict >) differs slightly from the
+    # semantics of the db.ReadUserNotifications call (inclusive >=).
+    if ns and ns[0].timestamp == args.timestamp:
+      ns.pop(0)
 
     return ApiListPendingUserNotificationsResult(
         items=[ApiNotification().InitFromUserNotification(n) for n in ns])

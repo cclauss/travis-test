@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 """Tests for the ThreadPool class."""
+from __future__ import division
 
 import logging
 import Queue
@@ -7,10 +8,10 @@ import threading
 import time
 
 
-from grr.lib import flags
-from grr.lib import stats
-from grr.lib import utils
-from grr.server.grr_response_server import threadpool
+from grr_response_core.lib import flags
+from grr_response_core.lib import stats
+from grr_response_core.lib import utils
+from grr_response_server import threadpool
 from grr.test_lib import test_lib
 
 

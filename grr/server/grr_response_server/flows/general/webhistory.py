@@ -1,23 +1,24 @@
 #!/usr/bin/env python
 """Flow to recover history files."""
+from __future__ import division
 
 # DISABLED for now until it gets converted to artifacts.
 
 import datetime
 import os
 
-from grr.lib import rdfvalue
-from grr.lib import utils
-from grr.lib.parsers import chrome_history
-from grr.lib.parsers import firefox3_history
-from grr.lib.rdfvalues import file_finder as rdf_file_finder
-from grr.lib.rdfvalues import standard
-from grr.lib.rdfvalues import structs as rdf_structs
+from grr_response_core.lib import rdfvalue
+from grr_response_core.lib import utils
+from grr_response_core.lib.parsers import chrome_history
+from grr_response_core.lib.parsers import firefox3_history
+from grr_response_core.lib.rdfvalues import file_finder as rdf_file_finder
+from grr_response_core.lib.rdfvalues import standard as rdf_standard
+from grr_response_core.lib.rdfvalues import structs as rdf_structs
 from grr_response_proto import flows_pb2
-from grr.server.grr_response_server import aff4
-from grr.server.grr_response_server import flow
-from grr.server.grr_response_server import flow_utils
-from grr.server.grr_response_server.flows.general import file_finder
+from grr_response_server import aff4
+from grr_response_server import flow
+from grr_response_server import flow_utils
+from grr_response_server.flows.general import file_finder
 
 
 class ChromeHistoryArgs(rdf_structs.RDFProtoStruct):
@@ -272,7 +273,7 @@ BROWSER_PATHS = {
 class CacheGrepArgs(rdf_structs.RDFProtoStruct):
   protobuf = flows_pb2.CacheGrepArgs
   rdf_deps = [
-      standard.RegularExpression,
+      rdf_standard.RegularExpression,
   ]
 
 

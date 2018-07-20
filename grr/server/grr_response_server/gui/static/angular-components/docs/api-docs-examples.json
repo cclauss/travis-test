@@ -436,41 +436,60 @@
                 "type": "RDFBool",
                 "value": false
               },
+              "args": {
+                "type": "CronJobAction",
+                "value": {
+                  "action_type": {
+                    "type": "EnumNamedValue",
+                    "value": "HUNT_CRON_ACTION"
+                  },
+                  "hunt_cron_action": {
+                    "type": "HuntCronAction",
+                    "value": {
+                      "flow_name": {
+                        "type": "unicode",
+                        "value": ""
+                      },
+                      "hunt_runner_args": {
+                        "type": "HuntRunnerArgs",
+                        "value": {
+                          "avg_cpu_seconds_per_client_limit": {
+                            "type": "long",
+                            "value": 60
+                          },
+                          "avg_network_bytes_per_client_limit": {
+                            "type": "long",
+                            "value": 10485760
+                          },
+                          "avg_results_per_client_limit": {
+                            "type": "long",
+                            "value": 1000
+                          },
+                          "crash_limit": {
+                            "type": "long",
+                            "value": 100
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              },
               "cron_job_id": {
                 "type": "ApiCronJobId",
                 "value": "CronJob_123456"
               },
-              "description": {
-                "type": "unicode",
-                "value": ""
+              "enabled": {
+                "type": "RDFBool",
+                "value": true
               },
-              "flow_name": {
-                "type": "unicode",
-                "value": ""
-              },
-              "flow_runner_args": {
-                "type": "FlowRunnerArgs",
-                "value": {}
+              "frequency": {
+                "type": "Duration",
+                "value": 86400
               },
               "is_failing": {
                 "type": "RDFBool",
                 "value": false
-              },
-              "lifetime": {
-                "type": "Duration",
-                "value": 0
-              },
-              "periodicity": {
-                "type": "Duration",
-                "value": 86400
-              },
-              "state": {
-                "type": "EnumNamedValue",
-                "value": "ENABLED"
-              },
-              "urn": {
-                "type": "RDFURN",
-                "value": "aff4:/cron/CronJob_123456"
               }
             }
           }
@@ -496,15 +515,22 @@
         "requestor": "api_test_user",
         "subject": {
           "allow_overruns": false,
+          "args": {
+            "action_type": "HUNT_CRON_ACTION",
+            "hunt_cron_action": {
+              "flow_name": "",
+              "hunt_runner_args": {
+                "avg_cpu_seconds_per_client_limit": 60,
+                "avg_network_bytes_per_client_limit": 10485760,
+                "avg_results_per_client_limit": 1000,
+                "crash_limit": 100
+              }
+            }
+          },
           "cron_job_id": "CronJob_123456",
-          "description": "",
-          "flow_name": "",
-          "flow_runner_args": {},
-          "is_failing": false,
-          "lifetime": 0,
-          "periodicity": 86400,
-          "state": "ENABLED",
-          "urn": "aff4:/cron/CronJob_123456"
+          "enabled": true,
+          "frequency": 86400,
+          "is_failing": false
         }
       },
       "url": "/api/users/me/approvals/cron-job/CronJob_123456"
@@ -517,34 +543,27 @@
       "request_payload": {
         "description": "Foobar!",
         "flow_args": {
-          "hunt_args": {
-            "flow_args": {
-              "paths": [
-                "c:\\windows\\system32\\notepad.*"
-              ]
-            },
-            "flow_runner_args": {
-              "flow_name": "FileFinder"
-            }
-          },
-          "hunt_runner_args": {
-            "avg_cpu_seconds_per_client_limit": 60,
-            "avg_network_bytes_per_client_limit": 10485760,
-            "avg_results_per_client_limit": 1000,
-            "client_rule_set": {
-              "rules": [
-                {
-                  "os": {
-                    "os_windows": true
-                  }
-                }
-              ]
-            },
-            "crash_limit": 100,
-            "description": "Foobar! (cron)"
-          }
+          "paths": [
+            "c:\\windows\\system32\\notepad.*"
+          ]
         },
-        "flow_name": "CreateAndRunGenericHuntFlow",
+        "flow_name": "FileFinder",
+        "hunt_runner_args": {
+          "avg_cpu_seconds_per_client_limit": 60,
+          "avg_network_bytes_per_client_limit": 10485760,
+          "avg_results_per_client_limit": 1000,
+          "client_rule_set": {
+            "rules": [
+              {
+                "os": {
+                  "os_windows": true
+                }
+              }
+            ]
+          },
+          "crash_limit": 100,
+          "description": "Foobar! (cron)"
+        },
         "lifetime": 3600,
         "periodicity": 604800
       },
@@ -555,19 +574,15 @@
             "type": "RDFBool",
             "value": false
           },
-          "cron_job_id": {
-            "type": "ApiCronJobId",
-            "value": "CreateAndRunGeneicHuntFlow_1234"
-          },
-          "description": {
-            "type": "unicode",
-            "value": "Foobar!"
-          },
-          "flow_args": {
-            "type": "CreateGenericHuntFlowArgs",
+          "args": {
+            "type": "CronJobAction",
             "value": {
-              "hunt_args": {
-                "type": "GenericHuntArgs",
+              "action_type": {
+                "type": "EnumNamedValue",
+                "value": "HUNT_CRON_ACTION"
+              },
+              "hunt_cron_action": {
+                "type": "HuntCronAction",
                 "value": {
                   "flow_args": {
                     "type": "FileFinderArgs",
@@ -580,81 +595,71 @@
                       ]
                     }
                   },
-                  "flow_runner_args": {
-                    "type": "FlowRunnerArgs",
+                  "flow_name": {
+                    "type": "unicode",
+                    "value": "FileFinder"
+                  },
+                  "hunt_runner_args": {
+                    "type": "HuntRunnerArgs",
                     "value": {
-                      "flow_name": {
+                      "avg_cpu_seconds_per_client_limit": {
+                        "type": "long",
+                        "value": 60
+                      },
+                      "avg_network_bytes_per_client_limit": {
+                        "type": "long",
+                        "value": 10485760
+                      },
+                      "avg_results_per_client_limit": {
+                        "type": "long",
+                        "value": 1000
+                      },
+                      "client_rule_set": {
+                        "type": "ForemanClientRuleSet",
+                        "value": {
+                          "rules": [
+                            {
+                              "type": "ForemanClientRule",
+                              "value": {
+                                "os": {
+                                  "type": "ForemanOsClientRule",
+                                  "value": {
+                                    "os_windows": {
+                                      "type": "RDFBool",
+                                      "value": true
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          ]
+                        }
+                      },
+                      "crash_limit": {
+                        "type": "long",
+                        "value": 100
+                      },
+                      "description": {
                         "type": "unicode",
-                        "value": "FileFinder"
+                        "value": "Foobar! (cron)"
                       }
                     }
                   }
                 }
-              },
-              "hunt_runner_args": {
-                "type": "HuntRunnerArgs",
-                "value": {
-                  "avg_cpu_seconds_per_client_limit": {
-                    "type": "long",
-                    "value": 60
-                  },
-                  "avg_network_bytes_per_client_limit": {
-                    "type": "long",
-                    "value": 10485760
-                  },
-                  "avg_results_per_client_limit": {
-                    "type": "long",
-                    "value": 1000
-                  },
-                  "client_rule_set": {
-                    "type": "ForemanClientRuleSet",
-                    "value": {
-                      "rules": [
-                        {
-                          "type": "ForemanClientRule",
-                          "value": {
-                            "os": {
-                              "type": "ForemanOsClientRule",
-                              "value": {
-                                "os_windows": {
-                                  "type": "RDFBool",
-                                  "value": true
-                                }
-                              }
-                            }
-                          }
-                        }
-                      ]
-                    }
-                  },
-                  "crash_limit": {
-                    "type": "long",
-                    "value": 100
-                  },
-                  "description": {
-                    "type": "unicode",
-                    "value": "Foobar! (cron)"
-                  },
-                  "hunt_name": {
-                    "type": "unicode",
-                    "value": "GenericHunt"
-                  }
-                }
               }
             }
           },
-          "flow_name": {
-            "type": "unicode",
-            "value": "CreateAndRunGenericHuntFlow"
+          "cron_job_id": {
+            "type": "ApiCronJobId",
+            "value": "CreateAndRunGenericHuntFlow_1234"
           },
-          "flow_runner_args": {
-            "type": "FlowRunnerArgs",
-            "value": {
-              "flow_name": {
-                "type": "unicode",
-                "value": "CreateAndRunGenericHuntFlow"
-              }
-            }
+          "enabled": {
+            "type": "RDFBool",
+            "value": false
+          },
+          "frequency": {
+            "type": "Duration",
+            "value": 604800
           },
           "is_failing": {
             "type": "RDFBool",
@@ -663,64 +668,44 @@
           "lifetime": {
             "type": "Duration",
             "value": 3600
-          },
-          "periodicity": {
-            "type": "Duration",
-            "value": 604800
-          },
-          "state": {
-            "type": "EnumNamedValue",
-            "value": "DISABLED"
-          },
-          "urn": {
-            "type": "RDFURN",
-            "value": "aff4:/cron/CreateAndRunGeneicHuntFlow_1234"
           }
         }
       },
       "test_class": "ApiCreateCronJobHandlerRegressionTest_http_v1",
       "type_stripped_response": {
         "allow_overruns": false,
-        "cron_job_id": "CreateAndRunGeneicHuntFlow_1234",
-        "description": "Foobar!",
-        "flow_args": {
-          "hunt_args": {
+        "args": {
+          "action_type": "HUNT_CRON_ACTION",
+          "hunt_cron_action": {
             "flow_args": {
               "paths": [
                 "c:\\windows\\system32\\notepad.*"
               ]
             },
-            "flow_runner_args": {
-              "flow_name": "FileFinder"
-            }
-          },
-          "hunt_runner_args": {
-            "avg_cpu_seconds_per_client_limit": 60,
-            "avg_network_bytes_per_client_limit": 10485760,
-            "avg_results_per_client_limit": 1000,
-            "client_rule_set": {
-              "rules": [
-                {
-                  "os": {
-                    "os_windows": true
+            "flow_name": "FileFinder",
+            "hunt_runner_args": {
+              "avg_cpu_seconds_per_client_limit": 60,
+              "avg_network_bytes_per_client_limit": 10485760,
+              "avg_results_per_client_limit": 1000,
+              "client_rule_set": {
+                "rules": [
+                  {
+                    "os": {
+                      "os_windows": true
+                    }
                   }
-                }
-              ]
-            },
-            "crash_limit": 100,
-            "description": "Foobar! (cron)",
-            "hunt_name": "GenericHunt"
+                ]
+              },
+              "crash_limit": 100,
+              "description": "Foobar! (cron)"
+            }
           }
         },
-        "flow_name": "CreateAndRunGenericHuntFlow",
-        "flow_runner_args": {
-          "flow_name": "CreateAndRunGenericHuntFlow"
-        },
+        "cron_job_id": "CreateAndRunGenericHuntFlow_1234",
+        "enabled": false,
+        "frequency": 604800,
         "is_failing": false,
-        "lifetime": 3600,
-        "periodicity": 604800,
-        "state": "DISABLED",
-        "urn": "aff4:/cron/CreateAndRunGeneicHuntFlow_1234"
+        "lifetime": 3600
       },
       "url": "/api/cron-jobs"
     }
@@ -4286,41 +4271,60 @@
                 "type": "RDFBool",
                 "value": false
               },
+              "args": {
+                "type": "CronJobAction",
+                "value": {
+                  "action_type": {
+                    "type": "EnumNamedValue",
+                    "value": "HUNT_CRON_ACTION"
+                  },
+                  "hunt_cron_action": {
+                    "type": "HuntCronAction",
+                    "value": {
+                      "flow_name": {
+                        "type": "unicode",
+                        "value": ""
+                      },
+                      "hunt_runner_args": {
+                        "type": "HuntRunnerArgs",
+                        "value": {
+                          "avg_cpu_seconds_per_client_limit": {
+                            "type": "long",
+                            "value": 60
+                          },
+                          "avg_network_bytes_per_client_limit": {
+                            "type": "long",
+                            "value": 10485760
+                          },
+                          "avg_results_per_client_limit": {
+                            "type": "long",
+                            "value": 1000
+                          },
+                          "crash_limit": {
+                            "type": "long",
+                            "value": 100
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              },
               "cron_job_id": {
                 "type": "ApiCronJobId",
                 "value": "CronJob_123456"
               },
-              "description": {
-                "type": "unicode",
-                "value": ""
+              "enabled": {
+                "type": "RDFBool",
+                "value": true
               },
-              "flow_name": {
-                "type": "unicode",
-                "value": ""
-              },
-              "flow_runner_args": {
-                "type": "FlowRunnerArgs",
-                "value": {}
+              "frequency": {
+                "type": "Duration",
+                "value": 86400
               },
               "is_failing": {
                 "type": "RDFBool",
                 "value": false
-              },
-              "lifetime": {
-                "type": "Duration",
-                "value": 0
-              },
-              "periodicity": {
-                "type": "Duration",
-                "value": 86400
-              },
-              "state": {
-                "type": "EnumNamedValue",
-                "value": "ENABLED"
-              },
-              "urn": {
-                "type": "RDFURN",
-                "value": "aff4:/cron/CronJob_123456"
               }
             }
           }
@@ -4343,15 +4347,22 @@
         "requestor": "api_test_user",
         "subject": {
           "allow_overruns": false,
+          "args": {
+            "action_type": "HUNT_CRON_ACTION",
+            "hunt_cron_action": {
+              "flow_name": "",
+              "hunt_runner_args": {
+                "avg_cpu_seconds_per_client_limit": 60,
+                "avg_network_bytes_per_client_limit": 10485760,
+                "avg_results_per_client_limit": 1000,
+                "crash_limit": 100
+              }
+            }
+          },
           "cron_job_id": "CronJob_123456",
-          "description": "",
-          "flow_name": "",
-          "flow_runner_args": {},
-          "is_failing": false,
-          "lifetime": 0,
-          "periodicity": 86400,
-          "state": "ENABLED",
-          "urn": "aff4:/cron/CronJob_123456"
+          "enabled": true,
+          "frequency": 86400,
+          "is_failing": false
         }
       },
       "url": "/api/users/api_test_user/approvals/cron-job/CronJob_123456/approval:111111"
@@ -4406,41 +4417,60 @@
                 "type": "RDFBool",
                 "value": false
               },
+              "args": {
+                "type": "CronJobAction",
+                "value": {
+                  "action_type": {
+                    "type": "EnumNamedValue",
+                    "value": "HUNT_CRON_ACTION"
+                  },
+                  "hunt_cron_action": {
+                    "type": "HuntCronAction",
+                    "value": {
+                      "flow_name": {
+                        "type": "unicode",
+                        "value": ""
+                      },
+                      "hunt_runner_args": {
+                        "type": "HuntRunnerArgs",
+                        "value": {
+                          "avg_cpu_seconds_per_client_limit": {
+                            "type": "long",
+                            "value": 60
+                          },
+                          "avg_network_bytes_per_client_limit": {
+                            "type": "long",
+                            "value": 10485760
+                          },
+                          "avg_results_per_client_limit": {
+                            "type": "long",
+                            "value": 1000
+                          },
+                          "crash_limit": {
+                            "type": "long",
+                            "value": 100
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              },
               "cron_job_id": {
                 "type": "ApiCronJobId",
                 "value": "CronJob_567890"
               },
-              "description": {
-                "type": "unicode",
-                "value": ""
+              "enabled": {
+                "type": "RDFBool",
+                "value": true
               },
-              "flow_name": {
-                "type": "unicode",
-                "value": ""
-              },
-              "flow_runner_args": {
-                "type": "FlowRunnerArgs",
-                "value": {}
+              "frequency": {
+                "type": "Duration",
+                "value": 86400
               },
               "is_failing": {
                 "type": "RDFBool",
                 "value": false
-              },
-              "lifetime": {
-                "type": "Duration",
-                "value": 0
-              },
-              "periodicity": {
-                "type": "Duration",
-                "value": 86400
-              },
-              "state": {
-                "type": "EnumNamedValue",
-                "value": "ENABLED"
-              },
-              "urn": {
-                "type": "RDFURN",
-                "value": "aff4:/cron/CronJob_567890"
               }
             }
           }
@@ -4463,132 +4493,65 @@
         "requestor": "api_test_user",
         "subject": {
           "allow_overruns": false,
+          "args": {
+            "action_type": "HUNT_CRON_ACTION",
+            "hunt_cron_action": {
+              "flow_name": "",
+              "hunt_runner_args": {
+                "avg_cpu_seconds_per_client_limit": 60,
+                "avg_network_bytes_per_client_limit": 10485760,
+                "avg_results_per_client_limit": 1000,
+                "crash_limit": 100
+              }
+            }
+          },
           "cron_job_id": "CronJob_567890",
-          "description": "",
-          "flow_name": "",
-          "flow_runner_args": {},
-          "is_failing": false,
-          "lifetime": 0,
-          "periodicity": 86400,
-          "state": "ENABLED",
-          "urn": "aff4:/cron/CronJob_567890"
+          "enabled": true,
+          "frequency": 86400,
+          "is_failing": false
         }
       },
       "url": "/api/users/api_test_user/approvals/cron-job/CronJob_567890/approval:222222"
     }
   ],
-  "ApiGetCronJobFlowHandler": [
+  "ApiGetCronJobRunHandler": [
     {
-      "api_method": "GetCronJobFlow",
+      "api_method": "GetCronJobRun",
       "method": "GET",
       "response": {
-        "type": "ApiFlow",
+        "type": "ApiCronJobRun",
         "value": {
-          "args": {
-            "type": "EmptyFlowArgs",
-            "value": {}
+          "cron_job_id": {
+            "type": "ApiCronJobId",
+            "value": "GRRVersionBreakDown"
           },
-          "context": {
-            "type": "FlowContext",
-            "value": {
-              "create_time": {
-                "type": "RDFDatetime",
-                "value": 44000000
-              },
-              "creator": {
-                "type": "unicode",
-                "value": "api_test_user"
-              },
-              "current_state": {
-                "type": "unicode",
-                "value": "Start"
-              },
-              "next_outbound_id": {
-                "type": "long",
-                "value": 2
-              },
-              "outstanding_requests": {
-                "type": "long",
-                "value": 1
-              },
-              "session_id": {
-                "type": "SessionID",
-                "value": "aff4:/cron/GRRVersionBreakDown/F:ABCDEF11"
-              },
-              "state": {
-                "type": "EnumNamedValue",
-                "value": "RUNNING"
-              }
-            }
-          },
-          "creator": {
-            "type": "unicode",
-            "value": "api_test_user"
-          },
-          "last_active_at": {
+          "finished_at": {
             "type": "RDFDatetime",
             "value": 44000000
           },
-          "name": {
-            "type": "unicode",
-            "value": "GRRVersionBreakDown"
-          },
-          "runner_args": {
-            "type": "FlowRunnerArgs",
-            "value": {
-              "base_session_id": {
-                "type": "RDFURN",
-                "value": "aff4:/cron/GRRVersionBreakDown"
-              },
-              "flow_name": {
-                "type": "unicode",
-                "value": "GRRVersionBreakDown"
-              },
-              "original_flow": {
-                "type": "FlowReference",
-                "value": {}
-              }
-            }
+          "run_id": {
+            "type": "ApiCronJobRunId",
+            "value": "F:ABCDEF11"
           },
           "started_at": {
             "type": "RDFDatetime",
             "value": 44000000
           },
-          "state": {
+          "status": {
             "type": "EnumNamedValue",
-            "value": "RUNNING"
-          },
-          "urn": {
-            "type": "SessionID",
-            "value": "aff4:/cron/GRRVersionBreakDown/F:ABCDEF11"
+            "value": "FINISHED"
           }
         }
       },
-      "test_class": "ApiGetCronJobFlowHandlerRegressionTest_http_v1",
+      "test_class": "ApiGetCronJobRunHandlerRegressionTest_http_v1",
       "type_stripped_response": {
-        "args": {},
-        "context": {
-          "create_time": 44000000,
-          "creator": "api_test_user",
-          "current_state": "Start",
-          "next_outbound_id": 2,
-          "outstanding_requests": 1,
-          "session_id": "aff4:/cron/GRRVersionBreakDown/F:ABCDEF11",
-          "state": "RUNNING"
-        },
-        "creator": "api_test_user",
-        "last_active_at": 44000000,
-        "name": "GRRVersionBreakDown",
-        "runner_args": {
-          "base_session_id": "aff4:/cron/GRRVersionBreakDown",
-          "flow_name": "GRRVersionBreakDown",
-          "original_flow": {}
-        },
+        "cron_job_id": "GRRVersionBreakDown",
+        "finished_at": 44000000,
+        "run_id": "F:ABCDEF11",
         "started_at": 44000000,
-        "state": "RUNNING",
-        "urn": "aff4:/cron/GRRVersionBreakDown/F:ABCDEF11"
+        "status": "FINISHED"
       },
-      "url": "/api/cron-jobs/GRRVersionBreakDown/flows/F:ABCDEF11"
+      "url": "/api/cron-jobs/GRRVersionBreakDown/runs/F:ABCDEF11"
     }
   ],
   "ApiGetFileDownloadCommandHandler": [
@@ -12352,41 +12315,60 @@
                 "type": "RDFBool",
                 "value": false
               },
+              "args": {
+                "type": "CronJobAction",
+                "value": {
+                  "action_type": {
+                    "type": "EnumNamedValue",
+                    "value": "HUNT_CRON_ACTION"
+                  },
+                  "hunt_cron_action": {
+                    "type": "HuntCronAction",
+                    "value": {
+                      "flow_name": {
+                        "type": "unicode",
+                        "value": ""
+                      },
+                      "hunt_runner_args": {
+                        "type": "HuntRunnerArgs",
+                        "value": {
+                          "avg_cpu_seconds_per_client_limit": {
+                            "type": "long",
+                            "value": 60
+                          },
+                          "avg_network_bytes_per_client_limit": {
+                            "type": "long",
+                            "value": 10485760
+                          },
+                          "avg_results_per_client_limit": {
+                            "type": "long",
+                            "value": 1000
+                          },
+                          "crash_limit": {
+                            "type": "long",
+                            "value": 100
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              },
               "cron_job_id": {
                 "type": "ApiCronJobId",
                 "value": "CronJob_123456"
               },
-              "description": {
-                "type": "unicode",
-                "value": ""
+              "enabled": {
+                "type": "RDFBool",
+                "value": true
               },
-              "flow_name": {
-                "type": "unicode",
-                "value": ""
-              },
-              "flow_runner_args": {
-                "type": "FlowRunnerArgs",
-                "value": {}
+              "frequency": {
+                "type": "Duration",
+                "value": 86400
               },
               "is_failing": {
                 "type": "RDFBool",
                 "value": false
-              },
-              "lifetime": {
-                "type": "Duration",
-                "value": 0
-              },
-              "periodicity": {
-                "type": "Duration",
-                "value": 86400
-              },
-              "state": {
-                "type": "EnumNamedValue",
-                "value": "ENABLED"
-              },
-              "urn": {
-                "type": "RDFURN",
-                "value": "aff4:/cron/CronJob_123456"
               }
             }
           }
@@ -12409,15 +12391,22 @@
         "requestor": "requestor",
         "subject": {
           "allow_overruns": false,
+          "args": {
+            "action_type": "HUNT_CRON_ACTION",
+            "hunt_cron_action": {
+              "flow_name": "",
+              "hunt_runner_args": {
+                "avg_cpu_seconds_per_client_limit": 60,
+                "avg_network_bytes_per_client_limit": 10485760,
+                "avg_results_per_client_limit": 1000,
+                "crash_limit": 100
+              }
+            }
+          },
           "cron_job_id": "CronJob_123456",
-          "description": "",
-          "flow_name": "",
-          "flow_runner_args": {},
-          "is_failing": false,
-          "lifetime": 0,
-          "periodicity": 86400,
-          "state": "ENABLED",
-          "urn": "aff4:/cron/CronJob_123456"
+          "enabled": true,
+          "frequency": 86400,
+          "is_failing": false
         }
       },
       "url": "/api/users/requestor/approvals/cron-job/CronJob_123456/approval:111111/actions/grant"
@@ -13161,13 +13150,13 @@
                 "type": "unicode",
                 "value": "ListProcesses"
               },
+              "leased_until": {
+                "type": "RDFDatetime",
+                "value": 10042000000
+              },
               "session_id": {
                 "type": "RDFURN",
                 "value": "aff4:/C.1000000000000000/flows/F:123456"
-              },
-              "task_eta": {
-                "type": "RDFDatetime",
-                "value": 10042000000
               },
               "task_id": {
                 "type": "long",
@@ -13182,8 +13171,8 @@
         "items": [
           {
             "client_action": "ListProcesses",
+            "leased_until": 10042000000,
             "session_id": "aff4:/C.1000000000000000/flows/F:123456",
-            "task_eta": 10042000000,
             "task_id": 43
           }
         ]
@@ -13202,6 +13191,10 @@
                 "type": "unicode",
                 "value": "ListProcesses"
               },
+              "leased_until": {
+                "type": "RDFDatetime",
+                "value": 10042000000
+              },
               "responses": [
                 {
                   "type": "GrrMessage",
@@ -13214,13 +13207,13 @@
                       "type": "float",
                       "value": 7200.0
                     },
-                    "eta": {
-                      "type": "RDFDatetime",
-                      "value": 42000000
-                    },
-                    "last_lease": {
+                    "leased_by": {
                       "type": "unicode",
                       "value": "test_process@test.host:42"
+                    },
+                    "leased_until": {
+                      "type": "RDFDatetime",
+                      "value": 42000000
                     },
                     "name": {
                       "type": "unicode",
@@ -13286,10 +13279,6 @@
                 "type": "RDFURN",
                 "value": "aff4:/C.1000000000000000/flows/F:123456"
               },
-              "task_eta": {
-                "type": "RDFDatetime",
-                "value": 10042000000
-              },
               "task_id": {
                 "type": "long",
                 "value": 43
@@ -13303,12 +13292,13 @@
         "items": [
           {
             "client_action": "ListProcesses",
+            "leased_until": 10042000000,
             "responses": [
               {
                 "auth_state": "AUTHENTICATED",
                 "cpu_limit": 7200.0,
-                "eta": 42000000,
-                "last_lease": "test_process@test.host:42",
+                "leased_by": "test_process@test.host:42",
+                "leased_until": 42000000,
                 "name": "ListProcesses",
                 "payload": {
                   "status": "GENERIC_ERROR"
@@ -13327,7 +13317,6 @@
               }
             ],
             "session_id": "aff4:/C.1000000000000000/flows/F:123456",
-            "task_eta": 10042000000,
             "task_id": 43
           }
         ]
@@ -14551,91 +14540,52 @@
       "url": "/api/clients/labels"
     }
   ],
-  "ApiListCronJobFlowsHandler": [
+  "ApiListCronJobRunsHandler": [
     {
-      "api_method": "ListCronJobFlows",
+      "api_method": "ListCronJobRuns",
       "method": "GET",
       "response": {
         "items": [
           {
-            "type": "ApiFlow",
+            "type": "ApiCronJobRun",
             "value": {
-              "args": {
-                "type": "EmptyFlowArgs",
-                "value": {}
+              "cron_job_id": {
+                "type": "ApiCronJobId",
+                "value": "GRRVersionBreakDown"
               },
-              "creator": {
-                "type": "unicode",
-                "value": "api_test_user"
-              },
-              "flow_id": {
-                "type": "ApiFlowId",
-                "value": "F:ABCDEF11"
-              },
-              "last_active_at": {
+              "finished_at": {
                 "type": "RDFDatetime",
                 "value": 44000000
               },
-              "name": {
-                "type": "unicode",
-                "value": "GRRVersionBreakDown"
-              },
-              "nested_flows": [],
-              "runner_args": {
-                "type": "FlowRunnerArgs",
-                "value": {
-                  "base_session_id": {
-                    "type": "RDFURN",
-                    "value": "aff4:/cron/GRRVersionBreakDown"
-                  },
-                  "flow_name": {
-                    "type": "unicode",
-                    "value": "GRRVersionBreakDown"
-                  },
-                  "original_flow": {
-                    "type": "FlowReference",
-                    "value": {}
-                  }
-                }
+              "run_id": {
+                "type": "ApiCronJobRunId",
+                "value": "F:ABCDEF11"
               },
               "started_at": {
                 "type": "RDFDatetime",
                 "value": 44000000
               },
-              "state": {
+              "status": {
                 "type": "EnumNamedValue",
-                "value": "RUNNING"
-              },
-              "urn": {
-                "type": "SessionID",
-                "value": "aff4:/cron/GRRVersionBreakDown/F:ABCDEF11"
+                "value": "FINISHED"
               }
             }
           }
         ]
       },
-      "test_class": "ApiListCronJobFlowsHandlerRegressionTest_http_v1",
+      "test_class": "ApiListCronJobRunsHandlerRegressionTest_http_v1",
       "type_stripped_response": {
         "items": [
           {
-            "args": {},
-            "creator": "api_test_user",
-            "flow_id": "F:ABCDEF11",
-            "last_active_at": 44000000,
-            "name": "GRRVersionBreakDown",
-            "nested_flows": [],
-            "runner_args": {
-              "base_session_id": "aff4:/cron/GRRVersionBreakDown",
-              "flow_name": "GRRVersionBreakDown",
-              "original_flow": {}
-            },
+            "cron_job_id": "GRRVersionBreakDown",
+            "finished_at": 44000000,
+            "run_id": "F:ABCDEF11",
             "started_at": 44000000,
-            "state": "RUNNING",
-            "urn": "aff4:/cron/GRRVersionBreakDown/F:ABCDEF11"
+            "status": "FINISHED"
           }
         ]
       },
-      "url": "/api/cron-jobs/GRRVersionBreakDown/flows"
+      "url": "/api/cron-jobs/GRRVersionBreakDown/runs"
     }
   ],
   "ApiListCronJobsHandler": [
@@ -14651,30 +14601,60 @@
                 "type": "RDFBool",
                 "value": false
               },
+              "args": {
+                "type": "CronJobAction",
+                "value": {
+                  "action_type": {
+                    "type": "EnumNamedValue",
+                    "value": "HUNT_CRON_ACTION"
+                  },
+                  "hunt_cron_action": {
+                    "type": "HuntCronAction",
+                    "value": {
+                      "flow_args": {
+                        "type": "EmptyFlowArgs",
+                        "value": {}
+                      },
+                      "flow_name": {
+                        "type": "unicode",
+                        "value": "GRRVersionBreakDown"
+                      },
+                      "hunt_runner_args": {
+                        "type": "HuntRunnerArgs",
+                        "value": {
+                          "avg_cpu_seconds_per_client_limit": {
+                            "type": "long",
+                            "value": 60
+                          },
+                          "avg_network_bytes_per_client_limit": {
+                            "type": "long",
+                            "value": 10485760
+                          },
+                          "avg_results_per_client_limit": {
+                            "type": "long",
+                            "value": 1000
+                          },
+                          "crash_limit": {
+                            "type": "long",
+                            "value": 100
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              },
               "cron_job_id": {
                 "type": "ApiCronJobId",
                 "value": "GRRVersionBreakDown"
               },
-              "description": {
-                "type": "unicode",
-                "value": "foo"
+              "enabled": {
+                "type": "RDFBool",
+                "value": false
               },
-              "flow_args": {
-                "type": "EmptyFlowArgs",
-                "value": {}
-              },
-              "flow_name": {
-                "type": "unicode",
-                "value": "GRRVersionBreakDown"
-              },
-              "flow_runner_args": {
-                "type": "FlowRunnerArgs",
-                "value": {
-                  "flow_name": {
-                    "type": "unicode",
-                    "value": "GRRVersionBreakDown"
-                  }
-                }
+              "frequency": {
+                "type": "Duration",
+                "value": 86400
               },
               "is_failing": {
                 "type": "RDFBool",
@@ -14683,18 +14663,6 @@
               "lifetime": {
                 "type": "Duration",
                 "value": 7200
-              },
-              "periodicity": {
-                "type": "Duration",
-                "value": 86400
-              },
-              "state": {
-                "type": "EnumNamedValue",
-                "value": "DISABLED"
-              },
-              "urn": {
-                "type": "RDFURN",
-                "value": "aff4:/cron/GRRVersionBreakDown"
               }
             }
           },
@@ -14705,34 +14673,68 @@
                 "type": "RDFBool",
                 "value": false
               },
+              "args": {
+                "type": "CronJobAction",
+                "value": {
+                  "action_type": {
+                    "type": "EnumNamedValue",
+                    "value": "HUNT_CRON_ACTION"
+                  },
+                  "hunt_cron_action": {
+                    "type": "HuntCronAction",
+                    "value": {
+                      "flow_args": {
+                        "type": "EmptyFlowArgs",
+                        "value": {}
+                      },
+                      "flow_name": {
+                        "type": "unicode",
+                        "value": "LastAccessStats"
+                      },
+                      "hunt_runner_args": {
+                        "type": "HuntRunnerArgs",
+                        "value": {
+                          "avg_cpu_seconds_per_client_limit": {
+                            "type": "long",
+                            "value": 60
+                          },
+                          "avg_network_bytes_per_client_limit": {
+                            "type": "long",
+                            "value": 10485760
+                          },
+                          "avg_results_per_client_limit": {
+                            "type": "long",
+                            "value": 1000
+                          },
+                          "crash_limit": {
+                            "type": "long",
+                            "value": 100
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              },
               "cron_job_id": {
                 "type": "ApiCronJobId",
                 "value": "LastAccessStats"
               },
-              "description": {
-                "type": "unicode",
-                "value": ""
+              "enabled": {
+                "type": "RDFBool",
+                "value": true
               },
-              "flow_args": {
-                "type": "EmptyFlowArgs",
-                "value": {}
-              },
-              "flow_name": {
-                "type": "unicode",
-                "value": "LastAccessStats"
-              },
-              "flow_runner_args": {
-                "type": "FlowRunnerArgs",
-                "value": {
-                  "flow_name": {
-                    "type": "unicode",
-                    "value": "LastAccessStats"
-                  }
-                }
+              "frequency": {
+                "type": "Duration",
+                "value": 604800
               },
               "is_failing": {
                 "type": "RDFBool",
                 "value": true
+              },
+              "last_run_status": {
+                "type": "EnumNamedValue",
+                "value": "ERROR"
               },
               "last_run_time": {
                 "type": "RDFDatetime",
@@ -14741,18 +14743,6 @@
               "lifetime": {
                 "type": "Duration",
                 "value": 86400
-              },
-              "periodicity": {
-                "type": "Duration",
-                "value": 604800
-              },
-              "state": {
-                "type": "EnumNamedValue",
-                "value": "ENABLED"
-              },
-              "urn": {
-                "type": "RDFURN",
-                "value": "aff4:/cron/LastAccessStats"
               }
             }
           },
@@ -14763,30 +14753,60 @@
                 "type": "RDFBool",
                 "value": false
               },
+              "args": {
+                "type": "CronJobAction",
+                "value": {
+                  "action_type": {
+                    "type": "EnumNamedValue",
+                    "value": "HUNT_CRON_ACTION"
+                  },
+                  "hunt_cron_action": {
+                    "type": "HuntCronAction",
+                    "value": {
+                      "flow_args": {
+                        "type": "EmptyFlowArgs",
+                        "value": {}
+                      },
+                      "flow_name": {
+                        "type": "unicode",
+                        "value": "OSBreakDown"
+                      },
+                      "hunt_runner_args": {
+                        "type": "HuntRunnerArgs",
+                        "value": {
+                          "avg_cpu_seconds_per_client_limit": {
+                            "type": "long",
+                            "value": 60
+                          },
+                          "avg_network_bytes_per_client_limit": {
+                            "type": "long",
+                            "value": 10485760
+                          },
+                          "avg_results_per_client_limit": {
+                            "type": "long",
+                            "value": 1000
+                          },
+                          "crash_limit": {
+                            "type": "long",
+                            "value": 100
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              },
               "cron_job_id": {
                 "type": "ApiCronJobId",
                 "value": "OSBreakDown"
               },
-              "description": {
-                "type": "unicode",
-                "value": "bar"
+              "enabled": {
+                "type": "RDFBool",
+                "value": true
               },
-              "flow_args": {
-                "type": "EmptyFlowArgs",
-                "value": {}
-              },
-              "flow_name": {
-                "type": "unicode",
-                "value": "OSBreakDown"
-              },
-              "flow_runner_args": {
-                "type": "FlowRunnerArgs",
-                "value": {
-                  "flow_name": {
-                    "type": "unicode",
-                    "value": "OSBreakDown"
-                  }
-                }
+              "frequency": {
+                "type": "Duration",
+                "value": 604800
               },
               "is_failing": {
                 "type": "RDFBool",
@@ -14795,18 +14815,6 @@
               "lifetime": {
                 "type": "Duration",
                 "value": 86400
-              },
-              "periodicity": {
-                "type": "Duration",
-                "value": 604800
-              },
-              "state": {
-                "type": "EnumNamedValue",
-                "value": "ENABLED"
-              },
-              "urn": {
-                "type": "RDFURN",
-                "value": "aff4:/cron/OSBreakDown"
               }
             }
           }
@@ -14818,49 +14826,68 @@
         "items": [
           {
             "allow_overruns": false,
+            "args": {
+              "action_type": "HUNT_CRON_ACTION",
+              "hunt_cron_action": {
+                "flow_args": {},
+                "flow_name": "GRRVersionBreakDown",
+                "hunt_runner_args": {
+                  "avg_cpu_seconds_per_client_limit": 60,
+                  "avg_network_bytes_per_client_limit": 10485760,
+                  "avg_results_per_client_limit": 1000,
+                  "crash_limit": 100
+                }
+              }
+            },
             "cron_job_id": "GRRVersionBreakDown",
-            "description": "foo",
-            "flow_args": {},
-            "flow_name": "GRRVersionBreakDown",
-            "flow_runner_args": {
-              "flow_name": "GRRVersionBreakDown"
-            },
+            "enabled": false,
+            "frequency": 86400,
             "is_failing": false,
-            "lifetime": 7200,
-            "periodicity": 86400,
-            "state": "DISABLED",
-            "urn": "aff4:/cron/GRRVersionBreakDown"
+            "lifetime": 7200
           },
           {
             "allow_overruns": false,
+            "args": {
+              "action_type": "HUNT_CRON_ACTION",
+              "hunt_cron_action": {
+                "flow_args": {},
+                "flow_name": "LastAccessStats",
+                "hunt_runner_args": {
+                  "avg_cpu_seconds_per_client_limit": 60,
+                  "avg_network_bytes_per_client_limit": 10485760,
+                  "avg_results_per_client_limit": 1000,
+                  "crash_limit": 100
+                }
+              }
+            },
             "cron_job_id": "LastAccessStats",
-            "description": "",
-            "flow_args": {},
-            "flow_name": "LastAccessStats",
-            "flow_runner_args": {
-              "flow_name": "LastAccessStats"
-            },
+            "enabled": true,
+            "frequency": 604800,
             "is_failing": true,
+            "last_run_status": "ERROR",
             "last_run_time": 230000000,
-            "lifetime": 86400,
-            "periodicity": 604800,
-            "state": "ENABLED",
-            "urn": "aff4:/cron/LastAccessStats"
+            "lifetime": 86400
           },
           {
             "allow_overruns": false,
-            "cron_job_id": "OSBreakDown",
-            "description": "bar",
-            "flow_args": {},
-            "flow_name": "OSBreakDown",
-            "flow_runner_args": {
-              "flow_name": "OSBreakDown"
+            "args": {
+              "action_type": "HUNT_CRON_ACTION",
+              "hunt_cron_action": {
+                "flow_args": {},
+                "flow_name": "OSBreakDown",
+                "hunt_runner_args": {
+                  "avg_cpu_seconds_per_client_limit": 60,
+                  "avg_network_bytes_per_client_limit": 10485760,
+                  "avg_results_per_client_limit": 1000,
+                  "crash_limit": 100
+                }
+              }
             },
+            "cron_job_id": "OSBreakDown",
+            "enabled": true,
+            "frequency": 604800,
             "is_failing": false,
-            "lifetime": 86400,
-            "periodicity": 604800,
-            "state": "ENABLED",
-            "urn": "aff4:/cron/OSBreakDown"
+            "lifetime": 86400
           }
         ],
         "total_count": 3
@@ -15099,7 +15126,7 @@
               },
               "doc": {
                 "type": "unicode",
-                "value": "This flow looks for files matching given criteria and acts on them.\n\n  FileFinder searches for files that match glob expressions.  The \"action\"\n  (e.g. Download) is applied to files that match all given \"conditions\".\n  Matches are then written to the results collection. If there are no\n  \"conditions\" specified, \"action\" is just applied to all found files.\n\n  FileFinder replaces these deprecated flows: FetchFiles, FingerprintFile\n  and SearchFileContent.\n  \n\n  Call Spec:\n    flow.GRRFlow.StartFlow(client_id=client_id, flow_name=\"FileFinder\", paths=paths, pathtype=pathtype, conditions=conditions, action=action, process_non_regular_files=process_non_regular_files, follow_links=follow_links, xdev=xdev)\n\n  Args:\n    action\n      description: \n      type: FileFinderAction\n      default: None\n\n    conditions\n      description: These conditions will be applied to all files that match the path arguments.\n      type: \n      default: None\n\n    follow_links\n      description: Should symbolic links be followed in recursive directory listings.\n      type: RDFBool\n      default: 0\n\n    paths\n      description: A path to glob that can contain %% expansions.\n      type: \n      default: None\n\n    pathtype\n      description: Path type to glob in.\n      type: EnumNamedValue\n      default: OS\n\n    process_non_regular_files\n      description: Look both into regular files and non-regular files (devices, named pipes, sockets). NOTE: This is very dangerous and should be used with care.\n      type: RDFBool\n      default: 0\n\n    xdev\n      description: Behavior when ecountering device boundaries while doing recursive searches.\n      type: EnumNamedValue\n      default: LOCAL\n"
+                "value": "This flow looks for files matching given criteria and acts on them.\n\n  FileFinder searches for files that match glob expressions.  The \"action\"\n  (e.g. Download) is applied to files that match all given \"conditions\".\n  Matches are then written to the results collection. If there are no\n  \"conditions\" specified, \"action\" is just applied to all found files.\n\n  FileFinder replaces these deprecated flows: FetchFiles, FingerprintFile\n  and SearchFileContent.\n  \n\n  Call Spec:\n    flow.StartFlow(client_id=client_id, flow_name=\"FileFinder\", paths=paths, pathtype=pathtype, conditions=conditions, action=action, process_non_regular_files=process_non_regular_files, follow_links=follow_links, xdev=xdev)\n\n  Args:\n    action\n      description: \n      type: FileFinderAction\n      default: None\n\n    conditions\n      description: These conditions will be applied to all files that match the path arguments.\n      type: \n      default: None\n\n    follow_links\n      description: Should symbolic links be followed in recursive directory listings.\n      type: RDFBool\n      default: 0\n\n    paths\n      description: A path to glob that can contain %% expansions.\n      type: \n      default: None\n\n    pathtype\n      description: Path type to glob in.\n      type: EnumNamedValue\n      default: OS\n\n    process_non_regular_files\n      description: Look both into regular files and non-regular files (devices, named pipes, sockets). NOTE: This is very dangerous and should be used with care.\n      type: RDFBool\n      default: 0\n\n    xdev\n      description: Behavior when ecountering device boundaries while doing recursive searches.\n      type: EnumNamedValue\n      default: LOCAL\n"
               },
               "friendly_name": {
                 "type": "unicode",
@@ -15138,7 +15165,7 @@
               },
               "doc": {
                 "type": "unicode",
-                "value": "List running processes on a system.\n\n  Call Spec:\n    flow.GRRFlow.StartFlow(client_id=client_id, flow_name=\"ListProcesses\", filename_regex=filename_regex, fetch_binaries=fetch_binaries, connection_states=connection_states)\n\n  Args:\n    connection_states\n      description: Network connection states to match. If a process has any network connections in any status listed here, it will be considered a match\n      type: \n      default: None\n\n    fetch_binaries\n      description: \n      type: RDFBool\n      default: 0\n\n    filename_regex\n      description: Regex used to filter the list of processes.\n      type: RegularExpression\n      default: .\n"
+                "value": "List running processes on a system.\n\n  Call Spec:\n    flow.StartFlow(client_id=client_id, flow_name=\"ListProcesses\", filename_regex=filename_regex, fetch_binaries=fetch_binaries, connection_states=connection_states)\n\n  Args:\n    connection_states\n      description: Network connection states to match. If a process has any network connections in any status listed here, it will be considered a match\n      type: \n      default: None\n\n    fetch_binaries\n      description: \n      type: RDFBool\n      default: 0\n\n    filename_regex\n      description: Regex used to filter the list of processes.\n      type: RegularExpression\n      default: .\n"
               },
               "name": {
                 "type": "unicode",
@@ -15159,7 +15186,7 @@
             ],
             "category": "Filesystem",
             "default_args": {},
-            "doc": "This flow looks for files matching given criteria and acts on them.\n\n  FileFinder searches for files that match glob expressions.  The \"action\"\n  (e.g. Download) is applied to files that match all given \"conditions\".\n  Matches are then written to the results collection. If there are no\n  \"conditions\" specified, \"action\" is just applied to all found files.\n\n  FileFinder replaces these deprecated flows: FetchFiles, FingerprintFile\n  and SearchFileContent.\n  \n\n  Call Spec:\n    flow.GRRFlow.StartFlow(client_id=client_id, flow_name=\"FileFinder\", paths=paths, pathtype=pathtype, conditions=conditions, action=action, process_non_regular_files=process_non_regular_files, follow_links=follow_links, xdev=xdev)\n\n  Args:\n    action\n      description: \n      type: FileFinderAction\n      default: None\n\n    conditions\n      description: These conditions will be applied to all files that match the path arguments.\n      type: \n      default: None\n\n    follow_links\n      description: Should symbolic links be followed in recursive directory listings.\n      type: RDFBool\n      default: 0\n\n    paths\n      description: A path to glob that can contain %% expansions.\n      type: \n      default: None\n\n    pathtype\n      description: Path type to glob in.\n      type: EnumNamedValue\n      default: OS\n\n    process_non_regular_files\n      description: Look both into regular files and non-regular files (devices, named pipes, sockets). NOTE: This is very dangerous and should be used with care.\n      type: RDFBool\n      default: 0\n\n    xdev\n      description: Behavior when ecountering device boundaries while doing recursive searches.\n      type: EnumNamedValue\n      default: LOCAL\n",
+            "doc": "This flow looks for files matching given criteria and acts on them.\n\n  FileFinder searches for files that match glob expressions.  The \"action\"\n  (e.g. Download) is applied to files that match all given \"conditions\".\n  Matches are then written to the results collection. If there are no\n  \"conditions\" specified, \"action\" is just applied to all found files.\n\n  FileFinder replaces these deprecated flows: FetchFiles, FingerprintFile\n  and SearchFileContent.\n  \n\n  Call Spec:\n    flow.StartFlow(client_id=client_id, flow_name=\"FileFinder\", paths=paths, pathtype=pathtype, conditions=conditions, action=action, process_non_regular_files=process_non_regular_files, follow_links=follow_links, xdev=xdev)\n\n  Args:\n    action\n      description: \n      type: FileFinderAction\n      default: None\n\n    conditions\n      description: These conditions will be applied to all files that match the path arguments.\n      type: \n      default: None\n\n    follow_links\n      description: Should symbolic links be followed in recursive directory listings.\n      type: RDFBool\n      default: 0\n\n    paths\n      description: A path to glob that can contain %% expansions.\n      type: \n      default: None\n\n    pathtype\n      description: Path type to glob in.\n      type: EnumNamedValue\n      default: OS\n\n    process_non_regular_files\n      description: Look both into regular files and non-regular files (devices, named pipes, sockets). NOTE: This is very dangerous and should be used with care.\n      type: RDFBool\n      default: 0\n\n    xdev\n      description: Behavior when ecountering device boundaries while doing recursive searches.\n      type: EnumNamedValue\n      default: LOCAL\n",
             "friendly_name": "File Finder",
             "name": "FileFinder"
           },
@@ -15171,7 +15198,7 @@
             ],
             "category": "Processes",
             "default_args": {},
-            "doc": "List running processes on a system.\n\n  Call Spec:\n    flow.GRRFlow.StartFlow(client_id=client_id, flow_name=\"ListProcesses\", filename_regex=filename_regex, fetch_binaries=fetch_binaries, connection_states=connection_states)\n\n  Args:\n    connection_states\n      description: Network connection states to match. If a process has any network connections in any status listed here, it will be considered a match\n      type: \n      default: None\n\n    fetch_binaries\n      description: \n      type: RDFBool\n      default: 0\n\n    filename_regex\n      description: Regex used to filter the list of processes.\n      type: RegularExpression\n      default: .\n",
+            "doc": "List running processes on a system.\n\n  Call Spec:\n    flow.StartFlow(client_id=client_id, flow_name=\"ListProcesses\", filename_regex=filename_regex, fetch_binaries=fetch_binaries, connection_states=connection_states)\n\n  Args:\n    connection_states\n      description: Network connection states to match. If a process has any network connections in any status listed here, it will be considered a match\n      type: \n      default: None\n\n    fetch_binaries\n      description: \n      type: RDFBool\n      default: 0\n\n    filename_regex\n      description: Regex used to filter the list of processes.\n      type: RegularExpression\n      default: .\n",
             "name": "ListProcesses"
           }
         ]
@@ -15658,13 +15685,13 @@
                       "type": "float",
                       "value": 7200.0
                     },
-                    "eta": {
-                      "type": "RDFDatetime",
-                      "value": 42000000
-                    },
-                    "last_lease": {
+                    "leased_by": {
                       "type": "unicode",
                       "value": "test_process@test.host:42"
+                    },
+                    "leased_until": {
+                      "type": "RDFDatetime",
+                      "value": 42000000
                     },
                     "name": {
                       "type": "unicode",
@@ -15755,8 +15782,8 @@
               {
                 "auth_state": "AUTHENTICATED",
                 "cpu_limit": 7200.0,
-                "eta": 42000000,
-                "last_lease": "test_process@test.host:42",
+                "leased_by": "test_process@test.host:42",
+                "leased_until": 42000000,
                 "name": "ListProcesses",
                 "payload": {
                   "status": "GENERIC_ERROR"
@@ -18762,6 +18789,15 @@
         ]
       },
       "url": "/api/users/me/notifications/pending?timestamp=43000000"
+    },
+    {
+      "api_method": "ListPendingUserNotifications",
+      "method": "GET",
+      "response": {
+        "items": []
+      },
+      "test_class": "ApiListPendingUserNotificationsHandlerRegressionTest_http_v1",
+      "url": "/api/users/me/notifications/pending?timestamp=44000000"
     }
   ],
   "ApiListReportsHandler": [
@@ -18960,7 +18996,7 @@
       "api_method": "ModifyCronJob",
       "method": "PATCH",
       "request_payload": {
-        "state": "ENABLED"
+        "enabled": true
       },
       "response": {
         "type": "ApiCronJob",
@@ -18969,30 +19005,60 @@
             "type": "RDFBool",
             "value": false
           },
+          "args": {
+            "type": "CronJobAction",
+            "value": {
+              "action_type": {
+                "type": "EnumNamedValue",
+                "value": "HUNT_CRON_ACTION"
+              },
+              "hunt_cron_action": {
+                "type": "HuntCronAction",
+                "value": {
+                  "flow_args": {
+                    "type": "EmptyFlowArgs",
+                    "value": {}
+                  },
+                  "flow_name": {
+                    "type": "unicode",
+                    "value": "OSBreakDown"
+                  },
+                  "hunt_runner_args": {
+                    "type": "HuntRunnerArgs",
+                    "value": {
+                      "avg_cpu_seconds_per_client_limit": {
+                        "type": "long",
+                        "value": 60
+                      },
+                      "avg_network_bytes_per_client_limit": {
+                        "type": "long",
+                        "value": 10485760
+                      },
+                      "avg_results_per_client_limit": {
+                        "type": "long",
+                        "value": 1000
+                      },
+                      "crash_limit": {
+                        "type": "long",
+                        "value": 100
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
           "cron_job_id": {
             "type": "ApiCronJobId",
             "value": "OSBreakDown"
           },
-          "description": {
-            "type": "unicode",
-            "value": ""
+          "enabled": {
+            "type": "RDFBool",
+            "value": true
           },
-          "flow_args": {
-            "type": "EmptyFlowArgs",
-            "value": {}
-          },
-          "flow_name": {
-            "type": "unicode",
-            "value": "OSBreakDown"
-          },
-          "flow_runner_args": {
-            "type": "FlowRunnerArgs",
-            "value": {
-              "flow_name": {
-                "type": "unicode",
-                "value": "OSBreakDown"
-              }
-            }
+          "frequency": {
+            "type": "Duration",
+            "value": 86400
           },
           "is_failing": {
             "type": "RDFBool",
@@ -19001,36 +19067,30 @@
           "lifetime": {
             "type": "Duration",
             "value": 604800
-          },
-          "periodicity": {
-            "type": "Duration",
-            "value": 86400
-          },
-          "state": {
-            "type": "EnumNamedValue",
-            "value": "ENABLED"
-          },
-          "urn": {
-            "type": "RDFURN",
-            "value": "aff4:/cron/OSBreakDown"
           }
         }
       },
       "test_class": "ApiModifyCronJobRegressionTest_http_v1",
       "type_stripped_response": {
         "allow_overruns": false,
-        "cron_job_id": "OSBreakDown",
-        "description": "",
-        "flow_args": {},
-        "flow_name": "OSBreakDown",
-        "flow_runner_args": {
-          "flow_name": "OSBreakDown"
+        "args": {
+          "action_type": "HUNT_CRON_ACTION",
+          "hunt_cron_action": {
+            "flow_args": {},
+            "flow_name": "OSBreakDown",
+            "hunt_runner_args": {
+              "avg_cpu_seconds_per_client_limit": 60,
+              "avg_network_bytes_per_client_limit": 10485760,
+              "avg_results_per_client_limit": 1000,
+              "crash_limit": 100
+            }
+          }
         },
+        "cron_job_id": "OSBreakDown",
+        "enabled": true,
+        "frequency": 86400,
         "is_failing": false,
-        "lifetime": 604800,
-        "periodicity": 86400,
-        "state": "ENABLED",
-        "urn": "aff4:/cron/OSBreakDown"
+        "lifetime": 604800
       },
       "url": "/api/cron-jobs/OSBreakDown"
     },
@@ -19038,7 +19098,7 @@
       "api_method": "ModifyCronJob",
       "method": "PATCH",
       "request_payload": {
-        "state": "DISABLED"
+        "enabled": false
       },
       "response": {
         "type": "ApiCronJob",
@@ -19047,30 +19107,60 @@
             "type": "RDFBool",
             "value": false
           },
+          "args": {
+            "type": "CronJobAction",
+            "value": {
+              "action_type": {
+                "type": "EnumNamedValue",
+                "value": "HUNT_CRON_ACTION"
+              },
+              "hunt_cron_action": {
+                "type": "HuntCronAction",
+                "value": {
+                  "flow_args": {
+                    "type": "EmptyFlowArgs",
+                    "value": {}
+                  },
+                  "flow_name": {
+                    "type": "unicode",
+                    "value": "GRRVersionBreakDown"
+                  },
+                  "hunt_runner_args": {
+                    "type": "HuntRunnerArgs",
+                    "value": {
+                      "avg_cpu_seconds_per_client_limit": {
+                        "type": "long",
+                        "value": 60
+                      },
+                      "avg_network_bytes_per_client_limit": {
+                        "type": "long",
+                        "value": 10485760
+                      },
+                      "avg_results_per_client_limit": {
+                        "type": "long",
+                        "value": 1000
+                      },
+                      "crash_limit": {
+                        "type": "long",
+                        "value": 100
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
           "cron_job_id": {
             "type": "ApiCronJobId",
             "value": "GRRVersionBreakDown"
           },
-          "description": {
-            "type": "unicode",
-            "value": ""
+          "enabled": {
+            "type": "RDFBool",
+            "value": false
           },
-          "flow_args": {
-            "type": "EmptyFlowArgs",
-            "value": {}
-          },
-          "flow_name": {
-            "type": "unicode",
-            "value": "GRRVersionBreakDown"
-          },
-          "flow_runner_args": {
-            "type": "FlowRunnerArgs",
-            "value": {
-              "flow_name": {
-                "type": "unicode",
-                "value": "GRRVersionBreakDown"
-              }
-            }
+          "frequency": {
+            "type": "Duration",
+            "value": 86400
           },
           "is_failing": {
             "type": "RDFBool",
@@ -19079,36 +19169,30 @@
           "lifetime": {
             "type": "Duration",
             "value": 604800
-          },
-          "periodicity": {
-            "type": "Duration",
-            "value": 86400
-          },
-          "state": {
-            "type": "EnumNamedValue",
-            "value": "DISABLED"
-          },
-          "urn": {
-            "type": "RDFURN",
-            "value": "aff4:/cron/GRRVersionBreakDown"
           }
         }
       },
       "test_class": "ApiModifyCronJobRegressionTest_http_v1",
       "type_stripped_response": {
         "allow_overruns": false,
-        "cron_job_id": "GRRVersionBreakDown",
-        "description": "",
-        "flow_args": {},
-        "flow_name": "GRRVersionBreakDown",
-        "flow_runner_args": {
-          "flow_name": "GRRVersionBreakDown"
+        "args": {
+          "action_type": "HUNT_CRON_ACTION",
+          "hunt_cron_action": {
+            "flow_args": {},
+            "flow_name": "GRRVersionBreakDown",
+            "hunt_runner_args": {
+              "avg_cpu_seconds_per_client_limit": 60,
+              "avg_network_bytes_per_client_limit": 10485760,
+              "avg_results_per_client_limit": 1000,
+              "crash_limit": 100
+            }
+          }
         },
+        "cron_job_id": "GRRVersionBreakDown",
+        "enabled": false,
+        "frequency": 86400,
         "is_failing": false,
-        "lifetime": 604800,
-        "periodicity": 86400,
-        "state": "DISABLED",
-        "urn": "aff4:/cron/GRRVersionBreakDown"
+        "lifetime": 604800
       },
       "url": "/api/cron-jobs/GRRVersionBreakDown"
     }
