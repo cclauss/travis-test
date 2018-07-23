@@ -1,36 +1,5 @@
-<p align="center">
-<img src="https://raw.githubusercontent.com/google/grr/gh-pages/img/grr_logo_real_sm.png" />
 
-<p align="center">
-GRR Rapid Response is an incident response framework focused on remote live forensics.
-
-| Build Type       | Status |
-| :--------------- | :----- |
-| Linux & MacOS    | [![Build Status](https://travis-ci.org/google/grr.svg?branch=master)](https://travis-ci.org/google/grr) |
-| Windows          | [![Build status](https://ci.appveyor.com/api/projects/status/o30jv69p5muc12r5?svg=true)](https://ci.appveyor.com/project/destijl/grr) |
-| End-to-end Tests | [![Build status](https://ci.appveyor.com/api/projects/status/ir4bq9577xwxt6t3?svg=true)](https://ci.appveyor.com/project/grr/grr) |
-
-GRR is a python client (agent) that is installed on target systems, and
-python server infrastructure that can manage and talk to clients.<br>
-
-
-Documentation
--------------
-
-Please visit our [documentation website](https://grr-doc.readthedocs.io/) if you want to know more about GRR.
-
-
-Contact Us
-----------
-
-* GitHub issues: [github.com/google/grr/issues](https://github.com/google/grr/issues)
-* GRR Users mailing list: [grr-users](https://groups.google.com/forum/#!forum/grr-users)
-* Follow us [on twitter](https://twitter.com/grrresponse) for announcements of GRR user meetups. We use [a gitter chat room](https://gitter.im/google/grr) during meetups.
-
-Screenshots
------------
-[<img src="https://github.com/google/grr/blob/gh-pages/screenshots/Screenshot from 2013-11-18 18-36-13.png" width="140" height="80" />](https://github.com/google/grr/blob/gh-pages/screenshots/Screenshot%20from%202013-11-18%2018-36-13.png)
-[<img src="https://github.com/google/grr/blob/gh-pages/screenshots/Screenshot from 2013-11-18 18-36-46.png" width="140" height="80" />](https://github.com/google/grr/blob/gh-pages/screenshots/Screenshot%20from%202013-11-18%2018-36-46.png)
-[<img src="https://github.com/google/grr/blob/gh-pages/screenshots/Screenshot from 2013-11-18 18-37-37.png" width="140" height="80" />](https://github.com/google/grr/blob/gh-pages/screenshots/Screenshot%20from%202013-11-18%2018-37-37.png)
-[<img src="https://github.com/google/grr/blob/gh-pages/screenshots/Screenshot from 2013-11-18 18-40-49.png" width="140" height="80" />](https://github.com/google/grr/blob/gh-pages/screenshots/Screenshot%20from%202013-11-18%2018-40-49.png)
-[<img src="https://github.com/google/grr/blob/gh-pages/screenshots/Screenshot from 2013-11-18 18-41-45.png" width="140" height="80" />](https://github.com/google/grr/blob/gh-pages/screenshots/Screenshot%20from%202013-11-18%2018-41-45.png)
+| Build type       | Status |
+| :------------    | :----- |
+| Linux & MacOS    | [![Build Status](https://travis-ci.org/demonchild2112/travis-test.svg?branch=master)](https://travis-ci.org/demonchild2112/travis-test) |
+| End-to-end Tests | [![Build status](https://ci.appveyor.com/api/projects/status/41tcxfr6hd4gbt78?svg=true)](https://ci.appveyor.com/project/demonchild2112/grr-1r2v0) |
