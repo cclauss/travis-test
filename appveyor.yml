@@ -37,4 +37,4 @@ artifacts:
 environment:
   GCS_BUCKET: ogaro-travis-test
   GCS_ENCRYPTION_KEY:
-    secure: e4FbUfG/83Onfl5eDZ4O4uM5zyGVOBz2TBKf/gCs8fS093Hu2S5C5CTwGVDjE5+y
+    secure: V50YB9ZMPxsSwcmEPaD5qw==
