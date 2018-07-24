@@ -31,6 +31,8 @@ echo -e "Logging.engines: stderr,file\nLogging.verbose: True\nClient.poll_max: 5
 
 systemctl restart grr
 
+cat /var/run/utmp
+
 grr_end_to_end_tests --verbose \
   --api_password "${GRR_ADMIN_PASS}" \
   --client_id "${CLIENT_ID}" \
