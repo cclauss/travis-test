@@ -38,7 +38,6 @@ grr_config_updater initialize --noprompt --external_hostname=localhost --admin_p
 echo 'Logging.verbose: True' >> /etc/grr/server.local.yaml
 cp ${APPVEYOR_BUILD_FOLDER}/grr/server/grr_response_server/artifact_registry.py /usr/share/grr-server/lib/python2.7/site-packages/grr_response_server
 cp ${APPVEYOR_BUILD_FOLDER}/grr/server/grr_response_server/flows/general/collectors.py /usr/share/grr-server/lib/python2.7/site-packages/grr_response_server/flows/general
-cp ${APPVEYOR_BUILD_FOLDER}/grr/client/grr_response_client/client_actions/linux/linux.py /usr/share/grr-server/lib/python2.7/site-packages/grr_response_client/client_actions/linux
 apt update && apt install -y emacs
 systemctl restart grr-server
 

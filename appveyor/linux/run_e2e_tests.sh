@@ -29,13 +29,7 @@ echo "Installed GRR client [Id ${CLIENT_ID}]"
 # get picked up quicker.
 echo -e "Logging.engines: stderr,file\nLogging.verbose: True\nClient.poll_max: 5" >> /etc/grr.local.yaml
 
-#systemctl restart grr
-
-systemctl stop grr
-
-source /usr/share/grr-server/bin/activate
-/usr/share/grr-server/lib/python2.7/site-packages/grr_response_client/client.py --config=/usr/lib/grr/grr_3.2.3.2_amd64/grrd.yaml 1>/dev/null 2>/dev/null &
-deactivate
+systemctl restart grr
 
 grr_end_to_end_tests --verbose \
   --api_password "${GRR_ADMIN_PASS}" \
