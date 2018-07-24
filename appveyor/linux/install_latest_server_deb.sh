@@ -37,6 +37,7 @@ DEBIAN_FRONTEND=noninteractive apt install -y ./grr-server_*_amd64.deb
 grr_config_updater initialize --noprompt --external_hostname=localhost --admin_password="${GRR_ADMIN_PASS}"
 echo 'Logging.verbose: True' >> /etc/grr/server.local.yaml
 cp ${APPVEYOR_BUILD_FOLDER}/grr/server/grr_response_server/artifact_registry.py /usr/share/grr-server/lib/python2.7/site-packages/grr_response_server
+cp ${APPVEYOR_BUILD_FOLDER}/grr/server/grr_response_server/flows/general/collectors.py /usr/share/grr-server/lib/python2.7/site-packages/grr_response_server/flows/general
 systemctl restart grr-server
 
 echo "Installation of server deb completed."
