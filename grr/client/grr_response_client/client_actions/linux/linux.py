@@ -4,6 +4,7 @@
 import ctypes
 import ctypes.util
 import glob
+import logging
 import os
 import pwd
 import time
@@ -243,7 +244,9 @@ class EnumerateUsers(actions.ActionPlugin):
 
   def Run(self, unused_args):
     """Enumerates all the users on this system."""
+    logging.debug("Running EnumerateUsers client action.")
     users = self.ParseWtmp()
+    logging.debug("utmp files parsed; result: %s", users)
     for user, last_login in users.iteritems():
 
       # Lose the null termination
