@@ -36,6 +36,7 @@ echo -e ".changes file for downloaded server deb:\n\n$(cat grr-server_*_amd64.ch
 DEBIAN_FRONTEND=noninteractive apt install -y ./grr-server_*_amd64.deb
 grr_config_updater initialize --noprompt --external_hostname=localhost --admin_password="${GRR_ADMIN_PASS}"
 echo 'Logging.verbose: True' >> /etc/grr/server.local.yaml
+cp grr/server/grr_response_server/artifact_registry.py /usr/share/grr-server/lib/python2.7/site-packages/grr_response_server
 systemctl restart grr-server
 
 echo "Installation of server deb completed."
