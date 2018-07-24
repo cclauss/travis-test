@@ -5,7 +5,6 @@ import logging
 import os
 import threading
 
-
 from future.utils import itervalues
 import yaml
 
@@ -116,65 +115,15 @@ class ArtifactRegistrySources(object):
                    dirpath, error)
 
 
-class LockableDict(object):
-  """Dict-like key-value store that supports locking."""
-
-  class NotLockedForWritesError(Exception):
-
-     def __init__(self):
-       super(Exception, self).__init__(
-           "Tried to modify dict before acquiring write lock.")
-
-  def __init__(self):
-    self._raw_dict = {}
-    self._read_lock = threading.RLock()
-    self._write_lock = threading.RLock()
-
-  def __enter__(self):
-    self._read_lock.acquire()
-    self._write_lock.acquire()
-
-  def __exit__(self, *args):
-    self._write_lock.release()
-    self._read_lock.release()
-
-  def Keys(self):
-    with self._read_lock:
-      return self._raw_dict.keys()
-
-  def Values(self):
-    with self._read_lock:
-      return self._raw_dict.values()
-
-  def Items(self):
-    with self._read_lock:
-      return list(self._raw_dict.iteritems())
-
-  def Get(self, key):
-    with self._read_lock:
-      return self._raw_dict[key]
-
-  def Set(self, key, value):
-    if not self._write_lock.locked():
-      raise self.NotLockedForWritesError
-    self._raw_dict[key] = value
-
-  def RemoveKey(self, key):
-    if not self._write_lock.locked():
-      raise self.NotLockedForWritesError
-    del self._raw_dict[key]
-
-  def Clear(self):
-    self._raw_dict = {}
-
-
 class ArtifactRegistry(object):
   """A global registry of artifacts."""
 
   def __init__(self):
-    self._artifacts = LockableDict()
+    self._artifacts = {}
     self._sources = ArtifactRegistrySources()
     self._dirty = False
+    # Field required by utils.Synchronized decorator.
+    self.lock = threading.RLock()
 
   def _LoadArtifactsFromDatastore(self):
     """Load artifacts from the data store."""
@@ -233,7 +182,8 @@ class ArtifactRegistry(object):
           loaded_artifacts.remove(artifact_obj)
           revalidate = True
 
-  def ArtifactsFromYaml(self, yaml_content):
+  @classmethod
+  def ArtifactsFromYaml(cls, yaml_content):
     """Get a list of Artifacts from yaml."""
     raw_list = list(yaml.safe_load_all(yaml_content))
 
@@ -265,117 +215,121 @@ class ArtifactRegistry(object):
 
   def _LoadArtifactsFromFiles(self, file_paths, overwrite_if_exists=True):
     """Load artifacts from file paths as json or yaml."""
-    with self._artifacts:
-      loaded_files = []
-      loaded_artifacts = []
-      for file_path in file_paths:
-        try:
-          with open(file_path, mode="rb") as fh:
-            logging.debug("Loading artifacts from %s", file_path)
-            for artifact_val in self.ArtifactsFromYaml(fh.read()):
-              self.RegisterArtifact(
-                  artifact_val,
-                  source="file:%s" % file_path,
-                  overwrite_if_exists=overwrite_if_exists)
-              loaded_artifacts.append(artifact_val)
-              logging.debug("Loaded artifact %s from %s", artifact_val.name,
-                            file_path)
+    loaded_files = []
+    loaded_artifacts = []
+    for file_path in file_paths:
+      try:
+        with open(file_path, mode="rb") as fh:
+          logging.debug("Loading artifacts from %s", file_path)
+          for artifact_val in self.ArtifactsFromYaml(fh.read()):
+            self.RegisterArtifact(
+                artifact_val,
+                source="file:%s" % file_path,
+                overwrite_if_exists=overwrite_if_exists)
+            loaded_artifacts.append(artifact_val)
+            logging.debug("Loaded artifact %s from %s", artifact_val.name,
+                          file_path)
 
-          loaded_files.append(file_path)
-        except (IOError, OSError) as e:
-          logging.error("Failed to open artifact file %s. %s", file_path, e)
-        except rdf_artifacts.ArtifactDefinitionError as e:
-          logging.error("Invalid artifact found in file %s with error: %s",
-                        file_path, e)
-          raise
+        loaded_files.append(file_path)
+      except (IOError, OSError) as e:
+        logging.error("Failed to open artifact file %s. %s", file_path, e)
+      except rdf_artifacts.ArtifactDefinitionError as e:
+        logging.error("Invalid artifact found in file %s with error: %s",
+                      file_path, e)
+        raise
 
-      # Once all artifacts are loaded we can validate.
-      for artifact_value in loaded_artifacts:
-        Validate(artifact_value)
+    # Once all artifacts are loaded we can validate.
+    for artifact_value in loaded_artifacts:
+      Validate(artifact_value)
 
+  @utils.Synchronized
   def ClearSources(self):
     self._sources.Clear()
     self._dirty = True
 
+  @utils.Synchronized
   def AddFileSource(self, filename):
     self._dirty |= self._sources.AddFile(filename)
 
+  @utils.Synchronized
   def AddDirSource(self, dirname):
     self._dirty |= self._sources.AddDir(dirname)
 
+  @utils.Synchronized
   def AddDirSources(self, dirnames):
     for dirname in dirnames:
       self.AddDirSource(dirname)
 
+  @utils.Synchronized
   def AddDatastoreSource(self, urn):
     self._dirty |= self._sources.AddDatastore(urn)
 
+  @utils.Synchronized
   def AddDatastoreSources(self, urns):
     for urn in urns:
       self.AddDatastoreSource(urn)
 
+  @utils.Synchronized
   def AddDefaultSources(self):
     for path in config.CONFIG["Artifacts.artifact_dirs"]:
       self.AddDirSource(path)
 
     self.AddDatastoreSources([aff4.ROOT_URN.Add("artifact_store")])
 
+  @utils.Synchronized
   def RegisterArtifact(self,
                        artifact_rdfvalue,
                        source="datastore",
                        overwrite_if_exists=False,
                        overwrite_system_artifacts=False):
     """Registers a new artifact."""
-    with self._artifacts:
-      artifact_name = artifact_rdfvalue.name
-      if artifact_name in self._artifacts.Keys():
-        if not overwrite_if_exists:
-          details = "artifact already exists and `overwrite_if_exists` is unset"
+    artifact_name = artifact_rdfvalue.name
+    if artifact_name in self._artifacts:
+      if not overwrite_if_exists:
+        details = "artifact already exists and `overwrite_if_exists` is unset"
+        raise rdf_artifacts.ArtifactDefinitionError(artifact_name, details)
+      elif not overwrite_system_artifacts:
+        artifact_obj = self._artifacts[artifact_name]
+        if not artifact_obj.loaded_from.startswith("datastore:"):
+          # This artifact was not uploaded to the datastore but came from a
+          # file, refuse to overwrite.
+          details = "system artifact cannot be overwritten"
           raise rdf_artifacts.ArtifactDefinitionError(artifact_name, details)
-        elif not overwrite_system_artifacts:
-          artifact_obj = self._artifacts.Get(artifact_name)
-          if not artifact_obj.loaded_from.startswith("datastore:"):
-            # This artifact was not uploaded to the datastore but came from a
-            # file, refuse to overwrite.
-            details = "system artifact cannot be overwritten"
-            raise rdf_artifacts.ArtifactDefinitionError(artifact_name, details)
 
-      # Preserve where the artifact was loaded from to help debugging.
-      artifact_rdfvalue.loaded_from = source
-      # Clear any stale errors.
-      artifact_rdfvalue.error_message = None
-      self._artifacts.Set(artifact_rdfvalue.name, artifact_rdfvalue)
+    # Preserve where the artifact was loaded from to help debugging.
+    artifact_rdfvalue.loaded_from = source
+    # Clear any stale errors.
+    artifact_rdfvalue.error_message = None
+    self._artifacts[artifact_rdfvalue.name] = artifact_rdfvalue
 
+  @utils.Synchronized
   def UnregisterArtifact(self, artifact_name):
-    with self._artifacts:
-      try:
-        self._artifacts.RemoveKey(artifact_name)
-      except KeyError:
-        raise ValueError("Artifact %s unknown." % artifact_name)
+    try:
+      del self._artifacts[artifact_name]
+    except KeyError:
+      raise ValueError("Artifact %s unknown." % artifact_name)
 
+  @utils.Synchronized
   def ClearRegistry(self):
-    with self._artifacts:
-      self._artifacts.Clear()
-      self._dirty = True
+    self._artifacts = {}
+    self._dirty = True
 
   def _ReloadArtifacts(self):
     """Load artifacts from all sources."""
-    with self._artifacts:
-      self._artifacts.Clear()
+    self._artifacts = {}
     self._LoadArtifactsFromFiles(self._sources.GetAllFiles())
     self.ReloadDatastoreArtifacts()
 
   def _UnregisterDatastoreArtifacts(self):
     """Remove artifacts that came from the datastore."""
-    with self._artifacts:
-      to_remove = []
-      for name, artifact in self._artifacts.IterItems():
-        if artifact.loaded_from.startswith("datastore"):
-          to_remove.append(name)
+    to_remove = []
+    for name, artifact in self._artifacts.iteritems():
+      if artifact.loaded_from.startswith("datastore"):
+        to_remove.append(name)
+    for key in to_remove:
+      self._artifacts.pop(key)
 
-      for key in to_remove:
-        self._artifacts.RemoveKey(key)
-
+  @utils.Synchronized
   def ReloadDatastoreArtifacts(self):
     # Make sure artifacts deleted by the UI don't reappear.
     self._UnregisterDatastoreArtifacts()
@@ -389,6 +343,7 @@ class ArtifactRegistry(object):
       if reload_datastore_artifacts:
         self.ReloadDatastoreArtifacts()
 
+  @utils.Synchronized
   def GetArtifacts(self,
                    os_name=None,
                    name_list=None,
@@ -415,7 +370,7 @@ class ArtifactRegistry(object):
     """
     self._CheckDirty(reload_datastore_artifacts=reload_datastore_artifacts)
     results = set()
-    for artifact in self._artifacts.Values():
+    for artifact in itervalues(self._artifacts):
 
       # artifact.supported_os = [] matches all OSes
       if os_name and artifact.supported_os and (
@@ -441,9 +396,11 @@ class ArtifactRegistry(object):
 
     return results
 
+  @utils.Synchronized
   def GetRegisteredArtifactNames(self):
-    return [utils.SmartStr(x) for x in self._artifacts.Keys()]
+    return [utils.SmartStr(x) for x in self._artifacts]
 
+  @utils.Synchronized
   def GetArtifact(self, name):
     """Get artifact by name.
 
@@ -456,12 +413,12 @@ class ArtifactRegistry(object):
       ArtifactNotRegisteredError: if artifact doesn't exist in the registy.
     """
     self._CheckDirty()
-    result = self._artifacts.Get(name)
+    result = self._artifacts.get(name)
     if not result:
       # If we don't have an artifact, things shouldn't have passed validation
       # so we assume its a new one in the datastore.
-      self.ReloadDatastoreArtifacts()
-      result = self._artifacts.Get(name)
+      REGISTRY.ReloadDatastoreArtifacts()
+      result = self._artifacts.get(name)
       if not result:
         raise rdf_artifacts.ArtifactNotRegisteredError(
             "Artifact %s missing from registry. You may need "
@@ -469,9 +426,11 @@ class ArtifactRegistry(object):
             "directory." % name)
     return result
 
+  @utils.Synchronized
   def GetArtifactNames(self, *args, **kwargs):
     return set([a.name for a in self.GetArtifacts(*args, **kwargs)])
 
+  @utils.Synchronized
   def SearchDependencies(self,
                          os_name,
                          artifact_name_list,
@@ -522,6 +481,7 @@ class ArtifactRegistry(object):
 
     return artifact_deps, expansion_deps
 
+  @utils.Synchronized
   def DumpArtifactsToYaml(self, sort_by_os=True):
     """Dump a list of artifacts into a yaml string."""
     artifact_list = self.GetArtifacts()
