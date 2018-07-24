@@ -35,6 +35,7 @@ systemctl stop grr
 
 source /usr/share/grr-server/bin/activate
 /usr/share/grr-server/lib/python2.7/site-packages/grr_response_client/client.py --config=/usr/lib/grr/grr_3.2.3.2_amd64/grrd.yaml 1>/dev/null 2>/dev/null &
+deactivate
 
 grr_end_to_end_tests --verbose \
   --api_password "${GRR_ADMIN_PASS}" \
