@@ -133,7 +133,7 @@ class ArtifactCollectorFlow(flow.GRRFlow):
   def Collect(self, artifact_obj):
     """Collect the raw data from the client for this artifact."""
     artifact_name = artifact_obj.name
-
+    logging.info("Starting collection of %s", artifact_name)
     test_conditions = list(artifact_obj.conditions)
     os_conditions = ConvertSupportedOSToConditions(artifact_obj)
     if os_conditions:
@@ -165,6 +165,7 @@ class ArtifactCollectorFlow(flow.GRRFlow):
 
       if source_conditions_met:
         type_name = source.type
+        logging.info("Type for %s is %s.", artifact_name, type_name)
         source_type = rdf_artifacts.ArtifactSource.SourceType
         self.current_artifact_name = artifact_name
         if type_name == source_type.COMMAND:
@@ -194,6 +195,7 @@ class ArtifactCollectorFlow(flow.GRRFlow):
         elif type_name == source_type.ARTIFACT_FILES:
           self.CollectArtifactFiles(source)
         elif type_name == source_type.GRR_CLIENT_ACTION:
+          logging.info("Running %s Client Action for artifact %s.", source.attributes["client_action"], artifact_name)
           self.RunGrrClientAction(source)
         else:
           raise RuntimeError(
