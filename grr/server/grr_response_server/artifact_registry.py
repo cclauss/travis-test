@@ -417,7 +417,7 @@ class ArtifactRegistry(object):
     if not result:
       # If we don't have an artifact, things shouldn't have passed validation
       # so we assume its a new one in the datastore.
-      REGISTRY.ReloadDatastoreArtifacts()
+      self.ReloadDatastoreArtifacts()
       result = self._artifacts.get(name)
       if not result:
         raise rdf_artifacts.ArtifactNotRegisteredError(
