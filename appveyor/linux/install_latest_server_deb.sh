@@ -41,8 +41,8 @@ systemctl restart grr-server
 echo "Installation of server deb completed."
 
 tar xzf grr-server_*.tar.gz
-/usr/share/grr-server/bin/pip install --no-index --find-links=grr/local_pypi grr/local_pypi/grr-response-test-*.zip
-
-cp ${APPVEYOR_BUILD_FOLDER}/grr/test/grr_response_test/end_to_end_tests/runner.py /usr/share/grr-server/lib/python2.7/site-packages/grr_response_test/end_to_end_tests
+source /usr/share/grr-server/bin/activate
+pip install --no-index --find-links=grr/local_pypi grr/local_pypi/grr-response-test-*.zip
+deactivate
 
 cd "${INITIAL_DIR}"

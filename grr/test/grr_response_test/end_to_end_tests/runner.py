@@ -7,8 +7,10 @@ import logging
 import os
 import time
 import unittest
-from future.moves.urllib import parse as urlparse
 
+
+from future.moves.urllib import parse as urlparse
+from future.utils import itervalues
 import requests
 
 from grr_api_client import api
@@ -215,7 +217,7 @@ class E2ETestRunner(object):
     while True:
       try:
         client = self._grr_api.Client(client_id).Get()
-        if client.data.os_info.system and client.data.users:
+        if client.data.os_info.system:
           return client
         if DeadlineExceeded():
           raise E2ETestError("Timeout of %d seconds exceeded for %s." %
@@ -241,7 +243,7 @@ class E2ETestRunner(object):
   def _GetApplicableTests(self, client):
     """Returns all e2e test methods that should be run against the client."""
     applicable_tests = {}
-    for test_class in test_base.REGISTRY.values():
+    for test_class in itervalues(test_base.REGISTRY):
       if client.data.os_info.system not in test_class.platforms:
         continue
       test_suite = unittest.TestLoader().loadTestsFromTestCase(test_class)
