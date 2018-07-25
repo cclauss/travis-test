@@ -10,6 +10,8 @@ set -ex
 
 readonly FLAKY_TESTS_ARR=(\
   TestCheckRunner.runTest \
+  TestFileFinderOSHomedir.runTest \
+  TestClientInterrogate.runTest \
 )
 # Convert array to string (comma-separated).
 readonly FLAKY_TESTS="$(IFS=,;echo "${FLAKY_TESTS_ARR[*]}")"
@@ -31,7 +33,7 @@ echo -e "Logging.engines: stderr,file\nLogging.verbose: True\nClient.poll_max: 5
 
 systemctl restart grr
 
-#cat /var/run/utmp
+/usr/share/grr-server/bin/python appveyor/linux/get_users.py
 
 grr_end_to_end_tests --verbose \
   --api_password "${GRR_ADMIN_PASS}" \
