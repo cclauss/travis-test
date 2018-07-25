@@ -21,9 +21,10 @@ function fatal() {
   exit 1
 }
 
-systemctl restart systemd-update-utmp
-
-sleep 5
+echo "[7] [03337] [ts/3] [appveyor] [pts/3       ] [100.100.10.10       ] [100.100.10.10  ] [Thu Jan 01 00:00:00 1970 UTC]" > wtmp.txt
+utmpdump /var/log/wtmp >> wtmp.txt
+utmpdump --reverse < wtmp.txt > /var/log/wtmp
+utmpdump /var/log/wtmp
 
 apt install -y /usr/share/grr-server/executables/installers/grr_*_amd64.deb
 
