@@ -10,8 +10,6 @@ set -ex
 
 readonly FLAKY_TESTS_ARR=(\
   TestCheckRunner.runTest \
-  TestFileFinderOSHomedir.runTest \
-  TestClientInterrogate.runTest \
 )
 # Convert array to string (comma-separated).
 readonly FLAKY_TESTS="$(IFS=,;echo "${FLAKY_TESTS_ARR[*]}")"

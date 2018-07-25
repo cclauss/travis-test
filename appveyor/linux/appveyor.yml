@@ -23,6 +23,6 @@ test_script:
 - sudo -EH ./appveyor/linux/test_repack.sh
 
 on_finish:
-- export APPVEYOR_SSH_BLOCK=true
-- curl -sflL 'https://raw.githubusercontent.com/appveyor/ci/master/scripts/enable-ssh.sh' | bash -e -
+#- export APPVEYOR_SSH_BLOCK=true
+#- curl -sflL 'https://raw.githubusercontent.com/appveyor/ci/master/scripts/enable-ssh.sh' | bash -e -
 - ./appveyor/linux/upload_e2e_artifacts.sh
