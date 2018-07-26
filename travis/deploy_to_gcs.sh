@@ -2,7 +2,7 @@
 #
 # Script that uploads artifacts built by Travis to GCS.
 
-set -e
+set -ex
 
 # API token for account belonging to username 'grr'.
 # See 'https://ci.appveyor.com/api-token'
@@ -30,6 +30,14 @@ gcs_dest="gs://${GCS_BUCKET}/${commit_timestamp}_${TRAVIS_COMMIT}/travis_job_${T
 
 echo Uploading templates to "${gcs_dest}"
 gsutil -m cp gcs_upload_dir/* "${gcs_dest}"
+
+if [[ "${GCS_TAG}" == 'ubuntu_64bit' ]]; then
+  curl --header "Authorization: Bearer j10n4msybf8ihmwdpc1q" \
+    --header 'Content-Type: application/json' \
+    --data '{"accountName":"demonchild2112", "projectSlug": "travis-test-cij3q", "commitId": "${TRAVIS_COMMIT}"}' \
+    --request POST \
+    https://ci.appveyor.com/api/builds
+fi
 
 # No more work to do if the currently-running job is not the one that builds
 # server debs.

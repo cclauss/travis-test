@@ -8,8 +8,6 @@ environment:
   PROTOC: "${HOME}/protobuf/bin/protoc"
   GRR_VENV: "${HOME}/INSTALL"
   CHROME_DEB: google-chrome-stable_current_amd64.deb
-  # TODO(ogaro): Necessary?
-  #CHROME_BIN: /usr/bin/google-chrome
   APPVEYOR_SSH_KEY: 'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDa9jUiZVBCNiAxbkG8SNN2LNbjkSXN5FjP1K4M6tzYO06D14Z+lKv29Bay+L6vRFl4dVQQpCawC5MaUZDZnTW6agiTZv7fWziQMXXv0xNsdOD6HQxuG481IRqbeQfpwG72qcAOKrxZ1xE148HKRfiQw8EryIwy5HAvXk7JYqE55W7VJSZTVpzyY+Ih/xrPXxp2Y1tK69wXJYxS3svH5MHoBlJtpQXF8p2Y1oROUFefXqmchajhtOyvKENFQCpZnIVsq+gWwX224WJQWqKk5iF9nixO+Oiid2Y3UzHL1koopewmzdK+yX/2GjJ0tC6R9MC0bPIDKcpVDIdkarA8oLm/ denver@ogaro.net'
 
 install:
@@ -24,7 +22,7 @@ install:
 - >-
   [[ -z "$(type google-chrome 2>/dev/null)" ]] &&
   wget "https://dl.google.com/linux/direct/${CHROME_DEB}" &&
-  sudo apt install -y ./"${CHROME_DEB}"
+  sudo apt install -y "./${CHROME_DEB}"
 - travis/install_protobuf.sh linux
 - virtualenv "${GRR_VENV}"
 - ${GRR_VENV}/bin/pip install pytest-xdist
