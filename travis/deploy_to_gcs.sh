@@ -41,7 +41,7 @@ if [[ "${GCS_TAG}" == 'ubuntu_64bit' ]]; then
     --output win_template_response.txt \
     --header "Authorization: Bearer j10n4msybf8ihmwdpc1q" \
     --header 'Content-Type: application/json' \
-    --data '{"accountName":"demonchild2112", "projectSlug": "travis-test-cij3q", "branch": "master", "commitId": "'${TRAVIS_COMMIT}'"}' \
+    --data '{"accountName":"demonchild2112", "projectSlug":"travis-test-cij3q", "branch":"master", "commitId":"'${TRAVIS_COMMIT}'"}' \
     --request POST \
     https://ci.appveyor.com/api/builds 1>win_template_response_code.txt
 
@@ -95,7 +95,7 @@ curl --write-out %{http_code} \
   --output e2e_response.txt \
   --header "Authorization: Bearer ${APPVEYOR_TOKEN}" \
   --header 'Content-Type: application/json' \
-  --data '{"accountName":"grr", "projectSlug": "grr", "branch": "master", "commitId": "'${TRAVIS_COMMIT}'"}' \
+  --data '{"accountName":"demonchild2112", "projectSlug":"grr-1r2v0", "branch":"master", "commitId":"'${TRAVIS_COMMIT}'"}' \
   --request POST \
   https://ci.appveyor.com/api/builds 1>e2e_response_code.txt
 response_code="$(cat e2e_response_code.txt)"
