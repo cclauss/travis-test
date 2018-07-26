@@ -11,6 +11,8 @@ install:
 - lsb_release -a
 - python --version
 - echo "${PATH}"
+- sudo apt install -y libmysqlclient-dev
+- pip install pytest-xdist
 - travis/install_protobuf.sh linux
 - virtualenv "${HOME}/INSTALL"
 - travis/install.sh
