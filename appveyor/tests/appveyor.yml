@@ -12,10 +12,12 @@ install:
 - lsb_release -a
 - python --version
 - echo "${PATH}"
+- free -hmw
+- lscpu
 - sudo apt install -y libmysqlclient-dev
 - travis/install_protobuf.sh linux
 - virtualenv "${GRR_VENV}"
-- "${GRR_VENV}/bin/pip" install pytest-xdist
+- ${GRR_VENV}/bin/pip install pytest-xdist
 - travis/install.sh
 
 # Appveyor will try to build any Visual Studio projects it finds
