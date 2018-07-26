@@ -15,10 +15,12 @@ install:
 - echo "${PATH}"
 - free -hmw
 - lscpu
+- sudo apt update
 - sudo apt install -y libmysqlclient-dev
 - travis/install_protobuf.sh linux
 - virtualenv "${GRR_VENV}"
 - ${GRR_VENV}/bin/pip install pytest-xdist
+- unset JAVA_TOOL_OPTIONS  # This env variable breaks 'gulp compile'.
 - travis/install.sh
 
 # Appveyor will try to build any Visual Studio projects it finds
