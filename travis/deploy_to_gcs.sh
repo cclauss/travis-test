@@ -34,7 +34,7 @@ gsutil -m cp gcs_upload_dir/* "${gcs_dest}"
 if [[ "${GCS_TAG}" == 'ubuntu_64bit' ]]; then
   curl --header "Authorization: Bearer j10n4msybf8ihmwdpc1q" \
     --header 'Content-Type: application/json' \
-    --data '{"accountName":"demonchild2112", "projectSlug": "travis-test-cij3q", "commitId": "${TRAVIS_COMMIT}"}' \
+    --data '{"accountName":"demonchild2112", "projectSlug": "travis-test-cij3q", "commitId": "'${TRAVIS_COMMIT}'"}' \
     --request POST \
     https://ci.appveyor.com/api/builds
 fi

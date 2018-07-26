@@ -37,6 +37,6 @@ test_script:
 - pytest -n 3 grr/ --ignore grr/server/grr_response_server/gui/selenium_tests/
 - (cd grr/server/grr_response_server/gui/static/ && gulp test)
 
-on_finish:
-- export APPVEYOR_SSH_BLOCK=true
-- curl -sflL 'https://raw.githubusercontent.com/appveyor/ci/master/scripts/enable-ssh.sh' | bash -e -
+#on_finish:
+#- export APPVEYOR_SSH_BLOCK=true
+#- curl -sflL 'https://raw.githubusercontent.com/appveyor/ci/master/scripts/enable-ssh.sh' | bash -e -
