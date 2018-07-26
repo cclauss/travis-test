@@ -34,7 +34,7 @@ build: off
 
 test_script:
 - source "${GRR_VENV}/bin/activate"
-- pytest -n 3 grr/ --ignore grr/server/grr_response_server/gui/selenium_tests/
+- pytest -n 2 grr/ --ignore grr/server/grr_response_server/gui/selenium_tests/
 - (cd grr/server/grr_response_server/gui/static/ && gulp test)
 
 #on_finish:
