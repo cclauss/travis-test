@@ -7,6 +7,7 @@ image: ubuntu
 environment:
   PROTOC: "${HOME}/protobuf/bin/protoc"
   GRR_VENV: "${HOME}/INSTALL"
+  CHROME_BIN: /usr/bin/google-chrome
   APPVEYOR_SSH_KEY: 'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDa9jUiZVBCNiAxbkG8SNN2LNbjkSXN5FjP1K4M6tzYO06D14Z+lKv29Bay+L6vRFl4dVQQpCawC5MaUZDZnTW6agiTZv7fWziQMXXv0xNsdOD6HQxuG481IRqbeQfpwG72qcAOKrxZ1xE148HKRfiQw8EryIwy5HAvXk7JYqE55W7VJSZTVpzyY+Ih/xrPXxp2Y1tK69wXJYxS3svH5MHoBlJtpQXF8p2Y1oROUFefXqmchajhtOyvKENFQCpZnIVsq+gWwX224WJQWqKk5iF9nixO+Oiid2Y3UzHL1koopewmzdK+yX/2GjJ0tC6R9MC0bPIDKcpVDIdkarA8oLm/ denver@ogaro.net'
 
 install:
@@ -17,6 +18,8 @@ install:
 - lscpu
 - sudo apt update
 - sudo apt install -y libmysqlclient-dev
+- wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+- sudo apt install -y ./google-chrome-stable_current_amd64.deb
 - travis/install_protobuf.sh linux
 - virtualenv "${GRR_VENV}"
 - ${GRR_VENV}/bin/pip install pytest-xdist
@@ -28,7 +31,7 @@ build: off
 
 test_script:
 - source "${GRR_VENV}/bin/activate"
-- pytest -n 2 grr/ --ignore grr/server/grr_response_server/gui/selenium_tests/
+- pytest -n 4 grr/ --ignore grr/server/grr_response_server/gui/selenium_tests/
 - (cd grr/server/grr_response_server/gui/static/ && gulp test)
 
 on_finish:
