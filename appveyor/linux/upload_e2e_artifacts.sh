@@ -25,6 +25,9 @@ sudo chown -R "$(whoami):$(whoami)" server-configs server-logs client-configs cl
 
 cd "${INITIAL_DIR}"
 
+# Keep going if there are any missing files.
+set +e
+
 # Artifact paths must be relative to the root of the GRR repo.
 appveyor PushArtifact e2e.log -DeploymentName 'Test Output'
 

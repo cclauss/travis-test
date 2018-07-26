@@ -6,7 +6,6 @@ image: ubuntu
 
 environment:
   GRR_ADMIN_PASS: 'e2e_tests'
-  APPVEYOR_SSH_KEY: 'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDbZpU3twVNzC72eqlwa4No404PuLDx31QMAEjGrXRuwj5fvpPwRxgbvq3Pxye+5hdNimEfucOnXmQD/TqSPLLuQhg7XDzkXLTfxKVlUKf3TjKNHVsU8mPvnRSR979fBKdgpfBDonrTBW6vD0X6KpmwzuThDQ29dtIj068MKBC2ruoNXpZafjKHHg+dPXT/rhfbgYNQdIAlc3fivvLb/RSODrj/CbWr2BGO/vt03Ca23gBJeZ12VWbYQwkYN1VCErbzv7GiSebgEEdhg8+25RNWdJRaHsc5MYVDUbp90bEslQZtZqWTSdMks5PTj5U6mOf8y6y5kmdG1V1RpTcBzQoN denver@ogaro.net'
 
 install:
 - lsb_release -a
@@ -23,6 +22,4 @@ test_script:
 - sudo -EH ./appveyor/linux/test_repack.sh
 
 on_finish:
-#- export APPVEYOR_SSH_BLOCK=true
-#- curl -sflL 'https://raw.githubusercontent.com/appveyor/ci/master/scripts/enable-ssh.sh' | bash -e -
 - ./appveyor/linux/upload_e2e_artifacts.sh

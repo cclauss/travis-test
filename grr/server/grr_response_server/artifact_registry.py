@@ -5,6 +5,8 @@ import logging
 import os
 import threading
 
+
+from future.utils import iteritems
 from future.utils import itervalues
 import yaml
 
@@ -122,7 +124,7 @@ class ArtifactRegistry(object):
     self._artifacts = {}
     self._sources = ArtifactRegistrySources()
     self._dirty = False
-    # Field required by utils.Synchronized decorator.
+    # Field required by the utils.Synchronized annotation.
     self.lock = threading.RLock()
 
   def _LoadArtifactsFromDatastore(self):
@@ -182,8 +184,8 @@ class ArtifactRegistry(object):
           loaded_artifacts.remove(artifact_obj)
           revalidate = True
 
-  @classmethod
-  def ArtifactsFromYaml(cls, yaml_content):
+  @utils.Synchronized
+  def ArtifactsFromYaml(self, yaml_content):
     """Get a list of Artifacts from yaml."""
     raw_list = list(yaml.safe_load_all(yaml_content))
 
@@ -323,7 +325,7 @@ class ArtifactRegistry(object):
   def _UnregisterDatastoreArtifacts(self):
     """Remove artifacts that came from the datastore."""
     to_remove = []
-    for name, artifact in self._artifacts.iteritems():
+    for name, artifact in iteritems(self._artifacts):
       if artifact.loaded_from.startswith("datastore"):
         to_remove.append(name)
     for key in to_remove:
@@ -709,7 +711,7 @@ def GetArtifactPathDependencies(rdf_artifact):
   """
   deps = set()
   for source in rdf_artifact.sources:
-    for arg, value in source.attributes.items():
+    for arg, value in iteritems(source.attributes):
       paths = []
       if arg in ["path", "query"]:
         paths.append(value)

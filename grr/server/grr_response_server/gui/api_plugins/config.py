@@ -3,6 +3,8 @@
 
 import logging
 
+
+from future.utils import iteritems
 from future.utils import itervalues
 
 from grr_response_core import config
@@ -27,7 +29,8 @@ from grr_response_server.gui import api_call_handler_utils
 # when new sensitive option is added, but these lists are not updated.
 REDACTED_OPTIONS = [
     "AdminUI.django_secret_key", "AdminUI.csrf_secret_key",
-    "Mysql.database_password", "Worker.smtp_password"
+    "BigQuery.service_acct_json", "Mysql.database_password", 
+    "Worker.smtp_password"
 ]
 REDACTED_SECTIONS = ["PrivateKeys", "Users"]
 
@@ -201,7 +204,7 @@ class ApiListGrrBinariesHandler(api_call_handler_base.ApiCallHandler):
 
     items = []
     for fd in sorted(binary_fds, key=lambda f: f.urn):
-      for binary_type, root in roots.items():
+      for binary_type, root in iteritems(roots):
         rel_name = fd.urn.RelativeName(root)
         if rel_name:
           api_binary = ApiGrrBinary(

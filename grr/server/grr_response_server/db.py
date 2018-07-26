@@ -10,6 +10,7 @@ WIP, will eventually replace datastore.py.
 import abc
 
 
+from future.utils import iteritems
 from future.utils import itervalues
 from future.utils import with_metaclass
 
@@ -100,11 +101,11 @@ class UnknownApprovalRequestError(NotFoundError):
   pass
 
 
-class UnknownCronjobError(NotFoundError):
+class UnknownCronJobError(NotFoundError):
   pass
 
 
-class UnknownCronjobRunError(NotFoundError):
+class UnknownCronJobRunError(NotFoundError):
   pass
 
 
@@ -602,6 +603,7 @@ class Database(with_metaclass(abc.ABCMeta, object)):
         if snapshot:
           yield snapshot
 
+  @abc.abstractmethod
   def ReadPathInfo(self, client_id, path_type, components, timestamp=None):
     """Retrieves a path info record for a given path.
 
@@ -623,10 +625,8 @@ class Database(with_metaclass(abc.ABCMeta, object)):
     Returns:
       An `rdf_objects.PathInfo` instance.
     """
-    path_id = rdf_objects.PathID.FromComponents(components)
-    return self.FindPathInfoByPathID(
-        client_id, path_type, path_id, timestamp=timestamp)
 
+  @abc.abstractmethod
   def ReadPathInfos(self, client_id, path_type, components_list):
     """Retrieves path info records for given paths.
 
@@ -639,16 +639,6 @@ class Database(with_metaclass(abc.ABCMeta, object)):
     Returns:
       A dictionary mapping path components to `rdf_objects.PathInfo` instances.
     """
-    path_ids = dict()
-    for components in components_list:
-      path_ids[rdf_objects.PathID.FromComponents(components)] = components
-
-    by_path_id = self.FindPathInfosByPathIDs(client_id, path_type, path_ids)
-
-    by_components = dict()
-    for path_id, path_info in by_path_id.iteritems():
-      by_components[path_ids[path_id]] = path_info
-    return by_components
 
   def ListChildPathInfos(self, client_id, path_type, components):
     """Lists path info records that correspond to children of given path.
@@ -665,12 +655,13 @@ class Database(with_metaclass(abc.ABCMeta, object)):
     return self.ListDescendentPathInfos(
         client_id, path_type, components, max_depth=1)
 
+  @abc.abstractmethod
   def ListDescendentPathInfos(self,
                               client_id,
                               path_type,
                               components,
                               max_depth=None):
-    """Lists path info records that are correspond to descendants of given path.
+    """Lists path info records that correspond to descendants of given path.
 
     Args:
       client_id: An identifier string for a client.
@@ -682,65 +673,6 @@ class Database(with_metaclass(abc.ABCMeta, object)):
 
     Returns:
       A list of `rdf_objects.PathInfo` instances sorted by path components.
-    """
-    path_id = rdf_objects.PathID.FromComponents(components)
-
-    result_path_ids = self.FindDescendentPathIDs(
-        client_id, path_type, path_id, max_depth=max_depth)
-    result_path_infos = self.FindPathInfosByPathIDs(client_id, path_type,
-                                                    result_path_ids)
-
-    return sorted(
-        itervalues(result_path_infos), key=lambda _: tuple(_.components))
-
-  @abc.abstractmethod
-  def FindPathInfoByPathID(self, client_id, path_type, path_id, timestamp=None):
-    """Returns path info record for a particular path on a particular client.
-
-    The `timestamp` parameter specifies for what moment in time the path
-    information is to be retrieved. For example, if (using abstract time units)
-    at time 1 the path was in state A, at time 5 it was observed to be in state
-    B and at time 8 it was in state C one wants to retrieve information at time
-    6 the result is going to be B.
-
-    Args:
-      client_id: The client of interest.
-      path_type: A type of the path to retrieve information for.
-      path_id: The id of the path to retrieve information for.
-      timestamp: A moment in time for which we want to retrieve the information.
-                 If none is provided, the latest known path information is
-                 returned.
-    """
-
-  @abc.abstractmethod
-  def FindPathInfosByPathIDs(self, client_id, path_type, path_ids):
-    """Returns path info records for a client.
-
-    Args:
-      client_id: The client of interest.
-      path_type: The type of paths, indicated by an objects.PathInfo.PathType
-        enum.
-      path_ids: A list of `objects.PathID` instances.
-
-    Returns:
-      A map from `objects.PathID` to `rdfvalues.objects.PathInfo` records, set
-        only for paths which have been observed on the client.
-    """
-
-  @abc.abstractmethod
-  def FindDescendentPathIDs(self, client_id, path_type, path_id,
-                            max_depth=None):
-    """Finds all path_ids seen on a client descendent from path_id.
-
-    Args:
-      client_id: The client of interest.
-      path_type: The type of path, indicated by an objects.PathInfo.PathType
-        enum.
-      path_id: `objects.PathID` to find descendants of.
-      max_depth: If set, the maximum number of generations to descend, otherwise
-        unlimited.
-
-    Returns: A list of `objects.PathID` instances.
     """
 
   @abc.abstractmethod
@@ -779,7 +711,7 @@ class Database(with_metaclass(abc.ABCMeta, object)):
                     instances as values.
     """
     rstat_entries = {}
-    for timestamp, stat_entry in stat_entries.iteritems():
+    for timestamp, stat_entry in iteritems(stat_entries):
       rpath_info = path_info.Copy()
       rpath_info.timestamp = timestamp
       rstat_entries[rpath_info] = stat_entry
@@ -798,7 +730,7 @@ class Database(with_metaclass(abc.ABCMeta, object)):
                     as values.
     """
     rhash_entries = {}
-    for timestamp, hash_entry in hash_entries.iteritems():
+    for timestamp, hash_entry in iteritems(hash_entries):
       rpath_info = path_info.Copy()
       rpath_info.timestamp = timestamp
       rhash_entries[rpath_info] = hash_entry
@@ -935,7 +867,7 @@ class Database(with_metaclass(abc.ABCMeta, object)):
       A list of cronjobs.CronJob objects.
 
     Raises:
-      UnknownCronjobError: A cron job with the given id does not exist.
+      UnknownCronJobError: A cron job with the given id does not exist.
     """
     return self.ReadCronJobs(cronjob_ids=[cronjob_id])[0]
 
@@ -951,7 +883,7 @@ class Database(with_metaclass(abc.ABCMeta, object)):
       A list of cronjobs.CronJob objects.
 
     Raises:
-      UnknownCronjobError: A cron job for at least one of the given ids
+      UnknownCronJobError: A cron job for at least one of the given ids
                            does not exist.
     """
 
@@ -963,7 +895,7 @@ class Database(with_metaclass(abc.ABCMeta, object)):
       cronjob_id: The id of the cron job to enable.
 
     Raises:
-      UnknownCronjobError: A cron job with the given id does not exist.
+      UnknownCronJobError: A cron job with the given id does not exist.
     """
 
   @abc.abstractmethod
@@ -974,7 +906,7 @@ class Database(with_metaclass(abc.ABCMeta, object)):
       cronjob_id: The id of the cron job to disable.
 
     Raises:
-      UnknownCronjobError: A cron job with the given id does not exist.
+      UnknownCronJobError: A cron job with the given id does not exist.
     """
 
   @abc.abstractmethod
@@ -985,7 +917,7 @@ class Database(with_metaclass(abc.ABCMeta, object)):
       cronjob_id: The id of the cron job to delete.
 
     Raises:
-      UnknownCronjobError: A cron job with the given id does not exist.
+      UnknownCronJobError: A cron job with the given id does not exist.
     """
 
   @abc.abstractmethod
@@ -1007,7 +939,7 @@ class Database(with_metaclass(abc.ABCMeta, object)):
       forced_run_requested: A boolean indicating if a forced run is pending
                             for this job.
     Raises:
-      UnknownCronjobError: A cron job with the given id does not exist.
+      UnknownCronJobError: A cron job with the given id does not exist.
     """
 
   @abc.abstractmethod
@@ -1227,6 +1159,12 @@ class DatabaseValidationWrapper(Database):
   def _ValidateUsername(self, username):
     self._ValidateStringId("username", username)
 
+  def _ValidateLabel(self, label):
+    if not isinstance(label, unicode):
+      message = "Expected `%s` instance but got `%s` of type `%s` instead"
+      message %= (unicode, label, type(label))
+      raise TypeError(message)
+
   def _ValidatePathInfo(self, path_info):
     self._ValidateType(path_info, rdf_objects.PathInfo)
     if not path_info.path_type:
@@ -1420,9 +1358,8 @@ class DatabaseValidationWrapper(Database):
 
   def AddClientLabels(self, client_id, owner, labels):
     self._ValidateClientId(client_id)
-
-    if isinstance(labels, basestring):
-      raise TypeError("Expected iterable, got string.")
+    for label in labels:
+      self._ValidateLabel(label)
 
     return self.delegate.AddClientLabels(client_id, owner, labels)
 
@@ -1434,9 +1371,8 @@ class DatabaseValidationWrapper(Database):
 
   def RemoveClientLabels(self, client_id, owner, labels):
     self._ValidateClientId(client_id)
-
-    if isinstance(labels, basestring):
-      raise TypeError("Expected iterable, got string.")
+    for label in labels:
+      self._ValidateLabel(label)
 
     return self.delegate.RemoveClientLabels(client_id, owner, labels)
 
@@ -1596,11 +1532,11 @@ class DatabaseValidationWrapper(Database):
   def MultiWritePathHistory(self, client_id, stat_entries, hash_entries):
     self._ValidateClientId(client_id)
 
-    for path_info, stat_entry in stat_entries.iteritems():
+    for path_info, stat_entry in iteritems(stat_entries):
       self._ValidateType(path_info, rdf_objects.PathInfo)
       self._ValidateType(stat_entry, rdf_client.StatEntry)
 
-    for path_info, hash_entry in hash_entries.iteritems():
+    for path_info, hash_entry in iteritems(hash_entries):
       self._ValidateType(path_info, rdf_objects.PathInfo)
       self._ValidateType(hash_entry, rdf_crypto.Hash)
 
@@ -1747,7 +1683,7 @@ class DatabaseValidationWrapper(Database):
     return self.delegate.DeleteOldCronJobRuns(cutoff_timestamp)
 
   def WriteClientPathBlobReferences(self, references_by_client_path_id):
-    for client_path_id, refs in references_by_client_path_id.iteritems():
+    for client_path_id, refs in iteritems(references_by_client_path_id):
       self._ValidateClientPathID(client_path_id)
       for ref in refs:
         self._ValidateBlobReference(ref)
@@ -1761,7 +1697,7 @@ class DatabaseValidationWrapper(Database):
     return self.delegate.ReadClientPathBlobReferences(client_path_ids)
 
   def WriteBlobs(self, blob_id_data_pairs):
-    for bid, data in blob_id_data_pairs.items():
+    for bid, data in iteritems(blob_id_data_pairs):
       self._ValidateBlobID(bid)
       self._ValidateBytes(data)
 

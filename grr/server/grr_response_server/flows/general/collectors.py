@@ -5,6 +5,7 @@ import logging
 
 
 from builtins import map  # pylint: disable=redefined-builtin
+from future.utils import iteritems
 
 from grr_response_core import config
 from grr_response_core.lib import artifact_utils
@@ -133,7 +134,7 @@ class ArtifactCollectorFlow(flow.GRRFlow):
   def Collect(self, artifact_obj):
     """Collect the raw data from the client for this artifact."""
     artifact_name = artifact_obj.name
-    logging.info("Starting collection of %s", artifact_name)
+
     test_conditions = list(artifact_obj.conditions)
     os_conditions = ConvertSupportedOSToConditions(artifact_obj)
     if os_conditions:
@@ -165,7 +166,6 @@ class ArtifactCollectorFlow(flow.GRRFlow):
 
       if source_conditions_met:
         type_name = source.type
-        logging.info("Type for %s is %s.", artifact_name, type_name)
         source_type = rdf_artifacts.ArtifactSource.SourceType
         self.current_artifact_name = artifact_name
         if type_name == source_type.COMMAND:
@@ -195,7 +195,6 @@ class ArtifactCollectorFlow(flow.GRRFlow):
         elif type_name == source_type.ARTIFACT_FILES:
           self.CollectArtifactFiles(source)
         elif type_name == source_type.GRR_CLIENT_ACTION:
-          logging.info("Running %s Client Action for artifact %s.", source.attributes["client_action"], artifact_name)
           self.RunGrrClientAction(source)
         else:
           raise RuntimeError(
@@ -480,7 +479,7 @@ class ArtifactCollectorFlow(flow.GRRFlow):
       original dict with all string values interpolated
     """
     new_args = {}
-    for key, value in input_dict.items():
+    for key, value in iteritems(input_dict):
       if isinstance(value, basestring):
         new_args[key] = self._GetSingleExpansion(value)
       elif isinstance(value, list):
@@ -530,7 +529,7 @@ class ArtifactCollectorFlow(flow.GRRFlow):
         **self.InterpolateDict(source.attributes.get("action_args", {})))
 
   def CallFallback(self, artifact_name, request_data):
-    classes = artifact.ArtifactFallbackCollector.classes.items()
+    classes = iteritems(artifact.ArtifactFallbackCollector.classes)
     for clsname, fallback_class in classes:
 
       if not aff4.issubclass(fallback_class,
@@ -605,7 +604,7 @@ class ArtifactCollectorFlow(flow.GRRFlow):
                              output_collection_map)
 
     # If we were saving responses, process them now:
-    for processor_name, responses_list in saved_responses.items():
+    for processor_name, responses_list in iteritems(saved_responses):
       processor_obj = parser.Parser.classes[processor_name]()
       self._ParseResponses(processor_obj, responses_list, responses,
                            artifact_name, source, output_collection_map)
@@ -775,7 +774,7 @@ class ArtifactCollectorFlow(flow.GRRFlow):
   def _FinalizeSplitCollection(self, output_collection_map):
     """Flush all of the collections that were split by artifact."""
     total = 0
-    for artifact_name, collection in output_collection_map.iteritems():
+    for artifact_name, collection in iteritems(output_collection_map):
       l = len(collection)
       total += l
       self.Log("Wrote results from Artifact %s to %s. Collection size %d.",
@@ -879,7 +878,7 @@ class ArtifactFilesDownloaderFlow(transfer.MultiGetFileMixin, flow.GRRFlow):
 
     grouped_results = utils.GroupBy(results_with_pathspecs,
                                     lambda x: x.found_pathspec)
-    for pathspec, group in grouped_results.items():
+    for pathspec, group in iteritems(grouped_results):
       self.StartFileFetch(pathspec, request_data=dict(results=group))
 
     for result in results_without_pathspecs:
