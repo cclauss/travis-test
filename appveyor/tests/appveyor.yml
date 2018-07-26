@@ -6,15 +6,16 @@ image: ubuntu
 
 environment:
   PROTOC: "${HOME}/protobuf/bin/protoc"
+  GRR_VENV: "${HOME}/INSTALL"
 
 install:
 - lsb_release -a
 - python --version
 - echo "${PATH}"
 - sudo apt install -y libmysqlclient-dev
-- pip install pytest-xdist
 - travis/install_protobuf.sh linux
-- virtualenv "${HOME}/INSTALL"
+- virtualenv "${GRR_VENV}"
+- "${GRR_VENV}/bin/pip" install pytest-xdist
 - travis/install.sh
 
 # Appveyor will try to build any Visual Studio projects it finds
@@ -22,6 +23,6 @@ install:
 build: off
 
 test_script:
-- source "${HOME}/INSTALL/bin/activate"
+- source "${GRR_VENV}/bin/activate"
 - pytest grr/ --ignore grr/server/grr_response_server/gui/selenium_tests/
 - (cd grr/server/grr_response_server/gui/static/ && gulp test)
