@@ -4,6 +4,7 @@
 import time
 
 
+from builtins import range  # pylint: disable=redefined-builtin
 from builtins import zip  # pylint: disable=redefined-builtin
 
 from grr_response_client import vfs
@@ -597,7 +598,7 @@ class FlowTest(BasicFlowTest):
     # message to complete the transaction (Well known flows do not
     # have transactions or states - all messages always get to the
     # ProcessMessage method):
-    self.assertEqual(test_flow.messages, range(10))
+    self.assertEqual(test_flow.messages, list(range(10)))
 
   def testArgParsing(self):
     """Test that arguments can be extracted and annotated successfully."""
@@ -1235,18 +1236,10 @@ class CallStateFlow(flow.GRRFlow):
   @flow.StateHandler()
   def Start(self):
     # Call the receive state.
-    self.CallState(
-        [rdfvalue.RDFString("Hello")],
-        next_state="ReceiveHello",
-        request_data={"test_req_data": 2})
+    self.CallState(next_state="ReceiveHello")
 
   @flow.StateHandler()
   def ReceiveHello(self, responses):
-    if responses.First() != "Hello":
-      raise RuntimeError("Did not receive hello.")
-
-    if responses.request_data["test_req_data"] != 2:
-      raise RuntimeError("request_data did not propagate.")
 
     CallStateFlow.success = True
 
@@ -1260,24 +1253,18 @@ class DelayedCallStateFlow(flow.GRRFlow):
   @flow.StateHandler()
   def Start(self):
     # Call the child flow.
-    self.CallState([rdfvalue.RDFString("Hello")], next_state="ReceiveHello")
+    self.CallState(next_state="ReceiveHello")
 
   @flow.StateHandler()
   def ReceiveHello(self, responses):
-    if responses.First() != "Hello":
-      raise RuntimeError("Did not receive hello.")
     DelayedCallStateFlow.flow_ran = 1
 
     # Call the child flow.
     self.CallState(
-        [rdfvalue.RDFString("Hello")],
-        next_state="DelayedHello",
-        start_time=rdfvalue.RDFDatetime.Now() + 100)
+        next_state="DelayedHello", start_time=rdfvalue.RDFDatetime.Now() + 100)
 
   @flow.StateHandler()
   def DelayedHello(self, responses):
-    if responses.First() != "Hello":
-      raise RuntimeError("Did not receive hello.")
     DelayedCallStateFlow.flow_ran = 2
 
 

@@ -9,6 +9,7 @@ import time
 
 from builtins import chr  # pylint: disable=redefined-builtin
 from builtins import map  # pylint: disable=redefined-builtin
+from builtins import range  # pylint: disable=redefined-builtin
 from builtins import zip  # pylint: disable=redefined-builtin
 import mock
 import requests
@@ -1395,7 +1396,7 @@ class RelationalClientCommsTest(ClientCommsTest):
         private_key=self.server_private_key)
 
   def _LabelClient(self, client_id, label):
-    data_store.REL_DB.AddClientLabels(client_id, "Test", [label])
+    data_store.REL_DB.AddClientLabels(client_id, u"Test", [label])
 
   def testClientPingAndClockIsUpdated(self):
     """Check PING and CLOCK are updated."""

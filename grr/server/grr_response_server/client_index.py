@@ -6,6 +6,7 @@ An index of client machines, associating likely identifiers to client IDs.
 
 
 from builtins import map  # pylint: disable=redefined-builtin
+from builtins import range  # pylint: disable=redefined-builtin
 from future.utils import iteritems
 from future.utils import itervalues
 
@@ -293,7 +294,10 @@ def GetClientURNsForHostnames(hostnames, token=None):
     A dict with a list of all known GRR client_ids for each hostname.
   """
 
-  index = CreateClientIndex(token=token)
+  if data_store.RelationalDBReadEnabled():
+    index = ClientIndex()
+  else:
+    index = CreateClientIndex(token=token)
 
   keywords = set()
   for hostname in hostnames:

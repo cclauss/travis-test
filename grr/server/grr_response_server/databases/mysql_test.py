@@ -6,8 +6,8 @@ import string
 import threading
 import unittest
 
-# TODO(hanuszczak): This should be imported conditionally.
-import MySQLdb
+from builtins import range  # pylint: disable=redefined-builtin
+import MySQLdb  # TODO(hanuszczak): This should be imported conditionally.
 
 import unittest
 from grr_response_server import db_test_mixin
@@ -212,6 +212,12 @@ class TestMysqlDB(stats_test_lib.StatsTestMixin,
   def testMultiWriteHistoryTwoPaths(self):
     pass
 
+  def testMultiWriteHistoryDoesNotAllowOverridingStat(self):
+    pass
+
+  def testMultiWriteHistoryDoesNotAllowOverridingHash(self):
+    pass
+
   def testReadPathInfosNonExistent(self):
     pass
 
@@ -290,6 +296,9 @@ class TestMysqlDB(stats_test_lib.StatsTestMixin,
   def testMultipleBlobsCanBeWrittenAndThenRead(self):
     pass
 
+  def testCheckBlobsExistCorrectlyReportsPresentAndMissingBlobs(self):
+    pass
+
   def testWritingBlobReferenceToNonExistentPathRaises(self):
     pass
 
@@ -308,7 +317,7 @@ class TestMysqlDB(stats_test_lib.StatsTestMixin,
   def testReadPathInfosHistoriesEmpty(self):
     pass
 
-  def testReadPathInfosHistoriesRaisesOnUnknownClient(self):
+  def testReadPathInfosHistoriesDoesNotRaiseOnUnknownClient(self):
     pass
 
   def testReadPathInfosHistoriesWithSingleFileWithSingleHistoryItem(self):
@@ -318,6 +327,27 @@ class TestMysqlDB(stats_test_lib.StatsTestMixin,
     pass
 
   def testReatPathInfosHistoriesWithTwoFilesWithTwoHistoryItems(self):
+    pass
+
+  def testInitPathInfosValidatesClient(self):
+    pass
+
+  def testInitPathInfosWriteSingle(self):
+    pass
+
+  def testInitPathInfosWriteMany(self):
+    pass
+
+  def testInitPathInfosTree(self):
+    pass
+
+  def testInitPathInfosClearsStatHistory(self):
+    pass
+
+  def testInitPathInfosClearsHashHistory(self):
+    pass
+
+  def testInitPathInfosRetainsIndirectPathHistory(self):
     pass
 
 

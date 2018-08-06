@@ -1,6 +1,10 @@
 #!/usr/bin/env python
+from __future__ import unicode_literals
+
 import functools
 import threading
+
+from builtins import range  # pylint: disable=redefined-builtin
 
 from grr_response_core.lib import flags
 from grr_response_core.lib import rdfvalue
@@ -16,7 +20,7 @@ from grr.test_lib import db_test_lib
 from grr.test_lib import test_lib
 
 
-class DummySystemCronJobRel(cronjobs.CronJobBase):
+class DummySystemCronJobRel(cronjobs.SystemCronJobBase):
   """Dummy system cron job."""
 
   lifetime = rdfvalue.Duration("42h")
@@ -26,8 +30,11 @@ class DummySystemCronJobRel(cronjobs.CronJobBase):
     pass
 
 
-class DummyStatefulSystemCronJobRel(cronjobs.CronJobBase):
+class DummyStatefulSystemCronJobRel(cronjobs.SystemCronJobBase):
   """Dummy stateful system cron job."""
+
+  frequency = rdfvalue.Duration("1d")
+  lifetime = rdfvalue.Duration("20h")
 
   VALUES = []
 

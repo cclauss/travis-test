@@ -1,5 +1,8 @@
 #!/usr/bin/env python
 """Mixin tests for storing cronjob objects in the relational db."""
+from __future__ import unicode_literals
+
+from builtins import range  # pylint: disable=redefined-builtin
 
 from grr_response_core.lib import rdfvalue
 from grr_response_core.lib import utils

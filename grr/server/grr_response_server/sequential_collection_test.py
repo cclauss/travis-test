@@ -5,6 +5,7 @@ import threading
 import time
 
 
+from builtins import range  # pylint: disable=redefined-builtin
 from future.utils import iterkeys
 
 from grr_response_core.lib import flags
@@ -181,7 +182,7 @@ class IndexedSequentialCollectionTest(aff4_test_lib.AFF4ObjectTest):
         self.assertEqual(collection.CalculateLength(), 10 * spacing)
         self.assertEqual(
             sorted(iterkeys(collection._index)),
-            [i * spacing for i in xrange(10)])
+            [i * spacing for i in range(10)])
         for index in collection._index:
           if not index:
             continue
@@ -199,8 +200,7 @@ class IndexedSequentialCollectionTest(aff4_test_lib.AFF4ObjectTest):
       self.assertEqual(collection._index, None)
       _ = collection[0]
       self.assertEqual(
-          sorted(iterkeys(collection._index)),
-          [i * spacing for i in xrange(10)])
+          sorted(iterkeys(collection._index)), [i * spacing for i in range(10)])
       for index in collection._index:
         if not index:
           continue

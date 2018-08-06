@@ -1,9 +1,11 @@
 #!/usr/bin/env python
 """Tests for datastore cleaning cron flows."""
+from __future__ import unicode_literals
 
 import re
 
 
+from builtins import range  # pylint: disable=redefined-builtin
 from future.utils import iteritems
 
 from grr_response_core import config

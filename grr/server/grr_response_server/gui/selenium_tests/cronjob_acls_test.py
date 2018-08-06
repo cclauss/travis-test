@@ -21,10 +21,10 @@ class TestCronACLWorkflow(gui_test_lib.GRRSeleniumTest):
 
   def _ScheduleCronJob(self):
     if data_store.RelationalDBReadEnabled(category="cronjobs"):
-      cron_job_id = cron_system.OSBreakDownCronJob.__name__
+      cron_job_id = unicode(cron_system.OSBreakDownCronJob.__name__)
       cronjobs.ScheduleSystemCronJobs(names=[cron_job_id])
     else:
-      cron_job_id = cron_system.OSBreakDown.__name__
+      cron_job_id = unicode(cron_system.OSBreakDown.__name__)
       aff4_cronjobs.ScheduleSystemCronFlows(
           names=[cron_job_id], token=self.token)
     aff4_cronjobs.GetCronManager().DisableJob(job_id=cron_job_id)
@@ -112,7 +112,7 @@ class TestCronACLWorkflow(gui_test_lib.GRRSeleniumTest):
     self.GrantCronJobApproval(
         cron_job_id,
         approval_id=approval_id,
-        approver="approver",
+        approver=u"approver",
         requestor=self.token.username,
         admin=False)
 
@@ -141,7 +141,7 @@ class TestCronACLWorkflow(gui_test_lib.GRRSeleniumTest):
                            self.GetText, "css=grr-request-approval-dialog")
 
     # Let's make "approver" an admin.
-    self.CreateAdminUser("approver")
+    self.CreateAdminUser(u"approver")
 
     # And try again
     self.Open("/")

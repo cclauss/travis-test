@@ -1,7 +1,9 @@
 #!/usr/bin/env python
 """Mixin tests for blobs in the relational db."""
+from __future__ import unicode_literals
 
 
+from builtins import range  # pylint: disable=redefined-builtin
 from builtins import zip  # pylint: disable=redefined-builtin
 
 from grr_response_server import db
@@ -51,7 +53,7 @@ class DatabaseTestBlobsMixin(object):
         path_type=rdf_objects.PathInfo.PathType.OS,
         path_id=rdf_objects.PathID.FromComponents(["foo", "bar"]))
     blob_ref = rdf_objects.BlobReference(
-        offset=0, size=3, blob_id=rdf_objects.BlobID.FromBlobData("foo"))
+        offset=0, size=3, blob_id=rdf_objects.BlobID.FromBlobData(b"foo"))
 
     with self.assertRaises(db.AtLeastOneUnknownPathError):
       d.WriteClientPathBlobReferences({path: [blob_ref]})
@@ -80,7 +82,7 @@ class DatabaseTestBlobsMixin(object):
         path_type=rdf_objects.PathInfo.PathType.OS,
         path_id=rdf_objects.PathID.FromComponents(["foo", "bar"]))
     blob_ref = rdf_objects.BlobReference(
-        offset=0, size=3, blob_id=rdf_objects.BlobID.FromBlobData("foo"))
+        offset=0, size=3, blob_id=rdf_objects.BlobID.FromBlobData(b"foo"))
 
     d.WriteClientPathBlobReferences({path: [blob_ref]})
 
@@ -117,3 +119,15 @@ class DatabaseTestBlobsMixin(object):
 
     read_refs = d.ReadClientPathBlobReferences(paths)
     self.assertEqual(read_refs, dict(zip(paths, refs)))
+
+  def testCheckBlobsExistCorrectlyReportsPresentAndMissingBlobs(self):
+    d = self.db
+
+    blob_id = rdf_objects.BlobID(b"01234567" * 4)
+    blob_data = b"abcdef"
+
+    d.WriteBlobs({blob_id: blob_data})
+
+    other_blob_id = rdf_objects.BlobID(b"abcdefgh" * 4)
+    result = d.CheckBlobsExist([blob_id, other_blob_id])
+    self.assertEqual(result, {blob_id: True, other_blob_id: False})

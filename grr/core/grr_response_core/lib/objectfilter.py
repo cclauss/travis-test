@@ -93,6 +93,7 @@ import re
 
 
 from builtins import filter  # pylint: disable=redefined-builtin
+from builtins import range  # pylint: disable=redefined-builtin
 from future.utils import iteritems
 from future.utils import with_metaclass
 
@@ -830,7 +831,7 @@ class Parser(lexer.SearchParser):
         lhs = self.stack[i - 1]
         rhs = self.stack[i + 1]
 
-        self.stack[i].AddOperands(lhs, rhs)
+        self.stack[i].AddOperands(lhs, rhs)  # pytype: disable=attribute-error
         self.stack[i - 1] = None
         self.stack[i + 1] = None
 

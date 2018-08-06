@@ -21,6 +21,7 @@ from grr_response_server.aff4_objects import users as aff4_users
 from grr_response_server.rdfvalues import objects as rdf_objects
 
 _CLIENT_BATCH_SIZE = 200
+_BLOB_BATCH_SIZE = 1000
 _CLIENT_VERSION_THRESHOLD = rdfvalue.Duration("24h")
 _PROGRESS_INTERVAL = rdfvalue.Duration("1s")
 
@@ -310,43 +311,157 @@ def ListVfs(client_urn):
   return vfs
 
 
-_VFS_GROUP_SIZE = 100000
+class ClientVfsMigrator(object):
+  """A class used to migrate VFS to relational database.
 
+  Attributes:
+    vfs_group_size: A size of a group into which all paths known for particular
+                    client are divided into. Increasing this number reduces the
+                    number of transactions per client is made but increases
+                    and increases the number of rows written per transaction.
+  """
 
-def MigrateClientVfs(client_urn):
-  """Migrates entire VFS of given client to the relational data store."""
-  vfs = ListVfs(client_urn)
+  def __init__(self):
+    self.vfs_group_size = 30000
+    self.thread_count = 300
+    self.client_batch_size = 200
 
-  path_infos = []
+  def MigrateAllClients(self, shard_number=None, shard_count=None):
+    """Migrates entire VFS of all clients available in the AFF4 data store."""
+    if shard_number is not None or shard_count is not None:
+      if shard_number is None:
+        raise ValueError("Shard number must be specified if shard count is")
+      if shard_count is None:
+        raise ValueError("Shard count must be specified if shard number is")
+    else:
+      shard_number = 1
+      shard_count = 1
 
-  for vfs_urn in vfs:
-    _, vfs_path = vfs_urn.Split(2)
-    path_type, components = rdf_objects.ParseCategorizedPath(vfs_path)
+    client_urns = []
+    for client_urn in _GetClientUrns():
+      client_nr = int(client_urn.Basename()[2:], 16)
+      if client_nr % shard_count == shard_number - 1:
+        client_urns.append(client_urn)
 
-    path_info = rdf_objects.PathInfo(path_type=path_type, components=components)
-    path_infos.append(path_info)
+    self.MigrateClients(client_urns)
 
-  data_store.REL_DB.WritePathInfos(client_urn.Basename(), path_infos)
+  def MigrateClients(self, client_urns):
+    """Migrates entire VFS of given client list to the relational data store."""
+    batches = utils.Grouper(client_urns, self.client_batch_size)
 
-  for vfs_group in utils.Grouper(vfs, _VFS_GROUP_SIZE):
-    stat_entries = dict()
-    hash_entries = dict()
+    tp = pool.ThreadPool(processes=self.thread_count)
+    tp.map(self.MigrateClientBatch, list(batches))
 
-    for fd in aff4.FACTORY.MultiOpen(vfs_group, age=aff4.ALL_TIMES):
-      _, vfs_path = fd.urn.Split(2)
+  def MigrateClientBatch(self, client_urns):
+    """Migrates entire VFS of given client batch to the relational database."""
+    for client_urn in client_urns:
+      self.MigrateClient(client_urn)
+
+  def MigrateClient(self, client_urn):
+    """Migrates entire VFS of given client to the relational data store."""
+    vfs = ListVfs(client_urn)
+
+    path_infos = []
+
+    for vfs_urn in vfs:
+      _, vfs_path = vfs_urn.Split(2)
       path_type, components = rdf_objects.ParseCategorizedPath(vfs_path)
+
       path_info = rdf_objects.PathInfo(
           path_type=path_type, components=components)
+      path_infos.append(path_info)
 
-      for stat_entry in fd.GetValuesForAttribute(fd.Schema.STAT):
-        stat_path_info = path_info.Copy()
-        stat_path_info.timestamp = stat_entry.age
-        stat_entries[stat_path_info] = stat_entry
+    data_store.REL_DB.InitPathInfos(client_urn.Basename(), path_infos)
 
-      for hash_entry in fd.GetValuesForAttribute(fd.Schema.HASH):
-        hash_path_info = path_info.Copy()
-        hash_path_info.timestamp = hash_entry.age
-        hash_entries[hash_path_info] = hash_entry
+    for vfs_group in utils.Grouper(vfs, self.vfs_group_size):
+      stat_entries = dict()
+      hash_entries = dict()
 
-    data_store.REL_DB.MultiWritePathHistory(client_urn.Basename(), stat_entries,
-                                            hash_entries)
+      for fd in aff4.FACTORY.MultiOpen(vfs_group, age=aff4.ALL_TIMES):
+        _, vfs_path = fd.urn.Split(2)
+        path_type, components = rdf_objects.ParseCategorizedPath(vfs_path)
+        path_info = rdf_objects.PathInfo(
+            path_type=path_type, components=components)
+
+        for stat_entry in fd.GetValuesForAttribute(fd.Schema.STAT):
+          stat_path_info = path_info.Copy()
+          stat_path_info.timestamp = stat_entry.age
+          stat_entries[stat_path_info] = stat_entry
+
+        for hash_entry in fd.GetValuesForAttribute(fd.Schema.HASH):
+          hash_path_info = path_info.Copy()
+          hash_path_info.timestamp = hash_entry.age
+          hash_entries[hash_path_info] = hash_entry
+
+      data_store.REL_DB.MultiWritePathHistory(client_urn.Basename(),
+                                              stat_entries, hash_entries)
+
+
+class BlobsMigrator(object):
+  """Blob store migrator."""
+
+  def __init__(self):
+    self._lock = threading.Lock()
+
+    self._total_count = 0
+    self._migrated_count = 0
+    self._start_time = None
+
+  def _MigrateBatch(self, batch):
+    """Migrates a batch of blobs."""
+
+    blobs = {}
+    for stream in aff4.FACTORY.MultiOpen(
+        batch, mode="r", aff4_type=aff4.AFF4UnversionedMemoryStream):
+      if stream.size > 0:
+        content_bytes = stream.Read(stream.size)
+        bid = rdf_objects.BlobID.FromBlobData(content_bytes)
+        blobs[bid] = content_bytes
+
+    data_store.REL_DB.WriteBlobs(blobs)
+
+    with self._lock:
+      self._migrated_count += len(batch)
+      self._Progress()
+
+  def _Progress(self):
+    """Prints the migration progress."""
+
+    elapsed = rdfvalue.RDFDatetime.Now() - self._start_time
+    if elapsed.seconds > 0:
+      bps = self._migrated_count / elapsed.seconds
+    else:
+      bps = 0.0
+
+    fraction = self._migrated_count / self._total_count
+    message = "\rMigrating blobs... {:>9}/{} ({:.2%}, bps: {:.2f})".format(
+        self._migrated_count, self._total_count, fraction, bps)
+    sys.stdout.write(message)
+    sys.stdout.flush()
+
+  def Execute(self, thread_count):
+    """Runs the migration with a given thread count."""
+
+    blob_urns = list(aff4.FACTORY.ListChildren("aff4:/blobs"))
+    sys.stdout.write("Blobs to migrate: {}\n".format(len(blob_urns)))
+    sys.stdout.write("Threads to use: {}\n".format(thread_count))
+
+    self._total_count = len(blob_urns)
+    self._migrated_count = 0
+    self._start_time = rdfvalue.RDFDatetime.Now()
+
+    batches = utils.Grouper(blob_urns, _BLOB_BATCH_SIZE)
+
+    self._Progress()
+    tp = pool.ThreadPool(processes=thread_count)
+    tp.map(self._MigrateBatch, list(batches))
+    self._Progress()
+
+    if self._migrated_count == self._total_count:
+      message = "\nMigration has been finished (migrated {} blobs).\n".format(
+          self._migrated_count)
+      sys.stdout.write(message)
+    else:
+      message = "Not all blobs have been migrated ({}/{})".format(
+          self._migrated_count, self._total_count)
+      raise AssertionError(message)

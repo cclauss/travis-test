@@ -34,12 +34,28 @@ class _PathRecord(object):
     self._blob_references[blob_ref.offset] = blob_ref.Copy()
 
   def AddStatEntry(self, stat_entry, timestamp):
+    if timestamp in self._stat_entries:
+      message = ("Duplicated stat entry write for path '%s' of type '%s' at "
+                 "timestamp '%s'. Old: %s. New: %s.")
+      message %= ("/".join(self._path_info.components),
+                  self._path_info.path_type, timestamp,
+                  self._stat_entries[timestamp], stat_entry)
+      raise db.Error(message)
+
     self._stat_entries[timestamp] = stat_entry.Copy()
 
   def GetStatEntries(self):
     return self._stat_entries.items()
 
   def AddHashEntry(self, hash_entry, timestamp):
+    if timestamp in self._hash_entries:
+      message = ("Duplicated hash entry write for path '%s' of type '%s' at "
+                 "timestamp '%s'. Old: %s. New: %s.")
+      message %= ("/".join(self._path_info.components),
+                  self._path_info.path_type, timestamp,
+                  self._hash_entries[timestamp], hash_entry)
+      raise db.Error(message)
+
     self._hash_entries[timestamp] = hash_entry.Copy()
 
   def GetHashEntries(self):
@@ -54,6 +70,10 @@ class _PathRecord(object):
       self.AddStatEntry(path_info.stat_entry, timestamp)
     if path_info.HasField("hash_entry"):
       self.AddHashEntry(path_info.hash_entry, timestamp)
+
+  def ClearHistory(self):
+    self._stat_entries = {}
+    self._hash_entries = {}
 
   def AddPathInfo(self, path_info):
     """Updates existing path information of the path record."""
@@ -144,10 +164,8 @@ class InMemoryDBPathMixin(object):
       path_record = self.path_records[(client_id, path_type, components)]
       return path_record.GetPathInfo(timestamp=timestamp)
     except KeyError:
-      # TODO(hanuszczak): Refactor `db.UnknownPathError` to contain `components`
-      # field instead of `path_id`.
       raise db.UnknownPathError(
-          client_id=client_id, path_type=path_type, path_id=None)
+          client_id=client_id, path_type=path_type, components=components)
 
   @utils.Synchronized
   def ReadPathInfos(self, client_id, path_type, components_list):
@@ -222,6 +240,15 @@ class InMemoryDBPathMixin(object):
         self._WritePathInfo(client_id, ancestor_path_info, ancestor=True)
 
   @utils.Synchronized
+  def InitPathInfos(self, client_id, path_infos):
+    """Initializes a collection of path info records for a client."""
+    for path_info in path_infos:
+      path_record = self._GetPathRecord(client_id, path_info)
+      path_record.ClearHistory()
+
+    self.WritePathInfos(client_id, path_infos)
+
+  @utils.Synchronized
   def MultiWritePathHistory(self, client_id, stat_entries, hash_entries):
     """Writes a collection of hash and stat entries observed for given paths."""
     if client_id not in self.metadatas:
@@ -238,13 +265,14 @@ class InMemoryDBPathMixin(object):
   @utils.Synchronized
   def ReadPathInfosHistories(self, client_id, path_type, components_list):
     """Reads a collection of hash and stat entries for given paths."""
-
-    if client_id not in self.metadatas:
-      raise db.UnknownClientError(client_id)
-
     results = {}
+
     for components in components_list:
-      path_record = self.path_records[(client_id, path_type, components)]
+      try:
+        path_record = self.path_records[(client_id, path_type, components)]
+      except KeyError:
+        results[components] = []
+        continue
 
       entries_by_ts = {}
       for ts, stat_entry in path_record.GetStatEntries():
@@ -266,7 +294,7 @@ class InMemoryDBPathMixin(object):
         pi.hash_entry = hash_entry
 
       results[components] = [
-          entries_by_ts[k] for k in sorted(entries_by_ts.iterkeys())
+          entries_by_ts[k] for k in sorted(iterkeys(entries_by_ts))
       ]
 
     return results
