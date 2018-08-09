@@ -16,8 +16,6 @@ fi
 mkdir "${DEB_TEMPDIR}"
 cd "${DEB_TEMPDIR}"
 
-apt update
-
 pyscript="
 import ConfigParser
 config = ConfigParser.SafeConfigParser()

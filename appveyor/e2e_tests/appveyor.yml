@@ -6,12 +6,12 @@ image: ubuntu
 
 environment:
   GRR_ADMIN_PASS: 'e2e_tests'
-  APPVEYOR_SSH_KEY: 'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC08i2IMKWh67KhNdtSl/xrwhZnyH+rzOui8xmzjBDrxGZV/3C+cbu578NVDvGEN1zlxPIhwiJuVpSLLSoKFz7USGwkgj6iOttuD9xTwi4T5GJFjIXJzAZXwxWB82WdPobSk8bjsiPjFXLTbskwPBYh/7VoSv76+tPSpT8zsBVXFJIOaHju0vly8/8T06JY8rdXHOxEfwluQ/Q3AQA7iOGdPJk++M9zTK+5Vkn+NQ1n8u/eKl6Zp10F1qpi8J6BuCuh/Cu5VhCH4Nb1t3zGMPNamPv3tG3qaaVECRftjkR/xNcCz4+yyQ6V++DzEgr0+4+W5+eBKN765HNAAeQ5P9t/ denver@ogaro.net'
 
 install:
 - lsb_release -a
 - echo "${PATH}"
 - lscpu
+- sudo apt update
 - sudo -EH ./appveyor/e2e_tests/install_mem_usage_cron.sh
 - sudo -EH ./appveyor/e2e_tests/install_latest_server_deb.sh
 
@@ -24,6 +24,4 @@ test_script:
 - sudo -EH ./appveyor/e2e_tests/test_repack.sh
 
 on_finish:
-- export APPVEYOR_SSH_BLOCK=true
-- curl -sflL 'https://raw.githubusercontent.com/appveyor/ci/master/scripts/enable-ssh.sh' | bash -e -
 - ./appveyor/e2e_tests/upload_e2e_artifacts.sh
