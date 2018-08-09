@@ -5,7 +5,7 @@ branches:
 environment:
   GCS_BUCKET: ogaro-travis-test
   GCS_ENCRYPTION_KEY:
-    secure: glqk3qOU13UWLPTwuGijtRYRgCVMgJAkdk8ekNasAiI=
+    secure: V50YB9ZMPxsSwcmEPaD5qw==
 
 clone_folder: C:\grr_src
 
