@@ -194,6 +194,9 @@ class TestMysqlDB(stats_test_lib.StatsTestMixin,
   def testWritePathInfosUpdatesAncestors(self):
     pass
 
+  def testMultiWritePathInfos(self):
+    pass
+
   def testWriteStatHistory(self):
     pass
 
@@ -216,6 +219,12 @@ class TestMysqlDB(stats_test_lib.StatsTestMixin,
     pass
 
   def testMultiWriteHistoryDoesNotAllowOverridingHash(self):
+    pass
+
+  def testMultiWriteHistoryRaisesOnNonExistingPathsForStat(self):
+    pass
+
+  def testMultiWriteHistoryRaisesOnNonExistingPathForHash(self):
     pass
 
   def testReadPathInfosNonExistent(self):
@@ -351,6 +360,36 @@ class TestMysqlDB(stats_test_lib.StatsTestMixin,
     pass
 
   def testInitPathInfosRetainsIndirectPathHistory(self):
+    pass
+
+  def testMultiInitPathInfos(self):
+    pass
+
+  def testMultiInitPathInfosEmptyDoesNotThrow(self):
+    pass
+
+  def testMultiInitPathInfosNoPathsDoesNotThrow(self):
+    pass
+
+  def testClearPathHistoryEmpty(self):
+    pass
+
+  def testClearPathHistorySingle(self):
+    pass
+
+  def testClearPathHistoryManyRecords(self):
+    pass
+
+  def testClearPathHistoryOnlyDirect(self):
+    pass
+
+  def testMultiClearPathHistoryEmptyDoesNotRaise(self):
+    pass
+
+  def testMultiClearPathHistoryNoPathsDoesNotRaise(self):
+    pass
+
+  def testMultiClearPathHistoryClearsMultipleHistories(self):
     pass
 
 
