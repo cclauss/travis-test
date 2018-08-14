@@ -15,6 +15,9 @@ install:
 - lsb_release -a
 - echo "${PATH}"
 - lscpu
+- sudo mysqld --version
+- sudo systemctl status mysql
+- sudo systemctl start mysql
 - sudo apt update -qq
 - sudo -EH ./appveyor/e2e_tests/install_mem_usage_cron.sh
 - sudo -EH ./appveyor/e2e_tests/install_latest_server_deb.sh
