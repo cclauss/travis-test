@@ -9,15 +9,15 @@ services:
 
 environment:
   GRR_ADMIN_PASS: 'e2e_tests'
-  APPVEYOR_SSH_KEY: 'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC08i2IMKWh67KhNdtSl/xrwhZnyH+rzOui8xmzjBDrxGZV/3C+cbu578NVDvGEN1zlxPIhwiJuVpSLLSoKFz7USGwkgj6iOttuD9xTwi4T5GJFjIXJzAZXwxWB82WdPobSk8bjsiPjFXLTbskwPBYh/7VoSv76+tPSpT8zsBVXFJIOaHju0vly8/8T06JY8rdXHOxEfwluQ/Q3AQA7iOGdPJk++M9zTK+5Vkn+NQ1n8u/eKl6Zp10F1qpi8J6BuCuh/Cu5VhCH4Nb1t3zGMPNamPv3tG3qaaVECRftjkR/xNcCz4+yyQ6V++DzEgr0+4+W5+eBKN765HNAAeQ5P9t/ denver@ogaro.net'
+  APPVEYOR_SSH_KEY: 'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCWCzNvKE+XDZ+gbZrwhWVBlWlTGrWwdWUFRA8MNrgS6DHltJgXCunSgvrGiy07DqwxErLU2nUfBMmctLRR4KLQsPxIqrMlchseHutG++G6bRI9tX9MH+JXz7xU6z9crYa2q+685flsZPwpudpeMXESinRt+WiKZDfUvKaahq+aENQKV7Hrxw9kfD/+XR1Pr//P9f15LP2wmUDRGsf0QJyjRRRFLr8uB3kzwysrBEEpFD51b68eW9U/SxZJWVLS/sRfxygxdvJQ+ILDreMWfVjq44Fe07zmNZrJ9CflSN67fsjTMFcKihFIJapq8V6sXvp4mHlWf3kUkWlBVWbvdX5/ denver@ogaro.net'
 
 install:
 - lsb_release -a
 - echo "${PATH}"
 - lscpu
 - sudo mysqld --version
-- sudo systemctl status mysql
-- sudo systemctl start mysql
+- service mysql status
+- sudo service mysql start
 - sudo apt update -qq
 - sudo -EH ./appveyor/e2e_tests/install_mem_usage_cron.sh
 - sudo -EH ./appveyor/e2e_tests/install_latest_server_deb.sh
