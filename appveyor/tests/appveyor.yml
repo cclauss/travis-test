@@ -18,7 +18,7 @@ install:
 - echo "${PATH}"
 - free -hmw
 - lscpu
-- sudo apt update
+- sudo apt update -qq
 - sudo apt install -y libmysqlclient-dev
 # Install chrome if absent.
 - >-
@@ -36,5 +36,5 @@ build: off
 
 test_script:
 - source "${GRR_VENV}/bin/activate"
-- pytest grr/ --ignore grr/server/grr_response_server/gui/selenium_tests/
+- pytest -n 4 grr/ --ignore grr/server/grr_response_server/gui/selenium_tests/
 - (cd grr/server/grr_response_server/gui/static/ && gulp test)

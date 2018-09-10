@@ -19,6 +19,8 @@ from future.utils import python_2_unicode_compatible
 from grr_response_core.lib import rdfvalue
 from grr_response_core.lib import utils
 from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_core.lib.rdfvalues import client_fs as rdf_client_fs
+from grr_response_core.lib.rdfvalues import client_network as rdf_client_network
 from grr_response_core.lib.rdfvalues import cloud as rdf_cloud
 from grr_response_core.lib.rdfvalues import crypto as rdf_crypto
 from grr_response_core.lib.rdfvalues import paths as rdf_paths
@@ -39,7 +41,6 @@ class ClientSnapshot(rdf_structs.RDFProtoStruct):
   """The client object.
 
   Attributes:
-
     timestamp: An rdfvalue.Datetime indicating when this client snapshot was
       saved to the database. Should be present in every client object loaded
       from the database, but is not serialized with the rdfvalue fields.
@@ -49,12 +50,12 @@ class ClientSnapshot(rdf_structs.RDFProtoStruct):
   rdf_deps = [
       StringMapEntry,
       rdf_cloud.CloudInstance,
-      rdf_client.Filesystem,
+      rdf_client_fs.Filesystem,
       rdf_client.HardwareInfo,
-      rdf_client.Interface,
+      rdf_client_network.Interface,
       rdf_client.KnowledgeBase,
       rdf_client.StartupInfo,
-      rdf_client.Volume,
+      rdf_client_fs.Volume,
       rdfvalue.ByteSize,
       rdfvalue.RDFDatetime,
   ]
@@ -91,7 +92,7 @@ class ClientSnapshot(rdf_structs.RDFProtoStruct):
     result = set()
     for interface in self.interfaces:
       if (interface.mac_address and
-          interface.mac_address != "\x00" * len(interface.mac_address)):
+          interface.mac_address != b"\x00" * len(interface.mac_address)):
         result.add(interface.mac_address.human_readable_address)
     return sorted(result)
 
@@ -158,7 +159,7 @@ class ClientMetadata(rdf_structs.RDFProtoStruct):
   protobuf = objects_pb2.ClientMetadata
 
   rdf_deps = [
-      rdf_client.NetworkAddress,
+      rdf_client_network.NetworkAddress,
       rdf_crypto.RDFX509Cert,
       rdfvalue.RDFDatetime,
   ]
@@ -312,7 +313,7 @@ class PathInfo(rdf_structs.RDFProtoStruct):
   protobuf = objects_pb2.PathInfo
   rdf_deps = [
       rdfvalue.RDFDatetime,
-      rdf_client.StatEntry,
+      rdf_client_fs.StatEntry,
       rdf_crypto.Hash,
   ]
 
@@ -444,6 +445,7 @@ class PathInfo(rdf_structs.RDFProtoStruct):
     Merges src into self.
     Args:
       src: An rdfvalues.objects.PathInfo record, will be merged into self.
+
     Raises:
       ValueError: If src does not represent the same path.
     """
@@ -613,6 +615,17 @@ class MessageHandlerRequest(rdf_structs.RDFProtoStruct):
   ]
 
 
+class SHA256HashID(HashID):
+  """SHA-256 based hash id."""
+
+  hash_id_length = 32
+
+  @classmethod
+  def FromData(cls, data):
+    h = hashlib.sha256(data).digest()
+    return SHA256HashID(h)
+
+
 class BlobID(HashID):
   """Blob identificator."""
 
@@ -635,4 +648,11 @@ class BlobReference(rdf_structs.RDFProtoStruct):
   protobuf = objects_pb2.BlobReference
   rdf_deps = [
       BlobID,
+  ]
+
+
+class BlobReferences(rdf_structs.RDFProtoStruct):
+  protobuf = objects_pb2.BlobReferences
+  rdf_deps = [
+      BlobReference,
   ]

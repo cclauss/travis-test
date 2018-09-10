@@ -10,6 +10,8 @@ Dict objects behave generally like a dict (with __getitem__, items() and
 an __iter__) method, but are serializable as an RDFProto.
 """
 
+from __future__ import unicode_literals
+
 import collections
 
 
@@ -18,7 +20,7 @@ from future.utils import iteritems
 
 from grr_response_core.lib import flags
 from grr_response_core.lib import rdfvalue
-from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_core.lib.rdfvalues import client_action as rdf_client_action
 from grr_response_core.lib.rdfvalues import protodict as rdf_protodict
 from grr_response_core.lib.rdfvalues import structs as rdf_structs
 from grr_response_core.lib.rdfvalues import test_base as rdf_test_base
@@ -169,7 +171,7 @@ class DictTest(rdf_test_base.RDFProtoTestMixin, test_lib.GRRBaseTest):
     self.assertEqual(sample["a"], "true")
 
   def testOverwriting(self):
-    req = rdf_client.Iterator(client_state=rdf_protodict.Dict({"A": 1}))
+    req = rdf_client_action.Iterator(client_state=rdf_protodict.Dict({"A": 1}))
     # There should be one element now.
     self.assertEqual(len(list(iteritems(req.client_state))), 1)
 
@@ -233,7 +235,7 @@ class RDFValueArrayTest(rdf_test_base.RDFProtoTestMixin, test_lib.GRRBaseTest):
     # Test iterator.
     sample_list = list(sample)
     self.assertIsInstance(sample_list, list)
-    self.assertIsInstance(sample_list[0], str)
+    self.assertIsInstance(sample_list[0], unicode)
     self.assertIsInstance(sample_list[1], rdfvalue.RDFString)
 
     # Test initialization from a list of variable types.

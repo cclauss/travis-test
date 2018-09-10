@@ -6,6 +6,8 @@ parameters. These annotations are used to assist in rendering the UI for
 starting flows and for validating arguments.
 """
 
+from __future__ import unicode_literals
+
 import logging
 
 
@@ -33,10 +35,6 @@ class UnknownArg(TypeValueError):
 class TypeInfoObject(with_metaclass(registry.MetaclassRegistry, object)):
   """Definition of the interface for flow arg typing information."""
 
-  # Some descriptors can delegate to child descriptors to define types of
-  # members.
-  child_descriptor = None
-
   # The delegate type this TypeInfoObject manages.
   _type = None
 
@@ -45,8 +43,7 @@ class TypeInfoObject(with_metaclass(registry.MetaclassRegistry, object)):
                default=None,
                description="",
                friendly_name="",
-               hidden=False,
-               help=""):  # pylint: disable=redefined-builtin
+               hidden=False):
     """Build a TypeInfo type descriptor.
 
     Args:
@@ -56,11 +53,10 @@ class TypeInfoObject(with_metaclass(registry.MetaclassRegistry, object)):
       description: A string describing this flow argument.
       friendly_name: A human readable name which may be provided.
       hidden: Should the argument be hidden from the UI.
-      help: A synonym for 'description'.
     """
     self.name = name
     self.default = default
-    self.description = description or help
+    self.description = description
     self.hidden = hidden
     if not friendly_name:
       friendly_name = name.replace("_", " ").capitalize()
@@ -153,7 +149,7 @@ class RDFValueType(TypeInfoObject):
     return value
 
   def FromString(self, string):
-    return self.rdfclass.FromSerializedString(string)
+    return self.rdfclass.FromHumanReadable(string)
 
 
 class RDFStructDictType(TypeInfoObject):
@@ -316,8 +312,6 @@ class TypeDescriptorSet(object):
 class Bool(TypeInfoObject):
   """A True or False value."""
 
-  renderer = "BoolFormRenderer"
-
   _type = bool
 
   def Validate(self, value):
@@ -373,8 +367,6 @@ class List(TypeInfoObject):
 class String(TypeInfoObject):
   """A String type."""
 
-  renderer = "StringFormRenderer"
-
   _type = unicode
 
   def __init__(self, **kwargs):
@@ -393,11 +385,15 @@ class String(TypeInfoObject):
     except UnicodeError:
       raise TypeValueError("Not a valid unicode string")
 
+  def ToString(self, value):
+    utils.AssertType(value, unicode)
+    return value
+
 
 class Bytes(String):
   """A Bytes type."""
 
-  _type = str
+  _type = bytes
 
   def Validate(self, value):
     if not isinstance(value, str):
@@ -405,10 +401,17 @@ class Bytes(String):
 
     return value
 
+  def FromString(self, string):
+    utils.AssertType(string, unicode)
+    return string.encode("utf-8")
+
+  def ToString(self, value):
+    utils.AssertType(value, bytes)
+    return value.decode("utf-8")
+
 
 class Integer(TypeInfoObject):
   """An Integer number type."""
-  renderer = "StringFormRenderer"
 
   _type = long
 

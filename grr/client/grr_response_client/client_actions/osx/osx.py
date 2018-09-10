@@ -5,6 +5,7 @@ Most of these actions share an interface (in/out rdfvalues) with linux actions
 of the same name. OSX-only actions are registered with the server via
 libs/server_stubs.py
 """
+from __future__ import unicode_literals
 
 import ctypes
 import logging
@@ -28,6 +29,9 @@ from grr_response_core import config
 from grr_response_core.lib import rdfvalue
 from grr_response_core.lib.parsers import osx_launchd
 from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_core.lib.rdfvalues import client_action as rdf_client_action
+from grr_response_core.lib.rdfvalues import client_fs as rdf_client_fs
+from grr_response_core.lib.rdfvalues import client_network as rdf_client_network
 from grr_response_core.lib.rdfvalues import protodict as rdf_protodict
 
 
@@ -135,67 +139,74 @@ setattr(Ifaddrs, "_fields_", [
 ])  # pyformat: disable
 
 
+def EnumerateInterfacesFromClient(args):
+  """Enumerate all MAC addresses."""
+  del args  # Unused
+
+  libc = ctypes.cdll.LoadLibrary(ctypes.util.find_library("c"))
+  ifa = Ifaddrs()
+  p_ifa = ctypes.pointer(ifa)
+  libc.getifaddrs(ctypes.pointer(p_ifa))
+
+  addresses = {}
+  macs = {}
+  ifs = set()
+
+  m = p_ifa
+  while m:
+    ifname = ctypes.string_at(m.contents.ifa_name)
+    ifs.add(ifname)
+    try:
+      iffamily = ord(m.contents.ifa_addr[1])
+      if iffamily == 0x2:  # AF_INET
+        data = ctypes.cast(m.contents.ifa_addr, ctypes.POINTER(Sockaddrin))
+        ip4 = "".join(map(chr, data.contents.sin_addr))
+        address_type = rdf_client_network.NetworkAddress.Family.INET
+        address = rdf_client_network.NetworkAddress(
+            address_type=address_type, packed_bytes=ip4)
+        addresses.setdefault(ifname, []).append(address)
+
+      if iffamily == 0x12:  # AF_LINK
+        data = ctypes.cast(m.contents.ifa_addr, ctypes.POINTER(Sockaddrdl))
+        iflen = data.contents.sdl_nlen
+        addlen = data.contents.sdl_alen
+        macs[ifname] = "".join(
+            map(chr, data.contents.sdl_data[iflen:iflen + addlen]))
+
+      if iffamily == 0x1E:  # AF_INET6
+        data = ctypes.cast(m.contents.ifa_addr, ctypes.POINTER(Sockaddrin6))
+        ip6 = "".join(map(chr, data.contents.sin6_addr))
+        address_type = rdf_client_network.NetworkAddress.Family.INET6
+        address = rdf_client_network.NetworkAddress(
+            address_type=address_type, packed_bytes=ip6)
+        addresses.setdefault(ifname, []).append(address)
+    except ValueError:
+      # Some interfaces don't have a iffamily and will raise a null pointer
+      # exception. We still want to send back the name.
+      pass
+
+    m = m.contents.ifa_next
+
+  libc.freeifaddrs(p_ifa)
+
+  for interface in ifs:
+    mac = macs.setdefault(interface, "")
+    address_list = addresses.setdefault(interface, "")
+    args = {"ifname": interface}
+    if mac:
+      args["mac_address"] = mac
+    if address_list:
+      args["addresses"] = address_list
+    yield rdf_client_network.Interface(**args)
+
+
 class EnumerateInterfaces(actions.ActionPlugin):
   """Enumerate all MAC addresses of all NICs."""
-  out_rdfvalues = [rdf_client.Interface]
+  out_rdfvalues = [rdf_client_network.Interface]
 
-  def Run(self, unused_args):
-    """Enumerate all MAC addresses."""
-    libc = ctypes.cdll.LoadLibrary(ctypes.util.find_library("c"))
-    ifa = Ifaddrs()
-    p_ifa = ctypes.pointer(ifa)
-    libc.getifaddrs(ctypes.pointer(p_ifa))
-
-    addresses = {}
-    macs = {}
-    ifs = set()
-
-    m = p_ifa
-    while m:
-      ifname = ctypes.string_at(m.contents.ifa_name)
-      ifs.add(ifname)
-      try:
-        iffamily = ord(m.contents.ifa_addr[1])
-        if iffamily == 0x2:  # AF_INET
-          data = ctypes.cast(m.contents.ifa_addr, ctypes.POINTER(Sockaddrin))
-          ip4 = "".join(map(chr, data.contents.sin_addr))
-          address_type = rdf_client.NetworkAddress.Family.INET
-          address = rdf_client.NetworkAddress(
-              address_type=address_type, packed_bytes=ip4)
-          addresses.setdefault(ifname, []).append(address)
-
-        if iffamily == 0x12:  # AF_LINK
-          data = ctypes.cast(m.contents.ifa_addr, ctypes.POINTER(Sockaddrdl))
-          iflen = data.contents.sdl_nlen
-          addlen = data.contents.sdl_alen
-          macs[ifname] = "".join(
-              map(chr, data.contents.sdl_data[iflen:iflen + addlen]))
-
-        if iffamily == 0x1E:  # AF_INET6
-          data = ctypes.cast(m.contents.ifa_addr, ctypes.POINTER(Sockaddrin6))
-          ip6 = "".join(map(chr, data.contents.sin6_addr))
-          address_type = rdf_client.NetworkAddress.Family.INET6
-          address = rdf_client.NetworkAddress(
-              address_type=address_type, packed_bytes=ip6)
-          addresses.setdefault(ifname, []).append(address)
-      except ValueError:
-        # Some interfaces don't have a iffamily and will raise a null pointer
-        # exception. We still want to send back the name.
-        pass
-
-      m = m.contents.ifa_next
-
-    libc.freeifaddrs(p_ifa)
-
-    for interface in ifs:
-      mac = macs.setdefault(interface, "")
-      address_list = addresses.setdefault(interface, "")
-      args = {"ifname": interface}
-      if mac:
-        args["mac_address"] = mac
-      if address_list:
-        args["addresses"] = address_list
-      self.SendReply(rdf_client.Interface(**args))
+  def Run(self, args):
+    for res in EnumerateInterfacesFromClient(args):
+      self.SendReply(res)
 
 
 class GetInstallDate(actions.ActionPlugin):
@@ -215,13 +226,13 @@ class GetInstallDate(actions.ActionPlugin):
 
 class EnumerateFilesystems(actions.ActionPlugin):
   """Enumerate all unique filesystems local to the system."""
-  out_rdfvalues = [rdf_client.Filesystem]
+  out_rdfvalues = [rdf_client_fs.Filesystem]
 
   def Run(self, unused_args):
     """List all local filesystems mounted on this system."""
     for fs_struct in client_utils_osx.GetFileSystems():
       self.SendReply(
-          rdf_client.Filesystem(
+          rdf_client_fs.Filesystem(
               device=fs_struct.f_mntfromname,
               mount_point=fs_struct.f_mntonname,
               type=fs_struct.f_fstypename))
@@ -235,7 +246,7 @@ class EnumerateFilesystems(actions.ActionPlugin):
       try:
         img_inf = pytsk3.Img_Info(path)
         # This is a volume or a partition - we send back a TSK device.
-        self.SendReply(rdf_client.Filesystem(device=path))
+        self.SendReply(rdf_client_fs.Filesystem(device=path))
 
         vol_inf = pytsk3.Volume_Info(img_inf)
 
@@ -243,7 +254,7 @@ class EnumerateFilesystems(actions.ActionPlugin):
           if volume.flags == pytsk3.TSK_VS_PART_FLAG_ALLOC:
             offset = volume.start * vol_inf.info.block_size
             self.SendReply(
-                rdf_client.Filesystem(
+                rdf_client_fs.Filesystem(
                     device=path + ":" + str(offset), type="partition"))
 
       except (IOError, RuntimeError):
@@ -371,7 +382,7 @@ class UpdateAgent(standard.ExecuteBinaryCommand):
     stderr = stderr[:10 * 1024 * 1024]
 
     self.SendReply(
-        rdf_client.ExecuteBinaryResponse(
+        rdf_client_action.ExecuteBinaryResponse(
             stdout=stdout,
             stderr=stderr,
             exit_status=status,

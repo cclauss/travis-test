@@ -18,7 +18,7 @@ from grr_response_core import config
 from grr_response_core.lib import flags
 from grr_response_core.lib import rdfvalue
 from grr_response_core.lib import utils
-from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_core.lib.rdfvalues import client_stats as rdf_client_stats
 from grr_response_core.lib.rdfvalues import protodict as rdf_protodict
 from grr_response_core.lib.rdfvalues import structs as rdf_structs
 from grr_response_proto import tests_pb2
@@ -226,7 +226,7 @@ class TestAdministrativeFlows(AdministrativeFlowTests):
         crash_alert_email="crashes@example.com",
         token=self.token) as hunt:
       hunt.Run()
-      hunt.StartClients(hunt.session_id, client_id)
+      hunt.StartClients(hunt.session_id, [client_id])
 
     with utils.Stubber(email_alerts.EMAIL_ALERTER, "SendEmail", SendEmail):
       client = flow_test_lib.CrashClientMock(client_id, self.token)
@@ -556,20 +556,20 @@ sys.test_code_ran_here = py_args['value']
   def testGetClientStats(self):
     client_id = test_lib.TEST_CLIENT_ID
 
-    class ClientMock(object):
+    class ClientMock(action_mocks.ActionMock):
 
       def GetClientStats(self, _):
         """Fake get client stats method."""
-        response = rdf_client.ClientStats()
+        response = rdf_client_stats.ClientStats()
         for i in range(12):
-          sample = rdf_client.CpuSample(
+          sample = rdf_client_stats.CpuSample(
               timestamp=int(i * 10 * 1e6),
               user_cpu_time=10 + i,
               system_cpu_time=20 + i,
               cpu_percent=10 + i)
           response.cpu_samples.Append(sample)
 
-          sample = rdf_client.IOSample(
+          sample = rdf_client_stats.IOSample(
               timestamp=int(i * 10 * 1e6),
               read_bytes=10 + i,
               write_bytes=10 + i)

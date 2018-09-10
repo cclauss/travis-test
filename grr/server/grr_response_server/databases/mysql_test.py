@@ -215,6 +215,9 @@ class TestMysqlDB(stats_test_lib.StatsTestMixin,
   def testMultiWriteHistoryTwoPaths(self):
     pass
 
+  def testMultiWriteHistoryTwoClients(self):
+    pass
+
   def testMultiWriteHistoryDoesNotAllowOverridingStat(self):
     pass
 
@@ -305,7 +308,22 @@ class TestMysqlDB(stats_test_lib.StatsTestMixin,
   def testMultipleBlobsCanBeWrittenAndThenRead(self):
     pass
 
+  def testWriting80MbOfBlobsWithSingleCallWorks(self):
+    pass
+
   def testCheckBlobsExistCorrectlyReportsPresentAndMissingBlobs(self):
+    pass
+
+  def testHashBlobReferenceCanBeWrittenAndReadBack(self):
+    pass
+
+  def testReportsNonExistingHashesAsNone(self):
+    pass
+
+  def testCorrectlyHandlesRequestWithOneExistingAndOneMissingHash(self):
+    pass
+
+  def testMultipleHashBlobReferencesCanBeWrittenAndReadBack(self):
     pass
 
   def testWritingBlobReferenceToNonExistentPathRaises(self):
@@ -335,7 +353,7 @@ class TestMysqlDB(stats_test_lib.StatsTestMixin,
   def testReadPathInfosHistoriesWithTwoFilesWithSingleHistoryItemEach(self):
     pass
 
-  def testReatPathInfosHistoriesWithTwoFilesWithTwoHistoryItems(self):
+  def testReadPathInfosHistoriesWithTwoFilesWithTwoHistoryItems(self):
     pass
 
   def testInitPathInfosValidatesClient(self):
@@ -390,6 +408,87 @@ class TestMysqlDB(stats_test_lib.StatsTestMixin,
     pass
 
   def testMultiClearPathHistoryClearsMultipleHistories(self):
+    pass
+
+  def testFlowWriting(self):
+    pass
+
+  def testFlowWritingUnknownClient(self):
+    pass
+
+  def testPersistentDataUpdate(self):
+    pass
+
+  def testCrashInfoUpdate(self):
+    pass
+
+  def testPendingTerminationUpdate(self):
+    pass
+
+  def testProcessingInformationUpdate(self):
+    pass
+
+  def testRequestWriting(self):
+    pass
+
+  def testResponsesForUnknownFlow(self):
+    pass
+
+  def testResponsesForUnknownRequest(self):
+    pass
+
+  def testResponseWriting(self):
+    pass
+
+  def testResponsesForEarlierRequestDontTriggerFlowProcessing(self):
+    pass
+
+  def testResponsesForLaterRequestDontTriggerFlowProcessing(self):
+    pass
+
+  def testResponsesForExpectedRequestTriggerFlowProcessing(self):
+    pass
+
+  def testReadFlowForProcessingThatIsAlreadyBeingProcessed(self):
+    pass
+
+  def testReadFlowForProcessingAfterProcessingTimeExpiration(self):
+    pass
+
+  def testReadFlowForProcessingUpdatesFlowObjects(self):
+    pass
+
+  def testReturnProcessedFlow(self):
+    pass
+
+  def testReadChildFlows(self):
+    pass
+
+  def testRequestWritingHighIDDoesntTriggerFlowProcessing(self):
+    pass
+
+  def testRequestWritingLowIDDoesntTriggerFlowProcessing(self):
+    pass
+
+  def testRequestWritingExpectedIDTriggersFlowProcessing(self):
+    pass
+
+  def testDeleteFlowRequests(self):
+    pass
+
+  def testDeleteAllFlowRequestsAndResponses(self):
+    pass
+
+  def testReadFlowRequestsReadyForProcessing(self):
+    pass
+
+  def testFlowProcessingRequestsQueue(self):
+    pass
+
+  def testFlowProcessingRequestsQueueWithDelay(self):
+    pass
+
+  def testFlowProcessingRequestDeletion(self):
     pass
 
 

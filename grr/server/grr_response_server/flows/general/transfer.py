@@ -12,6 +12,8 @@ from future.utils import itervalues
 from grr_response_core.lib import constants
 from grr_response_core.lib import rdfvalue
 from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_core.lib.rdfvalues import client_action as rdf_client_action
+from grr_response_core.lib.rdfvalues import client_fs as rdf_client_fs
 from grr_response_core.lib.rdfvalues import crypto as rdf_crypto
 from grr_response_core.lib.rdfvalues import flows as rdf_flows
 from grr_response_core.lib.rdfvalues import paths as rdf_paths
@@ -21,12 +23,15 @@ from grr_response_proto import flows_pb2
 from grr_response_server import aff4
 from grr_response_server import data_store
 from grr_response_server import events
+from grr_response_server import file_store
 from grr_response_server import flow
+from grr_response_server import flow_base
 from grr_response_server import message_handlers
 from grr_response_server import notification
 from grr_response_server import server_stubs
 from grr_response_server.aff4_objects import aff4_grr
-from grr_response_server.aff4_objects import filestore
+from grr_response_server.aff4_objects import filestore as legacy_filestore
+from grr_response_server.rdfvalues import file_store as rdf_file_store
 from grr_response_server.rdfvalues import objects as rdf_objects
 
 
@@ -37,7 +42,8 @@ class GetFileArgs(rdf_structs.RDFProtoStruct):
   ]
 
 
-class GetFile(flow.GRRFlow):
+@flow_base.DualDBFlow
+class GetFileMixin(object):
   """An efficient file transfer mechanism (deprecated, use MultiGetFile).
 
   This flow is deprecated in favor of MultiGetFile, but kept for now for use by
@@ -81,10 +87,11 @@ class GetFile(flow.GRRFlow):
     # This conditional should be removed after that date.
     if self.client_version >= 3221:
       stub = server_stubs.GetFileStat
-      request = rdf_client.GetFileStatRequest(pathspec=self.args.pathspec)
+      request = rdf_client_action.GetFileStatRequest(
+          pathspec=self.args.pathspec)
     else:
       stub = server_stubs.StatFile
-      request = rdf_client.ListDirRequest(pathspec=self.args.pathspec)
+      request = rdf_client_action.ListDirRequest(pathspec=self.args.pathspec)
 
     self.CallClient(stub, request, next_state="Stat")
 
@@ -98,7 +105,8 @@ class GetFile(flow.GRRFlow):
         raise IOError("Error: %s" % responses.status)
 
       # Just fill up a bogus stat entry.
-      self.state.stat_entry = rdf_client.StatEntry(pathspec=self.args.pathspec)
+      self.state.stat_entry = rdf_client_fs.StatEntry(
+          pathspec=self.args.pathspec)
 
     # Adjust the size from st_size if read length is not specified.
     if self.args.read_length == 0:
@@ -151,6 +159,9 @@ class GetFile(flow.GRRFlow):
         stat_entry = self.state.stat_entry
         urn = self.state.stat_entry.AFF4Path(self.client_urn)
 
+        # TODO(user): when all the code can read files from REL_DB,
+        # protect this with:
+        # if not data_store.RelationalDBReadEnabled(category="filestore"):
         with aff4.FACTORY.Create(
             urn, aff4_grr.VFSBlobImage, token=self.token) as fd:
           fd.SetChunksize(self.CHUNK_SIZE)
@@ -160,24 +171,36 @@ class GetFile(flow.GRRFlow):
             fd.AddBlob(data, length)
             fd.Set(fd.Schema.CONTENT_LAST, rdfvalue.RDFDatetime.Now())
 
-          # Save some space.
-          del self.state.blobs
-
         if data_store.RelationalDBWriteEnabled():
           path_info = rdf_objects.PathInfo.FromStatEntry(stat_entry)
+
+          # Adding files to filestore requires reading data from RELDB,
+          # thus protecting this code with a filestore-read-enabled check.
+          if data_store.RelationalDBReadEnabled("filestore"):
+            blob_ids = [
+                rdf_objects.BlobID.FromBytes(data)
+                for data, _ in self.state.blobs
+            ]
+
+            hash_id = file_store.AddFileWithUnknownHash(blob_ids)
+
+            path_info.hash_entry.sha256 = hash_id.AsBytes()
+
           data_store.REL_DB.WritePathInfos(self.client_id, [path_info])
 
+        # Save some space.
+        del self.state["blobs"]
         self.state.success = True
 
   def NotifyAboutEnd(self):
-    super(GetFile, self).NotifyAboutEnd()
+    super(GetFileMixin, self).NotifyAboutEnd()
 
-    if not self.runner.ShouldSendNotifications():
+    if not self.ShouldSendNotifications():
       return
 
     stat_entry = self.state.stat_entry
     if not stat_entry:
-      stat_entry = rdf_client.StatEntry(pathspec=self.args.pathspec)
+      stat_entry = rdf_client_fs.StatEntry(pathspec=self.args.pathspec)
 
     urn = stat_entry.AFF4Path(self.client_urn)
     components = urn.Split()
@@ -217,10 +240,10 @@ class GetFile(flow.GRRFlow):
       # Notify any parent flows the file is ready to be used now.
       self.SendReply(stat_entry)
 
-    super(GetFile, self).End(responses)
+    super(GetFileMixin, self).End(responses)
 
 
-class MultiGetFileMixin(object):
+class MultiGetFileLogic(object):
   """A flow mixin to efficiently retrieve a number of files.
 
   The class extending this can provide a self.state with the following
@@ -243,7 +266,7 @@ class MultiGetFileMixin(object):
             maximum_pending_files=1000,
             use_external_stores=False):
     """Initialize our state."""
-    super(MultiGetFileMixin, self).Start()
+    super(MultiGetFileLogic, self).Start()
 
     self.state.files_hashed = 0
     self.state.use_external_stores = use_external_stores
@@ -292,6 +315,7 @@ class MultiGetFileMixin(object):
 
   def _TryToStartNextPathspec(self):
     """Try to schedule the next pathspec if there is enough capacity."""
+
     # Nothing to do here.
     if self.state.maximum_pending_files <= len(self.state.pending_files):
       return
@@ -317,22 +341,22 @@ class MultiGetFileMixin(object):
     # This conditional should be removed after that date.
     if self.client_version >= 3221:
       stub = server_stubs.GetFileStat
-      request = rdf_client.GetFileStatRequest(pathspec=pathspec)
+      request = rdf_client_action.GetFileStatRequest(pathspec=pathspec)
     else:
       stub = server_stubs.StatFile
-      request = rdf_client.ListDirRequest(pathspec=pathspec)
+      request = rdf_client_action.ListDirRequest(pathspec=pathspec)
 
     self.CallClient(
         stub, request, next_state="StoreStat", request_data=dict(index=index))
 
-    request = rdf_client.FingerprintRequest(
+    request = rdf_client_action.FingerprintRequest(
         pathspec=pathspec, max_filesize=self.state.file_size)
     request.AddRequest(
-        fp_type=rdf_client.FingerprintTuple.Type.FPT_GENERIC,
+        fp_type=rdf_client_action.FingerprintTuple.Type.FPT_GENERIC,
         hashers=[
-            rdf_client.FingerprintTuple.HashType.MD5,
-            rdf_client.FingerprintTuple.HashType.SHA1,
-            rdf_client.FingerprintTuple.HashType.SHA256
+            rdf_client_action.FingerprintTuple.HashType.MD5,
+            rdf_client_action.FingerprintTuple.HashType.SHA1,
+            rdf_client_action.FingerprintTuple.HashType.SHA256
         ])
 
     self.CallClient(
@@ -370,10 +394,10 @@ class MultiGetFileMixin(object):
     """This method will be called for each new file successfully fetched.
 
     Args:
-      stat_entry: rdf_client.StatEntry object describing the file.
+      stat_entry: rdf_client_fs.StatEntry object describing the file.
       file_hash: rdf_crypto.Hash object with file hashes.
       request_data: Arbitrary dictionary that was passed to the corresponding
-                    StartFileFetch call.
+        StartFileFetch call.
     """
 
   def _FileFetchFailed(self, index, request_name):
@@ -391,7 +415,7 @@ class MultiGetFileMixin(object):
       pathspec: Pathspec of a file that failed to be fetched.
       request_name: Name of a failed client action.
       request_data: Arbitrary dictionary that was passed to the corresponding
-                    StartFileFetch call.
+        StartFileFetch call.
     """
 
   def StoreStat(self, responses):
@@ -466,8 +490,8 @@ class MultiGetFileMixin(object):
     if self.state.files_hashed_since_check >= self.MIN_CALL_TO_FILE_STORE:
       self._CheckHashesWithFileStore()
 
-  def _CheckHashesWithFileStore(self):
-    """Check all queued up hashes for existence in file store.
+  def _LegacyCheckHashesWithFileStore(self):
+    """Check all queued up hashes for existence in file store (legacy).
 
     Hashes which do not exist in the file store will be downloaded. This
     function flushes the entire queue (self.state.pending_hashes) in order to
@@ -503,15 +527,13 @@ class MultiGetFileMixin(object):
 
     # TODO(amoser): This object never changes, could this be a class attribute?
     filestore_obj = aff4.FACTORY.Open(
-        filestore.FileStore.PATH,
-        filestore.FileStore,
+        legacy_filestore.FileStore.PATH,
+        legacy_filestore.FileStore,
         mode="r",
         token=self.token)
 
     for file_store_urn, hash_obj in filestore_obj.CheckHashes(
         itervalues(file_hashes), external=self.state.use_external_stores):
-
-      self.HeartBeat()
 
       # Since checkhashes only returns one digest per unique hash we need to
       # find any other files pending download with the same hash.
@@ -546,10 +568,127 @@ class MultiGetFileMixin(object):
 
         if data_store.RelationalDBWriteEnabled():
           path_info = rdf_objects.PathInfo.FromStatEntry(stat_entry)
+          path_info.hash_entry = hash_obj
           data_store.REL_DB.WritePathInfos(self.client_id, [path_info])
 
         # Add this file to the filestore index.
         filestore_obj.AddURNToIndex(str(hash_obj.sha256), target_urn)
+
+        # Report this hit to the flow's caller.
+        self._ReceiveFetchedFile(file_tracker)
+
+    # Now we iterate over all the files which are not in the store and arrange
+    # for them to be copied.
+    for index in file_hashes:
+
+      # Move the tracker from the pending hashes store to the pending files
+      # store - it will now be downloaded.
+      file_tracker = self.state.pending_hashes.pop(index)
+      self.state.pending_files[index] = file_tracker
+
+      # If we already know how big the file is we use that, otherwise fall back
+      # to the size reported by stat.
+      if file_tracker["bytes_read"] > 0:
+        file_tracker["size_to_download"] = file_tracker["bytes_read"]
+      else:
+        file_tracker["size_to_download"] = file_tracker["stat_entry"].st_size
+
+      # We do not have the file here yet - we need to retrieve it.
+      expected_number_of_hashes = (
+          file_tracker["size_to_download"] // self.CHUNK_SIZE + 1)
+
+      # We just hash ALL the chunks in the file now. NOTE: This maximizes client
+      # VFS cache hit rate and is far more efficient than launching multiple
+      # GetFile flows.
+      self.state.files_to_fetch += 1
+
+      for i in range(expected_number_of_hashes):
+        if i == expected_number_of_hashes - 1:
+          # The last chunk is short.
+          length = file_tracker["size_to_download"] % self.CHUNK_SIZE
+        else:
+          length = self.CHUNK_SIZE
+        self.CallClient(
+            server_stubs.HashBuffer,
+            pathspec=file_tracker["stat_entry"].pathspec,
+            offset=i * self.CHUNK_SIZE,
+            length=length,
+            next_state="CheckHash",
+            request_data=dict(index=index))
+
+    if self.state.files_hashed % 100 == 0:
+      self.Log("Hashed %d files, skipped %s already stored.",
+               self.state.files_hashed, self.state.files_skipped)
+
+  def _CheckHashesWithFileStore(self):
+    """Check all queued up hashes for existence in file store.
+
+    Hashes which do not exist in the file store will be downloaded. This
+    function flushes the entire queue (self.state.pending_hashes) in order to
+    minimize the round trips to the file store.
+
+    If a file was found in the file store it is not scheduled for collection
+    and its PathInfo is written to the datastore pointing to the file store's
+    hash. Otherwise, we request the client to hash every block in the file,
+    and add it to the file tracking queue (self.state.pending_files).
+    """
+    if not data_store.RelationalDBReadEnabled(category="filestore"):
+      return self._LegacyCheckHashesWithFileStore()
+
+    if not self.state.pending_hashes:
+      return
+
+    # This map represents all the hashes in the pending urns.
+    file_hashes = {}
+
+    # Store a mapping of hash to tracker. Keys are hashdigest objects,
+    # values are arrays of tracker dicts.
+    hash_to_tracker = {}
+    for index, tracker in iteritems(self.state.pending_hashes):
+
+      # We might not have gotten this hash yet
+      if tracker.get("hash_obj") is None:
+        continue
+
+      hash_obj = tracker["hash_obj"]
+      digest = hash_obj.sha256
+      file_hashes[index] = hash_obj
+      hash_to_tracker.setdefault(rdf_objects.SHA256HashID(digest),
+                                 []).append(tracker)
+
+    # First we get all the files which are present in the file store.
+    files_in_filestore = set()
+
+    statuses = file_store.CheckHashes([
+        rdf_objects.SHA256HashID.FromBytes(ho.sha256.AsBytes())
+        for ho in itervalues(file_hashes)
+    ])
+    for hash_id, status in iteritems(statuses):
+      self.HeartBeat()
+
+      if not status:
+        continue
+
+      # Since checkhashes only returns one digest per unique hash we need to
+      # find any other files pending download with the same hash.
+      for tracker in hash_to_tracker[hash_id]:
+        self.state.files_skipped += 1
+        file_hashes.pop(tracker["index"])
+        files_in_filestore.add(hash_id)
+        # Remove this tracker from the pending_hashes store since we no longer
+        # need to process it.
+        self.state.pending_hashes.pop(tracker["index"])
+
+    # Now that the check is done, reset our counter
+    self.state.files_hashed_since_check = 0
+    # Now copy all existing files to the client aff4 space.
+    for hash_id in files_in_filestore:
+
+      for file_tracker in hash_to_tracker.get(hash_id, []):
+        stat_entry = file_tracker["stat_entry"]
+        path_info = rdf_objects.PathInfo.FromStatEntry(stat_entry)
+        path_info.hash_entry = hash_obj
+        data_store.REL_DB.WritePathInfos(self.client_id, [path_info])
 
         # Report this hit to the flow's caller.
         self._ReceiveFetchedFile(file_tracker)
@@ -637,6 +776,7 @@ class MultiGetFileMixin(object):
       for hash_response in file_tracker.get("hash_list", []):
         blob_hashes.append(hash_response.data.encode("hex"))
 
+    # This is effectively a BlobStore call.
     existing_blobs = data_store.DB.BlobsExist(blob_hashes, token=self.token)
 
     self.state.blob_hashes_pending = 0
@@ -686,6 +826,9 @@ class MultiGetFileMixin(object):
         stat_entry = file_tracker["stat_entry"]
         urn = stat_entry.pathspec.AFF4Path(self.client_urn)
 
+        # TODO(user): when all the code can read files from REL_DB,
+        # protect this with:
+        # if not data_store.RelationalDBReadEnabled(category="filestore"):
         with aff4.FACTORY.Create(
             urn, aff4_grr.VFSBlobImage, mode="w", token=self.token) as fd:
 
@@ -698,21 +841,49 @@ class MultiGetFileMixin(object):
             digest, length = blob_dict[index]
             fd.AddBlob(digest, length)
 
-          # Save some space.
-          del file_tracker["blobs"]
-          del file_tracker["hash_list"]
-
-        if data_store.RelationalDBWriteEnabled():
-          path_info = rdf_objects.PathInfo.FromStatEntry(stat_entry)
-          data_store.REL_DB.WritePathInfos(self.client_id, [path_info])
-
-        # File done, remove from the store and close it.
-        self._ReceiveFetchedFile(file_tracker)
-
         # Publish the new file event to cause the file to be added to the
         # filestore.
         events.Events.PublishEvent(
-            "FileStore.AddFileToStore", urn, token=self.token)
+            "LegacyFileStore.AddFileToStore", urn, token=self.token)
+
+        if data_store.RelationalDBWriteEnabled():
+          path_info = rdf_objects.PathInfo.FromStatEntry(stat_entry)
+
+          # Adding files to filestore requires reading data from RELDB,
+          # thus protecting this code with a filestore-read-enabled check.
+          if data_store.RelationalDBReadEnabled("filestore"):
+            blob_ids = []
+            for index in sorted(blob_dict):
+              digest, _ = blob_dict[index]
+              blob_ids.append(rdf_objects.BlobID.FromBytes(digest))
+
+            hash_obj = file_tracker["hash_obj"]
+
+            hash_id = file_store.AddFileWithUnknownHash(blob_ids)
+            # If the hash that we've calculated matches what we got from the
+            # client, then simply store the full hash entry.
+            # Otherwise store just the hash that we've calculated.
+            if hash_id.AsBytes() == hash_obj.sha256:
+              path_info.hash_entry = hash_obj
+            else:
+              path_info.hash_entry.sha256 = hash_id.AsBytes()
+
+            # Publish the add file event to cause the file to be added to the
+            # filestore.
+            events.Events.PublishEvent(
+                "FileStore.Add",
+                rdf_file_store.FileStoreAddEvent(
+                    hash_id=hash_id, blob_ids=blob_ids),
+                token=self.token)
+
+          data_store.REL_DB.WritePathInfos(self.client_id, [path_info])
+
+        # Save some space.
+        del file_tracker["blobs"]
+        del file_tracker["hash_list"]
+
+        # File done, remove from the store and close it.
+        self._ReceiveFetchedFile(file_tracker)
 
         self.state.files_fetched += 1
 
@@ -726,8 +897,8 @@ class MultiGetFileMixin(object):
       self._CheckHashesWithFileStore()
       self.FetchFileContent()
 
-    if not self.runner.OutstandingRequests():
-      super(MultiGetFileMixin, self).End(responses)
+    if not self.outstanding_requests:
+      super(MultiGetFileLogic, self).End(responses)
 
 
 class MultiGetFileArgs(rdf_structs.RDFProtoStruct):
@@ -738,14 +909,15 @@ class MultiGetFileArgs(rdf_structs.RDFProtoStruct):
   ]
 
 
-class MultiGetFile(MultiGetFileMixin, flow.GRRFlow):
+@flow_base.DualDBFlow
+class MultiGetFileMixin(MultiGetFileLogic):
   """A flow to effectively retrieve a number of files."""
 
   args_type = MultiGetFileArgs
 
   def Start(self):
     """Start state of the flow."""
-    super(MultiGetFile, self).Start(
+    super(MultiGetFileMixin, self).Start(
         file_size=self.args.file_size,
         maximum_pending_files=self.args.maximum_pending_files,
         use_external_stores=self.args.use_external_stores)
@@ -768,8 +940,12 @@ class MultiGetFile(MultiGetFileMixin, flow.GRRFlow):
     self.SendReply(stat_entry)
 
 
-class FileStoreCreateFile(events.EventListener):
+class LegacyFileStoreCreateFile(events.EventListener):
   """Receive an event about a new file and add it to the file store.
+
+  NOTE: this event handles submissions to the LEGACY (AFF4-based) FileStore
+  implementation. For the new REL_DB-based implementation, please see
+  FileStoreCreateFile class below.
 
   The file store is a central place where files are managed in the data
   store. Files are deduplicated and stored centrally.
@@ -779,27 +955,53 @@ class FileStoreCreateFile(events.EventListener):
   the data store under a canonical URN.
   """
 
-  EVENTS = ["FileStore.AddFileToStore"]
+  EVENTS = ["LegacyFileStore.AddFileToStore"]
 
   def ProcessMessages(self, msgs=None, token=None):
     """Process the new file and add to the file store."""
 
     filestore_fd = aff4.FACTORY.Create(
-        filestore.FileStore.PATH, filestore.FileStore, mode="w", token=token)
+        legacy_filestore.FileStore.PATH,
+        legacy_filestore.FileStore,
+        mode="w",
+        token=token)
 
     for vfs_urn in msgs:
       with aff4.FACTORY.Open(vfs_urn, mode="rw", token=token) as vfs_fd:
         try:
           filestore_fd.AddFile(vfs_fd)
         except Exception as e:  # pylint: disable=broad-except
-          logging.error("Exception while adding file to filestore: %s", e)
+          logging.exception("Exception while adding file to filestore: %s", e)
+
+
+class FileStoreCreateFile(events.EventListener):
+  """Receive an event about a new file and add it to the file store.
+
+  The file store is a central place where files are managed in the data
+  store. Files are deduplicated and stored centrally.
+
+  This event listener will be fired when a new file is collected through
+  any of the file-collection flows (i.e. MultiGetFile).
+  """
+
+  EVENTS = ["FileStore.Add"]
+
+  def ProcessMessages(self, msgs=None, token=None):
+    """Process the new file and add to the file store."""
+
+    for event in msgs:
+      try:
+        file_store.EXTERNAL_FILE_STORE.AddFile(event.hash_id, event.blob_ids)
+      except Exception as e:  # pylint: disable=broad-except
+        logging.exception("Exception while adding file to filestore: %s", e)
 
 
 class GetMBRArgs(rdf_structs.RDFProtoStruct):
   protobuf = flows_pb2.GetMBRArgs
 
 
-class GetMBR(flow.GRRFlow):
+@flow_base.DualDBFlow
+class GetMBRMixin(object):
   """A flow to retrieve the MBR.
 
   Returns to parent flow:
@@ -883,11 +1085,11 @@ class TransferStore(flow.WellKnownFlow):
       if not data:
         continue
 
-      if (read_buffer.compression ==
-          rdf_protodict.DataBlob.CompressionType.ZCOMPRESSION):
+      if (read_buffer.compression == rdf_protodict.DataBlob.CompressionType
+          .ZCOMPRESSION):
         data = zlib.decompress(data)
-      elif (read_buffer.compression ==
-            rdf_protodict.DataBlob.CompressionType.UNCOMPRESSED):
+      elif (read_buffer.compression == rdf_protodict.DataBlob.CompressionType
+            .UNCOMPRESSED):
         pass
       else:
         raise ValueError("Unsupported compression")
@@ -937,11 +1139,11 @@ class SendFile(flow.GRRFlow):
   nc -l <port> | openssl aes-128-cbc -d -K <key> -iv <iv> > <filename>
 
   Returns to parent flow:
-    A rdf_client.StatEntry of the sent file.
+    A rdf_client_fs.StatEntry of the sent file.
   """
 
   category = "/Filesystem/"
-  args_type = rdf_client.SendFileRequest
+  args_type = rdf_client_action.SendFileRequest
 
   def Start(self):
     """This issues the sendfile request."""

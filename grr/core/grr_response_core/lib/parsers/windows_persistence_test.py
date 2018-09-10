@@ -1,9 +1,12 @@
 #!/usr/bin/env python
 """Tests for grr.parsers.windows_persistence."""
 
+from __future__ import unicode_literals
+
 from grr_response_core.lib import flags
 from grr_response_core.lib.parsers import windows_persistence
 from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_core.lib.rdfvalues import client_fs as rdf_client_fs
 from grr_response_core.lib.rdfvalues import paths as rdf_paths
 from grr_response_core.lib.rdfvalues import protodict as rdf_protodict
 from grr.test_lib import flow_test_lib
@@ -19,8 +22,8 @@ class WindowsPersistenceMechanismsParserTest(flow_test_lib.FlowTestsBaseclass):
     pathspec = rdf_paths.PathSpec(
         path=path, pathtype=rdf_paths.PathSpec.PathType.REGISTRY)
     reg_data = "C:\\blah\\some.exe /v"
-    reg_type = rdf_client.StatEntry.RegistryType.REG_SZ
-    stat = rdf_client.StatEntry(
+    reg_type = rdf_client_fs.StatEntry.RegistryType.REG_SZ
+    stat = rdf_client_fs.StatEntry(
         pathspec=pathspec,
         registry_type=reg_type,
         registry_data=rdf_protodict.DataBlob(string=reg_data))

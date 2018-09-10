@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 # -*- mode: python; encoding: utf-8 -*-
 """Test client actions."""
+from __future__ import unicode_literals
+
 import collections
 import os
 import posix
@@ -8,7 +10,6 @@ import stat
 
 
 from builtins import range  # pylint: disable=redefined-builtin
-from builtins import zip  # pylint: disable=redefined-builtin
 import psutil
 
 from grr_response_client import actions
@@ -18,6 +19,8 @@ from grr_response_client.client_actions import standard
 from grr_response_core.lib import flags
 from grr_response_core.lib import utils
 from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_core.lib.rdfvalues import client_action as rdf_client_action
+from grr_response_core.lib.rdfvalues import client_fs as rdf_client_fs
 from grr_response_core.lib.rdfvalues import flows as rdf_flows
 from grr_response_core.lib.rdfvalues import paths as rdf_paths
 from grr.test_lib import client_test_lib
@@ -46,9 +49,9 @@ class ActionTest(client_test_lib.EmptyActionTest):
     """Test reading a buffer."""
     path = os.path.join(self.base_path, "morenumbers.txt")
     p = rdf_paths.PathSpec(path=path, pathtype=rdf_paths.PathSpec.PathType.OS)
-    result = self.RunAction(standard.ReadBuffer,
-                            rdf_client.BufferReference(
-                                pathspec=p, offset=100, length=10))[0]
+    result = self.RunAction(
+        standard.ReadBuffer,
+        rdf_client.BufferReference(pathspec=p, offset=100, length=10))[0]
 
     self.assertEqual(result.offset, 100)
     self.assertEqual(result.length, 10)
@@ -58,7 +61,7 @@ class ActionTest(client_test_lib.EmptyActionTest):
     """Tests listing directories."""
     p = rdf_paths.PathSpec(path=self.base_path, pathtype=0)
     results = self.RunAction(
-        standard.ListDirectory, rdf_client.ListDirRequest(pathspec=p))
+        standard.ListDirectory, rdf_client_action.ListDirRequest(pathspec=p))
     # Find the number.txt file
     result = None
     for result in results:
@@ -66,39 +69,10 @@ class ActionTest(client_test_lib.EmptyActionTest):
         break
 
     self.assertTrue(result)
-    self.assertEqual(result.__class__, rdf_client.StatEntry)
+    self.assertEqual(result.__class__, rdf_client_fs.StatEntry)
     self.assertEqual(result.pathspec.Basename(), "morenumbers.txt")
     self.assertEqual(result.st_size, 3893)
     self.assertTrue(stat.S_ISREG(result.st_mode))
-
-  def testIteratedListDirectory(self):
-    """Tests iterated listing of directories."""
-    p = rdf_paths.PathSpec(
-        path=self.base_path, pathtype=rdf_paths.PathSpec.PathType.OS)
-    non_iterated_results = self.RunAction(
-        standard.ListDirectory, rdf_client.ListDirRequest(pathspec=p))
-
-    # Make sure we get some results.
-    l = len(non_iterated_results)
-    self.assertTrue(l > 0)
-
-    iterated_results = []
-    request = rdf_client.ListDirRequest(pathspec=p)
-    request.iterator.number = 2
-    while True:
-      responses = self.RunAction(standard.IteratedListDirectory, request)
-      results = responses[:-1]
-      if not results:
-        break
-
-      for result in results:
-        iterated_results.append(result)
-
-    for x, y in zip(non_iterated_results, iterated_results):
-      # Reset the st_atime in the results to avoid potential flakiness.
-      x.st_atime = y.st_atime = 0
-
-      self.assertRDFValuesEqual(x, y)
 
   def testProcessListing(self):
     """Tests if listing processes works."""
@@ -202,7 +176,7 @@ class ActionTest(client_test_lib.EmptyActionTest):
       # This test assumes "/" is the mount point for /usr/bin
       results = self.RunAction(
           standard.StatFS,
-          rdf_client.StatFSRequest(path_list=["/usr/bin", "/"]))
+          rdf_client_action.StatFSRequest(path_list=["/usr/bin", "/"]))
       self.assertEqual(len(results), 2)
 
       # Both results should have mount_point as "/"
@@ -220,7 +194,7 @@ class ActionTest(client_test_lib.EmptyActionTest):
       # Test we get a result even if one path is bad
       results = self.RunAction(
           standard.StatFS,
-          rdf_client.StatFSRequest(path_list=["/does/not/exist", "/"]))
+          rdf_client_action.StatFSRequest(path_list=["/does/not/exist", "/"]))
       self.assertEqual(len(results), 1)
       self.assertEqual(result.Name(), "/")
 

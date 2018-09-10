@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 """Simple parsers for the output of linux commands."""
+from __future__ import unicode_literals
+
 import logging
 import os
 import re
@@ -230,7 +232,7 @@ class DmidecodeCmdParser(parser.CommandParser):
               break
           line = output.next()
 
-    return dmi_info
+    yield dmi_info
 
 
 class PsCmdParser(parser.CommandParser):

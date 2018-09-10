@@ -1,15 +1,19 @@
 #!/usr/bin/env python
 """RDFValue implementations related to flow scheduling."""
 
+from __future__ import unicode_literals
+
 import threading
 import time
 
 from grr_response_core.lib import rdfvalue
 from grr_response_core.lib import utils
 from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_core.lib.rdfvalues import client_stats as rdf_client_stats
 from grr_response_core.lib.rdfvalues import crypto as rdf_crypto
 from grr_response_core.lib.rdfvalues import protodict as rdf_protodict
 from grr_response_core.lib.rdfvalues import structs as rdf_structs
+from grr_response_proto import flows_pb2
 from grr_response_proto import jobs_pb2
 
 
@@ -124,7 +128,7 @@ class GrrStatus(rdf_structs.RDFProtoStruct):
   """
   protobuf = jobs_pb2.GrrStatus
   rdf_deps = [
-      rdf_client.CpuSeconds,
+      rdf_client_stats.CpuSeconds,
       rdfvalue.SessionID,
   ]
 
@@ -135,6 +139,13 @@ class GrrNotification(rdf_structs.RDFProtoStruct):
   rdf_deps = [
       rdfvalue.RDFDatetime,
       rdfvalue.SessionID,
+  ]
+
+
+class FlowProcessingRequest(rdf_structs.RDFProtoStruct):
+  protobuf = flows_pb2.FlowProcessingRequest
+  rdf_deps = [
+      rdfvalue.RDFDatetime,
   ]
 
 

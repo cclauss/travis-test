@@ -10,7 +10,7 @@ from future.utils import iteritems
 from future.utils import itervalues
 
 from grr_response_core.lib import rdfvalue
-from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_core.lib.rdfvalues import client_fs as rdf_client_fs
 from grr_response_core.lib.rdfvalues import paths as rdf_paths
 from grr_response_server import aff4
 from grr_response_server import data_store
@@ -47,7 +47,7 @@ class VFSDirectory(aff4.AFF4Volume):
 
     if attribute == "CONTAINS":
       # Get the pathspec for this object
-      flow_id = flow.StartFlow(
+      flow_id = flow.StartAFF4Flow(
           client_id=client_id,
           # Dependency loop: aff4_objects/aff4_grr.py depends on
           # aff4_objects/standard.py that depends on flows/general/filesystem.py
@@ -62,7 +62,7 @@ class VFSDirectory(aff4.AFF4Volume):
 
   class SchemaCls(aff4.AFF4Volume.SchemaCls):
     """Attributes specific to VFSDirectory."""
-    STAT = aff4.Attribute("aff4:stat", rdf_client.StatEntry,
+    STAT = aff4.Attribute("aff4:stat", rdf_client_fs.StatEntry,
                           "A StatEntry describing this file.", "stat")
 
     PATHSPEC = aff4.Attribute(

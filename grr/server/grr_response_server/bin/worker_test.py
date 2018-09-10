@@ -14,6 +14,7 @@ from grr_response_core.lib import queues
 from grr_response_core.lib import rdfvalue
 from grr_response_core.lib import utils
 from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_core.lib.rdfvalues import client_stats as rdf_client_stats
 from grr_response_core.lib.rdfvalues import flows as rdf_flows
 from grr_response_core.lib.rdfvalues import protodict as rdf_protodict
 from grr_response_server import aff4
@@ -404,7 +405,7 @@ class GrrWorkerTest(flow_test_lib.FlowTestsBaseclass):
 
     try:
       with test_lib.FakeTime(initial_time.AsSecondsSinceEpoch()):
-        flow.StartFlow(
+        flow.StartAFF4Flow(
             flow_name=WorkerStuckableTestFlow.__name__,
             client_id=self.client_id,
             token=self.token,
@@ -435,7 +436,7 @@ class GrrWorkerTest(flow_test_lib.FlowTestsBaseclass):
 
     try:
       with test_lib.FakeTime(initial_time.AsSecondsSinceEpoch()):
-        session_id = flow.StartFlow(
+        session_id = flow.StartAFF4Flow(
             flow_name=WorkerStuckableTestFlow.__name__,
             client_id=self.client_id,
             token=self.token,
@@ -475,7 +476,7 @@ class GrrWorkerTest(flow_test_lib.FlowTestsBaseclass):
 
     try:
       with test_lib.FakeTime(initial_time.AsSecondsSinceEpoch()):
-        session_id = flow.StartFlow(
+        session_id = flow.StartAFF4Flow(
             flow_name=WorkerStuckableTestFlow.__name__,
             client_id=self.client_id,
             token=self.token,
@@ -521,7 +522,7 @@ class GrrWorkerTest(flow_test_lib.FlowTestsBaseclass):
     WorkerStuckableTestFlow.Reset(heartbeat=True)
     try:
       with test_lib.FakeTime(initial_time.AsSecondsSinceEpoch()):
-        session_id = flow.StartFlow(
+        session_id = flow.StartAFF4Flow(
             flow_name=WorkerStuckableTestFlow.__name__,
             client_id=self.client_id,
             token=self.token,
@@ -573,7 +574,7 @@ class GrrWorkerTest(flow_test_lib.FlowTestsBaseclass):
     stuck_flows_timeout = flow_runner.FlowRunner.stuck_flows_timeout
 
     with test_lib.FakeTime(initial_time.AsSecondsSinceEpoch()):
-      session_id = flow.StartFlow(
+      session_id = flow.StartAFF4Flow(
           flow_name="WorkerSendingTestFlow",
           client_id=self.client_id,
           token=self.token,
@@ -620,7 +621,7 @@ class GrrWorkerTest(flow_test_lib.FlowTestsBaseclass):
     client_id = rdf_client.ClientURN("C.1100110011001100")
     self.SendResponse(
         session_id,
-        data=rdf_client.ClientStats(RSS_size=1234),
+        data=rdf_client_stats.ClientStats(RSS_size=1234),
         client_id=client_id,
         well_known=True)
 
@@ -659,7 +660,7 @@ class GrrWorkerTest(flow_test_lib.FlowTestsBaseclass):
     client_id = rdf_client.ClientURN("C.1100110011001100")
     self.SendResponse(
         rdfvalue.SessionID(queue=queues.STATS, flow_name="Stats"),
-        data=rdf_client.ClientStats(RSS_size=1234),
+        data=rdf_client_stats.ClientStats(RSS_size=1234),
         client_id=client_id,
         well_known=True)
 
@@ -716,7 +717,7 @@ class GrrWorkerTest(flow_test_lib.FlowTestsBaseclass):
     # Now check objects that are actually broken.
 
     # Start a new flow.
-    session_id = flow.StartFlow(
+    session_id = flow.StartAFF4Flow(
         flow_name="WorkerSendingTestFlow",
         client_id=self.client_id,
         token=self.token)
@@ -736,7 +737,7 @@ class GrrWorkerTest(flow_test_lib.FlowTestsBaseclass):
 
   def testNotificationRacesAreResolved(self):
     # We need a random flow object for this test.
-    session_id = flow.StartFlow(
+    session_id = flow.StartAFF4Flow(
         client_id=self.client_id,
         flow_name="WorkerSendingTestFlow",
         token=self.token)
@@ -783,7 +784,7 @@ class GrrWorkerTest(flow_test_lib.FlowTestsBaseclass):
     # Timestamp based notification handling should eliminate this bug.
 
     # We need a random flow object for this test.
-    session_id = flow.StartFlow(
+    session_id = flow.StartAFF4Flow(
         client_id=self.client_id,
         flow_name="WorkerSendingTestFlow",
         token=self.token)
@@ -887,7 +888,7 @@ class GrrWorkerTest(flow_test_lib.FlowTestsBaseclass):
     self.assertEqual(RESULTS, ["Response 1", "Response 2"])
 
   def testUniformTimestamps(self):
-    session_id = flow.StartFlow(
+    session_id = flow.StartAFF4Flow(
         client_id=self.client_id,
         flow_name="WorkerSendingTestFlow",
         token=self.token)
@@ -912,7 +913,7 @@ class GrrWorkerTest(flow_test_lib.FlowTestsBaseclass):
         threadpool_prefix="notification-test")
 
     # This schedules 10 requests.
-    session_id = flow.StartFlow(
+    session_id = flow.StartAFF4Flow(
         client_id=self.client_id,
         flow_name="WorkerSendingTestFlow",
         token=self.token)
@@ -956,29 +957,19 @@ class GrrWorkerTest(flow_test_lib.FlowTestsBaseclass):
 
   def testCPULimitForFlows(self):
     """This tests that the client actions are limited properly."""
-    result = {}
-    client_mock = action_mocks.CPULimitClientMock(result)
-    client_mock = flow_test_lib.MockClient(
-        self.client_id, client_mock, token=self.token)
-
-    client_mock.EnableResourceUsage(
+    client_mock = action_mocks.CPULimitClientMock(
         user_cpu_usage=[10], system_cpu_usage=[10], network_usage=[1000])
 
-    worker_obj = worker_lib.GRRWorker(token=self.token)
-
-    flow.StartFlow(
+    flow_test_lib.TestFlowHelper(
+        flow_test_lib.CPULimitFlow.__name__,
+        client_mock,
+        token=self.token,
         client_id=self.client_id,
-        flow_name=flow_test_lib.CPULimitFlow.__name__,
         cpu_limit=1000,
-        network_bytes_limit=10000,
-        token=self.token)
+        network_bytes_limit=10000)
 
-    self._Process([client_mock], worker_obj)
-
-    self.assertEqual(result["cpulimit"], [1000, 980, 960])
-    self.assertEqual(result["networklimit"], [10000, 9000, 8000])
-
-    return result
+    self.assertEqual(client_mock.storage["cpulimit"], [1000, 980, 960])
+    self.assertEqual(client_mock.storage["networklimit"], [10000, 9000, 8000])
 
   def _Process(self, client_mocks, worker_obj):
     while True:
@@ -997,13 +988,13 @@ class GrrWorkerTest(flow_test_lib.FlowTestsBaseclass):
     result = {}
     client_mocks = []
     for client_id in client_ids:
-      client_mock = action_mocks.CPULimitClientMock(result)
-      client_mock = flow_test_lib.MockClient(
-          rdf_client.ClientURN(client_id), client_mock, token=self.token)
-
-      client_mock.EnableResourceUsage(
-          user_cpu_usage=[10], system_cpu_usage=[10], network_usage=[1000])
-      client_mocks.append(client_mock)
+      client_mock = action_mocks.CPULimitClientMock(
+          result,
+          user_cpu_usage=[10],
+          system_cpu_usage=[10],
+          network_usage=[1000])
+      client_mocks.append(
+          flow_test_lib.MockClient(client_id, client_mock, token=self.token))
 
     flow_runner_args = rdf_flow_runner.FlowRunnerArgs(
         flow_name=flow_test_lib.CPULimitFlow.__name__)
@@ -1063,9 +1054,15 @@ class GrrWorkerTest(flow_test_lib.FlowTestsBaseclass):
     ])
     result.clear()
 
-    for client_mock in client_mocks:
-      client_mock.EnableResourceUsage(
-          user_cpu_usage=[500], system_cpu_usage=[500], network_usage=[1000000])
+    client_mocks = []
+    for client_id in client_ids:
+      client_mock = action_mocks.CPULimitClientMock(
+          result,
+          user_cpu_usage=[500],
+          system_cpu_usage=[500],
+          network_usage=[1000000])
+      client_mocks.append(
+          flow_test_lib.MockClient(client_id, client_mock, token=self.token))
 
     with implementation.StartHunt(
         hunt_name=standard.GenericHunt.__name__,

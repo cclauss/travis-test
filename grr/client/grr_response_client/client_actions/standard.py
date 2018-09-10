@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 """Standard actions that happen on the client."""
 from __future__ import print_function
+from __future__ import unicode_literals
 
 import ctypes
 import gzip
@@ -27,6 +28,9 @@ from grr_response_core.lib import flags
 from grr_response_core.lib import rdfvalue
 from grr_response_core.lib import utils
 from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_core.lib.rdfvalues import client_action as rdf_client_action
+from grr_response_core.lib.rdfvalues import client_fs as rdf_client_fs
+from grr_response_core.lib.rdfvalues import client_network as rdf_client_network
 from grr_response_core.lib.rdfvalues import crypto as rdf_crypto
 from grr_response_core.lib.rdfvalues import flows as rdf_flows
 from grr_response_core.lib.rdfvalues import paths as rdf_paths
@@ -124,8 +128,8 @@ class HashBuffer(actions.ActionPlugin):
 
 class HashFile(actions.ActionPlugin):
   """Hash an entire file using multiple algorithms."""
-  in_rdfvalue = rdf_client.FingerprintRequest
-  out_rdfvalues = [rdf_client.FingerprintResponse]
+  in_rdfvalue = rdf_client_action.FingerprintRequest
+  out_rdfvalues = [rdf_client_action.FingerprintResponse]
 
   _hash_types = {
       "md5": hashlib.md5,
@@ -144,7 +148,7 @@ class HashFile(actions.ActionPlugin):
       hasher.HashFile(fd, args.max_filesize)
 
     hash_object = hasher.GetHashObject()
-    response = rdf_client.FingerprintResponse(
+    response = rdf_client_action.FingerprintResponse(
         pathspec=fd.pathspec,
         bytes_read=hash_object.num_bytes,
         hash=hash_object)
@@ -153,8 +157,8 @@ class HashFile(actions.ActionPlugin):
 
 class CopyPathToFile(actions.ActionPlugin):
   """Copy contents of a pathspec to a file on disk."""
-  in_rdfvalue = rdf_client.CopyPathToFileRequest
-  out_rdfvalues = [rdf_client.CopyPathToFileRequest]
+  in_rdfvalue = rdf_client_action.CopyPathToFileRequest
+  out_rdfvalues = [rdf_client_action.CopyPathToFileRequest]
 
   BLOCK_SIZE = 10 * 1024 * 1024
 
@@ -165,6 +169,7 @@ class CopyPathToFile(actions.ActionPlugin):
       src_fd: File object to read from.
       dest_fd: File object to write to.
       length: Number of bytes to write.
+
     Returns:
       Bytes written.
     """
@@ -214,7 +219,7 @@ class CopyPathToFile(actions.ActionPlugin):
         written = self._Copy(src_fd, dest_fd, length)
 
     self.SendReply(
-        rdf_client.CopyPathToFileRequest(
+        rdf_client_action.CopyPathToFileRequest(
             offset=offset,
             length=written,
             src_path=args.src_path,
@@ -224,8 +229,8 @@ class CopyPathToFile(actions.ActionPlugin):
 
 class ListDirectory(ReadBuffer):
   """Lists all the files in a directory."""
-  in_rdfvalue = rdf_client.ListDirRequest
-  out_rdfvalues = [rdf_client.StatEntry]
+  in_rdfvalue = rdf_client_action.ListDirRequest
+  out_rdfvalues = [rdf_client_fs.StatEntry]
 
   def Run(self, args):
     """Lists a directory."""
@@ -242,35 +247,17 @@ class ListDirectory(ReadBuffer):
       self.SendReply(response)
 
 
-class IteratedListDirectory(actions.IteratedAction):
-  """Lists a directory as an iterator."""
-  in_rdfvalue = rdf_client.ListDirRequest
-  out_rdfvalues = [rdf_client.StatEntry]
-
-  def Iterate(self, request, client_state):
-    """Restores its way through the directory using an Iterator."""
-    try:
-      fd = vfs.VFSOpen(request.pathspec, progress_callback=self.Progress)
-    except (IOError, OSError), e:
-      self.SetStatus(rdf_flows.GrrStatus.ReturnedStatus.IOERROR, e)
-      return
-    files = list(fd.ListFiles())
-    files.sort(key=lambda x: x.pathspec.path)
-
-    index = client_state.get("index", 0)
-    length = request.iterator.number
-    for response in files[index:index + length]:
-      self.SendReply(response)
-
-    # Update the state
-    client_state["index"] = index + length
+def GetFileStatFromClient(args):
+  fd = vfs.VFSOpen(args.pathspec)
+  stat_entry = fd.Stat(ext_attrs=args.collect_ext_attrs)
+  yield stat_entry
 
 
 class GetFileStat(actions.ActionPlugin):
   """A client action that yields stat of a given file."""
 
-  in_rdfvalue = rdf_client.GetFileStatRequest
-  out_rdfvalues = [rdf_client.StatEntry]
+  in_rdfvalue = rdf_client_action.GetFileStatRequest
+  out_rdfvalues = [rdf_client_fs.StatEntry]
 
   def Run(self, args):
     try:
@@ -280,43 +267,45 @@ class GetFileStat(actions.ActionPlugin):
     except (IOError, OSError) as error:
       self.SetStatus(rdf_flows.GrrStatus.ReturnedStatus.IOERROR, error)
 
-  @classmethod
-  def Start(cls, args):
-    fd = vfs.VFSOpen(args.pathspec)
-    stat_entry = fd.Stat(ext_attrs=args.collect_ext_attrs)
-    yield stat_entry
+
+def ExecuteCommandFromClient(command):
+  """Executes one of the predefined commands.
+
+  Args:
+    command: An `ExecuteRequest` object.
+
+  Yields:
+    `rdf_client_action.ExecuteResponse` objects.
+  """
+  cmd = command.cmd
+  args = command.args
+  time_limit = command.time_limit
+
+  res = client_utils_common.Execute(cmd, args, time_limit)
+  (stdout, stderr, status, time_used) = res
+
+  # Limit output to 10MB so our response doesn't get too big.
+  stdout = stdout[:10 * 1024 * 1024]
+  stderr = stderr[:10 * 1024 * 1024]
+
+  yield rdf_client_action.ExecuteResponse(
+      request=command,
+      stdout=stdout,
+      stderr=stderr,
+      exit_status=status,
+      # We have to return microseconds.
+      time_used=int(1e6 * time_used))
 
 
 class ExecuteCommand(actions.ActionPlugin):
   """Executes one of the predefined commands."""
 
-  in_rdfvalue = rdf_client.ExecuteRequest
-  out_rdfvalues = [rdf_client.ExecuteResponse]
+  in_rdfvalue = rdf_client_action.ExecuteRequest
+  out_rdfvalues = [rdf_client_action.ExecuteResponse]
 
-  def Run(self, command):
-    for res in self.Start(command):
+  def Run(self, args):
+    for res in ExecuteCommandFromClient(args):
       self.SendReply(res)
-
-  @classmethod
-  def Start(cls, command):
-    cmd = command.cmd
-    args = command.args
-    time_limit = command.time_limit
-
-    res = client_utils_common.Execute(cmd, args, time_limit)
-    (stdout, stderr, status, time_used) = res
-
-    # Limit output to 10MB so our response doesn't get too big.
-    stdout = stdout[:10 * 1024 * 1024]
-    stderr = stderr[:10 * 1024 * 1024]
-
-    yield rdf_client.ExecuteResponse(
-        request=command,
-        stdout=stdout,
-        stderr=stderr,
-        exit_status=status,
-        # We have to return microseconds.
-        time_used=int(1e6 * time_used))
 
 
 class ExecuteBinaryCommand(actions.ActionPlugin):
@@ -333,8 +322,8 @@ class ExecuteBinaryCommand(actions.ActionPlugin):
   NOTE: If the binary is too large to fit inside a single request, the request
   will have the more_data flag enabled, indicating more data is coming.
   """
-  in_rdfvalue = rdf_client.ExecuteBinaryRequest
-  out_rdfvalues = [rdf_client.ExecuteBinaryResponse]
+  in_rdfvalue = rdf_client_action.ExecuteBinaryRequest
+  out_rdfvalues = [rdf_client_action.ExecuteBinaryResponse]
 
   def WriteBlobToFile(self, request):
     """Writes the blob to a file and returns its path."""
@@ -397,7 +386,7 @@ class ExecuteBinaryCommand(actions.ActionPlugin):
     stderr = stderr[:10 * 1024 * 1024]
 
     self.SendReply(
-        rdf_client.ExecuteBinaryResponse(
+        rdf_client_action.ExecuteBinaryResponse(
             stdout=stdout,
             stderr=stderr,
             exit_status=status,
@@ -414,20 +403,12 @@ class ExecutePython(actions.ActionPlugin):
   This is protected by CONFIG[PrivateKeys.executable_signing_private_key], which
   should be stored offline and well protected.
   """
-  in_rdfvalue = rdf_client.ExecutePythonRequest
-  out_rdfvalues = [rdf_client.ExecutePythonResponse]
+  in_rdfvalue = rdf_client_action.ExecutePythonRequest
+  out_rdfvalues = [rdf_client_action.ExecutePythonResponse]
 
   def Run(self, args):
     """Run."""
     time_start = time.time()
-
-    class StdOutHook(object):
-
-      def __init__(self, buf):
-        self.buf = buf
-
-      def write(self, text):
-        self.buf.write(text)
 
     args.python_code.Verify(
         config.CONFIG["Client.executable_signing_public_key"])
@@ -441,13 +422,9 @@ class ExecutePython(actions.ActionPlugin):
     # Export the Progress function to allow python hacks to call it.
     context["Progress"] = self.Progress
 
-    # TODO(hanuszczak): In Python 3 writing to stdout is writing human readable
-    # text so `StringIO` is better fit. Actions should be refactored so that
-    # they write unicode (probably they already do) instead of arbitrary stream
-    # of bytes.
-    stdout = io.BytesIO()
+    stdout = io.StringIO()
     with utils.Stubber(sys, "stdout", StdOutHook(stdout)):
-      exec (args.python_code.data, context)  # pylint: disable=exec-used
+      exec(args.python_code.data, context)  # pylint: disable=exec-used
 
     stdout_output = stdout.getvalue()
     magic_str_output = context.get("magic_return_str")
@@ -460,8 +437,26 @@ class ExecutePython(actions.ActionPlugin):
     time_used = time.time() - time_start
     # We have to return microseconds.
     self.SendReply(
-        rdf_client.ExecutePythonResponse(
+        rdf_client_action.ExecutePythonResponse(
             time_used=int(1e6 * time_used), return_val=utils.SmartStr(output)))
+
+
+# TODO(hanuszczak): This class has been moved out of `ExecutePython::Run`. The
+# reason is that on Python versions older than 2.7.9 there is a bug [1] with
+# `exec` used as a function (which we do in order to maintain compatibility with
+# Python 3) that triggers a syntax error if used in a method with other nested
+# functions. Once support for older Python version is dropped, this can be moved
+# back.
+#
+# [1]: https://bugs.python.org/issue21591
+class StdOutHook(object):
+
+  def __init__(self, buf):
+    self.buf = buf
+
+  def write(self, text):  # pylint: disable=invalid-name
+    utils.AssertType(text, unicode)
+    self.buf.write(text)
 
 
 class Segfault(actions.ActionPlugin):
@@ -478,18 +473,25 @@ class Segfault(actions.ActionPlugin):
       logging.warning("Segfault requested but not running in debug mode.")
 
 
+def ListProcessesFromClient(args):
+  del args  # Unused
+
+  # psutil will cause an active loop on Windows 2000
+  if platform.system() == "Windows" and platform.version().startswith("5.0"):
+    raise RuntimeError("ListProcesses not supported on Windows 2000")
+
+  for proc in psutil.process_iter():
+    yield rdf_client.Process.FromPsutilProcess(proc)
+
+
 class ListProcesses(actions.ActionPlugin):
   """This action lists all the processes running on a machine."""
   in_rdfvalue = None
   out_rdfvalues = [rdf_client.Process]
 
-  def Run(self, unused_arg):
-    # psutil will cause an active loop on Windows 2000
-    if platform.system() == "Windows" and platform.version().startswith("5.0"):
-      raise RuntimeError("ListProcesses not supported on Windows 2000")
-
-    for proc in psutil.process_iter():
-      self.SendReply(rdf_client.Process.FromPsutilProcess(proc))
+  def Run(self, args):
+    for res in ListProcessesFromClient(args):
+      self.SendReply(res)
 
       # Reading information here is slow so we heartbeat between processes.
       self.Progress()
@@ -497,8 +499,8 @@ class ListProcesses(actions.ActionPlugin):
 
 class SendFile(actions.ActionPlugin):
   """This action encrypts and sends a file to a remote listener."""
-  in_rdfvalue = rdf_client.SendFileRequest
-  out_rdfvalues = [rdf_client.StatEntry]
+  in_rdfvalue = rdf_client_action.SendFileRequest
+  out_rdfvalues = [rdf_client_fs.StatEntry]
 
   # 10 MB.
   BLOCK_SIZE = 1024 * 1024 * 10
@@ -518,9 +520,9 @@ class SendFile(actions.ActionPlugin):
     # Open the file.
     fd = vfs.VFSOpen(args.pathspec, progress_callback=self.Progress)
 
-    if args.address_family == rdf_client.NetworkAddress.Family.INET:
+    if args.address_family == rdf_client_network.NetworkAddress.Family.INET:
       family = socket.AF_INET
-    elif args.address_family == rdf_client.NetworkAddress.Family.INET6:
+    elif args.address_family == rdf_client_network.NetworkAddress.Family.INET6:
       family = socket.AF_INET6
     else:
       raise RuntimeError("Socket address family not supported.")
@@ -550,44 +552,59 @@ class SendFile(actions.ActionPlugin):
     self.SendReply(fd.Stat())
 
 
+def StatFSFromClient(args):
+  """Call os.statvfs for a given list of paths.
+
+  Args:
+    args: An `rdf_client_action.StatFSRequest`.
+
+  Yields:
+    `rdf_client_fs.UnixVolume` instances.
+
+  Raises:
+    RuntimeError: if called on a Windows system.
+  """
+  if platform.system() == "Windows":
+    raise RuntimeError("os.statvfs not available on Windows")
+
+  for path in args.path_list:
+
+    try:
+      fd = vfs.VFSOpen(rdf_paths.PathSpec(path=path, pathtype=args.pathtype))
+      st = fd.StatFS()
+      mount_point = fd.GetMountPoint()
+    except (IOError, OSError):
+      continue
+
+    unix = rdf_client_fs.UnixVolume(mount_point=mount_point)
+
+    # On linux pre 2.6 kernels don't have frsize, so we fall back to bsize.
+    # The actual_available_allocation_units attribute is set to blocks
+    # available to the unprivileged user, root may have some additional
+    # reserved space.
+    yield rdf_client_fs.Volume(
+        bytes_per_sector=(st.f_frsize or st.f_bsize),
+        sectors_per_allocation_unit=1,
+        total_allocation_units=st.f_blocks,
+        actual_available_allocation_units=st.f_bavail,
+        unixvolume=unix)
+
+
 class StatFS(actions.ActionPlugin):
-  """Call os.statvfs for a given list of paths. OS X and Linux only.
+  """Call os.statvfs for a given list of paths.
+
+  OS X and Linux only.
 
   Note that a statvfs call for a network filesystem (e.g. NFS) that is
   unavailable, e.g. due to no network, will result in the call blocking.
   """
-  in_rdfvalue = rdf_client.StatFSRequest
-  out_rdfvalues = [rdf_client.Volume]
+  in_rdfvalue = rdf_client_action.StatFSRequest
+  out_rdfvalues = [rdf_client_fs.Volume]
 
   def Run(self, args):
-    if platform.system() == "Windows":
-      raise RuntimeError("os.statvfs not available on Windows")
-
-    for path in args.path_list:
-
-      try:
-        fd = vfs.VFSOpen(
-            rdf_paths.PathSpec(path=path, pathtype=args.pathtype),
-            progress_callback=self.Progress)
-        st = fd.StatFS()
-        mount_point = fd.GetMountPoint()
-      except (IOError, OSError) as e:
-        self.SetStatus(rdf_flows.GrrStatus.ReturnedStatus.IOERROR, e)
-        continue
-
-      unix = rdf_client.UnixVolume(mount_point=mount_point)
-
-      # On linux pre 2.6 kernels don't have frsize, so we fall back to bsize.
-      # The actual_available_allocation_units attribute is set to blocks
-      # available to the unprivileged user, root may have some additional
-      # reserved space.
-      self.SendReply(
-          rdf_client.Volume(
-              bytes_per_sector=(st.f_frsize or st.f_bsize),
-              sectors_per_allocation_unit=1,
-              total_allocation_units=st.f_blocks,
-              actual_available_allocation_units=st.f_bavail,
-              unixvolume=unix))
+    for res in StatFSFromClient(args):
+      self.SendReply(res)
+      self.Progress()
 
 
 class GetMemorySize(actions.ActionPlugin):

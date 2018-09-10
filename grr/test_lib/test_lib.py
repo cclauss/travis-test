@@ -33,6 +33,7 @@ from grr_response_core.lib import rdfvalue
 from grr_response_core.lib import utils
 
 from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_core.lib.rdfvalues import client_network as rdf_client_network
 from grr_response_core.lib.rdfvalues import crypto as rdf_crypto
 from grr_response_server import access_control
 
@@ -347,22 +348,22 @@ class GRRBaseTest(unittest.TestCase):
         labels=["label1", "label2"])
 
   def _TestInterfaces(self, client_nr):
-    ip1 = rdf_client.NetworkAddress()
+    ip1 = rdf_client_network.NetworkAddress()
     ip1.human_readable_address = "192.168.0.%d" % client_nr
 
-    ip2 = rdf_client.NetworkAddress()
+    ip2 = rdf_client_network.NetworkAddress()
     ip2.human_readable_address = "2001:abcd::%x" % client_nr
 
-    mac1 = rdf_client.MacAddress()
+    mac1 = rdf_client_network.MacAddress()
     mac1.human_readable_address = "aabbccddee%02x" % client_nr
 
-    mac2 = rdf_client.MacAddress()
+    mac2 = rdf_client_network.MacAddress()
     mac2.human_readable_address = "bbccddeeff%02x" % client_nr
 
     return [
-        rdf_client.Interface(addresses=[ip1, ip2]),
-        rdf_client.Interface(mac_address=mac1),
-        rdf_client.Interface(mac_address=mac2),
+        rdf_client_network.Interface(addresses=[ip1, ip2]),
+        rdf_client_network.Interface(mac_address=mac1),
+        rdf_client_network.Interface(mac_address=mac2),
     ]
 
   def SetupTestClientObjects(self,
@@ -997,6 +998,25 @@ class AutoTempFilePath(object):
     del traceback  # Unused.
 
     os.remove(self.path)
+
+
+class SuppressLogs(object):
+  """A context manager for suppressing logging."""
+
+  def __enter__(self):
+    self.old_error = logging.error
+    self.old_info = logging.info
+    self.old_debug = logging.debug
+    logging.error = lambda *args, **kw: None
+    logging.info = lambda *args, **kw: None
+    logging.debug = lambda *args, **kw: None
+
+    return self
+
+  def __exit__(self, unused_type, unused_value, unused_traceback):
+    logging.error = self.old_error
+    logging.info = self.old_info
+    logging.debug = self.old_debug
 
 
 def main(argv=None):

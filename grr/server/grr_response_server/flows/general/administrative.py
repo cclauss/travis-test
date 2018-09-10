@@ -16,6 +16,7 @@ from grr_response_core.lib import registry
 from grr_response_core.lib import stats
 from grr_response_core.lib import utils
 from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_core.lib.rdfvalues import client_stats as rdf_client_stats
 from grr_response_core.lib.rdfvalues import flows as rdf_flows
 from grr_response_core.lib.rdfvalues import paths as rdf_paths
 from grr_response_core.lib.rdfvalues import protodict as rdf_protodict
@@ -107,7 +108,7 @@ class ClientCrashHandler(events.EventListener):
 <html><body><h1>GRR client crash report.</h1>
 
 Client {{ client_id }} ({{ hostname }}) just crashed while executing an action.
-Click <a href='{{ admin_ui }}/#{{ url }}'> here </a> to access this machine.
+Click <a href='{{ admin_ui }}/#{{ url }}'>here</a> to access this machine.
 
 <p>Thanks,</p>
 <p>{{ signature }}</p>
@@ -205,18 +206,17 @@ P.S. The state of the failing flow was:
         msg = "Client crashed."
 
       # Now terminate the flow.
-      flow.GRRFlow.TerminateFlow(
-          session_id, reason=msg, token=token, force=True)
+      flow.GRRFlow.TerminateAFF4Flow(session_id, reason=msg, token=token)
 
 
 class GetClientStatsProcessResponseMixin(object):
-  """Mixin defining ProcessReponse() that writes client stats to datastore."""
+  """Mixin defining ProcessResponse() that writes client stats to datastore."""
 
   def ProcessResponse(self, client_id, response):
     """Actually processes the contents of the response."""
     urn = client_id.Add("stats")
 
-    downsampled = rdf_client.ClientStats.Downsampled(response)
+    downsampled = rdf_client_stats.ClientStats.Downsampled(response)
     with aff4.FACTORY.Create(
         urn, aff4_stats.ClientStats, token=self.token, mode="w") as stats_fd:
       # Only keep the average of all values that fall within one minute.
@@ -256,7 +256,7 @@ class GetClientStatsAuto(flow.WellKnownFlow,
 
   def ProcessMessage(self, message):
     """Processes a stats response from the client."""
-    client_stats = rdf_client.ClientStats(message.payload)
+    client_stats = rdf_client_stats.ClientStats(message.payload)
     self.ProcessResponse(message.source, client_stats)
 
 
@@ -532,7 +532,7 @@ class OnlineNotification(flow.GRRFlow):
 
 <p>
   Client {{ client_id }} ({{ hostname }}) just came online. Click
-  <a href='{{ admin_ui }}/#{{ url }}'> here </a> to access this machine.
+  <a href='{{ admin_ui }}/#{{ url }}'>here</a> to access this machine.
   <br />This notification was created by %(creator)s.
 </p>
 
@@ -674,7 +674,7 @@ The nanny for client {{ client_id }} ({{ hostname }}) just sent a message:<br>
 <br>
 {{ message }}
 <br>
-Click <a href='{{ admin_ui }}/#{{ url }}'> here </a> to access this machine.
+Click <a href='{{ admin_ui }}/#{{ url }}'>here</a> to access this machine.
 
 <p>{{ signature }}</p>
 
@@ -696,7 +696,7 @@ Click <a href='{{ admin_ui }}/#{{ url }}'> here </a> to access this machine.
 
     # Write crash data.
     if data_store.RelationalDBReadEnabled():
-      client = data_store.REL_DB.ReadClientSnapshot(client_id)
+      client = data_store.REL_DB.ReadClientSnapshot(client_id.Basename())
       client_info = client.startup_info.client_info
     else:
       client = aff4.FACTORY.Open(client_id, token=self.token)
@@ -745,7 +745,7 @@ The client {{ client_id }} ({{ hostname }}) just sent a message:<br>
 <br>
 {{ message }}
 <br>
-Click <a href='{{ admin_ui }}/#{{ url }}'> here </a> to access this machine.
+Click <a href='{{ admin_ui }}/#{{ url }}'>here</a> to access this machine.
 
 <p>{{ signature }}</p>
 

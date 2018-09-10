@@ -17,6 +17,7 @@ from grr_response_core.lib import rdfvalue
 from grr_response_core.lib import stats
 from grr_response_core.lib import utils
 from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_core.lib.rdfvalues import client_fs as rdf_client_fs
 from grr_response_core.lib.rdfvalues import file_finder as rdf_file_finder
 from grr_response_core.lib.rdfvalues import paths as rdf_paths
 from grr_response_server import access_control
@@ -210,7 +211,7 @@ class StandardHuntTest(notification_test_lib.NotificationTestMixin,
       # We should receive stat entries.
       i = 0
       for i, x in enumerate(collection):
-        self.assertEqual(x.payload.__class__, rdf_client.StatEntry)
+        self.assertEqual(x.payload.__class__, rdf_client_fs.StatEntry)
         self.assertEqual(
             x.payload.AFF4Path(x.source).Split(2)[-1], "fs/os/tmp/evil.txt")
 
@@ -220,13 +221,13 @@ class StandardHuntTest(notification_test_lib.NotificationTestMixin,
           hunt_urn)
 
       for i, x in enumerate(per_type_collection):
-        self.assertEqual(x.payload.__class__, rdf_client.StatEntry)
+        self.assertEqual(x.payload.__class__, rdf_client_fs.StatEntry)
         self.assertEqual(
             x.payload.AFF4Path(x.source).Split(2)[-1], "fs/os/tmp/evil.txt")
 
       self.assertListEqual(
           list(per_type_collection.ListStoredTypes()),
-          [rdf_client.StatEntry.__name__])
+          [rdf_client_fs.StatEntry.__name__])
 
       self.assertEqual(hunt_obj.context.clients_with_results_count, 5)
       self.assertEqual(hunt_obj.context.results_count, 5)
@@ -1264,7 +1265,7 @@ class VerifyHuntOutputPluginsCronFlowTest(flow_test_lib.FlowTestsBaseclass,
         hunt_name=standard.SampleHunt.__name__, token=self.token)
 
     prev_count, _ = self.GetVerificationsStats()
-    flow.StartFlow(
+    flow.StartAFF4Flow(
         flow_name=standard.VerifyHuntOutputPluginsCronFlow.__name__,
         token=self.token)
     count, _ = self.GetVerificationsStats()
@@ -1277,7 +1278,7 @@ class VerifyHuntOutputPluginsCronFlowTest(flow_test_lib.FlowTestsBaseclass,
     self.RunHunt()
 
     prev_count, _ = self.GetVerificationsStats()
-    flow.StartFlow(
+    flow.StartAFF4Flow(
         flow_name=standard.VerifyHuntOutputPluginsCronFlow.__name__,
         token=self.token)
     count, _ = self.GetVerificationsStats()
@@ -1293,7 +1294,7 @@ class VerifyHuntOutputPluginsCronFlowTest(flow_test_lib.FlowTestsBaseclass,
     self.RunHunt()
 
     _, prev_results = self.GetVerificationsStats()
-    flow.StartFlow(
+    flow.StartAFF4Flow(
         flow_name=standard.VerifyHuntOutputPluginsCronFlow.__name__,
         token=self.token)
     _, results = self.GetVerificationsStats()
@@ -1308,7 +1309,7 @@ class VerifyHuntOutputPluginsCronFlowTest(flow_test_lib.FlowTestsBaseclass,
     self.AssignTasksToClients()
     self.RunHunt()
 
-    flow.StartFlow(
+    flow.StartAFF4Flow(
         flow_name=standard.VerifyHuntOutputPluginsCronFlow.__name__,
         token=self.token)
 
@@ -1328,7 +1329,7 @@ class VerifyHuntOutputPluginsCronFlowTest(flow_test_lib.FlowTestsBaseclass,
     self.RunHunt()
 
     _, prev_results = self.GetVerificationsStats()
-    flow.StartFlow(
+    flow.StartAFF4Flow(
         flow_name=standard.VerifyHuntOutputPluginsCronFlow.__name__,
         token=self.token)
     _, results = self.GetVerificationsStats()
@@ -1346,7 +1347,7 @@ class VerifyHuntOutputPluginsCronFlowTest(flow_test_lib.FlowTestsBaseclass,
     prev_count, _ = self.GetVerificationsStats()
     self.assertRaises(
         standard.HuntVerificationError,
-        flow.StartFlow,
+        flow.StartAFF4Flow,
         flow_name=standard.VerifyHuntOutputPluginsCronFlow.__name__,
         token=self.token)
     count, _ = self.GetVerificationsStats()
@@ -1364,7 +1365,7 @@ class VerifyHuntOutputPluginsCronFlowTest(flow_test_lib.FlowTestsBaseclass,
     prev_count = stats.STATS.GetMetricValue(
         "hunt_output_plugin_verification_errors")
     try:
-      flow.StartFlow(
+      flow.StartAFF4Flow(
           flow_name=standard.VerifyHuntOutputPluginsCronFlow.__name__,
           token=self.token)
     except standard.HuntVerificationError:
@@ -1388,7 +1389,7 @@ class VerifyHuntOutputPluginsCronFlowTest(flow_test_lib.FlowTestsBaseclass,
     _, prev_results = self.GetVerificationsStats()
     self.assertRaises(
         standard.HuntVerificationError,
-        flow.StartFlow,
+        flow.StartAFF4Flow,
         flow_name=standard.VerifyHuntOutputPluginsCronFlow.__name__,
         token=self.token)
     _, results = self.GetVerificationsStats()
@@ -1410,7 +1411,7 @@ class VerifyHuntOutputPluginsCronFlowTest(flow_test_lib.FlowTestsBaseclass,
     # a check frequency of 60m, slightly less than the 61m we set above.
     with utils.Stubber(standard.VerifyHuntOutputPluginsCronFlow, "frequency",
                        rdfvalue.Duration("30m")):
-      flow.StartFlow(
+      flow.StartAFF4Flow(
           flow_name=standard.VerifyHuntOutputPluginsCronFlow.__name__,
           token=self.token)
       count, _ = self.GetVerificationsStats()

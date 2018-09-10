@@ -1,12 +1,15 @@
 #!/usr/bin/env python
 """RDFValues used to communicate with the Rekall memory analysis framework."""
 
+from __future__ import unicode_literals
+
 import gzip
 import io
 import zlib
 
 from grr_response_core.lib import rdfvalue
 from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_core.lib.rdfvalues import client_action as rdf_client_action
 from grr_response_core.lib.rdfvalues import paths as rdf_paths
 from grr_response_core.lib.rdfvalues import protodict as rdf_protodict
 from grr_response_core.lib.rdfvalues import structs as rdf_structs
@@ -42,7 +45,7 @@ class RekallRequest(rdf_structs.RDFProtoStruct):
   protobuf = rekall_pb2.RekallRequest
   rdf_deps = [
       rdf_protodict.Dict,
-      rdf_client.Iterator,
+      rdf_client_action.Iterator,
       rdf_paths.PathSpec,
       PluginRequest,
       RekallProfile,

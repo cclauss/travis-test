@@ -28,15 +28,13 @@ print('%s.%s.%s-%s' % (
 "
 readonly DEB_VERSION="$(python -c "${pyscript}")"
 readonly GCS_DEB_DIR="https://storage.googleapis.com/autobuilds.grr-response.com/_latest_server_deb"
-wget https://storage.googleapis.com/ogaro-travis-test/.test/grr-server_3.2.3-2_amd64.deb
-wget https://storage.googleapis.com/ogaro-travis-test/.test/grr-server_3.2.3-2.tar.gz
-#wget "${GCS_DEB_DIR}/grr-server_${DEB_VERSION}_amd64.deb"
+wget "${GCS_DEB_DIR}/grr-server_${DEB_VERSION}_amd64.deb"
 wget "${GCS_DEB_DIR}/grr-server_${DEB_VERSION}_amd64.changes"
-#wget "${GCS_DEB_DIR}/grr-server_${DEB_VERSION}.tar.gz"
+wget "${GCS_DEB_DIR}/grr-server_${DEB_VERSION}.tar.gz"
 
 echo -e ".changes file for downloaded server deb:\n\n$(cat grr-server_*_amd64.changes)\n"
 DEBIAN_FRONTEND=noninteractive apt install -y ./grr-server_*_amd64.deb
-grr_config_updater initialize --noprompt --external_hostname=localhost --admin_password="${GRR_ADMIN_PASS}" --mysql_password 'Password12!'
+grr_config_updater initialize --noprompt --external_hostname=localhost --admin_password="${GRR_ADMIN_PASS}" --mysql_password="${APPVEYOR_MYSQL_PASS}"
 echo 'Logging.verbose: True' >> /etc/grr/server.local.yaml
 systemctl restart grr-server
 

@@ -9,15 +9,14 @@ services:
 
 environment:
   GRR_ADMIN_PASS: 'e2e_tests'
-  APPVEYOR_SSH_KEY: 'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCWCzNvKE+XDZ+gbZrwhWVBlWlTGrWwdWUFRA8MNrgS6DHltJgXCunSgvrGiy07DqwxErLU2nUfBMmctLRR4KLQsPxIqrMlchseHutG++G6bRI9tX9MH+JXz7xU6z9crYa2q+685flsZPwpudpeMXESinRt+WiKZDfUvKaahq+aENQKV7Hrxw9kfD/+XR1Pr//P9f15LP2wmUDRGsf0QJyjRRRFLr8uB3kzwysrBEEpFD51b68eW9U/SxZJWVLS/sRfxygxdvJQ+ILDreMWfVjq44Fe07zmNZrJ9CflSN67fsjTMFcKihFIJapq8V6sXvp4mHlWf3kUkWlBVWbvdX5/ denver@ogaro.net'
+  APPVEYOR_MYSQL_PASS: 'Password12!'  # See https://www.appveyor.com/docs/services-databases/#mysql
 
 install:
 - lsb_release -a
 - echo "${PATH}"
 - lscpu
 - sudo mysqld --version
-- systemctl status mysql || true
-- sudo systemctl start mysql
+- sudo systemctl start mysql  # We need to start the MySQL service manually.
 - sudo apt update -qq
 - sudo -EH ./appveyor/e2e_tests/install_mem_usage_cron.sh
 - sudo -EH ./appveyor/e2e_tests/install_latest_server_deb.sh
@@ -31,6 +30,4 @@ test_script:
 - sudo -EH ./appveyor/e2e_tests/test_repack.sh
 
 on_finish:
-- export APPVEYOR_SSH_BLOCK=true
-- curl -sflL 'https://raw.githubusercontent.com/appveyor/ci/master/scripts/enable-ssh.sh' | bash -e -
 - ./appveyor/e2e_tests/upload_e2e_artifacts.sh

@@ -17,6 +17,7 @@ from grr_response_core.lib import stats
 from grr_response_core.lib import type_info
 from grr_response_core.lib import utils
 from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_core.lib.rdfvalues import client_stats as rdf_client_stats
 from grr_response_core.lib.rdfvalues import events as rdf_events
 from grr_response_core.lib.rdfvalues import flows as rdf_flows
 from grr_response_core.lib.rdfvalues import protodict as rdf_protodict
@@ -270,13 +271,9 @@ class HuntRunner(object):
 
     Args:
       method_name: The name of the state method to call.
-
       request: A RequestState protobuf.
-
       responses: A list of GrrMessages responding to the request.
-
       event: A threading.Event() instance to signal completion of this request.
-
       direct_response: A flow.Responses() object can be provided to avoid
         creation of one.
     """
@@ -307,7 +304,7 @@ class HuntRunner(object):
         method()
       else:
         # Prepare a responses object for the state method to use:
-        responses = flow_responses.Responses(
+        responses = flow_responses.Responses.FromLegacyResponses(
             request=request, responses=responses)
 
         if responses.status:
@@ -346,7 +343,6 @@ class HuntRunner(object):
   def CallFlow(self,
                flow_name=None,
                next_state=None,
-               sync=True,
                request_data=None,
                client_id=None,
                base_session_id=None,
@@ -359,23 +355,15 @@ class HuntRunner(object):
 
     Args:
        flow_name: The name of the flow to invoke.
-
-       next_state: The state in this flow, that responses to this
-       message should go to.
-
-       sync: If True start the flow inline on the calling thread, else schedule
-         a worker to actually start the child flow.
-
+       next_state: The state in this flow, that responses to this message should
+         go to.
        request_data: Any dict provided here will be available in the
-             RequestState protobuf. The Responses object maintains a reference
-             to this protobuf for use in the execution of the state method. (so
-             you can access this data by responses.request). There is no
-             format mandated on this data but it may be a serialized protobuf.
-
+         RequestState protobuf. The Responses object maintains a reference to
+         this protobuf for use in the execution of the state method. (so you can
+         access this data by responses.request). There is no format mandated on
+         this data but it may be a serialized protobuf.
        client_id: If given, the flow is started for this client.
-
        base_session_id: A URN which will be used to build a URN.
-
        **kwargs: Arguments for the child flow.
 
     Returns:
@@ -444,7 +432,7 @@ class HuntRunner(object):
                                     remaining_network_quota)
 
     # Create the new child flow but do not notify the user about it.
-    child_urn = self.hunt_obj.StartFlow(
+    child_urn = self.hunt_obj.StartAFF4Flow(
         base_session_id=base_session_id or self.session_id,
         client_id=client_id,
         cpu_limit=subflow_cpu_limit,
@@ -455,7 +443,7 @@ class HuntRunner(object):
         parent_flow=self.hunt_obj,
         queue=self.runner_args.queue,
         request_state=state,
-        sync=sync,
+        sync=False,
         token=self.token,
         write_intermediate_results=write_intermediate,
         **kwargs)
@@ -638,6 +626,7 @@ class HuntRunner(object):
     Args:
       format_str: Format string
       *args: arguments to the format string
+
     Raises:
       RuntimeError: on parent missing logs_collection
     """
@@ -872,21 +861,17 @@ class HuntRunner(object):
     we send.
 
     Args:
-      messages: A list of rdfvalues to send. If the last one is not a
-              GrrStatus, we append an OK Status.
-
+      messages: A list of rdfvalues to send. If the last one is not a GrrStatus,
+        we append an OK Status.
       next_state: The state in this hunt to be invoked with the responses.
-
       client_id: ClientURN to use in scheduled requests.
+      request_data: Any dict provided here will be available in the RequestState
+        protobuf. The Responses object maintains a reference to this protobuf
+        for use in the execution of the state method. (so you can access this
+        data by responses.request).
+      start_time: Schedule the state at this time. This delays notification and
+        messages for processing into the future.
 
-      request_data: Any dict provided here will be available in the
-                    RequestState protobuf. The Responses object maintains a
-                    reference to this protobuf for use in the execution of the
-                    state method. (so you can access this data by
-                    responses.request).
-
-      start_time: Schedule the state at this time. This delays notification
-                  and messages for processing into the future.
     Raises:
       ValueError: on arguments error.
     """
@@ -1037,6 +1022,7 @@ class GRRHunt(flow.FlowBase):
     Args:
       hunt_id: The id of the hunt, a RDFURN of the form aff4:/hunts/H:123456.
       token: A data store token.
+
     Returns:
       The collection containing the results for the hunt identified by the id.
     """
@@ -1439,13 +1425,9 @@ class GRRHunt(flow.FlowBase):
       plugins_descriptors = self.runner_args.output_plugins
 
     for index, plugin_descriptor in enumerate(plugins_descriptors):
-      output_base_urn = self.output_plugins_base_urn.Add(
-          plugin_descriptor.plugin_name)
-
       plugin_class = plugin_descriptor.GetPluginClass()
       plugin_obj = plugin_class(
           self.results_collection_urn,
-          output_base_urn=output_base_urn,
           args=plugin_descriptor.plugin_args,
           token=self.token)
 
@@ -1484,7 +1466,7 @@ class GRRHunt(flow.FlowBase):
     """
     flow_path = status.child_session_id
 
-    resources = rdf_client.ClientResources()
+    resources = rdf_client_stats.ClientResources()
     resources.client_id = client_id
     resources.session_id = flow_path
     resources.cpu_usage.user_cpu_time = status.cpu_time_used.user_cpu_time

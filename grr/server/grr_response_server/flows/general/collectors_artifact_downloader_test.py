@@ -7,7 +7,7 @@ referenced by artifacts.
 
 from grr_response_core.lib import flags
 from grr_response_core.lib import utils
-from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_core.lib.rdfvalues import client_fs as rdf_client_fs
 from grr_response_core.lib.rdfvalues import paths as rdf_paths
 from grr_response_core.lib.rdfvalues import protodict as rdf_protodict
 from grr_response_server import aff4
@@ -32,7 +32,7 @@ class ArtifactFilesDownloaderFlowTest(flow_test_lib.FlowTestsBaseclass):
       for r in self.collector_replies:
         this.SendReply(r)
 
-    stubber = utils.Stubber(collectors.ArtifactCollectorFlow, "Start",
+    stubber = utils.Stubber(collectors.ArtifactCollectorFlowMixin, "Start",
                             ArtifactCollectorStub)
     stubber.Start()
     self.stubbers.append(stubber)
@@ -50,7 +50,7 @@ class ArtifactFilesDownloaderFlowTest(flow_test_lib.FlowTestsBaseclass):
       for r in self.failed_files:
         this.FileFetchFailed(pathspec, "StatFile", request_data=request_data)
 
-    stubber = utils.Stubber(transfer.MultiGetFileMixin, "StartFileFetch",
+    stubber = utils.Stubber(transfer.MultiGetFileLogic, "StartFileFetch",
                             StartFileFetch)
     stubber.Start()
     self.stubbers.append(stubber)
@@ -89,14 +89,14 @@ class ArtifactFilesDownloaderFlowTest(flow_test_lib.FlowTestsBaseclass):
         path_options=options,
         pathtype=rdf_paths.PathSpec.PathType.REGISTRY)
 
-    return rdf_client.StatEntry(
+    return rdf_client_fs.StatEntry(
         pathspec=pathspec,
         registry_data=rdf_protodict.DataBlob().SetValue(value),
-        registry_type=rdf_client.StatEntry.RegistryType.REG_SZ)
+        registry_type=rdf_client_fs.StatEntry.RegistryType.REG_SZ)
 
   def MakeFileStatEntry(self, path):
     pathspec = rdf_paths.PathSpec(path=path, pathtype="OS")
-    return rdf_client.StatEntry(pathspec=pathspec)
+    return rdf_client_fs.StatEntry(pathspec=pathspec)
 
   def testDoesNothingIfArtifactCollectorReturnsNothing(self):
     client_id = self.SetupClient(0)

@@ -12,7 +12,7 @@ from grr_response_client.client_actions import admin
 from grr_response_core import config
 from grr_response_core.lib import flags
 from grr_response_core.lib import rdfvalue
-from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_core.lib.rdfvalues import client_fs as rdf_client_fs
 from grr_response_core.lib.rdfvalues import paths as rdf_paths
 from grr_response_server import aff4
 from grr_response_server import client_index
@@ -231,7 +231,7 @@ class TestClientInterrogate(acl_test_lib.AclTestMixin,
     volumes = client.Get(client.Schema.VOLUMES)
     self.assertEqual(len(volumes), 2)
     for result in volumes:
-      self.assertTrue(isinstance(result, rdf_client.Volume))
+      self.assertTrue(isinstance(result, rdf_client_fs.Volume))
       self.assertTrue(result.windowsvolume.drive_letter in ["Z:", "C:"])
 
   def _CheckRegistryPathspec(self):
@@ -303,14 +303,15 @@ class TestClientInterrogate(acl_test_lib.AclTestMixin,
       }):
         client_mock = action_mocks.InterrogatedClient()
         client_mock.InitializeClient()
-        flow_test_lib.TestFlowHelper(
-            discovery.Interrogate.__name__,
-            client_mock,
-            token=self.token,
-            client_id=self.client_id)
+        with test_lib.SuppressLogs():
+          flow_test_lib.TestFlowHelper(
+              discovery.Interrogate.__name__,
+              client_mock,
+              token=self.token,
+              client_id=self.client_id)
 
-        self.fd = aff4.FACTORY.Open(self.client_id, token=self.token)
-        self._CheckCloudMetadata()
+    self.fd = aff4.FACTORY.Open(self.client_id, token=self.token)
+    self._CheckCloudMetadata()
 
   def testInterrogateCloudMetadataWindows(self):
     """Check google cloud metadata on windows."""
@@ -349,32 +350,33 @@ class TestClientInterrogate(acl_test_lib.AclTestMixin,
         client_mock = action_mocks.InterrogatedClient()
         client_mock.InitializeClient()
 
-        flow_test_lib.TestFlowHelper(
-            discovery.Interrogate.__name__,
-            client_mock,
-            token=self.token,
-            client_id=self.client_id)
+        with test_lib.SuppressLogs():
+          flow_test_lib.TestFlowHelper(
+              discovery.Interrogate.__name__,
+              client_mock,
+              token=self.token,
+              client_id=self.client_id)
 
-        self.fd = aff4.FACTORY.Open(self.client_id, token=self.token)
-        self._CheckBasicInfo("test_node.test", "Linux", 100 * 1000000)
-        self._CheckClientInfo()
-        self._CheckGRRConfig()
-        self._CheckNotificationsCreated()
-        self._CheckClientSummary(
-            "Linux", "14.4", release="Ubuntu", kernel="3.13.0-39-generic")
-        self._CheckRelease("Ubuntu", "14.4")
+    self.fd = aff4.FACTORY.Open(self.client_id, token=self.token)
+    self._CheckBasicInfo("test_node.test", "Linux", 100 * 1000000)
+    self._CheckClientInfo()
+    self._CheckGRRConfig()
+    self._CheckNotificationsCreated()
+    self._CheckClientSummary(
+        "Linux", "14.4", release="Ubuntu", kernel="3.13.0-39-generic")
+    self._CheckRelease("Ubuntu", "14.4")
 
-        # users 1,2,3 from wtmp
-        # users yagharek, isaac from netgroup
-        self._CheckUsers(["yagharek", "isaac", "user1", "user2", "user3"])
-        self._CheckNetworkInfo()
-        self._CheckVFS()
-        self._CheckLabels()
-        self._CheckLabelIndex()
-        self._CheckClientKwIndex(["Linux"], 1)
-        self._CheckClientKwIndex(["Label2"], 1)
-        self._CheckClientLibraries()
-        self._CheckMemory()
+    # users 1,2,3 from wtmp
+    # users yagharek, isaac from netgroup
+    self._CheckUsers(["yagharek", "isaac", "user1", "user2", "user3"])
+    self._CheckNetworkInfo()
+    self._CheckVFS()
+    self._CheckLabels()
+    self._CheckLabelIndex()
+    self._CheckClientKwIndex(["Linux"], 1)
+    self._CheckClientKwIndex(["Label2"], 1)
+    self._CheckClientLibraries()
+    self._CheckMemory()
 
   def testInterrogateWindows(self):
     """Test the Interrogate flow."""
@@ -423,6 +425,11 @@ class TestClientInterrogate(acl_test_lib.AclTestMixin,
         self._CheckClientKwIndex(["Windows"], 1)
         self._CheckClientKwIndex(["Label2"], 1)
         self._CheckMemory()
+
+
+class TestClientInterrogateRelationalFlows(
+    db_test_lib.RelationalFlowsEnabledMixin, TestClientInterrogate):
+  pass
 
 
 def main(argv):

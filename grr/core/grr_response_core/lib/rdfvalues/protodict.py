@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 """A generic serializer for python dictionaries."""
 
+from __future__ import unicode_literals
+
 import collections
 
 
@@ -360,11 +362,6 @@ class AttributedDict(Dict):
       object.__setattr__(self, item, value)
     else:
       self.SetItem(item, value)
-
-
-# Old clients still send back "RDFProtoDicts" so we need to keep this around.
-class RDFProtoDict(Dict):
-  pass
 
 
 class BlobArray(rdf_structs.RDFProtoStruct):

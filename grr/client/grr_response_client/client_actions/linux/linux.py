@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 """Linux specific actions."""
+from __future__ import unicode_literals
 
 import ctypes
 import ctypes.util
@@ -9,7 +10,7 @@ import pwd
 import time
 
 
-from builtins import map  # pylint: disable=redefined-builtin
+from builtins import bytes  # pylint: disable=redefined-builtin
 from builtins import range  # pylint: disable=redefined-builtin
 from future.utils import iteritems
 
@@ -19,6 +20,8 @@ from grr_response_client.client_actions import standard
 from grr_response_core.lib import rdfvalue
 from grr_response_core.lib import utils
 from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_core.lib.rdfvalues import client_fs as rdf_client_fs
+from grr_response_core.lib.rdfvalues import client_network as rdf_client_network
 from grr_response_core.lib.rdfvalues import protodict as rdf_protodict
 
 # struct sockaddr_ll
@@ -110,67 +113,75 @@ Ifaddrs._fields_ = [  # pylint: disable=protected-access
 ]  # pyformat: disable
 
 
+def EnumerateInterfacesFromClient(args):
+  """Enumerate all interfaces and collect their MAC addresses."""
+  del args  # Unused
+
+  libc = ctypes.cdll.LoadLibrary(ctypes.util.find_library("c"))
+  ifa = Ifaddrs()
+  p_ifa = ctypes.pointer(ifa)
+  libc.getifaddrs(ctypes.pointer(p_ifa))
+
+  addresses = {}
+  macs = {}
+  ifs = set()
+
+  m = p_ifa
+  while m:
+    ifname = ctypes.string_at(m.contents.ifa_name)
+    ifs.add(ifname)
+    try:
+      iffamily = ord(m.contents.ifa_addr[0])
+      # TODO(hanuszczak): There are some Python 3-incompatible `chr` usages
+      # here, they should be fixed.
+      if iffamily == 0x2:  # AF_INET
+        data = ctypes.cast(m.contents.ifa_addr, ctypes.POINTER(Sockaddrin))
+        ip4 = bytes(list(data.contents.sin_addr))
+        address_type = rdf_client_network.NetworkAddress.Family.INET
+        address = rdf_client_network.NetworkAddress(
+            address_type=address_type, packed_bytes=ip4)
+        addresses.setdefault(ifname, []).append(address)
+
+      if iffamily == 0x11:  # AF_PACKET
+        data = ctypes.cast(m.contents.ifa_addr, ctypes.POINTER(Sockaddrll))
+        addlen = data.contents.sll_halen
+        macs[ifname] = bytes(list(data.contents.sll_addr[:addlen]))
+
+      if iffamily == 0xA:  # AF_INET6
+        data = ctypes.cast(m.contents.ifa_addr, ctypes.POINTER(Sockaddrin6))
+        ip6 = bytes(list(data.contents.sin6_addr))
+        address_type = rdf_client_network.NetworkAddress.Family.INET6
+        address = rdf_client_network.NetworkAddress(
+            address_type=address_type, packed_bytes=ip6)
+        addresses.setdefault(ifname, []).append(address)
+    except ValueError:
+      # Some interfaces don't have a iffamily and will raise a null pointer
+      # exception. We still want to send back the name.
+      pass
+
+    m = m.contents.ifa_next
+
+  libc.freeifaddrs(p_ifa)
+
+  for interface in ifs:
+    mac = macs.setdefault(interface, b"")
+    address_list = addresses.setdefault(interface, b"")
+    args = {"ifname": interface}
+    if mac:
+      args["mac_address"] = mac
+    if addresses:
+      args["addresses"] = address_list
+    yield rdf_client_network.Interface(**args)
+
+
 class EnumerateInterfaces(actions.ActionPlugin):
   """Enumerates all MAC addresses on this system."""
-  out_rdfvalues = [rdf_client.Interface]
+  out_rdfvalues = [rdf_client_network.Interface]
 
-  def Run(self, unused_args):
+  def Run(self, args):
     """Enumerate all interfaces and collect their MAC addresses."""
-    libc = ctypes.cdll.LoadLibrary(ctypes.util.find_library("c"))
-    ifa = Ifaddrs()
-    p_ifa = ctypes.pointer(ifa)
-    libc.getifaddrs(ctypes.pointer(p_ifa))
-
-    addresses = {}
-    macs = {}
-    ifs = set()
-
-    m = p_ifa
-    while m:
-      ifname = ctypes.string_at(m.contents.ifa_name)
-      ifs.add(ifname)
-      try:
-        iffamily = ord(m.contents.ifa_addr[0])
-        # TODO(hanuszczak): There are some Python 3-incompatible `chr` usages
-        # here, they should be fixed.
-        if iffamily == 0x2:  # AF_INET
-          data = ctypes.cast(m.contents.ifa_addr, ctypes.POINTER(Sockaddrin))
-          ip4 = "".join(map(chr, data.contents.sin_addr))
-          address_type = rdf_client.NetworkAddress.Family.INET
-          address = rdf_client.NetworkAddress(
-              address_type=address_type, packed_bytes=ip4)
-          addresses.setdefault(ifname, []).append(address)
-
-        if iffamily == 0x11:  # AF_PACKET
-          data = ctypes.cast(m.contents.ifa_addr, ctypes.POINTER(Sockaddrll))
-          addlen = data.contents.sll_halen
-          macs[ifname] = "".join(map(chr, data.contents.sll_addr[:addlen]))
-
-        if iffamily == 0xA:  # AF_INET6
-          data = ctypes.cast(m.contents.ifa_addr, ctypes.POINTER(Sockaddrin6))
-          ip6 = "".join(map(chr, data.contents.sin6_addr))
-          address_type = rdf_client.NetworkAddress.Family.INET6
-          address = rdf_client.NetworkAddress(
-              address_type=address_type, packed_bytes=ip6)
-          addresses.setdefault(ifname, []).append(address)
-      except ValueError:
-        # Some interfaces don't have a iffamily and will raise a null pointer
-        # exception. We still want to send back the name.
-        pass
-
-      m = m.contents.ifa_next
-
-    libc.freeifaddrs(p_ifa)
-
-    for interface in ifs:
-      mac = macs.setdefault(interface, "")
-      address_list = addresses.setdefault(interface, "")
-      args = {"ifname": interface}
-      if mac:
-        args["mac_address"] = mac
-      if addresses:
-        args["addresses"] = address_list
-      self.SendReply(rdf_client.Interface(**args))
+    for res in EnumerateInterfacesFromClient(args):
+      self.SendReply(res)
 
 
 class GetInstallDate(actions.ActionPlugin):
@@ -200,6 +211,41 @@ class UtmpStruct(utils.Struct):
   ]
 
 
+def EnumerateUsersFromClient(args):
+  """Enumerates all the users on this system."""
+
+  del args  # Unused
+
+  users = _ParseWtmp()
+  for user, last_login in iteritems(users):
+
+    # Lose the null termination
+    username = user.split("\x00", 1)[0]
+
+    if username:
+      # Somehow the last login time can be < 0. There is no documentation
+      # what this means so we just set it to 0 (the rdfvalue field is
+      # unsigned so we can't send negative values).
+      if last_login < 0:
+        last_login = 0
+
+      result = rdf_client.User(
+          username=utils.SmartUnicode(username),
+          last_logon=last_login * 1000000)
+
+      try:
+        pwdict = pwd.getpwnam(username)
+        result.homedir = utils.SmartUnicode(pwdict.pw_dir)
+        result.full_name = utils.SmartUnicode(pwdict.pw_gecos)
+        result.uid = pwdict.pw_uid
+        result.gid = pwdict.pw_gid
+        result.shell = utils.SmartUnicode(pwdict.pw_shell)
+      except KeyError:
+        pass
+
+      yield result
+
+
 class EnumerateUsers(actions.ActionPlugin):
   """Enumerates all the users on this system.
 
@@ -212,67 +258,9 @@ class EnumerateUsers(actions.ActionPlugin):
   # KnowledgeBaseUser was renamed to User.
   out_rdfvalues = [rdf_client.User, rdf_client.KnowledgeBaseUser]
 
-  def ParseWtmp(self):
-    """Parse wtmp and utmp and extract the last logon time."""
-    users = {}
-
-    wtmp_struct_size = UtmpStruct.GetSize()
-    filenames = glob.glob("/var/log/wtmp*") + ["/var/run/utmp"]
-
-    for filename in filenames:
-      try:
-        wtmp = open(filename, "rb").read()
-      except IOError:
-        continue
-
-      for offset in range(0, len(wtmp), wtmp_struct_size):
-        try:
-          record = UtmpStruct(wtmp[offset:offset + wtmp_struct_size])
-        except utils.ParsingError:
-          break
-
-        # Users only appear for USER_PROCESS events, others are system.
-        if record.ut_type != 7:
-          continue
-
-        try:
-          if users[record.ut_user] < record.tv_sec:
-            users[record.ut_user] = record.tv_sec
-        except KeyError:
-          users[record.ut_user] = record.tv_sec
-
-    return users
-
-  def Run(self, unused_args):
-    """Enumerates all the users on this system."""
-    users = self.ParseWtmp()
-    for user, last_login in iteritems(users):
-
-      # Lose the null termination
-      username = user.split("\x00", 1)[0]
-
-      if username:
-        # Somehow the last login time can be < 0. There is no documentation
-        # what this means so we just set it to 0 (the rdfvalue field is
-        # unsigned so we can't send negative values).
-        if last_login < 0:
-          last_login = 0
-
-        result = rdf_client.User(
-            username=utils.SmartUnicode(username),
-            last_logon=last_login * 1000000)
-
-        try:
-          pwdict = pwd.getpwnam(username)
-          result.homedir = utils.SmartUnicode(pwdict.pw_dir)
-          result.full_name = utils.SmartUnicode(pwdict.pw_gecos)
-          result.uid = pwdict.pw_uid
-          result.gid = pwdict.pw_gid
-          result.shell = utils.SmartUnicode(pwdict.pw_shell)
-        except KeyError:
-          pass
-
-        self.SendReply(result)
+  def Run(self, args):
+    for res in EnumerateUsersFromClient(args):
+      self.SendReply(res)
 
 
 class EnumerateFilesystems(actions.ActionPlugin):
@@ -285,7 +273,7 @@ class EnumerateFilesystems(actions.ActionPlugin):
       "ext2", "ext3", "ext4", "vfat", "ntfs", "btrfs", "Reiserfs", "XFS", "JFS",
       "squashfs"
   ])
-  out_rdfvalues = [rdf_client.Filesystem]
+  out_rdfvalues = [rdf_client_fs.Filesystem]
 
   def CheckMounts(self, filename):
     """Parses the currently mounted devices."""
@@ -314,7 +302,7 @@ class EnumerateFilesystems(actions.ActionPlugin):
 
     for device, (fs_type, mnt_point) in iteritems(self.devices):
       self.SendReply(
-          rdf_client.Filesystem(
+          rdf_client_fs.Filesystem(
               mount_point=mnt_point, type=fs_type, device=device))
 
 
@@ -403,3 +391,35 @@ class UpdateAgent(standard.ExecuteBinaryCommand):
       # so we just wait. If something goes wrong, the nanny will restart the
       # service after a short while and the client will come back to life.
       time.sleep(1000)
+
+
+def _ParseWtmp():
+  """Parse wtmp and utmp and extract the last logon time."""
+  users = {}
+
+  wtmp_struct_size = UtmpStruct.GetSize()
+  filenames = glob.glob("/var/log/wtmp*") + ["/var/run/utmp"]
+
+  for filename in filenames:
+    try:
+      wtmp = open(filename, "rb").read()
+    except IOError:
+      continue
+
+    for offset in range(0, len(wtmp), wtmp_struct_size):
+      try:
+        record = UtmpStruct(wtmp[offset:offset + wtmp_struct_size])
+      except utils.ParsingError:
+        break
+
+      # Users only appear for USER_PROCESS events, others are system.
+      if record.ut_type != 7:
+        continue
+
+      try:
+        if users[record.ut_user] < record.tv_sec:
+          users[record.ut_user] = record.tv_sec
+      except KeyError:
+        users[record.ut_user] = record.tv_sec
+
+  return users

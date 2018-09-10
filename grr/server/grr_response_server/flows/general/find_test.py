@@ -7,7 +7,7 @@ import re
 from grr_response_client.client_actions import searching
 from grr_response_core.lib import flags
 from grr_response_core.lib import utils
-from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_core.lib.rdfvalues import client_fs as rdf_client_fs
 from grr_response_core.lib.rdfvalues import paths as rdf_paths
 from grr_response_server import flow
 from grr_response_server.flows.general import find
@@ -35,14 +35,14 @@ class TestFindFlow(flow_test_lib.FlowTestsBaseclass):
     """Test that its impossible to produce an invalid findspec."""
     # The regular expression is not valid.
     with self.assertRaises(re.error):
-      rdf_client.FindSpec(path_regex="[")
+      rdf_client_fs.FindSpec(path_regex="[")
 
   def testFindFiles(self):
     """Test that the Find flow works with files."""
     client_mock = action_mocks.ActionMock(searching.Find)
 
     # Prepare a findspec.
-    findspec = rdf_client.FindSpec(
+    findspec = rdf_client_fs.FindSpec(
         path_regex="bash",
         pathspec=rdf_paths.PathSpec(
             path="/", pathtype=rdf_paths.PathSpec.PathType.OS))
@@ -72,7 +72,7 @@ class TestFindFlow(flow_test_lib.FlowTestsBaseclass):
     client_mock = action_mocks.ActionMock(searching.Find)
 
     # Prepare a findspec.
-    findspec = rdf_client.FindSpec(
+    findspec = rdf_client_fs.FindSpec(
         path_glob="bash*",
         pathspec=rdf_paths.PathSpec(
             path="/", pathtype=rdf_paths.PathSpec.PathType.OS))
@@ -103,7 +103,7 @@ class TestFindFlow(flow_test_lib.FlowTestsBaseclass):
     client_mock = action_mocks.ActionMock(searching.Find)
 
     # Prepare a findspec.
-    findspec = rdf_client.FindSpec(
+    findspec = rdf_client_fs.FindSpec(
         path_regex="bin",
         pathspec=rdf_paths.PathSpec(
             path="/", pathtype=rdf_paths.PathSpec.PathType.OS))
@@ -125,39 +125,13 @@ class TestFindFlow(flow_test_lib.FlowTestsBaseclass):
       self.assertTrue("bin" in path)
       self.assertEqual(child.__class__.__name__, "StatEntry")
 
-  def testFindWithMaxFiles(self):
-    """Test that the Find flow works when specifying proto directly."""
-
-    client_mock = action_mocks.ActionMock(searching.Find)
-
-    # Prepare a findspec.
-    findspec = rdf_client.FindSpec(
-        path_regex=".*",
-        pathspec=rdf_paths.PathSpec(
-            path="/", pathtype=rdf_paths.PathSpec.PathType.OS))
-
-    session_id = flow_test_lib.TestFlowHelper(
-        find.FindFiles.__name__,
-        client_mock,
-        client_id=self.client_id,
-        token=self.token,
-        findspec=findspec,
-        iteration_count=3,
-        max_results=7)
-
-    # Check the output file is created
-    collection = flow.GRRFlow.ResultCollectionForFID(session_id)
-
-    # Make sure we got the right number of results.
-    self.assertEqual(len(collection), 7)
-
   def testCollectionOverwriting(self):
     """Test we overwrite the collection every time the flow is executed."""
 
     client_mock = action_mocks.ActionMock(searching.Find)
 
     # Prepare a findspec.
-    findspec = rdf_client.FindSpec()
+    findspec = rdf_client_fs.FindSpec()
     findspec.path_regex = "bin"
     findspec.pathspec.path = "/"
     findspec.pathspec.pathtype = rdf_paths.PathSpec.PathType.OS
@@ -181,8 +155,7 @@ class TestFindFlow(flow_test_lib.FlowTestsBaseclass):
         client_mock,
         client_id=self.client_id,
         token=self.token,
-        findspec=findspec,
-        max_results=1)
+        findspec=findspec)
 
     # Check the results collection.
     fd = flow.GRRFlow.ResultCollectionForFID(session_id)

@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 """rdf value representation for artifact collector parameters."""
 
+from __future__ import unicode_literals
+
 import json
 
 
@@ -371,20 +373,17 @@ class ArtifactDescriptor(rdf_structs.RDFProtoStruct):
   ]
 
 
-class ExtendedSource(rdf_structs.RDFProtoStruct):
+class ExpandedSource(rdf_structs.RDFProtoStruct):
   """An RDFValue representing a source and everything it depends on."""
-  protobuf = artifact_pb2.ExtendedSource
-  rdf_deps = [
-      ArtifactSource,
-      rdfvalue.ByteSize,
-  ]
+  protobuf = artifact_pb2.ExpandedSource
+  rdf_deps = [ArtifactSource, rdfvalue.ByteSize, "ExpandedSource"]
 
 
-class ExtendedArtifact(rdf_structs.RDFProtoStruct):
+class ExpandedArtifact(rdf_structs.RDFProtoStruct):
   """An RDFValue representing an artifact with its extended sources."""
-  protobuf = artifact_pb2.ExtendedArtifact
+  protobuf = artifact_pb2.ExpandedArtifact
   rdf_deps = [
-      ExtendedSource,
+      ExpandedSource,
       ArtifactName,
   ]
 
@@ -393,7 +392,7 @@ class ClientArtifactCollectorArgs(rdf_structs.RDFProtoStruct):
   """An RDFValue representation of an artifact bundle."""
   protobuf = artifact_pb2.ClientArtifactCollectorArgs
   rdf_deps = [
-      ExtendedArtifact,
+      ExpandedArtifact,
       rdf_client.KnowledgeBase,
       rdfvalue.ByteSize,
   ]
@@ -422,4 +421,7 @@ class CollectedArtifact(rdf_structs.RDFProtoStruct):
 class ClientArtifactCollectorResult(rdf_structs.RDFProtoStruct):
   """An RDFValue representation of the result of the collection results."""
   protobuf = artifact_pb2.ClientArtifactCollectorResult
-  rdf_deps = [CollectedArtifact]
+  rdf_deps = [
+      CollectedArtifact,
+      rdf_client.KnowledgeBase,
+  ]

@@ -15,6 +15,7 @@ from grr_response_client.client_actions import tempfiles
 from grr_response_core import config
 from grr_response_core.lib import flags
 from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_core.lib.rdfvalues import client_fs as rdf_client_fs
 from grr_response_core.lib.rdfvalues import crypto as rdf_crypto
 from grr_response_core.lib.rdfvalues import paths as rdf_paths
 from grr_response_core.lib.rdfvalues import rekall_types as rdf_rekall_types
@@ -42,18 +43,18 @@ class DummyDiskVolumeInfo(flow.GRRFlow):
 
   def Start(self):
     if "/opt" in self.args.path_list[0]:
-      mnt = rdf_client.UnixVolume(mount_point="/opt")
+      mnt = rdf_client_fs.UnixVolume(mount_point="/opt")
       self.SendReply(
-          rdf_client.Volume(
+          rdf_client_fs.Volume(
               unixvolume=mnt,
               bytes_per_sector=4096,
               sectors_per_allocation_unit=1,
               actual_available_allocation_units=10,
               total_allocation_units=100))
     else:
-      mnt = rdf_client.UnixVolume(mount_point="/var")
+      mnt = rdf_client_fs.UnixVolume(mount_point="/var")
       self.SendReply(
-          rdf_client.Volume(
+          rdf_client_fs.Volume(
               unixvolume=mnt,
               bytes_per_sector=1,
               sectors_per_allocation_unit=1,
@@ -97,8 +98,7 @@ class MemoryCollectorClientMock(action_mocks.MemoryClientMock):
             json_messages="""
         [["file",{"path": "%s", "pathtype": "TMPFILE"}]]
         """ % self.memory_file,
-            plugin="aff4acquire"),
-        rdf_client.Iterator(state="FINISHED")
+            plugin="aff4acquire")
     ]
 
 
@@ -134,14 +134,14 @@ class TestMemoryCollector(MemoryTest):
 
   def testMemoryCollectorIsDisabledByDefault(self):
     with self.assertRaisesRegexp(RuntimeError, "Rekall flows are disabled"):
-      flow.StartFlow(
+      flow.StartAFF4Flow(
           client_id=self.client_id,
           flow_name=memory.MemoryCollector.__name__,
           token=self.token)
 
   def RunWithDownload(self):
     with test_lib.ConfigOverrider({"Rekall.enabled": True}):
-      self.flow_urn = flow.StartFlow(
+      self.flow_urn = flow.StartAFF4Flow(
           client_id=self.client_id,
           flow_name=memory.MemoryCollector.__name__,
           token=self.token)
@@ -176,7 +176,7 @@ class TestMemoryCollector(MemoryTest):
       def CheckFreeGRRTempSpace(self, _):
         """Mock out the driver loading code to pass the memory image."""
         path = tempfiles.GetDefaultGRRTempDirectory()
-        reply = rdf_client.DiskUsage(
+        reply = rdf_client_fs.DiskUsage(
             path=path,
             total=10 * 1024 * 1024 * 1024,
             used=5 * 1024 * 1024 * 1024,
@@ -237,7 +237,7 @@ class ListVADBinariesActionMock(action_mocks.MemoryClientMock):
         json_data.append(new_entry)
       response.json_messages = json.dumps(json_data)
 
-    return [response, rdf_client.Iterator(state="FINISHED")]
+    return [response]
 
 
 class ListVADBinariesTest(MemoryTest):
@@ -274,7 +274,7 @@ class ListVADBinariesTest(MemoryTest):
 
   def testListVADBinariesIsDisabledByDefault(self):
     with self.assertRaisesRegexp(RuntimeError, "Rekall flows are disabled"):
-      flow.StartFlow(
+      flow.StartAFF4Flow(
           client_id=self.client_id,
           flow_name=memory.ListVADBinaries.__name__,
           token=self.token)
@@ -417,7 +417,7 @@ class TestAnalyzeClientMemory(rekall_test_lib.RekallTestBase):
 
   def testAnalyzeClientMemoryIsDisabledByDefault(self):
     with self.assertRaisesRegexp(RuntimeError, "Rekall flows are disabled"):
-      flow.StartFlow(
+      flow.StartAFF4Flow(
           client_id=self.client_id,
           flow_name=memory.AnalyzeClientMemory.__name__,
           token=self.token)
@@ -461,7 +461,7 @@ class TestAnalyzeClientMemory(rekall_test_lib.RekallTestBase):
             plugin="procdump", args=dict(pids=[2860]))
     ]
 
-    with test_lib.Instrument(transfer.MultiGetFile,
+    with test_lib.Instrument(transfer.MultiGetFileMixin,
                              "StoreStat") as storestat_instrument:
       self.LaunchRekallPlugin(request)
       # Expect one file to be downloaded.

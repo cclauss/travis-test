@@ -1,12 +1,14 @@
 #!/usr/bin/env python
 """Unit test for the linux sysctl parser."""
 
+from __future__ import unicode_literals
+
 import io
 
 
 from grr_response_core.lib import flags
 from grr_response_core.lib.parsers import linux_sysctl_parser
-from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_core.lib.rdfvalues import client_fs as rdf_client_fs
 from grr_response_core.lib.rdfvalues import paths as rdf_paths
 from grr_response_core.lib.rdfvalues import protodict as rdf_protodict
 from grr.test_lib import test_lib
@@ -20,9 +22,9 @@ class ProcSysParserTest(test_lib.GRRBaseTest):
     files = []
     for path in paths:
       p = rdf_paths.PathSpec(path=path)
-      stats.append(rdf_client.StatEntry(pathspec=p))
+      stats.append(rdf_client_fs.StatEntry(pathspec=p))
     for val in data:
-      files.append(io.BytesIO(val))
+      files.append(io.StringIO(val))
     return stats, files
 
   def testParseSysctl(self):

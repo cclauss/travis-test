@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 """Utils common to macOS and Linux."""
+from __future__ import unicode_literals
 
 import logging
 import os
@@ -15,7 +16,7 @@ from google.protobuf import message
 from grr_response_core import config
 from grr_response_core.lib import rdfvalue
 from grr_response_core.lib import utils
-from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_core.lib.rdfvalues import client_fs as rdf_client_fs
 from grr_response_core.lib.rdfvalues import flows as rdf_flows
 
 
@@ -76,7 +77,7 @@ def GetExtAttrs(filepath):
       logging.error(msg, attr_name, path, error)
       continue
 
-    yield rdf_client.ExtAttr(name=attr_name, value=attr_value)
+    yield rdf_client_fs.ExtAttr(name=attr_name, value=attr_value)
 
 
 class NannyThread(threading.Thread):

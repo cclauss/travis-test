@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 """API config options."""
 
+from __future__ import unicode_literals
+
 from grr_response_core.lib import config_lib
 from grr_response_core.lib import rdfvalue
 
@@ -13,7 +15,7 @@ config_lib.DEFINE_semantic_value(
     rdfvalue.Duration,
     "API.FlowDuplicateInterval",
     default="1200s",
-    description="Amount of time "
+    help="Amount of time "
     "that needs to pass before the throttler will allow "
     "an identical flow to run on the same client. Set "
     "to 0s to disable checking.")

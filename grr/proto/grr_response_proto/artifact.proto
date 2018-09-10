@@ -145,7 +145,7 @@ message ArtifactDescriptor {
 }
 
 message ClientArtifactCollectorArgs {
-  repeated ExtendedArtifact artifacts = 1
+  repeated ExpandedArtifact artifacts = 1
       [(sem_type) = { description: "A list of artifacts." }];
   optional KnowledgeBase knowledge_base = 2 [(sem_type) = {
     description: "The knowledge base containing information about the client."
@@ -184,16 +184,26 @@ message ClientArtifactCollectorArgs {
   ];
 }
 
-message ExtendedArtifact {
+message ExpandedArtifact {
   required string name = 1 [(sem_type) = {
     description: "The name of the artifact.",
     type: "ArtifactName",
   }];
-  repeated ExtendedSource sources = 2
+  repeated ExpandedSource sources = 2
       [(sem_type) = { description: "The sources and what they depend on." }];
+  repeated string provides = 3 [(sem_type) = {
+    description: "A list of knowledgebase values this artifact provides.",
+  }];
+  optional bool requested_by_user = 4 [
+    (sem_type) = {
+      description: "Whether the artifact is requested by the user or scheduled"
+                   " for collection as a KnowledgeBase dependency."
+    },
+    default = true
+  ];
 }
 
-message ExtendedSource {
+message ExpandedSource {
   required ArtifactSource base_source = 1
       [(sem_type) = { description: "The base source." }];
   optional PathSpec.PathType path_type = 6
@@ -207,11 +217,17 @@ message ExtendedSource {
     description: "File Finder Action Option: The maximum number of "
                  "results to get."
   }];
+  repeated ExpandedSource artifact_sources = 9 [(sem_type) = {
+    description: "Extended sources for ArtifactFiles collection."
+  }];
 }
 
 message ClientArtifactCollectorResult {
   repeated CollectedArtifact collected_artifacts = 1 [(sem_type) = {
     description: "The results of the single collected artifacts."
+  }];
+  optional KnowledgeBase knowledge_base = 2 [(sem_type) = {
+    description: "The knowledge base containing information about the client."
   }];
 }
 

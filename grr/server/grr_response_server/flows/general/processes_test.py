@@ -5,6 +5,7 @@ import os
 
 from grr_response_core.lib import flags
 from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_core.lib.rdfvalues import client_network as rdf_client_network
 from grr_response_server import flow
 from grr_response_server.flows.general import processes as flow_processes
 from grr.test_lib import action_mocks
@@ -28,7 +29,7 @@ class ListProcessesTest(flow_test_lib.FlowTestsBaseclass):
             ctime=1333718907167083)
     ])
 
-    flow_urn = flow.StartFlow(
+    flow_urn = flow.StartAFF4Flow(
         client_id=client_id,
         flow_name=flow_processes.ListProcesses.__name__,
         token=self.token)
@@ -65,7 +66,7 @@ class ListProcessesTest(flow_test_lib.FlowTestsBaseclass):
             pid=5, ppid=1, cmdline=["missing2_exe.exe"], ctime=1333718907167083)
     ])
 
-    flow_urn = flow.StartFlow(
+    flow_urn = flow.StartAFF4Flow(
         client_id=client_id,
         flow_name=flow_processes.ListProcesses.__name__,
         filename_regex=r".*cmd2.exe",
@@ -95,24 +96,30 @@ class ListProcessesTest(flow_test_lib.FlowTestsBaseclass):
         cmdline=["cmd.exe"],
         exe="c:\\windows\\cmd.exe",
         ctime=1333718907167083,
-        connections=rdf_client.NetworkConnection(family="INET", state="CLOSED"))
+        connections=[
+            rdf_client_network.NetworkConnection(family="INET", state="CLOSED")
+        ])
     p2 = rdf_client.Process(
         pid=3,
         ppid=1,
         cmdline=["cmd2.exe"],
         exe="c:\\windows\\cmd2.exe",
         ctime=1333718907167083,
-        connections=rdf_client.NetworkConnection(family="INET", state="LISTEN"))
+        connections=[
+            rdf_client_network.NetworkConnection(family="INET", state="LISTEN")
+        ])
     p3 = rdf_client.Process(
         pid=4,
         ppid=1,
         cmdline=["missing_exe.exe"],
         ctime=1333718907167083,
-        connections=rdf_client.NetworkConnection(
-            family="INET", state="ESTABLISHED"))
+        connections=[
+            rdf_client_network.NetworkConnection(
+                family="INET", state="ESTABLISHED")
+        ])
     client_mock = action_mocks.ListProcessesMock([p1, p2, p3])
 
-    flow_urn = flow.StartFlow(
+    flow_urn = flow.StartAFF4Flow(
         client_id=client_id,
         flow_name=flow_processes.ListProcesses.__name__,
         connection_states=["ESTABLISHED", "LISTEN"],
@@ -138,8 +145,10 @@ class ListProcessesTest(flow_test_lib.FlowTestsBaseclass):
         cmdline=["cmd.exe"],
         exe="c:\\windows\\cmd.exe",
         ctime=1333718907167083,
-        connections=rdf_client.NetworkConnection(
-            family="INET", state="ESTABLISHED"))
+        connections=[
+            rdf_client_network.NetworkConnection(
+                family="INET", state="ESTABLISHED")
+        ])
 
     client_mock = action_mocks.ListProcessesMock([p1, p2])
 

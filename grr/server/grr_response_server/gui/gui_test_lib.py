@@ -22,7 +22,8 @@ from selenium.webdriver.support import select
 from grr_response_core.lib import flags
 from grr_response_core.lib import rdfvalue
 from grr_response_core.lib import utils
-from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_core.lib.rdfvalues import client_fs as rdf_client_fs
+from grr_response_core.lib.rdfvalues import client_network as rdf_client_network
 
 from grr_response_core.lib.rdfvalues import crypto as rdf_crypto
 from grr_response_core.lib.rdfvalues import flows as rdf_flows
@@ -211,6 +212,8 @@ class GRRSeleniumTest(test_lib.GRRBaseTest, acl_test_lib.AclTestMixin):
     # pylint: disable=unreachable
     os.environ.pop("http_proxy", None)
     options = webdriver.ChromeOptions()
+    options.add_argument("--disable-notifications")
+
     if flags.FLAGS.use_headless_chrome:
       options.add_argument("--headless")
       options.add_argument("--window-size=1400,1080")
@@ -809,7 +812,7 @@ class FlowWithOneStatEntryResult(flow.GRRFlow):
 
   def Start(self):
     self.SendReply(
-        rdf_client.StatEntry(
+        rdf_client_fs.StatEntry(
             pathspec=rdf_paths.PathSpec(
                 path="/some/unique/path",
                 pathtype=rdf_paths.PathSpec.PathType.OS)))
@@ -819,7 +822,7 @@ class FlowWithOneNetworkConnectionResult(flow.GRRFlow):
   """Test flow that calls SendReply once with a NetworkConnection value."""
 
   def Start(self):
-    self.SendReply(rdf_client.NetworkConnection(pid=42))
+    self.SendReply(rdf_client_network.NetworkConnection(pid=42))
 
 
 class FlowWithOneHashEntryResult(flow.GRRFlow):

@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 """Client actions related to searching files and directories."""
+from __future__ import unicode_literals
 
 import functools
 import logging
@@ -9,13 +10,15 @@ from grr_response_client import actions
 from grr_response_client import vfs
 from grr_response_core.lib import utils
 from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_core.lib.rdfvalues import client_action as rdf_client_action
+from grr_response_core.lib.rdfvalues import client_fs as rdf_client_fs
 from grr_response_core.lib.rdfvalues import flows as rdf_flows
 
 
 class Find(actions.IteratedAction):
   """Recurses through a directory returning files which match conditions."""
-  in_rdfvalue = rdf_client.FindSpec
-  out_rdfvalues = [rdf_client.FindSpec]
+  in_rdfvalue = rdf_client_fs.FindSpec
+  out_rdfvalues = [rdf_client_fs.FindSpec]
 
   # The filesystem we are limiting ourselves to, if cross_devs is false.
   filesystem_id = None
@@ -185,7 +188,7 @@ class Find(actions.IteratedAction):
 
       # Ignore this file if any of the checks fail.
       if not any((check(f) for check in filters)):
-        self.SendReply(rdf_client.FindSpec(hit=f))
+        self.SendReply(rdf_client_fs.FindSpec(hit=f))
 
       # We only check a limited number of files in each iteration. This might
       # result in returning an empty response - but the iterator is not yet
@@ -195,12 +198,12 @@ class Find(actions.IteratedAction):
         return
 
     # End this iterator
-    request.iterator.state = rdf_client.Iterator.State.FINISHED
+    request.iterator.state = rdf_client_action.Iterator.State.FINISHED
 
 
 class Grep(actions.ActionPlugin):
   """Search a file for a pattern."""
-  in_rdfvalue = rdf_client.GrepSpec
+  in_rdfvalue = rdf_client_fs.GrepSpec
   out_rdfvalues = [rdf_client.BufferReference]
 
   def FindRegex(self, regex, data):
@@ -301,7 +304,7 @@ class Grep(actions.ActionPlugin):
     preamble_size = 0
     postscript_size = 0
     hits = 0
-    data = ""
+    data = b""
     while fd.Tell() < args.start_offset + args.length:
 
       # Base size to read is at most the buffer size.
@@ -344,12 +347,13 @@ class Grep(actions.ActionPlugin):
                 length=len(out_data),
                 pathspec=fd.pathspec))
 
-        if args.mode == rdf_client.GrepSpec.Mode.FIRST_HIT:
+        if args.mode == rdf_client_fs.GrepSpec.Mode.FIRST_HIT:
           return
 
         if hits >= self.HIT_LIMIT:
-          msg = utils.Xor("This Grep has reached the maximum number of hits"
-                          " (%d)." % self.HIT_LIMIT, self.xor_out_key)
+          msg = utils.Xor(
+              b"This Grep has reached the maximum number of hits"
+              b" (%d)." % self.HIT_LIMIT, self.xor_out_key)
           self.SendReply(
               rdf_client.BufferReference(offset=0, data=msg, length=len(msg)))
           return

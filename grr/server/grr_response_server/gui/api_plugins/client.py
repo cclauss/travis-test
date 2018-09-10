@@ -16,12 +16,15 @@ from fleetspeak.src.server.proto.fleetspeak_server import admin_pb2
 from grr_response_core.lib import rdfvalue
 from grr_response_core.lib import utils
 from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_core.lib.rdfvalues import client_fs as rdf_client_fs
+from grr_response_core.lib.rdfvalues import client_network as rdf_client_network
 from grr_response_core.lib.rdfvalues import cloud as rdf_cloud
 from grr_response_core.lib.rdfvalues import events as rdf_events
 from grr_response_core.lib.rdfvalues import flows as rdf_flows
 from grr_response_core.lib.rdfvalues import structs as rdf_structs
 from grr_response_proto.api import client_pb2
 from grr_response_server import aff4
+from grr_response_server import aff4_flows
 from grr_response_server import client_index
 from grr_response_server import data_store
 from grr_response_server import db
@@ -36,7 +39,6 @@ from grr_response_server.aff4_objects import aff4_grr
 from grr_response_server.aff4_objects import standard
 from grr_response_server.aff4_objects import stats as aff4_stats
 from grr_response_server.flows.general import audit
-from grr_response_server.flows.general import discovery
 from grr_response_server.gui import api_call_handler_base
 from grr_response_server.gui import api_call_handler_utils
 from grr_response_server.gui.api_plugins import stats as api_stats
@@ -103,12 +105,12 @@ class ApiClient(rdf_structs.RDFProtoStruct):
       rdf_client.ClientURN,
       rdf_cloud.CloudInstance,
       rdf_client.HardwareInfo,
-      rdf_client.Interface,
+      rdf_client_network.Interface,
       rdf_client.KnowledgeBase,
       rdfvalue.RDFDatetime,
       rdf_client.Uname,
       rdf_client.User,
-      rdf_client.Volume,
+      rdf_client_fs.Volume,
   ]
 
   def InitFromAff4Object(self, client_obj, include_metadata=True):
@@ -574,9 +576,9 @@ class ApiInterrogateClientHandler(api_call_handler_base.ApiCallHandler):
   result_type = ApiInterrogateClientResult
 
   def Handle(self, args, token=None):
-    flow_urn = flow.StartFlow(
+    flow_urn = flow.StartAFF4Flow(
         client_id=args.client_id.ToClientURN(),
-        flow_name=discovery.Interrogate.__name__,
+        flow_name=aff4_flows.Interrogate.__name__,
         token=token)
 
     return ApiInterrogateClientResult(operation_id=str(flow_urn))
@@ -600,7 +602,7 @@ class ApiGetInterrogateOperationStateHandler(
   def Handle(self, args, token=None):
     try:
       flow_obj = aff4.FACTORY.Open(
-          args.operation_id, aff4_type=discovery.Interrogate, token=token)
+          args.operation_id, aff4_type=aff4_flows.Interrogate, token=token)
 
       complete = not flow_obj.GetRunner().IsRunning()
     except aff4.InstantiationError:

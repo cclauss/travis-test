@@ -15,7 +15,7 @@ from grr_response_core.lib import flags
 
 from grr_response_core.lib import rdfvalue
 from grr_response_core.lib import utils
-from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_core.lib.rdfvalues import client_fs as rdf_client_fs
 from grr_response_core.lib.rdfvalues import crypto as rdf_crypto
 from grr_response_core.lib.rdfvalues import paths as rdf_paths
 from grr_response_server import aff4
@@ -70,7 +70,7 @@ class CollectionArchiveGeneratorTest(test_lib.GRRBaseTest):
     self.archive_paths = [archive_path1, archive_path2]
     for path in self.paths:
       self.stat_entries.append(
-          rdf_client.StatEntry(
+          rdf_client_fs.StatEntry(
               pathspec=rdf_paths.PathSpec(
                   path="foo/bar/" + str(path).split("/")[-1],
                   pathtype=rdf_paths.PathSpec.PathType.OS)))
@@ -198,8 +198,8 @@ class CollectionArchiveGeneratorTest(test_lib.GRRBaseTest):
 
     # Delete a single chunk
     aff4.FACTORY.Delete(
-        utils.SmartStr("aff4:/%s/fs/os/foo/bar/中国新闻网新闻中.txt/0000000000") %
-        utils.SmartStr(self.client_id.Basename()),
+        (u"aff4:/%s/fs/os/foo/bar/中国新闻网新闻中.txt/0000000000" %
+         self.client_id.Basename()),
         token=self.token)
 
     fd_path = self._GenerateArchive(

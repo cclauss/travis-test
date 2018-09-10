@@ -16,6 +16,8 @@ from grr_response_core.lib import rdfvalue
 from grr_response_core.lib import registry
 from grr_response_core.lib import utils
 from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_core.lib.rdfvalues import client_fs as rdf_client_fs
+from grr_response_core.lib.rdfvalues import client_network as rdf_client_network
 from grr_response_core.lib.rdfvalues import cloud as rdf_cloud
 from grr_response_core.lib.rdfvalues import crypto as rdf_crypto
 from grr_response_core.lib.rdfvalues import flows as rdf_flows
@@ -57,7 +59,7 @@ class VFSGRRClient(standard.VFSDirectory):
     CERT = aff4.Attribute("metadata:cert", rdf_crypto.RDFX509Cert,
                           "The PEM encoded cert of the client.")
 
-    FILESYSTEM = aff4.Attribute("aff4:filesystem", rdf_client.Filesystems,
+    FILESYSTEM = aff4.Attribute("aff4:filesystem", rdf_client_fs.Filesystems,
                                 "Filesystems on the client.")
 
     CLIENT_INFO = aff4.Attribute(
@@ -184,10 +186,11 @@ class VFSGRRClient(standard.VFSDirectory):
         creates_new_object_version=False,
         versioned=False)
 
-    VOLUMES = aff4.Attribute("aff4:volumes", rdf_client.Volumes,
+    VOLUMES = aff4.Attribute("aff4:volumes", rdf_client_fs.Volumes,
                              "Client disk volumes.")
 
-    INTERFACES = aff4.Attribute("aff4:interfaces", rdf_client.Interfaces,
+    INTERFACES = aff4.Attribute("aff4:interfaces",
+                                rdf_client_network.Interfaces,
                                 "Network interfaces.", "Interfaces")
 
     HARDWARE_INFO = aff4.Attribute(
@@ -247,7 +250,7 @@ class VFSGRRClient(standard.VFSDirectory):
 
   def Update(self, attribute=None):
     if attribute == "CONTAINS":
-      flow_id = flow.StartFlow(
+      flow_id = flow.StartAFF4Flow(
           client_id=self.client_id,
           # TODO(user): dependency loop with flows/general/discover.py
           # flow_name=discovery.Interrogate.__name__,
@@ -370,7 +373,7 @@ class VFSFile(aff4.AFF4Image):
 
     # Get the pathspec for this object
     pathspec = self.Get(self.Schema.STAT).pathspec
-    flow_urn = flow.StartFlow(
+    flow_urn = flow.StartAFF4Flow(
         client_id=client_id,
         # TODO(user): dependency loop between aff4_grr.py and transfer.py
         # flow_name=transfer.MultiGetFile.__name__,
@@ -484,7 +487,7 @@ class GRRForeman(aff4.AFF4Object):
             flow_cls.StartClients(action.hunt_id, [client_id])
             actions_count += 1
         else:
-          flow.StartFlow(
+          flow.StartAFF4Flow(
               client_id=client_id,
               flow_name=action.flow_name,
               token=token,

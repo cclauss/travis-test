@@ -1,11 +1,13 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """Tests for checks_test_lib."""
+from __future__ import unicode_literals
+
 
 from grr_response_core.lib import flags
 from grr_response_core.lib import parser
 from grr_response_core.lib.rdfvalues import anomaly as rdf_anomaly
-from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_core.lib.rdfvalues import client_fs as rdf_client_fs
 from grr_response_server.check_lib import checks
 from grr_response_server.check_lib import checks_test_lib
 from grr.test_lib import test_lib
@@ -33,7 +35,7 @@ class CheckHelperTests(checks_test_lib.HostCheckTest):
             checks.CheckResult(check_id="SW-CHECK"),
         "OTHER":
             checks.CheckResult(
-                check_id="OTHER", anomaly=rdf_anomaly.Anomaly(**anomaly))
+                check_id="OTHER", anomaly=[rdf_anomaly.Anomaly(**anomaly)])
     }
     self.assertCheckUndetected("SW-CHECK", other_anomaly)
 
@@ -41,7 +43,7 @@ class CheckHelperTests(checks_test_lib.HostCheckTest):
     has_anomaly = {
         "SW-CHECK":
             checks.CheckResult(
-                check_id="SW-CHECK", anomaly=rdf_anomaly.Anomaly(**anomaly))
+                check_id="SW-CHECK", anomaly=[rdf_anomaly.Anomaly(**anomaly)])
     }
     self.assertRaises(AssertionError, self.assertCheckUndetected, "SW-CHECK",
                       has_anomaly)
@@ -105,7 +107,7 @@ class CheckHelperTests(checks_test_lib.HostCheckTest):
     failing_checks = {
         "EXISTS":
             checks.CheckResult(
-                check_id="EXISTS", anomaly=rdf_anomaly.Anomaly(**anomaly))
+                check_id="EXISTS", anomaly=[rdf_anomaly.Anomaly(**anomaly)])
     }
 
     # Check we pass when our check produces an anomaly and we don't care
@@ -192,7 +194,7 @@ class CheckHelperTests(checks_test_lib.HostCheckTest):
     for r in result["FILES"]["RAW"]:
       if r.pathspec.path == "/tmp/bar":
         statentry = r
-    self.assertIsInstance(statentry, rdf_client.StatEntry)
+    self.assertIsInstance(statentry, rdf_client_fs.StatEntry)
     self.assertEquals(33188, statentry.st_mode)
 
   def testGenSysVInitData(self):

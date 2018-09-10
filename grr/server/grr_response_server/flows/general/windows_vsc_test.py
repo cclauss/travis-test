@@ -5,16 +5,17 @@ import stat
 from builtins import range  # pylint: disable=redefined-builtin
 
 from grr_response_core.lib import flags
-from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_core.lib.rdfvalues import client_fs as rdf_client_fs
 from grr_response_core.lib.rdfvalues import paths as rdf_paths
 from grr_response_core.lib.rdfvalues import protodict as rdf_protodict
 from grr_response_server import aff4
 from grr_response_server.flows.general import windows_vsc
+from grr.test_lib import action_mocks
 from grr.test_lib import flow_test_lib
 from grr.test_lib import test_lib
 
 
-class TestClient(object):
+class TestClient(action_mocks.ActionMock):
   """A test client mock."""
 
   _RESPONSES = {
@@ -77,7 +78,7 @@ class TestClient(object):
       mock_pathspec = pathspec.Copy()
       mock_pathspec.last.path = "/file %s" % i
       result.append(
-          rdf_client.StatEntry(pathspec=mock_pathspec, st_mode=stat.S_IFDIR))
+          rdf_client_fs.StatEntry(pathspec=mock_pathspec, st_mode=stat.S_IFDIR))
 
     return result
 

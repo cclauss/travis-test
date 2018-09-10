@@ -3,6 +3,7 @@
 
 from grr_response_core.lib import rdfvalue
 from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_core.lib.rdfvalues import client_stats as rdf_client_stats
 from grr_response_core.lib.rdfvalues import flows as rdf_flows
 from grr_response_core.lib.rdfvalues import protodict as rdf_protodict
 from grr_response_core.lib.rdfvalues import structs as rdf_structs
@@ -40,17 +41,29 @@ class FlowRunnerArgs(rdf_structs.RDFProtoStruct):
 
 
 class OutputPluginState(rdf_structs.RDFProtoStruct):
+  """The output plugin state."""
   protobuf = output_plugin_pb2.OutputPluginState
   rdf_deps = [
       rdf_protodict.AttributedDict,
       "OutputPluginDescriptor",  # TODO(user): dependency loop.
   ]
 
+  def GetPlugin(self):
+    return self.plugin_descriptor.GetPluginForState(self.plugin_state)
+
+  def Log(self, msg):
+    # Cannot append to lists in AttributedDicts.
+    self.plugin_state["logs"] += [msg]
+
+  def Error(self, msg):
+    # Cannot append to lists in AttributedDicts.
+    self.plugin_state["errors"] += [msg]
+
 
 class FlowContext(rdf_structs.RDFProtoStruct):
   protobuf = flows_pb2.FlowContext
   rdf_deps = [
-      rdf_client.ClientResources,
+      rdf_client_stats.ClientResources,
       OutputPluginState,
       rdfvalue.RDFDatetime,
       rdfvalue.SessionID,
