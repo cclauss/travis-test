@@ -36,6 +36,7 @@ class RegistryConfigParser(config_lib.GRRConfigParser):
     self.filename = url.path.replace("/", "\\")
     self.hive = url.netloc
     self.path = self.filename.lstrip("\\")
+    self._type_infos = None
 
     try:
       # Don't use _winreg.KEY_WOW64_64KEY since it breaks on Windows 2000
@@ -46,6 +47,10 @@ class RegistryConfigParser(config_lib.GRRConfigParser):
       logging.debug("Unable to open config registry key: %s", e)
       return
 
+  def SetTypeConversionInfo(self, type_infos):
+    """See base class for description."""
+    self._type_infos = type_infos
+
   def RawData(self):
     """Yields the valus in each section."""
     result = config_lib.OrderedYamlDict()
@@ -55,8 +60,16 @@ class RegistryConfigParser(config_lib.GRRConfigParser):
       try:
         name, value, value_type = _winreg.EnumValue(self.root_key, i)
         # Only support strings here.
-        if value_type == _winreg.REG_SZ:
-          result[name] = utils.SmartStr(value)
+        if value_type != _winreg.REG_SZ:
+          continue
+
+        value = utils.SmartStr(value)
+        if self._type_infos:
+          descriptor = self._type_infos.get(name)
+          logging.debug("Descriptor for %s is %s.", name, descriptor.__class__)
+          result[name] = descriptor.FromString(name) if descriptor else value
+        else:
+          result[name] = value
       except (exceptions.WindowsError, TypeError):
         break
 

@@ -320,6 +320,12 @@ class GRRConfigParser(with_metaclass(registry.MetaclassRegistry, object)):
   # Set to True by the parsers if the file exists.
   parsed = None
 
+  def SetTypeConversionInfo(self, type_infos):
+    """Sets type info for config options, for use in converting raw values.
+
+    This is overridden by concrete classes that store values as strings.
+    """
+
   def RawData(self):
     """Convert the file to a more suitable data structure.
 
@@ -1192,6 +1198,7 @@ class GrrConfigManager(object):
 
       parser_cls = self.GetParserFromFilename(filename)
       parser = parser_cls(filename=filename)
+      parser.SetTypeConversionInfo(self.type_infos)
       logging.debug("Loading configuration from %s", filename)
       self.secondary_config_parsers.append(parser)
     elif parser is None:
