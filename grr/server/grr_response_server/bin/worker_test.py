@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 """Tests for the worker."""
+from __future__ import unicode_literals
 
 import threading
 import time
@@ -159,8 +160,8 @@ class WorkerStuckableTestFlow(flow.GRRFlow):
 
     Args:
       last_heartbeat: If True, the flow won't heartbeat anymore. Consequently,
-                      the test won't be supposed to call LetFlowHeartBeat and
-                      WaitForFlowHeartBeat methods.
+        the test won't be supposed to call LetFlowHeartBeat and
+        WaitForFlowHeartBeat methods.
 
     Raises:
       RuntimeError: if heartbeat is not enabled. Heartbeat can be enabled via

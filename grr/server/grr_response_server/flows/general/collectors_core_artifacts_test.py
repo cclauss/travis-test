@@ -4,14 +4,15 @@
 These tests ensure some key artifacts are working, particularly those used for
 windows interrogate, which is the most complex platform for interrogate.
 """
+from __future__ import unicode_literals
 
 import os
 
 
 from grr_response_client.client_actions import standard
 from grr_response_core import config
-from grr_response_core.lib import artifact_utils
 from grr_response_core.lib import flags
+from grr_response_core.lib.rdfvalues import artifacts as rdf_artifacts
 from grr_response_core.lib.rdfvalues import client as rdf_client
 from grr_response_core.lib.rdfvalues import client_fs as rdf_client_fs
 from grr_response_core.lib.rdfvalues import paths as rdf_paths
@@ -130,8 +131,8 @@ class TestArtifactCollectorsRealArtifacts(flow_test_lib.FlowTestsBaseclass):
         artifact_list=["WMIComputerSystemProduct"],
         token=self.token,
         client_id=client_id,
-        dependencies=artifact_utils.ArtifactCollectorFlowArgs.Dependency.
-        IGNORE_DEPS)
+        dependencies=(
+            rdf_artifacts.ArtifactCollectorFlowArgs.Dependency.IGNORE_DEPS))
 
     results = flow.GRRFlow.ResultCollectionForFID(session_id)
     self.assertEqual(len(results), 1)
@@ -156,7 +157,7 @@ class TestArtifactCollectorsRealArtifacts(flow_test_lib.FlowTestsBaseclass):
         token=self.token,
         client_id=client_id,
         dependencies=(
-            artifact_utils.ArtifactCollectorFlowArgs.Dependency.IGNORE_DEPS))
+            rdf_artifacts.ArtifactCollectorFlowArgs.Dependency.IGNORE_DEPS))
 
     results = flow.GRRFlow.ResultCollectionForFID(session_id)
     self.assertEqual(len(results), 2)
@@ -189,7 +190,7 @@ class TestArtifactCollectorsRealArtifacts(flow_test_lib.FlowTestsBaseclass):
         token=self.token,
         client_id=client_id,
         dependencies=(
-            artifact_utils.ArtifactCollectorFlowArgs.Dependency.IGNORE_DEPS))
+            rdf_artifacts.ArtifactCollectorFlowArgs.Dependency.IGNORE_DEPS))
 
     # Make sure the artifact's base_object made it into the WmiQuery call.
     artifact_obj = artifact_registry.REGISTRY.GetArtifact(

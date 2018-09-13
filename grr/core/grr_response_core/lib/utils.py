@@ -28,6 +28,7 @@ import tarfile
 import tempfile
 import threading
 import time
+import types
 import weakref
 import zipfile
 import zlib
@@ -449,7 +450,7 @@ class Memoize(object):
 
     Args:
       deep_copy: Whether to perform a deep copy of the returned object.
-          Otherwise, a direct reference is returned.
+        Otherwise, a direct reference is returned.
     """
     self.deep_copy = deep_copy
 
@@ -488,6 +489,7 @@ class Memoize(object):
 
 class MemoizeFunction(object):
   """A decorator to produce a memoizing version a function.
+
   """
 
   def __init__(self, deep_copy=False):
@@ -495,7 +497,7 @@ class MemoizeFunction(object):
 
     Args:
       deep_copy: Whether to perform a deep copy of the returned object.
-          Otherwise, a direct reference is returned.
+        Otherwise, a direct reference is returned.
     """
     self.deep_copy = deep_copy
 
@@ -769,7 +771,7 @@ def JoinPath(stem="", *parts):
   Args:
      stem: The stem to join to.
      *parts: parts of the path to join. The first arg is always the root and
-        directory traversal is not allowed.
+       directory traversal is not allowed.
 
   Returns:
      a normalized path.
@@ -879,6 +881,13 @@ class PRNG(object):
         PRNG.random_list = list(
             struct.unpack("=" + "L" * 1000,
                           os.urandom(struct.calcsize("=L") * 1000)))
+
+  @classmethod
+  def GetPositiveUInt32(cls):
+    res = cls.GetUInt32()
+    while res == 0:
+      res = cls.GetUInt32()
+    return res
 
   @classmethod
   def GetUInt64(cls):
@@ -1245,9 +1254,8 @@ class StreamingZipWriter(object):
     """Open streaming ZIP file with mode read "r", write "w" or append "a".
 
     Args:
-      fd_or_path: Either the path to the file, or a file-like object.
-                  If it is a path, the file will be opened and closed by
-                  ZipFile.
+      fd_or_path: Either the path to the file, or a file-like object. If it is a
+        path, the file will be opened and closed by ZipFile.
       mode: The mode can be either read "r", write "w" or append "a".
       compression: ZIP_STORED (no compression) or ZIP_DEFLATED (requires zlib).
     """
@@ -1614,7 +1622,7 @@ class Stat(object):
   Args:
     path: A path to the file to perform `stat` on.
     follow_symlink: True if `stat` of a symlink should be returned instead of a
-        file that it points to. For non-symlinks this setting has no effect.
+      file that it points to. For non-symlinks this setting has no effect.
   """
 
   def __init__(self, path, follow_symlink=True):
@@ -1742,7 +1750,7 @@ class StatCache(object):
     Args:
       path: A path to the file to perform `stat` on.
       follow_symlink: True if `stat` of a symlink should be returned instead of
-          a file that it points to. For non-symlinks this setting has no effect.
+        a file that it points to. For non-symlinks this setting has no effect.
 
     Returns:
       `Stat` object corresponding to the given path.
@@ -2022,8 +2030,8 @@ def MakeType(name, base_classes, namespace):
   return type(name, base_classes, namespace)
 
 
-def GetName(cls):
-  """A compatibility wrapper for getting class name.
+def GetName(obj):
+  """A compatibility wrapper for getting object's name.
 
   In Python 2 class names are returned as `bytes` (since class names can contain
   only ASCII characters) whereas in Python 3 they are `unicode` (since class
@@ -2036,10 +2044,60 @@ def GetName(cls):
   replaced with ordinary `__name__` access.
 
   Args:
-    cls: A class object to get the name for.
+    obj: A type or function object to get the name for.
 
   Returns:
     Name of the specified class as unicode string.
+  """
+  AssertType(obj, (types.TypeType, types.FunctionType))
+
+  # TODO(hanuszczak): According to pytype, `sys.version_info` is a tuple of two
+  # elements which is not true.
+  # pytype: disable=attribute-error
+  if sys.version_info.major == 2:
+    return obj.__name__.decode("ascii")
+  else:
+    return obj.__name__
+  # pytype: enable=attribute-error
+
+
+def SetName(obj, name):
+  """A compatibility wrapper for setting object's name.
+
+  See documentation for `GetName` for more information.
+
+  Args:
+    obj: A type or function object to set the name for.
+    name: A name to set.
+  """
+  AssertType(obj, (types.TypeType, types.FunctionType))
+  AssertType(name, unicode)
+
+  # TODO(hanuszczak): According to pytype, `sys.version_info` is a tuple of two
+  # elements which is not true.
+  # pytype: disable=attribute-error
+  if sys.version_info.major == 2:
+    obj.__name__ = name.encode("ascii")
+  else:
+    obj.__name__ = name
+  # pytype: disable=attribute-error
+
+
+def ListAttrs(cls):
+  """A compatibility wrapper for listing class attributes.
+
+  This method solves similar Python 2 compatibility issues for `dir` function as
+  `GetName` does for `__name__` invocations. See documentation for `GetName` for
+  more details.
+
+  Once support for Python 2 is dropped all invocations of this function should
+  be replaced with ordinary `dir` calls.
+
+  Args:
+    cls: A class object to list the attributes for.
+
+  Returns:
+    A list of attribute names as unicode strings.
   """
   AssertType(cls, type)
 
@@ -2047,7 +2105,14 @@ def GetName(cls):
   # elements which is not true.
   # pytype: disable=attribute-error
   if sys.version_info.major == 2:
-    return cls.__name__.decode("ascii")
+    return [item.decode("ascii") for item in dir(cls)]
   else:
-    return cls.__name__
+    return dir(cls)
   # pytype: enable=attribute-error
+
+
+def IterValuesInSortedKeysOrder(d):
+  """Iterates dict's values in sorted keys order."""
+
+  for key in sorted(iterkeys(d)):
+    yield d[key]

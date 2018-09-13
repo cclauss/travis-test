@@ -8,7 +8,6 @@ environment:
   PROTOC: "${HOME}/protobuf/bin/protoc"
   GRR_VENV: "${HOME}/INSTALL"
   CHROME_DEB: google-chrome-stable_current_amd64.deb
-  APPVEYOR_SSH_KEY: 'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC9uNlkf3inyhfFauInErbKaQuauIDeIe5Q32rO1ZI68MdlDEW1rsl8TnQ5QnYm+wqda1IRQg87NU7x84V1SDsSPmXuSxjt/qBvvjR1t2PEBn5QQtmpdd9oc9F1DSe3/IfOXaobqZ6+cYhVxRfUePeWfzSQKwIp+4lZYyXWx28l2k0Dredt1GQuQkGQm8r5CKjsWW25POml7YAGGdezbSsvQEvMrPaxI0jDN01BKMI2wqSqxzEl07oT7om+4j4HnuLNn0JnVwuR2A+YY57P8YQ9MRq8A0E4mBH183QB6EOZ7yHSKTY62tYeKxZTQbQKVPovh4yFhcVpEmt32WzNufoV ogaro@ogaro-xenial'
 
 cache:
  - ${HOME}/.cache/pip
@@ -24,7 +23,7 @@ install:
 # Install chrome if absent.
 - >-
   if [[ -z "$(type google-chrome 2>/dev/null)" ]]; then
-  wget "https://dl.google.com/linux/direct/${CHROME_DEB}" && sudo apt install -y "./${CHROME_DEB}"
+  wget "https://dl.google.com/linux/direct/${CHROME_DEB}" && sudo apt install -y "./${CHROME_DEB}";
   fi
 - travis/install_protobuf.sh linux
 - virtualenv "${GRR_VENV}"
@@ -37,9 +36,5 @@ build: off
 
 test_script:
 - source "${GRR_VENV}/bin/activate"
-- pytest grr/ --ignore grr/server/grr_response_server/gui/selenium_tests/
+- pytest -n 4 grr/ --ignore grr/server/grr_response_server/gui/selenium_tests/
 - (cd grr/server/grr_response_server/gui/static/ && gulp test)
-
-on_finish:
-- export APPVEYOR_SSH_BLOCK=true
-- curl -sflL 'https://raw.githubusercontent.com/appveyor/ci/master/scripts/enable-ssh.sh' | bash -e -

@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 """The MySQL database methods for GRR users and approval handling."""
+from __future__ import unicode_literals
 
 import MySQLdb
 
@@ -36,6 +37,8 @@ def _ResponseToApprovalsWithGrants(response):
       cur_approval_request = mysql_utils.StringToRDFProto(
           rdf_objects.ApprovalRequest, approval_request_bytes)
       cur_approval_request.approval_id = _IntToApprovalID(approval_id_int)
+      cur_approval_request.timestamp = mysql_utils.MysqlToRDFDatetime(
+          approval_timestamp)
 
     if grantor_username and grant_timestamp:
       cur_approval_request.grants.append(
