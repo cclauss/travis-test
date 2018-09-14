@@ -59,6 +59,7 @@ class RegistryConfigParser(config_lib.GRRConfigParser):
     while True:
       try:
         name, value, value_type = _winreg.EnumValue(self.root_key, i)
+        i += 1
         # Only support strings here.
         if value_type != _winreg.REG_SZ:
           continue
@@ -72,8 +73,6 @@ class RegistryConfigParser(config_lib.GRRConfigParser):
           result[name] = value
       except (exceptions.WindowsError, TypeError):
         break
-
-      i += 1
 
     return result
 
