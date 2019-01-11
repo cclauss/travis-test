@@ -3,7 +3,7 @@ branches:
     - master
 
 environment:
-  GCS_BUCKET: autobuilds.grr-response.com
+  GCS_BUCKET: ogaro-travis-test
   GCS_ENCRYPTION_KEY:
     secure: glqk3qOU13UWLPTwuGijtRYRgCVMgJAkdk8ekNasAiI=
 
