@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 """A simple wrapper to send email alerts."""
-
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import unicode_literals
 
 from email import encoders
 from email.mime.base import MIMEBase
@@ -14,6 +16,7 @@ import socket
 
 
 from future.utils import iteritems
+from future.utils import string_types
 from future.utils import with_metaclass
 
 from grr_response_core import config
@@ -42,7 +45,7 @@ class EmailAlerterBase(with_metaclass(registry.MetaclassRegistry, object)):
     # Process email addresses, and build up a list.
     if isinstance(address_list, rdf_standard.DomainEmailAddress):
       address_list = [str(address_list)]
-    elif isinstance(address_list, basestring):
+    elif isinstance(address_list, string_types):
       address_list = [address for address in address_list.split(",") if address]
     for address in address_list:
       result.append(self.AddEmailDomain(address))

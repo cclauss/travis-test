@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 """Flows that utilize the Yara library."""
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import unicode_literals
 
 import logging
@@ -7,17 +9,14 @@ import re
 
 from grr_response_core.lib.rdfvalues import rdf_yara
 from grr_response_server import flow
+from grr_response_server import flow_base
 from grr_response_server import server_stubs
 from grr_response_server.flows.general import transfer
 
 
-class YaraProcessScan(flow.GRRFlow):
-  """Scans process memory using Yara.
-
-  Note that accessing process memory with Yara on Linux causes
-  processes to pause. This can impact the client machines when doing
-  large scans.
-  """
+@flow_base.DualDBFlow
+class YaraProcessScanMixin(object):
+  """Scans process memory using Yara."""
 
   category = "/Yara/"
   friendly_name = "Yara Process Scan"
@@ -67,7 +66,7 @@ class YaraProcessScan(flow.GRRFlow):
 
     if pids_to_dump:
       self.CallFlow(
-          YaraDumpProcessMemory.__name__,
+          YaraDumpProcessMemory.__name__,  # pylint: disable=undefined-variable
           pids=list(pids_to_dump),
           skip_special_regions=self.args.skip_special_regions,
           skip_mapped_files=self.args.skip_mapped_files,
@@ -84,7 +83,8 @@ class YaraProcessScan(flow.GRRFlow):
       self.SendReply(response)
 
 
-class YaraDumpProcessMemory(flow.GRRFlow):
+@flow_base.DualDBFlow
+class YaraDumpProcessMemoryMixin(object):
   """Acquires memory for a given list of processes.
 
   Note that accessing process memory with Yara on Linux causes

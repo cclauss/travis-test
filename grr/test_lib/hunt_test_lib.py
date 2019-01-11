@@ -1,5 +1,8 @@
 #!/usr/bin/env python
 """Classes for hunt-related testing."""
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import unicode_literals
 
 import hashlib
 import time
@@ -7,20 +10,24 @@ import time
 
 from future.utils import iteritems
 
+from grr_response_core.lib import rdfvalue
 from grr_response_core.lib.rdfvalues import client as rdf_client
 from grr_response_core.lib.rdfvalues import client_fs as rdf_client_fs
 from grr_response_core.lib.rdfvalues import flows as rdf_flows
 from grr_response_core.lib.rdfvalues import paths as rdf_paths
+from grr_response_server import access_control
 from grr_response_server import aff4
 from grr_response_server import data_store
 from grr_response_server import flow
 from grr_response_server import foreman
 from grr_response_server import foreman_rules
 from grr_response_server import output_plugin
+from grr_response_server.aff4_objects import aff4_grr
 from grr_response_server.flows.general import transfer
 from grr_response_server.hunts import implementation
 from grr_response_server.hunts import process_results
 from grr_response_server.hunts import standard
+from grr_response_server.rdfvalues import cronjobs as rdf_cronjobs
 from grr_response_server.rdfvalues import flow_runner as rdf_flow_runner
 from grr.test_lib import acl_test_lib
 from grr.test_lib import action_mocks
@@ -33,7 +40,7 @@ class SampleHuntMock(action_mocks.ActionMock):
 
   def __init__(self,
                failrate=2,
-               data="Hello World!",
+               data=b"Hello World!",
                user_cpu_time=None,
                system_cpu_time=None,
                network_bytes_sent=None):
@@ -76,8 +83,9 @@ class SampleHuntMock(action_mocks.ActionMock):
 
     return [response]
 
-  def GenerateStatusMessage(self, message, response_id):
-    status = rdf_flows.GrrStatus(status=rdf_flows.GrrStatus.ReturnedStatus.OK)
+  def GenerateStatusMessage(self, message, response_id, status=None):
+    status = rdf_flows.GrrStatus(
+        status=status or rdf_flows.GrrStatus.ReturnedStatus.OK)
 
     if message.name in ["StatFile", "GetFileStat"]:
       # Create status message to report sample resource usage
@@ -113,7 +121,7 @@ class SampleHuntMock(action_mocks.ActionMock):
     sha256.update(self.data[offset:])
     response.data = sha256.digest()
     response.length = len(self.data[offset:])
-    data_store.DB.StoreBlob(self.data[offset:])
+    data_store.BLOBS.WriteBlobWithUnknownHash(self.data[offset:])
 
     return [response]
 
@@ -135,8 +143,14 @@ def TestHuntHelperWithMultipleMocks(client_mocks,
       worker_mock.Next() will be called iteration_limit number of times. Every
       iteration processes worker's message queue. If new messages are sent to
       the queue during the iteration processing, they will be processed on next
-      iteration,
+      iteration.
+
+  Returns:
+    A number of iterations complete.
   """
+
+  if token is None:
+    token = access_control.ACLToken(username="test")
 
   total_flows = set()
 
@@ -148,30 +162,37 @@ def TestHuntHelperWithMultipleMocks(client_mocks,
       flow_test_lib.MockClient(client_id, client_mock, token=token)
       for client_id, client_mock in iteritems(client_mocks)
   ]
-  worker_mock = worker_test_lib.MockWorker(
-      check_flow_errors=check_flow_errors, token=token)
 
-  # Run the clients and worker until nothing changes any more.
-  while iteration_limit is None or iteration_limit > 0:
-    client_processed = 0
+  num_iterations = 0
+  with flow_test_lib.TestWorker(threadpool_size=0, token=True) as rel_db_worker:
+    worker_mock = worker_test_lib.MockWorker(
+        check_flow_errors=check_flow_errors, token=token)
 
-    for client_mock in client_mocks:
-      client_processed += client_mock.Next()
+    # Run the clients and worker until nothing changes any more.
+    while iteration_limit is None or num_iterations < iteration_limit:
+      client_processed = 0
 
-    flows_run = []
+      for client_mock in client_mocks:
+        client_processed += client_mock.Next()
 
-    for flow_run in worker_mock.Next():
-      total_flows.add(flow_run)
-      flows_run.append(flow_run)
+      flows_run = []
 
-    if client_processed == 0 and not flows_run:
-      break
+      for flow_run in worker_mock.Next():
+        total_flows.add(flow_run)
+        flows_run.append(flow_run)
 
-    if iteration_limit:
-      iteration_limit -= 1
+      worker_processed = rel_db_worker.ResetProcessedFlows()
+      flows_run.extend(worker_processed)
 
-  if check_flow_errors:
-    flow_test_lib.CheckFlowErrors(total_flows, token=token)
+      num_iterations += 1
+
+      if client_processed == 0 and not flows_run:
+        break
+
+    if check_flow_errors:
+      flow_test_lib.CheckFlowErrors(total_flows, token=token)
+
+  return num_iterations
 
 
 def TestHuntHelper(client_mock,
@@ -194,8 +215,11 @@ def TestHuntHelper(client_mock,
       iteration processes worker's message queue. If new messages are sent to
       the queue during the iteration processing, they will be processed on next
       iteration.
+
+  Returns:
+    A number of iterations complete.
   """
-  TestHuntHelperWithMultipleMocks(
+  return TestHuntHelperWithMultipleMocks(
       dict([(client_id, client_mock) for client_id in client_ids]),
       check_flow_errors=check_flow_errors,
       iteration_limit=iteration_limit,
@@ -218,6 +242,7 @@ class StandardHuntTestMixin(acl_test_lib.AclTestMixin):
                  flow_args=None,
                  client_rule_set=None,
                  original_object=None,
+                 client_rate=0,
                  token=None,
                  **kwargs):
     # Only initialize default flow_args value if default flow_runner_args value
@@ -239,7 +264,7 @@ class StandardHuntTestMixin(acl_test_lib.AclTestMixin):
         flow_runner_args=flow_runner_args,
         flow_args=flow_args,
         client_rule_set=client_rule_set,
-        client_rate=0,
+        client_rate=client_rate,
         original_object=original_object,
         token=token or self.token,
         **kwargs)
@@ -249,6 +274,21 @@ class StandardHuntTestMixin(acl_test_lib.AclTestMixin):
       hunt.Run()
 
     return hunt.urn
+
+  def FindForemanRules(self, hunt, token=None):
+    if data_store.RelationalDBReadEnabled(category="foreman"):
+      rules = data_store.REL_DB.ReadAllForemanRules()
+      return [
+          rule for rule in rules
+          if hunt is None or rule.hunt_id == hunt.urn.Basename()
+      ]
+    else:
+      fman = aff4.FACTORY.Open(
+          "aff4:/foreman", mode="r", aff4_type=aff4_grr.GRRForeman, token=token)
+      rules = fman.Get(fman.Schema.RULES, [])
+      return [
+          rule for rule in rules if hunt is None or rule.hunt_id == hunt.urn
+      ]
 
   def AssignTasksToClients(self, client_ids=None):
     # Pretend to be the foreman now and dish out hunting jobs to all the
@@ -261,7 +301,7 @@ class StandardHuntTestMixin(acl_test_lib.AclTestMixin):
 
   def RunHunt(self, client_ids=None, iteration_limit=None, **mock_kwargs):
     client_mock = SampleHuntMock(**mock_kwargs)
-    TestHuntHelper(
+    return TestHuntHelper(
         client_mock,
         client_ids or self.client_ids,
         check_flow_errors=False,
@@ -275,108 +315,72 @@ class StandardHuntTestMixin(acl_test_lib.AclTestMixin):
       hunt_obj.Stop()
 
   def ProcessHuntOutputPlugins(self):
-    flow_urn = flow.StartAFF4Flow(
-        flow_name=process_results.ProcessHuntResultCollectionsCronFlow.__name__,
-        token=self.token)
-    flow_test_lib.TestFlowHelper(flow_urn, token=self.token)
-    return flow_urn
+    if data_store.RelationalDBFlowsEnabled():
+      job = rdf_cronjobs.CronJob(
+          cron_job_id="some/id", lifetime=rdfvalue.Duration("1h"))
+      run_state = rdf_cronjobs.CronJobRun(
+          cron_job_id="some/id",
+          status="RUNNING",
+          started_at=rdfvalue.RDFDatetime.Now())
+      process_results.ProcessHuntResultCollectionsCronJob(run_state, job).Run()
+    else:
+      flow_urn = flow.StartAFF4Flow(
+          flow_name=process_results.ProcessHuntResultCollectionsCronFlow
+          .__name__,
+          token=self.token)
+      flow_test_lib.TestFlowHelper(flow_urn, token=self.token)
+      return flow_urn
 
 
 class DummyHuntOutputPlugin(output_plugin.OutputPlugin):
   num_calls = 0
   num_responses = 0
 
-  def ProcessResponses(self, responses):
+  def ProcessResponses(self, state, responses):
     DummyHuntOutputPlugin.num_calls += 1
     DummyHuntOutputPlugin.num_responses += len(list(responses))
 
 
 class FailingDummyHuntOutputPlugin(output_plugin.OutputPlugin):
 
-  def ProcessResponses(self, responses):
+  def ProcessResponses(self, state, responses):
     raise RuntimeError("Oh no!")
 
 
 class FailingInFlushDummyHuntOutputPlugin(output_plugin.OutputPlugin):
 
-  def ProcessResponses(self, responses):
+  def ProcessResponses(self, state, responses):
     pass
 
-  def Flush(self):
+  def Flush(self, state):
     raise RuntimeError("Flush, oh no!")
 
 
 class StatefulDummyHuntOutputPlugin(output_plugin.OutputPlugin):
+  """Stateful dummy hunt output plugin."""
   data = []
 
-  def InitializeState(self):
-    super(StatefulDummyHuntOutputPlugin, self).InitializeState()
-    self.state.index = 0
+  def __init__(self, *args, **kwargs):
+    super(StatefulDummyHuntOutputPlugin, self).__init__(*args, **kwargs)
+    self.delta = 0
 
-  def ProcessResponses(self, responses):
-    StatefulDummyHuntOutputPlugin.data.append(self.state.index)
-    self.state.index += 1
+  def InitializeState(self, state):
+    super(StatefulDummyHuntOutputPlugin, self).InitializeState(state)
+    state.index = 0
+
+  def ProcessResponses(self, state, responses):
+    StatefulDummyHuntOutputPlugin.data.append(state.index + self.delta)
+    self.delta += 1
+
+  def UpdateState(self, state):
+    state.index += self.delta
 
 
 class LongRunningDummyHuntOutputPlugin(output_plugin.OutputPlugin):
   num_calls = 0
 
-  def ProcessResponses(self, responses):
+  def ProcessResponses(self, state, responses):
     LongRunningDummyHuntOutputPlugin.num_calls += 1
     # TODO(hanuszczak): This is terrible. Figure out why it has been put here
     # delete it as soon as possible.
     time.time = lambda: 100
-
-
-class VerifiableDummyHuntOutputPlugin(output_plugin.OutputPlugin):
-
-  def ProcessResponses(self, responses):
-    pass
-
-
-class VerifiableDummyHuntOutputPluginVerfier(
-    output_plugin.OutputPluginVerifier):
-  """One of the dummy hunt output plugins."""
-  plugin_name = VerifiableDummyHuntOutputPlugin.__name__
-
-  num_calls = 0
-
-  def VerifyHuntOutput(self, plugin, hunt):
-    # Check that we get the plugin object we expected to get.
-    # Actual verifiers implementations don't have to do this check.
-    if not isinstance(plugin, VerifiableDummyHuntOutputPlugin):
-      raise ValueError(
-          "Passed plugin must be an "
-          "VerifiableDummyHuntOutputPlugin, got: " % plugin.__class__.__name__)
-
-    VerifiableDummyHuntOutputPluginVerfier.num_calls += 1
-    return output_plugin.OutputPluginVerificationResult(
-        status="SUCCESS", status_message="yo")
-
-  def VerifyFlowOutput(self, plugin, hunt):
-    pass
-
-
-class DummyHuntOutputPluginWithRaisingVerifier(output_plugin.OutputPlugin):
-
-  def ProcessResponses(self, responses):
-    pass
-
-
-class DummyHuntOutputPluginWithRaisingVerifierVerifier(
-    output_plugin.OutputPluginVerifier):
-  """One of the dummy hunt output plugins."""
-  plugin_name = DummyHuntOutputPluginWithRaisingVerifier.__name__
-
-  def VerifyHuntOutput(self, plugin, hunt):
-    # Check that we get the plugin object we expected to get.
-    # Actual verifiers implementations don't have to do this check.
-    if not isinstance(plugin, DummyHuntOutputPluginWithRaisingVerifier):
-      raise ValueError(
-          "Passed plugin must be an "
-          "VerifiableDummyHuntOutputPlugin, got: " % plugin.__class__.__name__)
-
-    raise RuntimeError("foobar")
-
-  def VerifyFlowOutput(self, plugin, hunt):
-    pass

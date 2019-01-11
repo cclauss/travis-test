@@ -186,7 +186,7 @@
           },
           "name": "ListProcesses",
           "runnerArgs": {
-            "notifyToUser": false
+            "notifyToUser": true
           }
         }
       },
@@ -204,8 +204,7 @@
         "runnerArgs": {
           "clientId": "aff4:/C.1000000000000000",
           "flowName": "ListProcesses",
-          "notifyToUser": false,
-          "originalFlow": {}
+          "notifyToUser": true
         },
         "startedAt": "42000000",
         "state": "RUNNING",
@@ -324,7 +323,7 @@
         "maxDepth": "1"
       },
       "response": {
-        "operationId": "aff4:/C.1000000000000000/flows/W:ABCDEF"
+        "operationId": "W:ABCDEF"
       },
       "test_class": "ApiCreateVfsRefreshOperationHandlerRegressionTest_http_v2",
       "url": "/api/v2/clients/C.1000000000000000/vfs-refresh-operations"
@@ -1379,7 +1378,7 @@
         "runnerArgs": {
           "clientId": "aff4:/C.1000000000000000",
           "flowName": "Interrogate",
-          "originalFlow": {}
+          "notifyToUser": true
         },
         "startedAt": "42000000",
         "state": "RUNNING",
@@ -1436,7 +1435,7 @@
         "runnerArgs": {
           "clientId": "aff4:/C.1000000000000000",
           "flowName": "Interrogate",
-          "originalFlow": {}
+          "notifyToUser": true
         },
         "startedAt": "42000000",
         "state": "ERROR",
@@ -1860,7 +1859,7 @@
           "runnerArgs": {
             "clientId": "aff4:/C.1000000000000000",
             "flowName": "Interrogate",
-            "originalFlow": {}
+            "notifyToUser": true
           },
           "startedAt": "42000000",
           "state": "RUNNING",
@@ -1962,93 +1961,93 @@
       "response": {
         "completePoints": [
           {
-            "xValue": 0.0,
+            "xValue": 44.0,
             "yValue": 0.0
           },
           {
-            "xValue": 0.00027777778450399637,
+            "xValue": 45.0,
             "yValue": 1.0
           },
           {
-            "xValue": 0.0030555555131286383,
+            "xValue": 55.0,
             "yValue": 2.0
           },
           {
-            "xValue": 0.005833333358168602,
+            "xValue": 65.0,
             "yValue": 3.0
           },
           {
-            "xValue": 0.008611110970377922,
+            "xValue": 75.0,
             "yValue": 4.0
           },
           {
-            "xValue": 0.011388888582587242,
+            "xValue": 85.0,
             "yValue": 5.0
           },
           {
-            "xValue": 0.014166667126119137,
+            "xValue": 95.0,
             "yValue": 6.0
           },
           {
-            "xValue": 0.016944443807005882,
+            "xValue": 105.0,
             "yValue": 7.0
           },
           {
-            "xValue": 0.019722221419215202,
+            "xValue": 115.0,
             "yValue": 8.0
           },
           {
-            "xValue": 0.02250000089406967,
+            "xValue": 125.0,
             "yValue": 9.0
           },
           {
-            "xValue": 0.02527777850627899,
+            "xValue": 135.0,
             "yValue": 10.0
           }
         ],
         "startPoints": [
           {
-            "xValue": 0.0,
+            "xValue": 44.0,
             "yValue": 0.0
           },
           {
-            "xValue": 0.00027777778450399637,
+            "xValue": 45.0,
             "yValue": 1.0
           },
           {
-            "xValue": 0.0030555555131286383,
+            "xValue": 55.0,
             "yValue": 2.0
           },
           {
-            "xValue": 0.005833333358168602,
+            "xValue": 65.0,
             "yValue": 3.0
           },
           {
-            "xValue": 0.008611110970377922,
+            "xValue": 75.0,
             "yValue": 4.0
           },
           {
-            "xValue": 0.011388888582587242,
+            "xValue": 85.0,
             "yValue": 5.0
           },
           {
-            "xValue": 0.014166667126119137,
+            "xValue": 95.0,
             "yValue": 6.0
           },
           {
-            "xValue": 0.016944443807005882,
+            "xValue": 105.0,
             "yValue": 7.0
           },
           {
-            "xValue": 0.019722221419215202,
+            "xValue": 115.0,
             "yValue": 8.0
           },
           {
-            "xValue": 0.02250000089406967,
+            "xValue": 125.0,
             "yValue": 9.0
           },
           {
-            "xValue": 0.02527777850627899,
+            "xValue": 135.0,
             "yValue": 10.0
           }
         ]
@@ -2062,45 +2061,37 @@
       "response": {
         "completePoints": [
           {
-            "xValue": 0.0,
-            "yValue": 0.0
-          },
-          {
-            "xValue": 0.006319444626569748,
+            "xValue": 66.75,
             "yValue": 3.0
           },
           {
-            "xValue": 0.012638889253139496,
+            "xValue": 89.5,
             "yValue": 5.0
           },
           {
-            "xValue": 0.018958333879709244,
+            "xValue": 112.25,
             "yValue": 7.0
           },
           {
-            "xValue": 0.02527777850627899,
+            "xValue": 135.0,
             "yValue": 10.0
           }
         ],
         "startPoints": [
           {
-            "xValue": 0.0,
-            "yValue": 0.0
-          },
-          {
-            "xValue": 0.006319444626569748,
+            "xValue": 66.75,
             "yValue": 3.0
           },
           {
-            "xValue": 0.012638889253139496,
+            "xValue": 89.5,
             "yValue": 5.0
           },
           {
-            "xValue": 0.018958333879709244,
+            "xValue": 112.25,
             "yValue": 7.0
           },
           {
-            "xValue": 0.02527777850627899,
+            "xValue": 135.0,
             "yValue": 10.0
           }
         ]
@@ -2114,93 +2105,93 @@
       "response": {
         "completePoints": [
           {
-            "xValue": 0.0,
+            "xValue": 44.0,
             "yValue": 0.0
           },
           {
-            "xValue": 0.00027777778450399637,
+            "xValue": 45.0,
             "yValue": 1.0
           },
           {
-            "xValue": 0.0030555555131286383,
+            "xValue": 55.0,
             "yValue": 2.0
           },
           {
-            "xValue": 0.005833333358168602,
+            "xValue": 65.0,
             "yValue": 3.0
           },
           {
-            "xValue": 0.008611110970377922,
+            "xValue": 75.0,
             "yValue": 4.0
           },
           {
-            "xValue": 0.011388888582587242,
+            "xValue": 85.0,
             "yValue": 5.0
           },
           {
-            "xValue": 0.014166667126119137,
+            "xValue": 95.0,
             "yValue": 6.0
           },
           {
-            "xValue": 0.016944443807005882,
+            "xValue": 105.0,
             "yValue": 7.0
           },
           {
-            "xValue": 0.019722221419215202,
+            "xValue": 115.0,
             "yValue": 8.0
           },
           {
-            "xValue": 0.02250000089406967,
+            "xValue": 125.0,
             "yValue": 9.0
           },
           {
-            "xValue": 0.02527777850627899,
+            "xValue": 135.0,
             "yValue": 10.0
           }
         ],
         "startPoints": [
           {
-            "xValue": 0.0,
+            "xValue": 44.0,
             "yValue": 0.0
           },
           {
-            "xValue": 0.00027777778450399637,
+            "xValue": 45.0,
             "yValue": 1.0
           },
           {
-            "xValue": 0.0030555555131286383,
+            "xValue": 55.0,
             "yValue": 2.0
           },
           {
-            "xValue": 0.005833333358168602,
+            "xValue": 65.0,
             "yValue": 3.0
           },
           {
-            "xValue": 0.008611110970377922,
+            "xValue": 75.0,
             "yValue": 4.0
           },
           {
-            "xValue": 0.011388888582587242,
+            "xValue": 85.0,
             "yValue": 5.0
           },
           {
-            "xValue": 0.014166667126119137,
+            "xValue": 95.0,
             "yValue": 6.0
           },
           {
-            "xValue": 0.016944443807005882,
+            "xValue": 105.0,
             "yValue": 7.0
           },
           {
-            "xValue": 0.019722221419215202,
+            "xValue": 115.0,
             "yValue": 8.0
           },
           {
-            "xValue": 0.02250000089406967,
+            "xValue": 125.0,
             "yValue": 9.0
           },
           {
-            "xValue": 0.02527777850627899,
+            "xValue": 135.0,
             "yValue": 10.0
           }
         ]
@@ -5049,7 +5040,7 @@
         "state": "RUNNING"
       },
       "test_class": "ApiGetVfsFileContentUpdateStateHandlerRegressionTest_http_v2",
-      "url": "/api/v2/clients/C.1000000000000000/vfs-update/aff4:/C.1000000000000000/flows/W:ABCDEF"
+      "url": "/api/v2/clients/C.1000000000000000/vfs-update/W:ABCDEF"
     },
     {
       "api_method": "GetVfsFileContentUpdateState",
@@ -5058,16 +5049,16 @@
         "state": "FINISHED"
       },
       "test_class": "ApiGetVfsFileContentUpdateStateHandlerRegressionTest_http_v2",
-      "url": "/api/v2/clients/C.1000000000000000/vfs-update/aff4:/C.1000000000000000/flows/W:ABCDEF"
+      "url": "/api/v2/clients/C.1000000000000000/vfs-update/W:ABCDEF"
     },
     {
       "api_method": "GetVfsFileContentUpdateState",
       "method": "GET",
       "response": {
-        "message": "Operation with id aff4:/C.1000000000000000/flows/W:ABCDEF not found"
+        "message": "Operation with id W:ABCDEF not found"
       },
       "test_class": "ApiGetVfsFileContentUpdateStateHandlerRegressionTest_http_v2",
-      "url": "/api/v2/clients/C.1000000000000000/vfs-update/aff4:/C.1000000000000000/flows/W:ABCDEF"
+      "url": "/api/v2/clients/C.1000000000000000/vfs-update/W:ABCDEF"
     },
     {
       "api_method": "GetVfsFileContentUpdateState",
@@ -5087,7 +5078,7 @@
         "state": "RUNNING"
       },
       "test_class": "ApiGetVfsRefreshOperationStateHandlerRegressionTest_http_v2",
-      "url": "/api/v2/clients/C.1000000000000000/vfs-refresh-operations/aff4:/C.1000000000000000/flows/W:ABCDEF"
+      "url": "/api/v2/clients/C.1000000000000000/vfs-refresh-operations/W:ABCDEF"
     },
     {
       "api_method": "GetVfsRefreshOperationState",
@@ -5096,16 +5087,16 @@
         "state": "FINISHED"
       },
       "test_class": "ApiGetVfsRefreshOperationStateHandlerRegressionTest_http_v2",
-      "url": "/api/v2/clients/C.1000000000000000/vfs-refresh-operations/aff4:/C.1000000000000000/flows/W:ABCDEF"
+      "url": "/api/v2/clients/C.1000000000000000/vfs-refresh-operations/W:ABCDEF"
     },
     {
       "api_method": "GetVfsRefreshOperationState",
       "method": "GET",
       "response": {
-        "message": "Operation with id aff4:/C.1000000000000000/flows/W:ABCDEF not found"
+        "message": "Operation with id W:ABCDEF not found"
       },
       "test_class": "ApiGetVfsRefreshOperationStateHandlerRegressionTest_http_v2",
-      "url": "/api/v2/clients/C.1000000000000000/vfs-refresh-operations/aff4:/C.1000000000000000/flows/W:ABCDEF"
+      "url": "/api/v2/clients/C.1000000000000000/vfs-refresh-operations/W:ABCDEF"
     },
     {
       "api_method": "GetVfsRefreshOperationState",
@@ -5461,6 +5452,34 @@
       "url": "/api/v2/users/me/notifications"
     }
   ],
+  "ApiListApproverSuggestionsHandler": [
+    {
+      "api_method": "ListApproverSuggestions",
+      "method": "GET",
+      "response": {},
+      "test_class": "ApiListApproverSuggestionsHandlerRegressionTest_http_v2",
+      "url": "/api/v2/users/approver-suggestions?username_query=foo"
+    },
+    {
+      "api_method": "ListApproverSuggestions",
+      "method": "GET",
+      "response": {
+        "suggestions": [
+          {
+            "username": "sanchezmorty"
+          },
+          {
+            "username": "sanchezrick"
+          },
+          {
+            "username": "sanchezsummer"
+          }
+        ]
+      },
+      "test_class": "ApiListApproverSuggestionsHandlerRegressionTest_http_v2",
+      "url": "/api/v2/users/approver-suggestions?username_query=sanchez"
+    }
+  ],
   "ApiListArtifactsHandler": [
     {
       "api_method": "ListArtifacts",
@@ -5520,8 +5539,7 @@
           {
             "clientAction": "ListProcesses",
             "leasedUntil": "10042000000",
-            "sessionId": "aff4:/C.1000000000000000/flows/F:123456",
-            "taskId": "43"
+            "sessionId": "aff4:/C.1000000000000000/flows/W:ABCDEF"
           }
         ]
       },
@@ -5538,20 +5556,25 @@
             "leasedUntil": "10042000000",
             "responses": [
               {
-                "args": "CAo=",
-                "argsRdfName": "GrrStatus",
-                "authState": "AUTHENTICATED",
-                "name": "ListProcesses",
+                "args": "Ggx0ZXN0X3Byb2Nlc3M=",
+                "argsRdfName": "Process",
                 "requestId": "1",
                 "responseId": "1",
-                "sessionId": "aff4:/C.1000000000000000/flows/F:123456",
-                "taskId": "43",
+                "sessionId": "aff4:/C.1000000000000000/flows/W:ABCDEF",
+                "timestamp": "42000000",
+                "type": "MESSAGE"
+              },
+              {
+                "args": "CAA=",
+                "argsRdfName": "GrrStatus",
+                "requestId": "1",
+                "responseId": "2",
+                "sessionId": "aff4:/C.1000000000000000/flows/W:ABCDEF",
                 "timestamp": "42000000",
                 "type": "STATUS"
               }
             ],
-            "sessionId": "aff4:/C.1000000000000000/flows/F:123456",
-            "taskId": "43"
+            "sessionId": "aff4:/C.1000000000000000/flows/W:ABCDEF"
           }
         ]
       },
@@ -5843,7 +5866,7 @@
             },
             "crashMessage": "Client killed during transaction",
             "crashType": "Client Crash",
-            "sessionId": "aff4:/hunts/H:123456/C.1000000000000000/H:11223344",
+            "sessionId": "<some session id>",
             "timestamp": "45000000"
           }
         ],
@@ -5870,7 +5893,7 @@
             },
             "crashMessage": "Client killed during transaction",
             "crashType": "Client Crash",
-            "sessionId": "aff4:/hunts/H:123456/C.1000000000000000/H:11223344",
+            "sessionId": "<some session id>",
             "timestamp": "45000000"
           }
         ],
@@ -6019,8 +6042,7 @@
             "lastCollected": "42000000",
             "lastCollectedSize": "11",
             "name": "bash",
-            "path": "fs/tsk/c/bin/bash",
-            "type": "VFSMemoryFile"
+            "path": "fs/tsk/c/bin/bash"
           },
           {
             "age": "42000000",
@@ -6028,8 +6050,7 @@
             "lastCollected": "42000000",
             "lastCollectedSize": "11",
             "name": "rbash",
-            "path": "fs/tsk/c/bin/rbash",
-            "type": "VFSMemoryFile"
+            "path": "fs/tsk/c/bin/rbash"
           }
         ]
       },
@@ -6047,8 +6068,7 @@
             "lastCollected": "42000000",
             "lastCollectedSize": "11",
             "name": "bash",
-            "path": "fs/tsk/c/bin/bash",
-            "type": "VFSMemoryFile"
+            "path": "fs/tsk/c/bin/bash"
           },
           {
             "age": "42000000",
@@ -6056,8 +6076,7 @@
             "lastCollected": "42000000",
             "lastCollectedSize": "11",
             "name": "rbash",
-            "path": "fs/tsk/c/bin/rbash",
-            "type": "VFSMemoryFile"
+            "path": "fs/tsk/c/bin/rbash"
           }
         ]
       },
@@ -6112,13 +6131,11 @@
         "items": [
           {
             "flowId": "W:ABCDEF",
-            "flowName": "ListProcesses",
             "logMessage": "Sample message: foo.",
             "timestamp": "52000000"
           },
           {
             "flowId": "W:ABCDEF",
-            "flowName": "ListProcesses",
             "logMessage": "Sample message: bar.",
             "timestamp": "55000000"
           }
@@ -6135,7 +6152,6 @@
         "items": [
           {
             "flowId": "W:ABCDEF",
-            "flowName": "ListProcesses",
             "logMessage": "Sample message: foo.",
             "timestamp": "52000000"
           }
@@ -6152,7 +6168,6 @@
         "items": [
           {
             "flowId": "W:ABCDEF",
-            "flowName": "ListProcesses",
             "logMessage": "Sample message: bar.",
             "timestamp": "55000000"
           }
@@ -6175,27 +6190,20 @@
               "clientId": "aff4:/C.1000000000000000",
               "id": 1,
               "nextState": "IterateProcesses",
-              "request": {
-                "cpuLimit": 7200.0,
-                "name": "ListProcesses",
-                "queue": "aff4:/C.1000000000000000/tasks",
-                "requestId": "1",
-                "requireFastpoll": true,
-                "sessionId": "aff4:/C.1000000000000000/flows/W:ABCDEF",
-                "taskId": "42"
-              },
               "sessionId": "aff4:/C.1000000000000000/flows/W:ABCDEF"
             },
             "responses": [
               {
-                "args": "CAo=",
-                "argsRdfName": "GrrStatus",
-                "authState": "AUTHENTICATED",
-                "name": "ListProcesses",
                 "requestId": "1",
                 "responseId": "1",
                 "sessionId": "aff4:/C.1000000000000000/flows/W:ABCDEF",
-                "taskId": "42",
+                "timestamp": "42000000",
+                "type": "MESSAGE"
+              },
+              {
+                "requestId": "1",
+                "responseId": "2",
+                "sessionId": "aff4:/C.1000000000000000/flows/W:ABCDEF",
                 "timestamp": "42000000",
                 "type": "STATUS"
               }
@@ -6259,7 +6267,7 @@
             "runnerArgs": {
               "clientId": "aff4:/C.1000000000000000",
               "flowName": "ListProcesses",
-              "originalFlow": {}
+              "notifyToUser": true
             },
             "startedAt": "44000000",
             "state": "RUNNING",
@@ -6277,7 +6285,7 @@
             "runnerArgs": {
               "clientId": "aff4:/C.1000000000000000",
               "flowName": "Interrogate",
-              "originalFlow": {}
+              "notifyToUser": true
             },
             "startedAt": "43000000",
             "state": "RUNNING",
@@ -6966,33 +6974,6 @@
       "url": "/api/v2/output-plugins/all"
     }
   ],
-  "ApiListPendingGlobalNotificationsHandler": [
-    {
-      "api_method": "ListPendingGlobalNotifications",
-      "method": "GET",
-      "response": {
-        "items": [
-          {
-            "duration": "1209600",
-            "header": "Nothing to worry about!",
-            "link": "http://www.google.com",
-            "showFrom": "0",
-            "type": "INFO"
-          },
-          {
-            "content": "Houston, Houston, we have a prob...",
-            "duration": "1209600",
-            "header": "Oh no, we're doomed!",
-            "link": "http://www.google.com",
-            "showFrom": "0",
-            "type": "ERROR"
-          }
-        ]
-      },
-      "test_class": "ApiListPendingGlobalNotificationsHandlerRegressionTest_http_v2",
-      "url": "/api/v2/users/me/notifications/pending/global"
-    }
-  ],
   "ApiListPendingUserNotificationsHandler": [
     {
       "api_method": "ListPendingUserNotifications",
@@ -7111,7 +7092,7 @@
           {
             "docstring": "Sample gauge metric.",
             "metricType": "GAUGE",
-            "valueType": "STR",
+            "valueType": "FLOAT",
             "varname": "sample_gauge_value"
           }
         ]
@@ -7417,7 +7398,7 @@
         "filePath": "fs/os/c/bin/bash"
       },
       "response": {
-        "operationId": "aff4:/C.1000000000000000/flows/W:ABCDEF"
+        "operationId": "W:ABCDEF"
       },
       "test_class": "ApiUpdateVfsFileContentHandlerRegressionTest_http_v2",
       "url": "/api/v2/clients/C.1000000000000000/vfs-update"

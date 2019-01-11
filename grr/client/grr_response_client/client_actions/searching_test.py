@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 # -*- mode: python; encoding: utf-8 -*-
 """Test client vfs."""
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import unicode_literals
 
 import functools
@@ -19,6 +21,7 @@ from grr_response_core.lib.rdfvalues import client_fs as rdf_client_fs
 from grr_response_core.lib.rdfvalues import paths as rdf_paths
 from grr.test_lib import benchmark_test_lib
 from grr.test_lib import client_test_lib
+from grr.test_lib import temp
 from grr.test_lib import test_lib
 from grr.test_lib import vfs_test_lib
 
@@ -45,16 +48,9 @@ class MockVFSHandlerFind(vfs.VFSHandler):
       "/mock2/directory3/long_file.text": (b"space " * 100000 + b"A Secret")
   }
 
-  def __init__(self,
-               base_fd,
-               pathspec=None,
-               progress_callback=None,
-               full_pathspec=None):
+  def __init__(self, base_fd, pathspec=None, progress_callback=None):
     super(MockVFSHandlerFind, self).__init__(
-        base_fd,
-        pathspec=pathspec,
-        progress_callback=progress_callback,
-        full_pathspec=full_pathspec)
+        base_fd, pathspec=pathspec, progress_callback=progress_callback)
 
     self.pathspec.Append(pathspec)
     self.path = self.pathspec.CollapsePath()
@@ -187,9 +183,9 @@ class FindTest(client_test_lib.EmptyActionTest):
       if request.iterator.state == rdf_client_action.Iterator.State.FINISHED:
         break
 
-      self.assertEqual(len(result), 2)
-      self.assertTrue(isinstance(result[0], rdf_client_fs.FindSpec))
-      self.assertTrue(isinstance(result[1], rdf_client_action.Iterator))
+      self.assertLen(result, 2)
+      self.assertIsInstance(result[0], rdf_client_fs.FindSpec)
+      self.assertIsInstance(result[1], rdf_client_action.Iterator)
       files.append(result[0].hit)
 
       request.iterator = result[1].Copy()
@@ -202,7 +198,7 @@ class FindTest(client_test_lib.EmptyActionTest):
                      rdf_client_action.Iterator.State.FINISHED)
 
     # Ensure we remove old states from client_state
-    self.assertEqual(len(request.iterator.client_state.dat), 0)
+    self.assertEmpty(request.iterator.client_state.dat)
 
   def testFindAction2(self):
     """Test the find action path regex."""
@@ -213,7 +209,7 @@ class FindTest(client_test_lib.EmptyActionTest):
     result = self.RunAction(searching.Find, request)
     all_files = [x.hit for x in result if isinstance(x, rdf_client_fs.FindSpec)]
 
-    self.assertEqual(len(all_files), 1)
+    self.assertLen(all_files, 1)
     self.assertEqual(all_files[0].pathspec.Basename(), "file.mp3")
 
   def testFindAction3(self):
@@ -226,7 +222,7 @@ class FindTest(client_test_lib.EmptyActionTest):
     request.iterator.number = 200
     result = self.RunAction(searching.Find, request)
     all_files = [x.hit for x in result if isinstance(x, rdf_client_fs.FindSpec)]
-    self.assertEqual(len(all_files), 2)
+    self.assertLen(all_files, 2)
     self.assertEqual(all_files[0].pathspec.Basename(), "file1.txt")
     self.assertEqual(all_files[1].pathspec.Basename(), "long_file.text")
 
@@ -244,12 +240,12 @@ class FindTest(client_test_lib.EmptyActionTest):
     for result in results:
       if isinstance(result, rdf_client_fs.FindSpec):
         all_files.append(result.hit.pathspec.Basename())
-    self.assertEqual(len(all_files), 5)
+    self.assertLen(all_files, 5)
 
     for filename in all_files:
       # Our mock filesize is the length of the base filename, check all the
       # files we got match the size criteria
-      self.assertTrue(4 <= len(filename) <= 15)
+      self.assertBetween(len(filename), 4, 15)
 
   def testNoFilters(self):
     """Test the we get all files with no filters in place."""
@@ -260,7 +256,7 @@ class FindTest(client_test_lib.EmptyActionTest):
     request.iterator.number = 200
     result = self.RunAction(searching.Find, request)
     all_files = [x.hit for x in result if isinstance(x, rdf_client_fs.FindSpec)]
-    self.assertEqual(len(all_files), 9)
+    self.assertLen(all_files, 9)
 
   def testFindActionCrossDev(self):
     """Test that devices boundaries don't get crossed, also by default."""
@@ -273,7 +269,7 @@ class FindTest(client_test_lib.EmptyActionTest):
     all_files = [
         x.hit for x in results if isinstance(x, rdf_client_fs.FindSpec)
     ]
-    self.assertEqual(len(all_files), 9)
+    self.assertLen(all_files, 9)
 
     request = rdf_client_fs.FindSpec(
         pathspec=pathspec, cross_devs=False, path_regex=".")
@@ -282,7 +278,7 @@ class FindTest(client_test_lib.EmptyActionTest):
     all_files = [
         x.hit for x in results if isinstance(x, rdf_client_fs.FindSpec)
     ]
-    self.assertEqual(len(all_files), 7)
+    self.assertLen(all_files, 7)
 
     request = rdf_client_fs.FindSpec(pathspec=pathspec, path_regex=".")
     request.iterator.number = 200
@@ -290,7 +286,7 @@ class FindTest(client_test_lib.EmptyActionTest):
     all_files = [
         x.hit for x in results if isinstance(x, rdf_client_fs.FindSpec)
     ]
-    self.assertEqual(len(all_files), 7)
+    self.assertLen(all_files, 7)
 
   def testPermissionFilter(self):
     """Test filtering based on file/folder permission happens correctly."""
@@ -306,7 +302,7 @@ class FindTest(client_test_lib.EmptyActionTest):
     result = self.RunAction(searching.Find, request)
     all_files = [x.hit for x in result if isinstance(x, rdf_client_fs.FindSpec)]
 
-    self.assertEqual(len(all_files), 2)
+    self.assertLen(all_files, 2)
     self.assertEqual(all_files[0].pathspec.Dirname().Basename(), "directory2")
     self.assertEqual(all_files[0].pathspec.Basename(), "file.jpg")
     self.assertEqual(all_files[1].pathspec.Dirname().Basename(), "directory2")
@@ -326,7 +322,7 @@ class FindTest(client_test_lib.EmptyActionTest):
     result = self.RunAction(searching.Find, request)
     all_files = [x.hit for x in result if isinstance(x, rdf_client_fs.FindSpec)]
 
-    self.assertEqual(len(all_files), 2)
+    self.assertLen(all_files, 2)
     self.assertEqual(all_files[0].pathspec.Dirname().Basename(), "directory1")
     self.assertEqual(all_files[0].pathspec.Basename(), "file1.txt")
     self.assertEqual(all_files[1].pathspec.Dirname().Basename(), "directory1")
@@ -345,7 +341,7 @@ class FindTest(client_test_lib.EmptyActionTest):
     result = self.RunAction(searching.Find, request)
     all_files = [x.hit for x in result if isinstance(x, rdf_client_fs.FindSpec)]
 
-    self.assertEqual(len(all_files), 2)
+    self.assertLen(all_files, 2)
     self.assertEqual(all_files[0].pathspec.Dirname().Basename(), "directory3")
     self.assertEqual(all_files[0].pathspec.Basename(), "file1.txt")
     self.assertEqual(all_files[1].pathspec.Dirname().Basename(), "directory3")
@@ -364,7 +360,7 @@ class FindTest(client_test_lib.EmptyActionTest):
     result = self.RunAction(searching.Find, request)
     all_files = [x.hit for x in result if isinstance(x, rdf_client_fs.FindSpec)]
 
-    self.assertEqual(len(all_files), 3)
+    self.assertLen(all_files, 3)
     self.assertEqual(all_files[0].pathspec.Basename(), "directory2")
     self.assertEqual(all_files[1].pathspec.Basename(), "directory1")
     self.assertEqual(all_files[2].pathspec.Basename(), "directory3")
@@ -383,7 +379,7 @@ class FindTest(client_test_lib.EmptyActionTest):
     result = self.RunAction(searching.Find, request)
     all_files = [x.hit for x in result if isinstance(x, rdf_client_fs.FindSpec)]
 
-    self.assertEqual(len(all_files), 2)
+    self.assertLen(all_files, 2)
     self.assertEqual(all_files[0].pathspec.Dirname().Basename(), "directory3")
     self.assertEqual(all_files[0].pathspec.Basename(), "file1.txt")
     self.assertEqual(all_files[1].pathspec.Dirname().Basename(), "directory3")
@@ -397,7 +393,7 @@ class FindTest(client_test_lib.EmptyActionTest):
     result = self.RunAction(searching.Find, request)
     all_files = [x.hit for x in result if isinstance(x, rdf_client_fs.FindSpec)]
 
-    self.assertEqual(len(all_files), 3)
+    self.assertLen(all_files, 3)
     self.assertEqual(all_files[0].pathspec.Basename(), "directory2")
     self.assertEqual(all_files[1].pathspec.Basename(), "directory1")
     self.assertEqual(all_files[2].pathspec.Basename(), "directory3")
@@ -416,7 +412,7 @@ class FindTest(client_test_lib.EmptyActionTest):
     result = self.RunAction(searching.Find, request)
     all_files = [x.hit for x in result if isinstance(x, rdf_client_fs.FindSpec)]
 
-    self.assertEqual(len(all_files), 2)
+    self.assertLen(all_files, 2)
     self.assertEqual(all_files[0].pathspec.Dirname().Basename(), "directory2")
     self.assertEqual(all_files[0].pathspec.Basename(), "file.jpg")
     self.assertEqual(all_files[1].pathspec.Dirname().Basename(), "directory2")
@@ -430,7 +426,7 @@ class FindTest(client_test_lib.EmptyActionTest):
     result = self.RunAction(searching.Find, request)
     all_files = [x.hit for x in result if isinstance(x, rdf_client_fs.FindSpec)]
 
-    self.assertEqual(len(all_files), 2)
+    self.assertLen(all_files, 2)
     self.assertEqual(all_files[0].pathspec.Dirname().Basename(), "directory1")
     self.assertEqual(all_files[0].pathspec.Basename(), "file1.txt")
     self.assertEqual(all_files[1].pathspec.Dirname().Basename(), "directory1")
@@ -450,7 +446,7 @@ class FindTest(client_test_lib.EmptyActionTest):
     result = self.RunAction(searching.Find, request)
     all_files = [x.hit for x in result if isinstance(x, rdf_client_fs.FindSpec)]
 
-    self.assertEqual(len(all_files), 0)
+    self.assertEmpty(all_files)
 
     # Look for files that have uid of 50 and gid of 500
 
@@ -460,7 +456,7 @@ class FindTest(client_test_lib.EmptyActionTest):
     result = self.RunAction(searching.Find, request)
     all_files = [x.hit for x in result if isinstance(x, rdf_client_fs.FindSpec)]
 
-    self.assertEqual(len(all_files), 2)
+    self.assertLen(all_files, 2)
     self.assertEqual(all_files[0].pathspec.Dirname().Basename(), "directory2")
     self.assertEqual(all_files[0].pathspec.Basename(), "file.jpg")
     self.assertEqual(all_files[1].pathspec.Dirname().Basename(), "directory2")
@@ -470,14 +466,14 @@ class FindTest(client_test_lib.EmptyActionTest):
 class FindExtAttrsTest(client_test_lib.EmptyActionTest):
 
   def testExtAttrsCollection(self):
-    with test_lib.AutoTempDirPath(remove_non_empty=True) as temp_dirpath:
-      foo_filepath = test_lib.TempFilePath(dir=temp_dirpath)
+    with temp.AutoTempDirPath(remove_non_empty=True) as temp_dirpath:
+      foo_filepath = temp.TempFilePath(dir=temp_dirpath)
       client_test_lib.SetExtAttr(foo_filepath, name="user.quux", value="foo")
 
-      bar_filepath = test_lib.TempFilePath(dir=temp_dirpath)
+      bar_filepath = temp.TempFilePath(dir=temp_dirpath)
       client_test_lib.SetExtAttr(bar_filepath, name="user.quux", value="bar")
 
-      baz_filepath = test_lib.TempFilePath(dir=temp_dirpath)
+      baz_filepath = temp.TempFilePath(dir=temp_dirpath)
       client_test_lib.SetExtAttr(baz_filepath, name="user.quux", value="baz")
 
       request = rdf_client_fs.FindSpec(
@@ -492,14 +488,14 @@ class FindExtAttrsTest(client_test_lib.EmptyActionTest):
         if isinstance(response, rdf_client_fs.FindSpec):
           hits.append(response.hit)
 
-      self.assertEqual(len(hits), 3)
+      self.assertLen(hits, 3)
 
       values = []
       for hit in hits:
-        self.assertEqual(len(hit.ext_attrs), 1)
+        self.assertLen(hit.ext_attrs, 1)
         values.append(hit.ext_attrs[0].value)
 
-      self.assertItemsEqual(values, ["foo", "bar", "baz"])
+      self.assertCountEqual(values, ["foo", "bar", "baz"])
 
 
 class GrepTest(client_test_lib.EmptyActionTest):
@@ -540,7 +536,7 @@ class GrepTest(client_test_lib.EmptyActionTest):
         1529, 1929, 2329, 2729, 3129, 3529, 3888
     ])
     for x in result:
-      self.assertTrue(b"10" in utils.Xor(x.data, self.XOR_OUT_KEY))
+      self.assertIn(b"10", utils.Xor(x.data, self.XOR_OUT_KEY))
       self.assertEqual(request.target.path, x.pathspec.path)
 
   def testGrepRegex(self):
@@ -562,7 +558,7 @@ class GrepTest(client_test_lib.EmptyActionTest):
         1529, 1929, 2329, 2729, 3129, 3529, 3888
     ])
     for x in result:
-      self.assertTrue(b"10" in utils.Xor(x.data, self.XOR_OUT_KEY))
+      self.assertIn(b"10", utils.Xor(x.data, self.XOR_OUT_KEY))
 
   def testGrepLength(self):
     data = b"X" * 100 + b"HIT"
@@ -578,7 +574,7 @@ class GrepTest(client_test_lib.EmptyActionTest):
     request.start_offset = 0
 
     result = self.RunAction(searching.Grep, request)
-    self.assertEqual(len(result), 1)
+    self.assertLen(result, 1)
     self.assertEqual(result[0].offset, 100)
 
     request = rdf_client_fs.GrepSpec(
@@ -591,7 +587,7 @@ class GrepTest(client_test_lib.EmptyActionTest):
     request.length = 100
 
     result = self.RunAction(searching.Grep, request)
-    self.assertEqual(len(result), 0)
+    self.assertEmpty(result)
 
   def testGrepOffset(self):
     data = b"X" * 10 + b"HIT" + b"X" * 100
@@ -607,7 +603,7 @@ class GrepTest(client_test_lib.EmptyActionTest):
     request.start_offset = 0
 
     result = self.RunAction(searching.Grep, request)
-    self.assertEqual(len(result), 1)
+    self.assertLen(result, 1)
     self.assertEqual(result[0].offset, 10)
 
     request = rdf_client_fs.GrepSpec(
@@ -619,7 +615,7 @@ class GrepTest(client_test_lib.EmptyActionTest):
     request.start_offset = 5
 
     result = self.RunAction(searching.Grep, request)
-    self.assertEqual(len(result), 1)
+    self.assertLen(result, 1)
     # This should still report 10.
     self.assertEqual(result[0].offset, 10)
 
@@ -632,7 +628,7 @@ class GrepTest(client_test_lib.EmptyActionTest):
     request.start_offset = 11
 
     result = self.RunAction(searching.Grep, request)
-    self.assertEqual(len(result), 0)
+    self.assertEmpty(result)
 
   def testOffsetAndLength(self):
 
@@ -649,7 +645,7 @@ class GrepTest(client_test_lib.EmptyActionTest):
     request.length = 100
 
     result = self.RunAction(searching.Grep, request)
-    self.assertEqual(len(result), 0)
+    self.assertEmpty(result)
 
   @SearchParams(1000, 100)
   def testSecondBuffer(self):
@@ -666,7 +662,7 @@ class GrepTest(client_test_lib.EmptyActionTest):
     request.start_offset = 0
 
     result = self.RunAction(searching.Grep, request)
-    self.assertEqual(len(result), 1)
+    self.assertLen(result, 1)
     self.assertEqual(result[0].offset, 1500)
 
   @SearchParams(1000, 100)
@@ -686,10 +682,10 @@ class GrepTest(client_test_lib.EmptyActionTest):
       request.start_offset = 0
 
       result = self.RunAction(searching.Grep, request)
-      self.assertEqual(len(result), 1)
+      self.assertLen(result, 1)
       self.assertEqual(result[0].offset, 1000 + offset)
       expected = b"X" * 10 + b"HIT" + b"X" * 10
-      self.assertEqual(result[0].length, len(expected))
+      self.assertLen(expected, result[0].length)
       self.assertEqual(utils.Xor(result[0].data, self.XOR_OUT_KEY), expected)
 
   def testSnippetSize(self):
@@ -710,10 +706,10 @@ class GrepTest(client_test_lib.EmptyActionTest):
         request.bytes_after = after
 
         result = self.RunAction(searching.Grep, request)
-        self.assertEqual(len(result), 1)
+        self.assertLen(result, 1)
         self.assertEqual(result[0].offset, 100)
         expected = b"X" * before + b"HIT" + b"X" * after
-        self.assertEqual(result[0].length, len(expected))
+        self.assertLen(expected, result[0].length)
         self.assertEqual(utils.Xor(result[0].data, self.XOR_OUT_KEY), expected)
 
   @SearchParams(100, 50)
@@ -734,10 +730,10 @@ class GrepTest(client_test_lib.EmptyActionTest):
       request.bytes_after = 10
 
       result = self.RunAction(searching.Grep, request)
-      self.assertEqual(len(result), 1)
+      self.assertLen(result, 1)
       self.assertEqual(result[0].offset, offset)
       expected = data[max(0, offset - 10):offset + 3 + 10]
-      self.assertEqual(result[0].length, len(expected))
+      self.assertLen(expected, result[0].length)
       self.assertEqual(utils.Xor(result[0].data, self.XOR_OUT_KEY), expected)
 
   def testHitLimit(self):
@@ -758,9 +754,9 @@ class GrepTest(client_test_lib.EmptyActionTest):
     request.bytes_after = 10
 
     result = self.RunAction(searching.Grep, request)
-    self.assertEqual(len(result), limit + 1)
+    self.assertLen(result, limit + 1)
     error = b"maximum number of hits"
-    self.assertTrue(error in utils.Xor(result[-1].data, self.XOR_OUT_KEY))
+    self.assertIn(error, utils.Xor(result[-1].data, self.XOR_OUT_KEY))
 
 
 class XoredSearchingTest(GrepTest):
@@ -785,7 +781,7 @@ class FindBenchmarks(benchmark_test_lib.AverageMicroBenchmarks,
       request.iterator.number = 80
       result = self.RunAction(searching.Find, request)
       # 80 results plus one iterator.
-      self.assertEqual(len(result), 81)
+      self.assertLen(result, 81)
 
     self.TimeIt(RunFind, "Find files with no filters.")
 

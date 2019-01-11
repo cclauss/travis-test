@@ -1,13 +1,17 @@
 #!/usr/bin/env python
 # Copyright 2012 Google Inc. All Rights Reserved.
 """Client actions related to plist files."""
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import unicode_literals
 
-import cStringIO
+import io
 import types
 
 
 from binplist import binplist
+from future.builtins import str
+
 from grr_response_client import actions
 from grr_response_client import vfs
 from grr_response_core.lib import plist as plist_lib
@@ -44,10 +48,10 @@ class PlistQuery(actions.ActionPlugin):
 
     with vfs.VFSOpen(args.pathspec, progress_callback=self.Progress) as fd:
       data = fd.Read(self.MAX_PLIST_SIZE)
-      plist = binplist.readPlist(cStringIO.StringIO(data))
+      plist = binplist.readPlist(io.BytesIO(data))
 
       # Create the query parser
-      parser = plist_lib.PlistFilterParser(unicode(self.filter_query)).Parse()
+      parser = plist_lib.PlistFilterParser(str(self.filter_query)).Parse()
       filter_imp = plist_lib.PlistFilterImplementation
       matcher = parser.Compile(filter_imp)
 

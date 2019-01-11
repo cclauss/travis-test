@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 """Simple parsers for configuration files."""
 
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import unicode_literals
 
 import logging
@@ -12,6 +14,7 @@ import stat
 from builtins import zip  # pylint: disable=redefined-builtin
 from future.utils import iteritems
 from future.utils import itervalues
+from typing import Text
 
 from grr_response_core.lib import lexer
 from grr_response_core.lib import parser
@@ -20,6 +23,7 @@ from grr_response_core.lib.parsers import config_file
 from grr_response_core.lib.rdfvalues import anomaly as rdf_anomaly
 from grr_response_core.lib.rdfvalues import client as rdf_client
 from grr_response_core.lib.rdfvalues import protodict as rdf_protodict
+from grr_response_core.lib.util import precondition
 
 
 class LSBInitLexer(lexer.Lexer):
@@ -60,7 +64,7 @@ class LSBInitLexer(lexer.Lexer):
     self.buffer = []
 
   def ParseEntries(self, data):
-    utils.AssertType(data, unicode)
+    precondition.AssertType(data, Text)
     self.entries = {}
     self.Reset()
     self.Feed(data)
@@ -110,12 +114,11 @@ def GetRunlevelsNonLSB(states):
   return set([convert_table[s] for s in states.split() if s in convert_table])
 
 
-class LinuxLSBInitParser(parser.FileParser):
+class LinuxLSBInitParser(parser.FileMultiParser):
   """Parses LSB style /etc/init.d entries."""
 
   output_types = ["LinuxServiceInformation"]
   supported_artifacts = ["LinuxLSBInit"]
-  process_together = True
 
   def _Facilities(self, condition):
     results = []
@@ -128,7 +131,7 @@ class LinuxLSBInitParser(parser.FileParser):
   def _ParseInit(self, init_files):
     init_lexer = LSBInitLexer()
     for path, file_obj in init_files:
-      init = init_lexer.ParseEntries(file_obj.read())
+      init = init_lexer.ParseEntries(utils.ReadFileBytesAsUnicode(file_obj))
       if init:
         service = rdf_client.LinuxServiceInformation()
         service.name = init.get("provides")
@@ -192,7 +195,7 @@ class LinuxLSBInitParser(parser.FileParser):
     init_files = []
     for k, v in iteritems(files):
       if k.startswith("/etc/insserv.conf"):
-        insserv_data += "%s\n" % v.read()
+        insserv_data += "%s\n" % utils.ReadFileBytesAsUnicode(v)
       else:
         init_files.append((k, v))
     self._ParseInsserv(insserv_data)
@@ -200,12 +203,11 @@ class LinuxLSBInitParser(parser.FileParser):
       yield rslt
 
 
-class LinuxXinetdParser(parser.FileParser):
+class LinuxXinetdParser(parser.FileMultiParser):
   """Parses xinetd entries."""
 
   output_types = ["LinuxServiceInformation"]
   supported_artifacts = ["LinuxXinetd"]
-  process_together = True
 
   def _ParseSection(self, section, cfg):
     p = config_file.KeyValueParser()
@@ -226,7 +228,7 @@ class LinuxXinetdParser(parser.FileParser):
   def _ProcessEntries(self, fd):
     """Extract entries from the xinetd config files."""
     p = config_file.KeyValueParser(kv_sep="{", term="}", sep=None)
-    data = fd.read()
+    data = utils.ReadFileBytesAsUnicode(fd)
     entries = p.ParseEntries(data)
     for entry in entries:
       for section, cfg in iteritems(entry):
@@ -275,7 +277,7 @@ class LinuxXinetdParser(parser.FileParser):
       yield self._GenService(name, cfg)
 
 
-class LinuxSysVInitParser(parser.FileParser):
+class LinuxSysVInitParser(parser.FileMultiParser):
   """Parses SysV runlevel entries.
 
   Reads the stat entries for files under /etc/rc* runlevel scripts.
@@ -288,7 +290,6 @@ class LinuxSysVInitParser(parser.FileParser):
 
   output_types = ["LinuxServiceInformation"]
   supported_artifacts = ["LinuxSysVInit"]
-  process_together = True
 
   runlevel_re = re.compile(r"/etc/rc(?:\.)?([0-6S]|local$)(?:\.d)?")
   runscript_re = re.compile(r"(?P<action>[KS])(?P<prio>\d+)(?P<name>\S+)")

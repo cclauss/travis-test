@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 """Tests for the RegistryFinder flow."""
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import unicode_literals
 
 
@@ -44,7 +46,7 @@ class TestStubbedRegistryFinderFlow(flow_test_lib.FlowTestsBaseclass):
     # Listing inside a key gives the values.
     results = self._RunRegistryFinder(
         ["HKEY_LOCAL_MACHINE/SOFTWARE/ListingTest/*"])
-    self.assertEqual(len(results), 2)
+    self.assertLen(results, 2)
     self.assertEqual(
         sorted([x.stat_entry.registry_data.GetValue() for x in results]),
         ["Value1", "Value2"])
@@ -53,7 +55,7 @@ class TestStubbedRegistryFinderFlow(flow_test_lib.FlowTestsBaseclass):
     results = self._RunRegistryFinder(
         ["HKEY_LOCAL_MACHINE/SOFTWARE/ListingTest"])
 
-    self.assertEqual(len(results), 1)
+    self.assertLen(results, 1)
     self.assertEqual(results[0].stat_entry.registry_data.GetValue(),
                      "DefaultValue")
 
@@ -73,7 +75,7 @@ class TestStubbedRegistryFinderFlow(flow_test_lib.FlowTestsBaseclass):
     # the results.
     results = self._RunRegistryFinder(
         ["HKEY_LOCAL_MACHINE/SOFTWARE/ListingTest/*"])
-    self.assertEqual(len(results), 2)
+    self.assertLen(results, 2)
     for result in results:
       st = result.stat_entry
       self.assertIsNone(st.st_mtime)
@@ -84,7 +86,7 @@ class TestStubbedRegistryFinderFlow(flow_test_lib.FlowTestsBaseclass):
         "HKEY_LOCAL_MACHINE/SOFTWARE/ListingTest/Value2",
     ])
 
-    self.assertEqual(len(results), 2)
+    self.assertLen(results, 2)
     for result in results:
       st = result.stat_entry
       path = utils.SmartStr(st.pathspec.path)
@@ -94,6 +96,14 @@ class TestStubbedRegistryFinderFlow(flow_test_lib.FlowTestsBaseclass):
         self.assertEqual(st.st_mtime, 120)
       else:
         self.fail("Unexpected value: %s" % path)
+
+  def testListingRegistryHivesWorksCorrectly(self):
+    results = self._RunRegistryFinder(["*"])
+    self.assertLen(results, 2)
+    self.assertTrue(
+        [r for r in results if r.stat_entry.pathspec.pathtype == "REGISTRY"])
+    self.assertCountEqual([r.stat_entry.pathspec.path for r in results],
+                          ["/HKEY_LOCAL_MACHINE", "/HKEY_USERS"])
 
 
 def main(argv):

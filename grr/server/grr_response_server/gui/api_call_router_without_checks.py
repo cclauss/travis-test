@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 """Implementation of a router class that does no ACL checks."""
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import unicode_literals
 
 from grr_response_server.gui import api_call_router
@@ -106,6 +108,12 @@ class ApiCallRouterWithoutChecks(api_call_router.ApiCallRouterStub):
 
   def GetVfsFileContentUpdateState(self, args, token=None):
     return api_vfs.ApiGetVfsFileContentUpdateStateHandler()
+
+  def GetFileDecoders(self, args, token=None):
+    return api_vfs.ApiGetFileDecodersHandler()
+
+  def GetDecodedFileBlob(self, args, token=None):
+    return api_vfs.ApiGetDecodedFileHandler()
 
   # Clients labels methods.
   # ======================
@@ -305,6 +313,9 @@ class ApiCallRouterWithoutChecks(api_call_router.ApiCallRouterStub):
   def ListCronJobApprovals(self, args, token=None):
     return api_user.ApiListCronJobApprovalsHandler()
 
+  def ListApproverSuggestions(self, args, token=None):
+    return api_user.ApiListApproverSuggestionsHandler()
+
   # User settings methods.
   # =====================
   #
@@ -326,12 +337,6 @@ class ApiCallRouterWithoutChecks(api_call_router.ApiCallRouterStub):
 
   def UpdateGrrUser(self, args, token=None):
     return api_user.ApiUpdateGrrUserHandler()
-
-  def ListPendingGlobalNotifications(self, args, token=None):
-    return api_user.ApiListPendingGlobalNotificationsHandler()
-
-  def DeletePendingGlobalNotification(self, args, token=None):
-    return api_user.ApiDeletePendingGlobalNotificationHandler()
 
   # Config methods.
   # ==============

@@ -1,5 +1,8 @@
 #!/usr/bin/env python
 """Base classes for artifacts."""
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import unicode_literals
 
 import logging
 
@@ -8,21 +11,48 @@ from future.utils import iteritems
 
 from grr_response_core import config
 from grr_response_core.lib import artifact_utils
-from grr_response_core.lib import parser
 from grr_response_core.lib import rdfvalue
 from grr_response_core.lib import registry
 from grr_response_core.lib import utils
 from grr_response_core.lib.rdfvalues import anomaly as rdf_anomaly
-from grr_response_core.lib.rdfvalues import artifacts as rdf_artifacts
 from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_core.lib.rdfvalues import client_fs as rdf_client_fs
 from grr_response_core.lib.rdfvalues import protodict as rdf_protodict
 from grr_response_core.lib.rdfvalues import structs as rdf_structs
+from grr_response_core.lib.util import precondition
 from grr_response_proto import flows_pb2
 from grr_response_server import aff4
 from grr_response_server import artifact_registry
 from grr_response_server import data_store
+from grr_response_server import db
+from grr_response_server import file_store
 from grr_response_server import flow
 from grr_response_server import flow_base
+
+
+def GetKnowledgeBase(rdf_client_obj, allow_uninitialized=False):
+  """Returns a knowledgebase from an rdf client object."""
+  kb = rdf_client_obj.knowledge_base
+  if not allow_uninitialized:
+    if not kb:
+      raise artifact_utils.KnowledgeBaseUninitializedError(
+          "KnowledgeBase empty for %s." % rdf_client_obj.client_id)
+    if not kb.os:
+      raise artifact_utils.KnowledgeBaseAttributesMissingError(
+          "KnowledgeBase missing OS for %s. Knowledgebase content: %s" %
+          (rdf_client_obj.client_id, kb))
+  if not kb:
+    return rdf_client.KnowledgeBase()
+
+  version = rdf_client_obj.os_version.split(".")
+  try:
+    kb.os_major_version = int(version[0])
+    if len(version) >= 1:
+      kb.os_minor_version = int(version[1])
+  except ValueError:
+    pass
+
+  return kb
 
 
 def GetArtifactKnowledgeBase(client_obj, allow_uninitialized=False):
@@ -338,99 +368,84 @@ class KnowledgeBaseInitializationFlowMixin(object):
 
   def InitializeKnowledgeBase(self):
     """Get the existing KB or create a new one if none exists."""
-    self.client = aff4.FACTORY.Open(self.client_id, token=self.token)
+    if data_store.AFF4Enabled():
+      self.client = aff4.FACTORY.Open(self.client_id, token=self.token)
 
-    # Always create a new KB to override any old values.
-    self.state.knowledge_base = rdf_client.KnowledgeBase()
-    SetCoreGRRKnowledgeBaseValues(self.state.knowledge_base, self.client)
+      # Always create a new KB to override any old values.
+      self.state.knowledge_base = rdf_client.KnowledgeBase()
+      SetCoreGRRKnowledgeBaseValues(self.state.knowledge_base, self.client)
 
-    if not self.state.knowledge_base.os:
-      # If we don't know what OS this is, there is no way to proceed.
-      raise flow.FlowError("Client OS not set for: %s, cannot initialize"
-                           " KnowledgeBase" % self.client_id)
+      if not self.state.knowledge_base.os:
+        # If we don't know what OS this is, there is no way to proceed.
+        raise flow.FlowError("Client OS not set for: %s, cannot initialize"
+                             " KnowledgeBase" % self.client_id)
+    else:
+      # Always create a new KB to override any old values but keep os and
+      # version so we know which artifacts we can run.
+      self.state.knowledge_base = rdf_client.KnowledgeBase()
+      kb = data_store.REL_DB.ReadClientSnapshot(self.client_id).knowledge_base
+      if kb:
+        self.state.knowledge_base.os = kb.os
+        self.state.knowledge_base.os_minor_version = kb.os_major_version
+        self.state.knowledge_base.os_minor_version = kb.os_minor_version
 
 
-def ApplyParserToResponses(processor_obj, responses, source, flow_obj, token):
-  """Parse responses using the specified processor and the right args.
+def ApplyParsersToResponses(parser_factory, responses, flow_obj):
+  """Parse responses with applicable parsers.
 
   Args:
-    processor_obj: A Processor object that inherits from Parser.
-    responses: A list of, or single response depending on the processors
-      process_together setting.
-    source: The source responsible for producing the responses.
+    parser_factory: A parser factory for specific artifact.
+    responses: A list of responses from the client.
     flow_obj: An artifact collection flow.
-    token: The token used in an artifact collection flow.
-
-  Raises:
-    RuntimeError: On bad parser.
 
   Returns:
-    An iterator of the processor responses.
+    A list of (possibly parsed) responses.
   """
-  if not processor_obj:
-    # We don't do any parsing, the results are raw as they came back.
-    # If this is an RDFValue we don't want to unpack it further
-    if isinstance(responses, rdfvalue.RDFValue):
-      result_iterator = [responses]
+  # We have some processors to run.
+  knowledge_base = flow_obj.state.knowledge_base
+
+  parsed_responses = []
+
+  if parser_factory.HasSingleResponseParsers():
+    for response in responses:
+      for parser in parser_factory.SingleResponseParsers():
+        parsed_responses.extend(
+            parser.ParseResponse(knowledge_base, response,
+                                 flow_obj.args.path_type))
+
+  for parser in parser_factory.MultiResponseParsers():
+    parsed_responses.extend(parser.ParseResponses(knowledge_base, responses))
+
+  has_single_file_parsers = parser_factory.HasSingleFileParsers()
+  has_multi_file_parsers = parser_factory.HasMultiFileParsers()
+
+  if has_single_file_parsers or has_multi_file_parsers:
+    precondition.AssertIterableType(responses, rdf_client_fs.StatEntry)
+    pathspecs = [response.pathspec for response in responses]
+    if (data_store.RelationalDBReadEnabled("vfs") and
+        data_store.RelationalDBReadEnabled("filestore")):
+      # TODO(amoser): This is not super efficient, AFF4 provided an api to open
+      # all pathspecs at the same time, investigate if optimizing this is worth
+      # it.
+      filedescs = []
+      for pathspec in pathspecs:
+        client_path = db.ClientPath.FromPathSpec(flow_obj.client_id, pathspec)
+        filedescs.append(file_store.OpenFile(client_path))
     else:
-      result_iterator = responses
+      filedescs = MultiOpenAff4File(flow_obj, pathspecs)
 
-  else:
-    # We have some processors to run.
-    if processor_obj.process_together:
-      # We are processing things in a group which requires specialized
-      # handling by the parser. This is used when multiple responses need to
-      # be combined to parse successfully. E.g parsing passwd and shadow files
-      # together.
-      parse_method = processor_obj.ParseMultiple
-    else:
-      parse_method = processor_obj.Parse
+  if has_single_file_parsers:
+    for response, filedesc in zip(responses, filedescs):
+      for parser in parser_factory.SingleFileParsers():
+        parsed_responses.extend(
+            parser.ParseFile(knowledge_base, response.pathspec, filedesc))
 
-    state = flow_obj.state
-    if isinstance(processor_obj, parser.CommandParser):
-      # Command processor only supports one response at a time.
-      response = responses
-      result_iterator = parse_method(
-          cmd=response.request.cmd,
-          args=response.request.args,
-          stdout=response.stdout,
-          stderr=response.stderr,
-          return_val=response.exit_status,
-          time_taken=response.time_used,
-          knowledge_base=state.knowledge_base)
+  if has_multi_file_parsers:
+    for parser in parser_factory.MultiFileParsers():
+      parsed_responses.extend(
+          parser.ParseFiles(knowledge_base, pathspecs, filedescs))
 
-    elif isinstance(processor_obj, parser.WMIQueryParser):
-      query = source["attributes"]["query"]
-      result_iterator = parse_method(query, responses, state.knowledge_base)
-
-    elif isinstance(processor_obj, parser.FileParser):
-      if processor_obj.process_together:
-        # TODO(amoser): This is very brittle, one day we should come
-        # up with a better API here.
-        urns = [r.AFF4Path(flow_obj.client_urn) for r in responses]
-        file_objects = list(aff4.FACTORY.MultiOpen(urns, token=token))
-        file_objects.sort(key=lambda file_object: file_object.urn)
-        stats = sorted(responses, key=lambda r: r.pathspec.path)
-        result_iterator = parse_method(stats, file_objects,
-                                       state.knowledge_base)
-      else:
-        fd = aff4.FACTORY.Open(
-            responses.AFF4Path(flow_obj.client_urn), token=token)
-        result_iterator = parse_method(responses, fd, state.knowledge_base)
-
-    elif isinstance(processor_obj,
-                    (parser.RegistryParser, parser.RekallPluginParser,
-                     parser.RegistryValueParser, parser.GenericResponseParser,
-                     parser.GrepParser)):
-      result_iterator = parse_method(responses, state.knowledge_base)
-
-    elif isinstance(processor_obj, (parser.ArtifactFilesParser)):
-      result_iterator = parse_method(responses, state.knowledge_base,
-                                     flow_obj.args.path_type)
-
-    else:
-      raise RuntimeError("Unsupported parser detected %s" % processor_obj)
-  return result_iterator
+  return parsed_responses or responses
 
 
 ARTIFACT_STORE_ROOT_URN = aff4.ROOT_URN.Add("artifact_store")
@@ -472,7 +487,11 @@ def UploadArtifactYamlFile(file_content,
           source="datastore:%s" % ARTIFACT_STORE_ROOT_URN,
           overwrite_if_exists=overwrite,
           overwrite_system_artifacts=overwrite_system_artifacts)
+
       artifact_coll.Add(artifact_value, mutation_pool=pool)
+      if data_store.RelationalDBWriteEnabled():
+        data_store.REL_DB.WriteArtifact(artifact_value)
+
       loaded_artifacts.append(artifact_value)
 
       name = artifact_value.name
@@ -485,30 +504,18 @@ def UploadArtifactYamlFile(file_content,
     artifact_registry.ValidateDependencies(artifact_value)
 
 
-class ArtifactFallbackCollectorArgs(rdf_structs.RDFProtoStruct):
-  protobuf = flows_pb2.ArtifactFallbackCollectorArgs
-  rdf_deps = [
-      rdf_artifacts.ArtifactName,
-  ]
+# TODO(hanuszczak): This function is not very elegant and should probably be
+# placed in some other module. Or maybe it should be a method of the `Flow`
+# class...?
+def OpenAff4File(flow_obj, pathspec):
+  aff4_path = pathspec.AFF4Path(flow_obj.client_urn)
+  return aff4.FACTORY.Open(aff4_path, token=flow_obj.token)
 
 
-class ArtifactFallbackCollector(flow.GRRFlow):
-  """Abstract class for artifact fallback flows.
-
-  If an artifact can't be collected by normal means a flow can be registered
-  with a fallback means of collection by subclassing this class. This is useful
-  when an artifact is critical to the collection of other artifacts so we want
-  to try harder to make sure its collected.
-
-  The flow will be called from
-  lib.flows.general.collectors.ArtifactCollectorFlow. The flow should SendReply
-  the artifact value in the same format as would have been returned by the
-  original artifact collection.
-  """
-  args_type = ArtifactFallbackCollectorArgs
-
-  # List of artifact names for which we are registering as the fallback
-  artifacts = []
+# TODO(hanuszczak): Same as above.
+def MultiOpenAff4File(flow_obj, pathspecs):
+  aff4_paths = [_.AFF4Path(flow_obj.client_urn) for _ in pathspecs]
+  return aff4.FACTORY.MultiOpenOrdered(aff4_paths, token=flow_obj.token)
 
 
 class ArtifactLoader(registry.InitHook):

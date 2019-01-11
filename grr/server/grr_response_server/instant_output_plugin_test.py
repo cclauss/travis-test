@@ -1,5 +1,8 @@
 #!/usr/bin/env python
 """Tests for grr.lib.output_plugin."""
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import unicode_literals
 
 
 from grr_response_core.lib import flags
@@ -11,9 +14,11 @@ from grr_response_server import export
 from grr_response_server import instant_output_plugin
 from grr_response_server import multi_type_collection
 from grr_response_server.output_plugins import test_plugins
+from grr.test_lib import db_test_lib
 from grr.test_lib import test_lib
 
 
+@db_test_lib.DualDBTest
 class ApplyPluginToMultiTypeCollectionTest(test_lib.GRRBaseTest):
   """Tests for ApplyPluginToMultiTypeCollection() function."""
 
@@ -162,6 +167,7 @@ class TestConverter2(export.ExportConverter):
     ]
 
 
+@db_test_lib.DualDBTest
 class InstantOutputPluginWithExportConversionTest(
     test_plugins.InstantOutputPluginTestBase):
   """Tests for InstantOutputPluginWithExportConversion."""

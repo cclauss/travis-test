@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 """End to end tests for GRR filesystem-related flows."""
+from __future__ import absolute_import
+from __future__ import division
 
 from grr_response_test.end_to_end_tests import test_base
 
@@ -88,6 +90,7 @@ class TestFindTSKLinux(test_base.EndToEndTest):
     # Cut down the number of files by specifying a partial regex
     # match, we just want to find /usr/bin/diff, when run on a real
     # system there are thousands which takes forever with TSK.
+    # TODO
     args.findspec.max_depth = 1
     args.findspec.path_regex = "di"
     args.findspec.pathspec.path = "/usr/bin"

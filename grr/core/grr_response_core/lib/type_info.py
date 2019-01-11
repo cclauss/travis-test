@@ -5,6 +5,8 @@ This contains objects that are used to provide type annotations for flow
 parameters. These annotations are used to assist in rendering the UI for
 starting flows and for validating arguments.
 """
+from __future__ import absolute_import
+from __future__ import division
 
 from __future__ import unicode_literals
 
@@ -12,12 +14,15 @@ import logging
 
 
 from future.utils import itervalues
+from future.utils import string_types
 from future.utils import with_metaclass
 from past.builtins import long
+from typing import Text
 
 from grr_response_core.lib import rdfvalue
 from grr_response_core.lib import registry
 from grr_response_core.lib import utils
+from grr_response_core.lib.util import precondition
 
 
 class Error(Exception):
@@ -342,7 +347,7 @@ class List(TypeInfoObject):
 
   def Validate(self, value):
     """Validate a potential list."""
-    if isinstance(value, basestring):
+    if isinstance(value, string_types):
       raise TypeValueError("Value must be an iterable not a string.")
 
     elif not isinstance(value, (list, tuple)):
@@ -367,7 +372,7 @@ class List(TypeInfoObject):
 class String(TypeInfoObject):
   """A String type."""
 
-  _type = unicode
+  _type = Text
 
   def __init__(self, **kwargs):
     defaults = dict(default="")
@@ -375,18 +380,20 @@ class String(TypeInfoObject):
     super(String, self).__init__(**defaults)
 
   def Validate(self, value):
-    if not isinstance(value, basestring):
+    # TODO(hanuszczak): Accept only unicode strings here.
+    if not isinstance(value, string_types):
       raise TypeValueError("%s: %s not a valid string" % (self.name, value))
 
     # A String means a unicode String. We must be dealing with unicode strings
     # here and the input must be encodable as a unicode object.
     try:
-      return unicode(value)
+      # TODO(hanuszczak): Use `future.builtins.str` here.
+      return Text(value)
     except UnicodeError:
       raise TypeValueError("Not a valid unicode string")
 
   def ToString(self, value):
-    utils.AssertType(value, unicode)
+    precondition.AssertType(value, Text)
     return value
 
 
@@ -396,17 +403,17 @@ class Bytes(String):
   _type = bytes
 
   def Validate(self, value):
-    if not isinstance(value, str):
+    if not isinstance(value, bytes):
       raise TypeValueError("%s not a valid string" % value)
 
     return value
 
   def FromString(self, string):
-    utils.AssertType(string, unicode)
+    precondition.AssertType(string, Text)
     return string.encode("utf-8")
 
   def ToString(self, value):
-    utils.AssertType(value, bytes)
+    precondition.AssertType(value, bytes)
     return value.decode("utf-8")
 
 

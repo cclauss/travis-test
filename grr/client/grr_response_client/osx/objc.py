@@ -1,5 +1,8 @@
 #!/usr/bin/env python
 """Interface to Objective C libraries on OS X."""
+from __future__ import absolute_import
+from __future__ import division
+
 from __future__ import unicode_literals
 
 import ctypes
@@ -8,9 +11,12 @@ import logging
 import subprocess
 
 
-from builtins import range  # pylint: disable=redefined-builtin
+from future.builtins import range
 from future.utils import iteritems
+from future.utils import python_2_unicode_compatible
+from future.utils import string_types
 from past.builtins import long
+from typing import Text
 
 # kCFStringEncodingUTF8
 UTF8 = 134217984
@@ -131,7 +137,7 @@ class Foundation(object):
     length = (self.dll.CFStringGetLength(value) * 4) + 1
     buff = ctypes.create_string_buffer(length)
     self.dll.CFStringGetCString(value, buff, length * 4, UTF8)
-    return unicode(buff.value, 'utf8')
+    return buff.value.decode('utf-8')
 
   def IntToCFNumber(self, num):
     if not isinstance(num, (int, long)):
@@ -303,6 +309,7 @@ class CFNumber(CFType):
     return str(self.value)
 
 
+@python_2_unicode_compatible
 class CFString(CFType):
   """Wrapper class for CFString to behave like a python string."""
 
@@ -311,7 +318,7 @@ class CFString(CFType):
     if isinstance(obj, (ctypes.c_void_p, int)):
       super(CFString, self).__init__(obj)
       self.dll.CFRetain(obj)
-    elif isinstance(obj, basestring):
+    elif isinstance(obj, string_types):
       super(CFString, self).__init__(None)
       self.ref = self.PyStringToCFString(obj)
     else:
@@ -324,8 +331,8 @@ class CFString(CFType):
   def __len__(self):
     return self.dll.CFArrayGetCount(self.ref)
 
-  def __unicode__(self):
-    return unicode(self.value)
+  def __str__(self):
+    return self.value
 
   def __repr__(self):
     return self.value
@@ -372,7 +379,7 @@ class CFDictionary(CFType):
   def __getitem__(self, key):
     if isinstance(key, CFType):
       cftype_key = key
-    if isinstance(key, basestring):
+    if isinstance(key, string_types):
       cftype_key = CFString(key)
     elif isinstance(key, (int, long)):
       cftype_key = CFNumber(key)

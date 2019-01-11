@@ -1,11 +1,13 @@
 #!/usr/bin/env python
 # -*- mode: python; encoding: utf-8 -*-
 """Test the artifact rendering interface."""
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import unicode_literals
 
 import os
 
-import unittest
+
 from grr_response_core import config
 from grr_response_core.lib import flags
 from grr_response_core.lib import parser
@@ -14,6 +16,7 @@ from grr_response_server import artifact_registry
 from grr_response_server.flows.general import collectors
 from grr_response_server.gui import gui_test_lib
 from grr.test_lib import db_test_lib
+from grr.test_lib import test_lib
 
 
 class TestCmdProcessor(parser.CommandParser):
@@ -145,11 +148,5 @@ class TestArtifactRender(gui_test_lib.GRRSeleniumTest):
         "span[title~='Custom Uploaded Artifact'] > i.fa-user")
 
 
-def main(argv):
-  del argv  # Unused.
-  # Run the full test suite
-  unittest.main()
-
-
 if __name__ == "__main__":
-  flags.StartMain(main)
+  flags.StartMain(test_lib.main)

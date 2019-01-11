@@ -1,15 +1,18 @@
 #!/usr/bin/env python
 # -*- mode: python; encoding: utf-8 -*-
 """Test the vfs refreshing functionality."""
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import unicode_literals
 
 
-import unittest
 from grr_response_core.lib import flags
 
 from grr_response_core.lib import rdfvalue
 from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_core.lib.util import compatibility
 from grr_response_server import aff4
+from grr_response_server import data_store
 from grr_response_server.flows.general import filesystem
 from grr_response_server.flows.general import transfer
 from grr_response_server.gui import gui_test_lib
@@ -32,10 +35,6 @@ class DirRefreshTest(gui_test_lib.GRRSeleniumTest):
     self.RequestAndGrantClientApproval("C.0000000000000001")
 
   def _RunUpdateFlow(self, client_id):
-    # Get the flows that should have been started and finish them.
-    fd = aff4.FACTORY.Open(client_id.Add("flows"), token=self.token)
-    flows = list(fd.ListChildren())
-
     gui_test_lib.CreateFileVersion(
         client_id,
         "fs/os/c/a.txt",
@@ -53,37 +52,13 @@ class DirRefreshTest(gui_test_lib.GRRSeleniumTest):
         timestamp=gui_test_lib.TIME_0,
         token=self.token)
 
-    client_mock = action_mocks.ActionMock()
-    for flow_urn in flows:
-      flow_test_lib.TestFlowHelper(
-          flow_urn,
-          client_mock,
-          client_id=client_id,
-          token=self.token,
-          check_flow_errors=False)
+    flow_test_lib.FinishAllFlowsOnClient(
+        client_id,
+        client_mock=action_mocks.MultiGetFileClientMock(),
+        check_flow_errors=False)
 
   def testRefreshFileStartsFlow(self):
-    self.Open("/")
-
-    self.Type("client_query", "C.0000000000000001")
-    self.Click("client_query_submit")
-
-    self.WaitUntilEqual(u"C.0000000000000001", self.GetText,
-                        "css=span[type=subject]")
-
-    # Choose client 1.
-    self.Click("css=td:contains('0001')")
-
-    # Go to Browse VFS.
-    self.Click("css=a:contains('Browse Virtual Filesystem')")
-
-    self.Click("css=#_fs i.jstree-icon")
-    self.Click("css=#_fs-os i.jstree-icon")
-    self.Click("css=#_fs-os-c i.jstree-icon")
-
-    # Test file versioning.
-    self.WaitUntil(self.IsElementPresent, "css=#_fs-os-c-Downloads")
-    self.Click("link=Downloads")
+    self.Open("/#/clients/C.0000000000000001/vfs/fs/os/c/Downloads/")
 
     # Select a file and start a flow by requesting a newer version.
     self.Click("css=tr:contains(\"a.txt\")")
@@ -99,34 +74,30 @@ class DirRefreshTest(gui_test_lib.GRRSeleniumTest):
     # Make sure that the flow has started (when button is clicked, the HTTP
     # API request is sent asynchronously).
     def MultiGetFileStarted():
-      return transfer.MultiGetFile.__name__ in list(
-          x.__class__.__name__ for x in fd.OpenChildren())
+      if data_store.RelationalDBFlowsEnabled():
+        return compatibility.GetName(transfer.MultiGetFile) in [
+            f.flow_class_name for f in data_store.REL_DB.ReadAllFlowObjects(
+                client_id=client_id.Basename())
+        ]
+      else:
+        return transfer.MultiGetFile.__name__ in list(
+            x.__class__.__name__ for x in fd.OpenChildren())
 
     self.WaitUntil(MultiGetFileStarted)
 
-    flows = list(fd.ListChildren())
-
-    client_mock = action_mocks.MultiGetFileClientMock()
-    for flow_urn in flows:
-      flow_test_lib.TestFlowHelper(
-          flow_urn,
-          client_mock,
-          client_id=client_id,
-          check_flow_errors=False,
-          token=self.token)
+    flow_test_lib.FinishAllFlowsOnClient(client_id, check_flow_errors=False)
 
     time_in_future = rdfvalue.RDFDatetime.Now() + rdfvalue.Duration("1h")
     # We have to make sure that the new version will not be within a second
     # from the current one, otherwise the previous one and the new one will
     # be indistinguishable in the UI (as it has a 1s precision when
     # displaying versions).
-    with test_lib.FakeTime(time_in_future):
-      gui_test_lib.CreateFileVersion(
-          rdf_client.ClientURN("C.0000000000000001"),
-          "fs/os/c/Downloads/a.txt",
-          "The newest version!".encode("utf-8"),
-          timestamp=rdfvalue.RDFDatetime.Now(),
-          token=self.token)
+    gui_test_lib.CreateFileVersion(
+        rdf_client.ClientURN("C.0000000000000001"),
+        "fs/os/c/Downloads/a.txt",
+        "The newest version!".encode("utf-8"),
+        timestamp=time_in_future,
+        token=self.token)
 
     # Once the flow has finished, the file view should update and add the
     # newly created, latest version of the file to the list. The selected
@@ -303,11 +274,5 @@ class DirRefreshTest(gui_test_lib.GRRSeleniumTest):
     self.WaitUntil(self.IsElementPresent, "link=foo")
 
 
-def main(argv):
-  del argv  # Unused.
-  # Run the full test suite
-  unittest.main()
-
-
 if __name__ == "__main__":
-  flags.StartMain(main)
+  flags.StartMain(test_lib.main)

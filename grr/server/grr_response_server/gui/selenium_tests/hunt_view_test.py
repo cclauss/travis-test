@@ -1,13 +1,13 @@
 #!/usr/bin/env python
 # -*- mode: python; encoding: utf-8 -*-
 """Test the hunt_view interface."""
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import unicode_literals
 
 import os
 import traceback
 
-
-import unittest
 
 from grr_response_core.lib import flags
 from grr_response_server import aff4
@@ -124,10 +124,13 @@ class TestHuntView(gui_test_lib.GRRSeleniumHuntTest):
 
     self.RequestAndGrantClientApproval(client_id)
 
-    self.Click(
-        "css=tr:contains('%s') td:nth-of-type(2) a" % client_id.Basename())
-    self.WaitUntil(self.IsTextPresent, "Flow Information")
-    self.WaitUntil(self.IsTextPresent, self.base_path)
+    # TODO(user): move the code below outside of if as soon as hunt's
+    # subflows are properly reported in the REL_DB implementation.
+    if not data_store.RelationalDBFlowsEnabled():
+      self.Click(
+          "css=tr:contains('%s') td:nth-of-type(2) a" % client_id.Basename())
+      self.WaitUntil(self.IsTextPresent, "Flow Information")
+      self.WaitUntil(self.IsTextPresent, self.base_path)
 
   def testHuntOverviewShowsBrokenHunt(self):
     hunt = self.CreateSampleHunt()
@@ -523,10 +526,5 @@ class TestHuntView(gui_test_lib.GRRSeleniumHuntTest):
         hunt.urn.Basename())
 
 
-def main(argv):
-  del argv  # Unused.
-  unittest.main()
-
-
 if __name__ == "__main__":
-  flags.StartMain(main)
+  flags.StartMain(test_lib.main)

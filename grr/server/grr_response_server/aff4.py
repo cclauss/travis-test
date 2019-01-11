@@ -3,9 +3,10 @@
 
 This contains an AFF4 data model implementation.
 """
+from __future__ import absolute_import
 from __future__ import division
+from __future__ import unicode_literals
 
-import __builtin__
 import abc
 import io
 import itertools
@@ -19,7 +20,9 @@ from builtins import range  # pylint: disable=redefined-builtin
 from builtins import zip  # pylint: disable=redefined-builtin
 from future.utils import iteritems
 from future.utils import itervalues
+from future.utils import string_types
 from future.utils import with_metaclass
+from typing import Text
 
 from grr_response_core import config
 from grr_response_core.lib import lexer
@@ -31,6 +34,8 @@ from grr_response_core.lib.rdfvalues import crypto as rdf_crypto
 from grr_response_core.lib.rdfvalues import paths as rdf_paths
 from grr_response_core.lib.rdfvalues import protodict as rdf_protodict
 from grr_response_core.lib.rdfvalues import structs as rdf_structs
+from grr_response_core.lib.util import collection
+from grr_response_core.lib.util import precondition
 from grr_response_server import access_control
 from grr_response_server import data_store
 from grr_response_server.rdfvalues import aff4 as rdf_aff4
@@ -109,8 +114,8 @@ class DeletionPool(object):
 
     Args:
       urn: The urn to open.
-      aff4_type: If this parameter is set, we raise an IOError if
-          the object is not an instance of this type.
+      aff4_type: If this parameter is set, we raise an IOError if the object is
+        not an instance of this type.
       mode: The mode to open the file with.
 
     Returns:
@@ -291,7 +296,7 @@ class Factory(object):
     # aff4:/files, as well as to create top level paths like aff4:/foreman
     self.root_token = access_control.ACLToken(
         username="GRRSystem", reason="Maintenance").SetUID()
-    self._InitWellKnownPaths()
+    self._static_content_path = rdfvalue.RDFURN("aff4:/web/static")
 
   @classmethod
   def ParseAgeSpecification(cls, age):
@@ -439,13 +444,14 @@ class Factory(object):
 
     Args:
        urn: The urn of the object.
-       age: The age policy used to build this object. Should be one
-            of ALL_TIMES, NEWEST_TIME or a range.
+       age: The age policy used to build this object. Should be one of
+         ALL_TIMES, NEWEST_TIME or a range.
 
     Returns:
        A key into the cache.
     """
-    return "%s:%s" % (utils.SmartStr(urn), self.ParseAgeSpecification(age))
+    precondition.AssertType(urn, Text)
+    return "%s:%s" % (urn, self.ParseAgeSpecification(age))
 
   def CreateWithLock(self,
                      urn,
@@ -468,14 +474,14 @@ class Factory(object):
       aff4_type: The desired type for this object.
       token: The Security Token to use for opening this item.
       age: The age policy used to build this object. Only makes sense when mode
-           has "r".
+        has "r".
       force_new_version: Forces the creation of a new object in the data_store.
       blocking: When True, wait and repeatedly try to grab the lock.
       blocking_lock_timeout: Maximum wait time when sync is True.
       blocking_sleep_interval: Sleep time between lock grabbing attempts. Used
-          when blocking is True.
+        when blocking is True.
       lease_time: Maximum time the object stays locked. Lock will be considered
-          released when this time expires.
+        released when this time expires.
 
     Returns:
       An AFF4 object of the desired type and mode.
@@ -483,6 +489,9 @@ class Factory(object):
     Raises:
       AttributeError: If the mode is invalid.
     """
+
+    if not data_store.AFF4Enabled():
+      raise NotImplementedError("AFF4 data store has been disabled.")
 
     transaction = self._AcquireLock(
         urn,
@@ -523,19 +532,19 @@ class Factory(object):
     Args:
       urn: The urn to open.
       aff4_type: If this optional parameter is set, we raise an
-          InstantiationError if the object exists and is not an instance of this
-          type. This check is important when a different object can be stored in
-          this location.
+        InstantiationError if the object exists and is not an instance of this
+        type. This check is important when a different object can be stored in
+        this location.
       token: The Security Token to use for opening this item.
       age: The age policy used to build this object. Should be one of
-         NEWEST_TIME, ALL_TIMES or a time range given as a tuple (start, end) in
-         microseconds since Jan 1st, 1970.
+        NEWEST_TIME, ALL_TIMES or a time range given as a tuple (start, end) in
+        microseconds since Jan 1st, 1970.
       blocking: When True, wait and repeatedly try to grab the lock.
       blocking_lock_timeout: Maximum wait time when sync is True.
       blocking_sleep_interval: Sleep time between lock grabbing attempts. Used
-          when blocking is True.
+        when blocking is True.
       lease_time: Maximum time the object stays locked. Lock will be considered
-          released when this time expires.
+        released when this time expires.
 
     Raises:
       ValueError: The URN passed in is None.
@@ -543,6 +552,9 @@ class Factory(object):
     Returns:
       Context manager to be used in 'with ...' statement.
     """
+
+    if not data_store.AFF4Enabled():
+      raise NotImplementedError("AFF4 data store has been disabled.")
 
     transaction = self._AcquireLock(
         urn,
@@ -626,8 +638,8 @@ class Factory(object):
       aff4_type: Expected object type.
       follow_symlinks: If object opened is a symlink, follow it.
       age: The age policy used to check this object. Should be either
-         NEWEST_TIME or a time range given as a tuple (start, end) in
-         microseconds since Jan 1st, 1970.
+        NEWEST_TIME or a time range given as a tuple (start, end) in
+        microseconds since Jan 1st, 1970.
       token: The Security Token to use for opening this item.
 
     Raises:
@@ -675,22 +687,17 @@ class Factory(object):
 
     Args:
       urn: The urn to open.
-
-      aff4_type: If this parameter is set, we raise an IOError if
-          the object is not an instance of this type. This check is important
-          when a different object can be stored in this location. If mode is
-          "w", this parameter will determine the type of the object and is
-          mandatory.
-
+      aff4_type: If this parameter is set, we raise an IOError if the object is
+        not an instance of this type. This check is important when a different
+        object can be stored in this location. If mode is "w", this parameter
+        will determine the type of the object and is mandatory.
       mode: The mode to open the file with.
       token: The Security Token to use for opening this item.
       local_cache: A dict containing a cache as returned by GetAttributes. If
-                   set, this bypasses the factory cache.
-
+        set, this bypasses the factory cache.
       age: The age policy used to build this object. Should be one of
-         NEWEST_TIME, ALL_TIMES or a time range given as a tuple (start, end) in
-         microseconds since Jan 1st, 1970.
-
+        NEWEST_TIME, ALL_TIMES or a time range given as a tuple (start, end) in
+        microseconds since Jan 1st, 1970.
       follow_symlinks: If object opened is a symlink, follow it.
       transaction: A lock in case this object is opened under lock.
 
@@ -701,6 +708,10 @@ class Factory(object):
       IOError: If the object is not of the required type.
       AttributeError: If the requested mode is incorrect.
     """
+
+    if not data_store.AFF4Enabled():
+      raise NotImplementedError("AFF4 data store has been disabled.")
+
     _ValidateAFF4Type(aff4_type)
 
     if mode not in ["w", "r", "rw"]:
@@ -816,6 +827,40 @@ class Factory(object):
         obj.symlink_urn = symlinks[obj.urn][0]
         yield obj
 
+  def MultiOpenOrdered(self, urns, **kwargs):
+    """Opens many URNs and returns handles in the same order.
+
+    `MultiOpen` can return file handles in arbitrary order. This makes it more
+    efficient and in most cases the order does not matter. However, there are
+    cases where order is important and this function should be used instead.
+
+    Args:
+      urns: A list of URNs to open.
+      **kwargs: Same keyword arguments as in `MultiOpen`.
+
+    Returns:
+      A list of file-like objects corresponding to the specified URNs.
+
+    Raises:
+      IOError: If one of the specified URNs does not correspond to the AFF4
+          object.
+    """
+    precondition.AssertIterableType(urns, rdfvalue.RDFURN)
+
+    urn_filedescs = {}
+    for filedesc in self.MultiOpen(urns, **kwargs):
+      urn_filedescs[filedesc.urn] = filedesc
+
+    filedescs = []
+
+    for urn in urns:
+      try:
+        filedescs.append(urn_filedescs[urn])
+      except KeyError:
+        raise IOError("No associated AFF4 object for `%s`" % urn)
+
+    return filedescs
+
   def OpenDiscreteVersions(self,
                            urn,
                            mode="r",
@@ -840,12 +885,11 @@ class Factory(object):
       mode: The mode to open the file with.
       token: The Security Token to use for opening this item.
       local_cache: A dict containing a cache as returned by GetAttributes. If
-                   set, this bypasses the factory cache.
-
-      age: The age policy used to build this object. Should be one of
-         ALL_TIMES or a time range
+        set, this bypasses the factory cache.
+      age: The age policy used to build this object. Should be one of ALL_TIMES
+        or a time range
       diffs_only: If True, will return only diffs between the versions (instead
-         of full objects).
+        of full objects).
       follow_symlinks: If object opened is a symlink, follow it.
 
     Yields:
@@ -946,7 +990,7 @@ class Factory(object):
     Raises:
       ValueError: A string was passed instead of an iterable.
     """
-    if isinstance(urns, basestring):
+    if isinstance(urns, string_types):
       raise ValueError("Expected an iterable, not string.")
     for subject, values in data_store.DB.MultiResolvePrefix(
         urns, ["aff4:type", "metadata:last"]):
@@ -979,12 +1023,12 @@ class Factory(object):
       mode: The desired mode for this object.
       token: The Security Token to use for opening this item.
       age: The age policy used to build this object. Only makes sense when mode
-           has "r".
+        has "r".
       force_new_version: Forces the creation of a new object in the data_store.
       object_exists: If we know the object already exists we can skip index
-                     creation.
+        creation.
       mutation_pool: An optional MutationPool object to write to. If not given,
-                     the data_store is used directly.
+        the data_store is used directly.
       transaction: For locked objects, a lock is passed to the object.
 
     Returns:
@@ -993,6 +1037,9 @@ class Factory(object):
     Raises:
       AttributeError: If the mode is invalid.
     """
+    if not data_store.AFF4Enabled():
+      raise NotImplementedError("AFF4 data store has been disabled.")
+
     if mode not in ["w", "r", "rw"]:
       raise AttributeError("Invalid mode %s" % mode)
 
@@ -1049,6 +1096,7 @@ class Factory(object):
     Args:
       urns: Urns of objects to remove.
       token: The Security Token to use for opening this item.
+
     Raises:
       ValueError: If one of the urns is too short. This is a safety check to
       ensure the root is not removed.
@@ -1104,6 +1152,7 @@ class Factory(object):
     Args:
       urn: The object to remove.
       token: The Security Token to use for opening this item.
+
     Raises:
       ValueError: If the urn is too short. This is a safety check to ensure
       the root is not removed.
@@ -1117,7 +1166,7 @@ class Factory(object):
       urns: List of urns to list children.
       limit: Max number of children to list (NOTE: this is per urn).
       age: The age of the items to retrieve. Should be one of ALL_TIMES,
-           NEWEST_TIME or a range.
+        NEWEST_TIME or a range.
 
     Yields:
        Tuples of Subjects and a list of children urns of a given subject.
@@ -1147,7 +1196,7 @@ class Factory(object):
       urn: Urn to list children.
       limit: Max number of children to list.
       age: The age of the items to retrieve. Should be one of ALL_TIMES,
-           NEWEST_TIME or a range.
+        NEWEST_TIME or a range.
 
     Returns:
       RDFURNs instances of each child.
@@ -1163,7 +1212,7 @@ class Factory(object):
       urns: List of urns to list children.
       limit: Max number of children to list (NOTE: this is per urn).
       age: The age of the items to retrieve. Should be one of ALL_TIMES,
-           NEWEST_TIME or a range.
+        NEWEST_TIME or a range.
 
     Yields:
        (subject<->children urns) tuples. RecursiveMultiListChildren will fetch
@@ -1198,18 +1247,6 @@ class Factory(object):
 
   def Flush(self):
     self.intermediate_cache.Flush()
-
-  # Well known AFF4 paths.
-  def _InitWellKnownPaths(self):
-    self._python_hack_root = rdfvalue.RDFURN("aff4:/config/python_hacks")
-    self._executables_root = rdfvalue.RDFURN("aff4:/config/executables")
-    self._static_content_path = rdfvalue.RDFURN("aff4:/web/static")
-
-  def GetPythonHackRoot(self):
-    return self._python_hack_root
-
-  def GetExecutablesRoot(self):
-    return self._executables_root
 
   def GetStaticContentPath(self):
     return self._static_content_path
@@ -1247,19 +1284,19 @@ class Attribute(object):
        description: A one line description of what this attribute represents.
        name: A human readable name for the attribute to be used in filters.
        _copy: Used internally to create a copy of this object without
-          registering.
+         registering.
        default: A default value will be returned if the attribute is not set on
-          an object. This can be a constant or a callback which receives the fd
-          itself as an arg.
+         an object. This can be a constant or a callback which receives the fd
+         itself as an arg.
        index: The name of the index to use for this attribute. If None, the
-          attribute will not be indexed.
+         attribute will not be indexed.
        versioned: Should this attribute be versioned? Non-versioned attributes
-          always overwrite other versions of the same attribute.
+         always overwrite other versions of the same attribute.
        lock_protected: If True, this attribute may only be set if the object was
-          opened via OpenWithLock().
+         opened via OpenWithLock().
        creates_new_object_version: If this is set, a write to this attribute
-          will also write a new version of the parent attribute. This should be
-          False for attributes where lots of entries are collected like logs.
+         will also write a new version of the parent attribute. This should be
+         False for attributes where lots of entries are collected like logs.
     """
     self.name = name
     self.predicate = predicate
@@ -1392,6 +1429,7 @@ class Attribute(object):
     Args:
       fd: The base RDFValue or Array.
       field_names: A list of strings indicating which subfields to get.
+
     Yields:
       All the subfields matching the field_names specification.
     """
@@ -1577,8 +1615,7 @@ class AFF4Object(with_metaclass(registry.MetaclassRegistry, object)):
 
     LEASED_UNTIL = Attribute(
         "aff4:lease",
-        rdfvalue.RDFDatetime,
-        "The time until which the object is leased by a "
+        rdfvalue.RDFDatetime, "The time until which the object is leased by a "
         "particular caller.",
         versioned=False,
         creates_new_object_version=False)
@@ -1634,6 +1671,7 @@ class AFF4Object(with_metaclass(registry.MetaclassRegistry, object)):
 
       Args:
         attr: Some ignored attribute.
+
       Raises:
         BadGetAttributeError: if the object was opened with a specific type
       """
@@ -1791,6 +1829,13 @@ class AFF4Object(with_metaclass(registry.MetaclassRegistry, object)):
 
     return 0
 
+  def _RaiseLockError(self, operation):
+    now = rdfvalue.RDFDatetime.Now()
+    expires = self.transaction.ExpirationAsRDFDatetime()
+    raise LockError(
+        "%s: Can not update lease that has already expired (%s > %s)" %
+        (operation, now, expires))
+
   def UpdateLease(self, duration):
     """Updates the lease and flushes the object.
 
@@ -1801,8 +1846,9 @@ class AFF4Object(with_metaclass(registry.MetaclassRegistry, object)):
     See flows/hunts locking for an example.
 
     Args:
-      duration: Integer number of seconds. Lease expiry time will be set
-                to "time.time() + duration".
+      duration: Integer number of seconds. Lease expiry time will be set to
+        "time.time() + duration".
+
     Raises:
       LockError: if the object is not currently locked or the lease has
                  expired.
@@ -1812,14 +1858,14 @@ class AFF4Object(with_metaclass(registry.MetaclassRegistry, object)):
           "Object must be locked to update the lease: %s." % self.urn)
 
     if self.CheckLease() == 0:
-      raise LockError("Can not update lease that has already expired.")
+      self._RaiseLockError("UpdateLease")
 
     self.transaction.UpdateLease(duration)
 
   def Flush(self):
     """Syncs this object with the data store, maintaining object validity."""
     if self.locked and self.CheckLease() == 0:
-      raise LockError("Can not update lease that has already expired.")
+      self._RaiseLockError("Flush")
 
     self._WriteAttributes()
     self._SyncAttributes()
@@ -1945,6 +1991,7 @@ class AFF4Object(with_metaclass(registry.MetaclassRegistry, object)):
     Args:
        attribute: An instance of Attribute().
        value: An instance of RDFValue.
+
     Raises:
        ValueError: when the value is not of the expected type.
        AttributeError: When the attribute is not of type Attribute().
@@ -2107,7 +2154,7 @@ class AFF4Object(with_metaclass(registry.MetaclassRegistry, object)):
     if attribute is None:
       return []
 
-    elif isinstance(attribute, basestring):
+    elif isinstance(attribute, string_types):
       attribute = Attribute.GetAttributeByName(attribute)
 
     return attribute.GetValues(self)
@@ -2235,7 +2282,7 @@ class AFF4Object(with_metaclass(registry.MetaclassRegistry, object)):
     if owner is None and not self.token:
       raise ValueError("Can't set label: No owner specified and "
                        "no access token available.")
-    if isinstance(labels_names, basestring):
+    if isinstance(labels_names, string_types):
       raise ValueError("Label list can't be string.")
 
     owner = owner or self.token.username
@@ -2256,7 +2303,7 @@ class AFF4Object(with_metaclass(registry.MetaclassRegistry, object)):
     if owner is None and not self.token:
       raise ValueError("Can't remove label: No owner specified and "
                        "no access token available.")
-    if isinstance(labels_names, basestring):
+    if isinstance(labels_names, string_types):
       raise ValueError("Label list can't be string.")
 
     owner = owner or self.token.username
@@ -2343,7 +2390,7 @@ class AFF4Volume(AFF4Object):
     Args:
       limit: Total number of items we will attempt to retrieve.
       age: The age of the items to retrieve. Should be one of ALL_TIMES,
-           NEWEST_TIME or a range in microseconds.
+        NEWEST_TIME or a range in microseconds.
 
     Yields:
       RDFURNs instances of each child.
@@ -2369,12 +2416,13 @@ class AFF4Volume(AFF4Object):
 
     Args:
       children: A list of children RDFURNs to open. If None open all our
-             children.
+        children.
       mode: The mode the files should be opened with.
       limit: Total number of items we will attempt to retrieve.
       chunk_limit: Maximum number of items to retrieve at a time.
       age: The age of the items to retrieve. Should be one of ALL_TIMES,
-           NEWEST_TIME or a range.
+        NEWEST_TIME or a range.
+
     Yields:
       Instances for each direct child.
     """
@@ -2627,7 +2675,7 @@ class AFF4MemoryStreamBase(AFF4Stream):
     return self.fd.read(int(length))
 
   def Write(self, data):
-    if isinstance(data, unicode):
+    if isinstance(data, Text):
       raise IOError("Cannot write unencoded string.")
 
     self._dirty = True
@@ -2682,7 +2730,7 @@ class AFF4MemoryStream(AFF4MemoryStreamBase):
         "aff4:content",
         rdfvalue.RDFBytes,
         "Total content of this file.",
-        default="")
+        default=b"")
 
 
 class AFF4UnversionedMemoryStream(AFF4MemoryStreamBase):
@@ -2693,7 +2741,7 @@ class AFF4UnversionedMemoryStream(AFF4MemoryStreamBase):
         "aff4:content",
         rdfvalue.RDFBytes,
         "Total content of this file.",
-        default="",
+        default=b"",
         versioned=False)
 
 
@@ -2779,7 +2827,7 @@ class AFF4ImageBase(AFF4Stream):
     """
 
     missing_chunks_by_fd = {}
-    for chunk_fd_pairs in utils.Grouper(
+    for chunk_fd_pairs in collection.Batch(
         cls._GenerateChunkPaths(fds), cls.MULTI_STREAM_CHUNKS_READ_AHEAD):
 
       chunks_map = dict(chunk_fd_pairs)
@@ -2955,7 +3003,7 @@ class AFF4ImageBase(AFF4Stream):
 
   def Read(self, length):
     """Read a block of data from the file."""
-    result = ""
+    result = b""
 
     # The total available size in the file
     length = int(length)
@@ -2988,9 +3036,9 @@ class AFF4ImageBase(AFF4Stream):
     return data[available_to_write:]
 
   def Write(self, data):
+    precondition.AssertType(data, bytes)
+
     self._dirty = True
-    if isinstance(data, unicode):
-      raise IOError("Cannot write unencoded string.")
     while data:
       data = self._WritePartial(data)
 
@@ -3045,7 +3093,7 @@ class AFF4UnversionedImage(AFF4ImageBase):
 # Utility functions
 class AFF4InitHook(registry.InitHook):
 
-  pre = [access_control.ACLInit, data_store.DataStoreInit]
+  pre = [data_store.DataStoreInit]
 
   def Run(self):
     """Delayed loading of aff4 plugins to break import cycles."""
@@ -3093,38 +3141,3 @@ class ValueConverter(object):
 # A global registry of all AFF4 classes
 FACTORY = None
 ROOT_URN = rdfvalue.RDFURN("aff4:/")
-
-
-def issubclass(obj, cls):  # pylint: disable=redefined-builtin,g-bad-name
-  """A sane implementation of issubclass.
-
-  See http://bugs.python.org/issue10569
-
-  Python bare issubclass must be protected by an isinstance test first since it
-  can only work on types and raises when provided something which is not a type.
-
-  Args:
-    obj: Any object or class.
-    cls: The class to check against.
-
-  Returns:
-    True if obj is a subclass of cls and False otherwise.
-  """
-  return isinstance(obj, type) and __builtin__.issubclass(obj, cls)
-
-
-def AuditLogBase():
-  return ROOT_URN.Add("audit").Add("logs")
-
-
-AUDIT_ROLLOVER_TIME = rdfvalue.Duration("2w")
-
-
-def CurrentAuditLog():
-  """Get the rdfurn of the current audit log."""
-  now_sec = rdfvalue.RDFDatetime.Now().AsSecondsSinceEpoch()
-  rollover_seconds = AUDIT_ROLLOVER_TIME.seconds
-  # This gives us a filename that only changes every
-  # AUDIT_ROLLOVER_TIME seconds, but is still a valid timestamp.
-  current_log = (now_sec // rollover_seconds) * rollover_seconds
-  return AuditLogBase().Add(str(current_log))

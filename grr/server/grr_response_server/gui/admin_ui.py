@@ -1,5 +1,9 @@
 #!/usr/bin/env python
 """This is a development server for running the UI."""
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+from __future__ import unicode_literals
 
 import logging
 import os
@@ -24,8 +28,6 @@ from grr_response_core.lib import flags
 from grr_response_server import server_startup
 from grr_response_server.gui import wsgiapp
 
-flags.DEFINE_version(config_server.VERSION["packageversion"])
-
 
 class ThreadedServer(SocketServer.ThreadingMixIn, simple_server.WSGIServer):
   address_family = socket.AF_INET6
@@ -33,12 +35,17 @@ class ThreadedServer(SocketServer.ThreadingMixIn, simple_server.WSGIServer):
 
 def main(_):
   """Run the main test harness."""
+
+  if flags.FLAGS.version:
+    print("GRR Admin UI {}".format(config_server.VERSION["packageversion"]))
+    return
+
   config.CONFIG.AddContext(
       contexts.ADMIN_UI_CONTEXT,
       "Context applied when running the admin user interface GUI.")
   server_startup.Init()
 
-  if (not os.path.exists(
+  if not config.CONFIG["AdminUI.headless"] and (not os.path.exists(
       os.path.join(config.CONFIG["AdminUI.document_root"],
                    "dist/grr-ui.bundle.js")) or not os.path.exists(
                        os.path.join(config.CONFIG["AdminUI.document_root"],

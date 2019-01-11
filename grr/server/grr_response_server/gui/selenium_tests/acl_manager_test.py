@@ -1,14 +1,16 @@
 #!/usr/bin/env python
 # -*- mode: python; encoding: utf-8 -*-
 """Tests the access control authorization workflow."""
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import unicode_literals
 
-import unittest
 from grr_response_core.lib import flags
 
 from grr_response_core.lib import utils
 from grr_response_server.gui import gui_test_lib
 from grr.test_lib import db_test_lib
+from grr.test_lib import test_lib
 
 
 @db_test_lib.DualDBTest
@@ -78,7 +80,7 @@ class TestACLWorkflow(gui_test_lib.GRRSeleniumTest):
     self.Click(
         "css=grr-request-approval-dialog button[name=Proceed]:not([disabled])")
 
-    self.WaitForNotification("aff4:/users/%s" % self.token.username)
+    self.WaitForNotification(self.token.username)
     # User test logs in as an approver.
     self.Open("/")
 
@@ -97,7 +99,7 @@ class TestACLWorkflow(gui_test_lib.GRRSeleniumTest):
 
     self.WaitUntil(self.IsTextPresent, "Approval granted.")
 
-    self.WaitForNotification("aff4:/users/%s" % self.token.username)
+    self.WaitForNotification(self.token.username)
     self.Open("/")
 
     # We should be notified that we have an approval
@@ -141,7 +143,7 @@ class TestACLWorkflow(gui_test_lib.GRRSeleniumTest):
     self.WaitUntil(self.IsTextPresent, "Interfaces")
 
     # One email for the original request and one for each approval.
-    self.assertEqual(len(self.emails_sent), 3)
+    self.assertLen(self.emails_sent, 3)
 
   def testRecentReasonBox(self):
     self.Open("/")
@@ -231,11 +233,5 @@ class TestACLWorkflow(gui_test_lib.GRRSeleniumTest):
     self.assertEqual(utils.SmartUnicode(approvals[0].reason), test_reason)
 
 
-def main(argv):
-  del argv  # Unused.
-  # Run the full test suite
-  unittest.main()
-
-
 if __name__ == "__main__":
-  flags.StartMain(main)
+  flags.StartMain(test_lib.main)

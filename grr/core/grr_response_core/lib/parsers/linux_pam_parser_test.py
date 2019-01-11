@@ -2,6 +2,8 @@
 # -*- mode: python; encoding: utf-8 -*-
 """Unit test for the linux pam config parser."""
 
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import unicode_literals
 
 
@@ -12,40 +14,40 @@ from grr_response_core.lib.rdfvalues import config_file as rdf_config_file
 from grr.test_lib import artifact_test_lib
 from grr.test_lib import test_lib
 
-ETC_PAM_CONF_EMPTY = """
+ETC_PAM_CONF_EMPTY = b"""
 # Nothing to do here.
    # white space
 
 # ^ blank line
 """
-ETC_PAM_CONF_SIMPLE = """
+ETC_PAM_CONF_SIMPLE = b"""
 ssh auth required test.so
 telnet auth required unix.so
 ssh session    required     pam_limits.so
 """
-ETC_PAM_CONF_COMPLEX = ETC_PAM_CONF_SIMPLE + """
+ETC_PAM_CONF_COMPLEX = ETC_PAM_CONF_SIMPLE + b"""
 telnet account include filt_include
 ssh @include full_include
 """
-ETC_PAMD_FILT_INCLUDE = """
+ETC_PAMD_FILT_INCLUDE = b"""
 account    required     pam_nologin.so
 auth       required     pam_env.so envfile=/etc/default/locale
 """
 ETC_PAMD_FULL_INCLUDE = ETC_PAMD_FILT_INCLUDE
-ETC_PAMD_SSH = """
+ETC_PAMD_SSH = b"""
 auth required test.so  # Comment
 session    required     pam_limits.so random=option  # Comment
 account include filt_include  # only include 'account' entries from file.
 @include full_include  # Include everything from file 'full_include'
 """
-ETC_PAMD_TELNET = """
+ETC_PAMD_TELNET = b"""
 # Blank line
 
 # Multi line and 'type' with a leading '-'.
 -auth [success=ok new_authtok_reqd=ok ignore=ignore default=bad] \
   testing.so module arguments  # Comments
 """
-ETC_PAMD_EXTERNAL = """
+ETC_PAMD_EXTERNAL = b"""
 password substack nonexistant
 auth optional testing.so
 @include /external/nonexistant
@@ -65,8 +67,8 @@ TELNET_WITH_PAMCONF = {
 TELNET_WITH_PAMCONF_EXPECTED = TELNET_ONLY_CONFIG_EXPECTED
 
 PAM_CONF_SIMPLE = {'/etc/pam.conf': ETC_PAM_CONF_SIMPLE}
-PAM_CONF_SIMPLE_EXPECTED = [('ssh', 'auth', 'required', 'test.so',
-                             ''), ('telnet', 'auth', 'required', 'unix.so', ''),
+PAM_CONF_SIMPLE_EXPECTED = [('ssh', 'auth', 'required', 'test.so', ''),
+                            ('telnet', 'auth', 'required', 'unix.so', ''),
                             ('ssh', 'session', 'required', 'pam_limits.so', '')]
 
 PAM_CONF_OVERRIDE = {
@@ -143,9 +145,9 @@ class LinuxPAMParserTest(test_lib.GRRBaseTest):
     # e.g. a single entry for 'telnet' with no includes etc.
     stats, file_objs = artifact_test_lib.GenStatFileData(TELNET_ONLY_CONFIG)
     out = list(parser.ParseMultiple(stats, file_objs, self.kb))
-    self.assertEqual(len(out), 1)
-    self.assertTrue(isinstance(out[0], rdf_config_file.PamConfig))
-    self.assertItemsEqual(TELNET_ONLY_CONFIG_EXPECTED,
+    self.assertLen(out, 1)
+    self.assertIsInstance(out[0], rdf_config_file.PamConfig)
+    self.assertCountEqual(TELNET_ONLY_CONFIG_EXPECTED,
                           self._EntriesToTuples(out[0].entries))
     self.assertEqual([], out[0].external_config)
 
@@ -154,23 +156,23 @@ class LinuxPAMParserTest(test_lib.GRRBaseTest):
     # e.g. a single entry for 'telnet' with no includes etc.
     stats, file_objs = artifact_test_lib.GenStatFileData(TELNET_WITH_PAMCONF)
     out = list(parser.ParseMultiple(stats, file_objs, self.kb))
-    self.assertEqual(len(out), 1)
-    self.assertTrue(isinstance(out[0], rdf_config_file.PamConfig))
+    self.assertLen(out, 1)
+    self.assertIsInstance(out[0], rdf_config_file.PamConfig)
     entry = out[0].entries[0]
     self.assertEqual(
         ('telnet', 'auth',
          '[success=ok new_authtok_reqd=ok ignore=ignore default=bad]',
          'testing.so', 'module arguments'), self._EntryToTuple(entry))
-    self.assertItemsEqual(TELNET_WITH_PAMCONF_EXPECTED,
+    self.assertCountEqual(TELNET_WITH_PAMCONF_EXPECTED,
                           self._EntriesToTuples(out[0].entries))
     self.assertEqual([], out[0].external_config)
 
     # Parse a simple old-style pam config. i.e. Just /etc/pam.conf.
     stats, file_objs = artifact_test_lib.GenStatFileData(PAM_CONF_SIMPLE)
     out = list(parser.ParseMultiple(stats, file_objs, self.kb))
-    self.assertEqual(len(out), 1)
-    self.assertTrue(isinstance(out[0], rdf_config_file.PamConfig))
-    self.assertItemsEqual(PAM_CONF_SIMPLE_EXPECTED,
+    self.assertLen(out, 1)
+    self.assertIsInstance(out[0], rdf_config_file.PamConfig)
+    self.assertCountEqual(PAM_CONF_SIMPLE_EXPECTED,
                           self._EntriesToTuples(out[0].entries))
     self.assertEqual([], out[0].external_config)
 
@@ -178,9 +180,9 @@ class LinuxPAMParserTest(test_lib.GRRBaseTest):
     # i.e. Configs in /etc/pam.conf override everything else.
     stats, file_objs = artifact_test_lib.GenStatFileData(PAM_CONF_OVERRIDE)
     out = list(parser.ParseMultiple(stats, file_objs, self.kb))
-    self.assertEqual(len(out), 1)
-    self.assertTrue(isinstance(out[0], rdf_config_file.PamConfig))
-    self.assertItemsEqual(PAM_CONF_OVERRIDE_EXPECTED,
+    self.assertLen(out, 1)
+    self.assertIsInstance(out[0], rdf_config_file.PamConfig)
+    self.assertCountEqual(PAM_CONF_OVERRIDE_EXPECTED,
                           self._EntriesToTuples(out[0].entries))
     self.assertEqual([], out[0].external_config)
 
@@ -190,9 +192,9 @@ class LinuxPAMParserTest(test_lib.GRRBaseTest):
     stats, file_objs = artifact_test_lib.GenStatFileData(
         PAM_CONF_OVERRIDE_COMPLEX)
     out = list(parser.ParseMultiple(stats, file_objs, self.kb))
-    self.assertEqual(len(out), 1)
-    self.assertTrue(isinstance(out[0], rdf_config_file.PamConfig))
-    self.assertItemsEqual(PAM_CONF_OVERRIDE_COMPLEX_EXPECTED,
+    self.assertLen(out, 1)
+    self.assertIsInstance(out[0], rdf_config_file.PamConfig)
+    self.assertCountEqual(PAM_CONF_OVERRIDE_COMPLEX_EXPECTED,
                           self._EntriesToTuples(out[0].entries))
     self.assertEqual([], out[0].external_config)
 
@@ -201,20 +203,20 @@ class LinuxPAMParserTest(test_lib.GRRBaseTest):
     #      that have includes etc.
     stats, file_objs = artifact_test_lib.GenStatFileData(PAM_CONF_TYPICAL)
     out = list(parser.ParseMultiple(stats, file_objs, self.kb))
-    self.assertEqual(len(out), 1)
-    self.assertTrue(isinstance(out[0], rdf_config_file.PamConfig))
-    self.assertItemsEqual(PAM_CONF_TYPICAL_EXPECTED,
+    self.assertLen(out, 1)
+    self.assertIsInstance(out[0], rdf_config_file.PamConfig)
+    self.assertCountEqual(PAM_CONF_TYPICAL_EXPECTED,
                           self._EntriesToTuples(out[0].entries))
     self.assertEqual([], out[0].external_config)
 
     # Parse a config which has references to external or missing files.
     stats, file_objs = artifact_test_lib.GenStatFileData(PAM_CONF_EXTERNAL_REF)
     out = list(parser.ParseMultiple(stats, file_objs, self.kb))
-    self.assertEqual(len(out), 1)
-    self.assertTrue(isinstance(out[0], rdf_config_file.PamConfig))
-    self.assertItemsEqual(PAM_CONF_EXTERNAL_REF_EXPECTED,
+    self.assertLen(out, 1)
+    self.assertIsInstance(out[0], rdf_config_file.PamConfig)
+    self.assertCountEqual(PAM_CONF_EXTERNAL_REF_EXPECTED,
                           self._EntriesToTuples(out[0].entries))
-    self.assertItemsEqual(PAM_CONF_EXTERNAL_REF_ERRORS,
+    self.assertCountEqual(PAM_CONF_EXTERNAL_REF_ERRORS,
                           list(out[0].external_config))
 
 

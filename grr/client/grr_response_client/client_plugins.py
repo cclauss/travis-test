@@ -8,6 +8,8 @@ register them.
 This also acts as a sensible single place to add deployment specific plugin
 modules that have been customized for your deployment.
 """
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import unicode_literals
 
 import sys
@@ -15,16 +17,16 @@ import sys
 # pylint: disable=g-import-not-at-top,unused-import,g-bad-import-order
 # Load the os specific modules.
 if sys.platform == "win32":
-  from grr_response_client import windows
+  from grr_response_client.windows import registry_init as windows_registry_init
 
 elif sys.platform == "darwin":
-  from grr_response_client import osx
+  from grr_response_client.osx import registry_init as osx_registry_init
 
 elif "linux" in sys.platform:
-  from grr_response_client import linux
+  from grr_response_client.linux import registry_init as linux_registry_init
 
-from grr_response_client import client_actions
+from grr_response_client.client_actions import registry_init as client_actions_registry_init
+from grr_response_client.vfs_handlers import registry_init as vfs_handlers_registry_init
 from grr_response_client import comms
 from grr_response_client import local
-from grr_response_client import vfs_handlers
 # pylint: enable=g-import-not-at-top,unused-import,g-bad-import-order

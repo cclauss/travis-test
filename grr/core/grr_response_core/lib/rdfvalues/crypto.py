@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 """Implementation of various cryptographic types."""
+from __future__ import absolute_import
 from __future__ import division
 from __future__ import unicode_literals
 
@@ -24,13 +25,18 @@ from cryptography.hazmat.primitives.ciphers import modes
 from cryptography.hazmat.primitives.kdf import pbkdf2
 from cryptography.x509 import oid
 
+from future.builtins import str
+from future.utils import string_types
+from typing import Text
+
 from grr_response_core.lib import config_lib
 from grr_response_core.lib import rdfvalue
 from grr_response_core.lib import type_info
 from grr_response_core.lib import utils
 from grr_response_core.lib.rdfvalues import standard as rdf_standard
 from grr_response_core.lib.rdfvalues import structs as rdf_structs
-
+from grr_response_core.lib.util import precondition
+from grr_response_core.lib.util import random
 from grr_response_proto import jobs_pb2
 
 
@@ -62,7 +68,7 @@ class RDFX509Cert(rdfvalue.RDFPrimitive):
     if self._value is None and initializer is not None:
       if isinstance(initializer, x509.Certificate):
         self._value = initializer
-      elif isinstance(initializer, basestring):
+      elif isinstance(initializer, string_types):
         self.ParseFromString(initializer)
       else:
         raise rdfvalue.InitializeError(
@@ -102,11 +108,11 @@ class RDFX509Cert(rdfvalue.RDFPrimitive):
     self.GetCN()
 
   def ParseFromHumanReadable(self, string):
-    utils.AssertType(string, unicode)
+    precondition.AssertType(string, Text)
     self.ParseFromString(string.encode("ascii"))
 
   def ParseFromDatastore(self, value):
-    utils.AssertType(value, bytes)
+    precondition.AssertType(value, bytes)
     self.ParseFromString(value)
 
   def SerializeToString(self):
@@ -167,8 +173,7 @@ class RDFX509Cert(rdfvalue.RDFPrimitive):
     builder = builder.serial_number(serial)
     builder = builder.subject_name(
         x509.Name(
-            [x509.NameAttribute(oid.NameOID.COMMON_NAME,
-                                unicode(common_name))]))
+            [x509.NameAttribute(oid.NameOID.COMMON_NAME, str(common_name))]))
 
     now = rdfvalue.RDFDatetime.Now()
     now_plus_year = now + rdfvalue.Duration("52w")
@@ -209,17 +214,16 @@ class CertificateSigningRequest(rdfvalue.RDFValue):
     if self._value is None:
       if isinstance(initializer, x509.CertificateSigningRequest):
         self._value = initializer
-      elif isinstance(initializer, basestring):
+      elif isinstance(initializer, string_types):
         self.ParseFromString(initializer)
       elif common_name and private_key:
         self._value = x509.CertificateSigningRequestBuilder().subject_name(
-            x509.Name([
-                x509.NameAttribute(oid.NameOID.COMMON_NAME,
-                                   unicode(common_name))
-            ])).sign(
-                private_key.GetRawPrivateKey(),
-                hashes.SHA256(),
-                backend=openssl.backend)
+            x509.Name(
+                [x509.NameAttribute(oid.NameOID.COMMON_NAME,
+                                    str(common_name))])).sign(
+                                        private_key.GetRawPrivateKey(),
+                                        hashes.SHA256(),
+                                        backend=openssl.backend)
       elif initializer is not None:
         raise rdfvalue.InitializeError(
             "Cannot initialize %s from %s." % (self.__class__, initializer))
@@ -228,7 +232,7 @@ class CertificateSigningRequest(rdfvalue.RDFValue):
     self._value = x509.load_pem_x509_csr(csr_as_pem, backend=openssl.backend)
 
   def ParseFromDatastore(self, value):
-    utils.AssertType(value, bytes)
+    precondition.AssertType(value, bytes)
     self.ParseFromString(value)
 
   def SerializeToString(self):
@@ -275,7 +279,7 @@ class RSAPublicKey(rdfvalue.RDFPrimitive):
         self._value = initializer
       elif isinstance(initializer, bytes):
         self.ParseFromString(initializer)
-      elif isinstance(initializer, unicode):
+      elif isinstance(initializer, Text):
         self.ParseFromString(initializer.encode("ascii"))
       else:
         raise rdfvalue.InitializeError(
@@ -285,7 +289,7 @@ class RSAPublicKey(rdfvalue.RDFPrimitive):
     return self._value
 
   def ParseFromString(self, pem_string):
-    utils.AssertType(pem_string, bytes)
+    precondition.AssertType(pem_string, bytes)
     try:
       self._value = serialization.load_pem_public_key(
           pem_string, backend=openssl.backend)
@@ -293,11 +297,11 @@ class RSAPublicKey(rdfvalue.RDFPrimitive):
       raise type_info.TypeValueError("Public key invalid: %s" % e)
 
   def ParseFromDatastore(self, value):
-    utils.AssertType(value, bytes)
+    precondition.AssertType(value, bytes)
     self.ParseFromString(value)
 
   def ParseFromHumanReadable(self, string):
-    utils.AssertType(string, unicode)
+    precondition.AssertType(string, Text)
     self.ParseFromString(string.encode("ascii"))
 
   def SerializeToString(self):
@@ -372,14 +376,14 @@ class RSAPrivateKey(rdfvalue.RDFPrimitive):
         self._value = initializer
       elif isinstance(initializer, bytes):
         self.ParseFromString(initializer)
-      elif isinstance(initializer, unicode):
+      elif isinstance(initializer, Text):
         self.ParseFromString(initializer.encode("ascii"))
       else:
         raise rdfvalue.InitializeError(
             "Cannot initialize %s from %s." % (self.__class__, initializer))
 
   def ParseFromHumanReadable(self, string):
-    utils.AssertType(string, unicode)
+    precondition.AssertType(string, Text)
     self.ParseFromString(string.encode("ascii"))
 
   def GetRawPrivateKey(self):
@@ -390,7 +394,7 @@ class RSAPrivateKey(rdfvalue.RDFPrimitive):
 
   def Sign(self, message, use_pss=False):
     """Sign a given message."""
-    utils.AssertType(message, bytes)
+    precondition.AssertType(message, bytes)
 
     # TODO(amoser): This should use PSS by default at some point.
     if not use_pss:
@@ -422,7 +426,7 @@ class RSAPrivateKey(rdfvalue.RDFPrimitive):
     return cls(key)
 
   def ParseFromString(self, pem_string):
-    utils.AssertType(pem_string, bytes)
+    precondition.AssertType(pem_string, bytes)
     try:
       self._value = serialization.load_pem_private_key(
           pem_string, password=None, backend=openssl.backend)
@@ -462,7 +466,7 @@ class RSAPrivateKey(rdfvalue.RDFPrimitive):
       raise type_info.TypeValueError("Unable to load private key: %s" % e)
 
   def ParseFromDatastore(self, value):
-    utils.AssertType(value, bytes)
+    precondition.AssertType(value, bytes)
     self.ParseFromString(value)
 
   def SerializeToString(self):
@@ -817,11 +821,20 @@ class Password(rdf_structs.RDFProtoStruct):
     return kdf.derive(password)
 
   def SetPassword(self, password):
-    self.salt = b"%016x" % utils.PRNG.GetUInt64()
+    self.salt = b"%016x" % random.UInt64()
     self.iteration_count = 100000
+
+    # prevent non-descriptive 'key_material must be bytes' error later
+    if isinstance(password, string_types):
+      password = password.encode("utf-8")
+
     self.hashed_pwd = self._CalculateHash(password, self.salt,
                                           self.iteration_count)
 
   def CheckPassword(self, password):
+    # prevent non-descriptive 'key_material must be bytes' error later
+    if isinstance(password, string_types):
+      password = password.encode("utf-8")
+
     h = self._CalculateHash(password, self.salt, self.iteration_count)
     return constant_time.bytes_eq(h, self.hashed_pwd)

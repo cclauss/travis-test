@@ -1,8 +1,11 @@
 #!/usr/bin/env python
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import unicode_literals
 
 
 from future.builtins import map
+from future.builtins import str
 import mock
 
 from grr_response_core.lib import flags
@@ -270,7 +273,7 @@ class ClientVfsMigratorTest(test_lib.GRRBaseTest):
       path_info = data_store.REL_DB.ReadPathInfo(
           client_id=client_urn.Basename(),
           path_type=rdf_objects.PathInfo.PathType.OS,
-          components=("foo", unicode(i)))
+          components=("foo", str(i)))
 
       self.assertEqual(path_info.hash_entry.md5, b"bar")
       self.assertEqual(path_info.stat_entry.st_size, i + 42)
@@ -357,14 +360,14 @@ class ClientVfsMigratorTest(test_lib.GRRBaseTest):
 class BlobStoreMigratorTest(test_lib.GRRBaseTest):
 
   def testBlobsAreCorrectlyMigrated(self):
-    mem_bs = memory_stream_bs.MemoryStreamBlobstore()
-    db_bs = db_blob_store.DbBlobstore()
+    mem_bs = memory_stream_bs.MemoryStreamBlobStore()
+    db_bs = db_blob_store.DbBlobStore()
 
     blob_contents_1 = b"A" * 1024
-    blob_hash_1 = mem_bs.StoreBlob(blob_contents_1)
+    blob_hash_1 = mem_bs.WriteBlobWithUnknownHash(blob_contents_1)
 
     blob_contents_2 = b"B" * 1024
-    blob_hash_2 = mem_bs.StoreBlob(blob_contents_2)
+    blob_hash_2 = mem_bs.WriteBlobWithUnknownHash(blob_contents_2)
 
     data_migration.BlobsMigrator().Execute(2)
 

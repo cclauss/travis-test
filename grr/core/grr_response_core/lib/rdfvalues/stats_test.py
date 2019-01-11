@@ -2,9 +2,9 @@
 """Test for RunningStats class."""
 
 
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import unicode_literals
-
-import math
 
 from builtins import range  # pylint: disable=redefined-builtin
 
@@ -32,7 +32,7 @@ class RunningStatsTest(rdf_test_base.RDFValueTestMixin, test_lib.GRRBaseTest):
       stats.RegisterValue(v)
 
     # Compare calculated mean with a precalculated value.
-    self.assertTrue(math.fabs(stats.mean - 49.5) < 1e-7)
+    self.assertAlmostEqual(stats.mean, 49.5)
 
   def testStdDevIsCalculatedCorrectly(self):
     stats = rdf_stats.RunningStats()
@@ -42,7 +42,7 @@ class RunningStatsTest(rdf_test_base.RDFValueTestMixin, test_lib.GRRBaseTest):
       stats.RegisterValue(v)
 
     # Compare calculated standard deviation with a precalculated value.
-    self.assertTrue(math.fabs(stats.std - 28.86607004) < 1e-7)
+    self.assertAlmostEqual(stats.std, 28.86607004)
 
   def testHistogramIsCalculatedCorrectly(self):
     stats = rdf_stats.RunningStats()

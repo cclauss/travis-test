@@ -1,11 +1,14 @@
 #!/usr/bin/env python
 """Tests for grr.parsers.osx_quarantine."""
 
-
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import unicode_literals
 
 import datetime
 import os
+
+from future.builtins import str
 
 from grr_response_core.lib import flags
 from grr_response_core.lib.parsers import osx_quarantine
@@ -45,7 +48,7 @@ class OSXQuarantineTest(test_lib.GRRBaseTest):
     url = "https://hilariouscatsdownload.com/badfile?dat=funny_cats.exe"
     self.assertEqual(entries[-1][2], url)
 
-    self.assertEqual(len(entries), 2)
+    self.assertLen(entries, 2)
 
 
 def main(argv):

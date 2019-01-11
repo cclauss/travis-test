@@ -1,30 +1,33 @@
 #!/usr/bin/env python
 """Simple parsers for OS X files."""
 
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import unicode_literals
 
+import datetime
 import io
 import os
 import stat
 
 
 from binplist import binplist
+from future.utils import string_types
 from grr_response_core.lib import parser
 from grr_response_core.lib.rdfvalues import client as rdf_client
 from grr_response_core.lib.rdfvalues import plist as rdf_plist
 
 
-class OSXUsersParser(parser.ArtifactFilesParser):
+class OSXUsersParser(parser.ArtifactFilesMultiParser):
   """Parser for Glob of /Users/*."""
 
   output_types = ["User"]
   supported_artifacts = ["MacOSUsers"]
   blacklist = ["Shared"]
-  process_together = True
 
-  def ParseMultiple(self, stat_entries, knowledge_base, path_type):
+  def ParseMultiple(self, stat_entries, knowledge_base):
     """Parse the StatEntry objects."""
-    _, _ = knowledge_base, path_type
+    _ = knowledge_base
 
     for stat_entry in stat_entries:
       if stat.S_ISDIR(stat_entry.st_mode):
@@ -110,7 +113,7 @@ class OSXLaunchdPlistParser(parser.FileParser):
     # does Apple so we check.
     for key in string_array_items:
       elements = plist.get(key)
-      if isinstance(elements, basestring):
+      if isinstance(elements, string_types):
         kwargs[key] = [elements]
       else:
         kwargs[key] = elements
@@ -180,3 +183,35 @@ class OSXLaunchdPlistParser(parser.FileParser):
                   Month=entry.get("Month")))
 
     yield rdf_plist.LaunchdPlist(**kwargs)
+
+
+class OSXInstallHistoryPlistParser(parser.FileParser):
+  """Parse InstallHistory plist files into SoftwarePackage objects."""
+
+  output_types = [rdf_client.SoftwarePackage.__name__]
+  supported_artifacts = ["MacOSInstallationHistory"]
+
+  def Parse(self, statentry, file_object, knowledge_base):
+    """Parse the Plist file."""
+
+    plist = binplist.readPlist(file_object)
+
+    if not isinstance(plist, list):
+      raise parser.ParseError(
+          "InstallHistory plist is a '%s', expecting a list" % type(plist))
+
+    for sw in plist:
+      yield rdf_client.SoftwarePackage(
+          name=sw.get("displayName"),
+          version=sw.get("displayVersion"),
+          description=",".join(sw.get("packageIdentifiers")),
+          # TODO(hanuszczak): make installed_on an RDFDatetime
+          installed_on=_DateToEpoch(sw.get("date")),
+          install_state=rdf_client.SoftwarePackage.InstallState.INSTALLED)
+
+
+def _DateToEpoch(date):
+  """Converts python datetime to epoch microseconds."""
+  tz_zero = datetime.datetime.utcfromtimestamp(0)
+  diff_sec = int((date - tz_zero).total_seconds())
+  return diff_sec * 1000000

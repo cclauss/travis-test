@@ -1,5 +1,8 @@
 #!/usr/bin/env python
 """Test the various collection objects."""
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import unicode_literals
 
 from grr_response_core import config
 from grr_response_core.lib import flags
@@ -16,7 +19,7 @@ class TestCollections(aff4_test_lib.AFF4ObjectTest):
 
     # The only way to create a GRRSignedBlob is via this constructor.
     fd = collects.GRRSignedBlob.NewFromContent(
-        "hello world",
+        b"hello world",
         urn,
         chunk_size=2,
         token=self.token,
@@ -30,7 +33,7 @@ class TestCollections(aff4_test_lib.AFF4ObjectTest):
     self.assertEqual(fd.size, 11)
 
     # We have 6 collections.
-    self.assertEqual(len(fd.collection), 6)
+    self.assertLen(fd.collection, 6)
 
     # Chunking works ok.
     self.assertEqual(fd.collection[0].data, "he")
@@ -48,7 +51,7 @@ class TestCollections(aff4_test_lib.AFF4ObjectTest):
         token=self.token)
 
   def testSignedBlob(self):
-    test_string = "Sample 5"
+    test_string = b"Sample 5"
 
     urn = "aff4:/test/signedblob"
     self._NewFromString(urn, test_string)
@@ -66,7 +69,7 @@ class TestCollections(aff4_test_lib.AFF4ObjectTest):
     self.assertEqual(sample.Read(3), test_string[3:6])
 
   def testSignedBlobDeletion(self):
-    test_string = "Sample 5"
+    test_string = b"Sample 5"
 
     urn = "aff4:/test/signedblobdel"
     self._NewFromString(urn, test_string)
@@ -76,7 +79,7 @@ class TestCollections(aff4_test_lib.AFF4ObjectTest):
     aff4.FACTORY.Delete(urn, token=self.token)
 
     # Recreate in the same place.
-    test_string = "Sample 4"
+    test_string = b"Sample 4"
     self._NewFromString(urn, test_string)
 
     sample = aff4.FACTORY.Open(urn, token=self.token)

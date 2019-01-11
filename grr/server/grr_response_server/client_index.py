@@ -3,12 +3,16 @@
 
 An index of client machines, associating likely identifiers to client IDs.
 """
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import unicode_literals
 
 
 from builtins import map  # pylint: disable=redefined-builtin
 from builtins import range  # pylint: disable=redefined-builtin
 from future.utils import iteritems
 from future.utils import itervalues
+from future.utils import string_types
 
 from grr_response_core.lib import rdfvalue
 from grr_response_core.lib import utils
@@ -43,7 +47,13 @@ class AFF4ClientIndex(keyword_index.AFF4KeywordIndex):
     return urn.Basename()
 
   def _NormalizeKeyword(self, keyword):
-    return keyword.lower()
+    # We're not sure about the type here, so converting the string to
+    # unicode first to lower it properly and then converting it back
+    # to utf-8 bytestring, since it's what the rest of the code is
+    # expecting.
+    # TODO(user): deprecate this code and make sure that ClientIndex
+    # implementation below doesn't rely on such hacks.
+    return utils.SmartStr(utils.SmartUnicode(keyword).lower())
 
   def _AnalyzeKeywords(self, keywords):
     start_time = rdfvalue.RDFDatetime.Now() - rdfvalue.Duration("180d")
@@ -88,7 +98,7 @@ class AFF4ClientIndex(keyword_index.AFF4KeywordIndex):
     Raises:
       ValueError: A string (single keyword) was passed instead of an iterable.
     """
-    if isinstance(keywords, basestring):
+    if isinstance(keywords, string_types):
       raise ValueError(
           "Keywords should be an iterable, not a string (got %s)." % keywords)
 
@@ -136,6 +146,7 @@ class AFF4ClientIndex(keyword_index.AFF4KeywordIndex):
 
     Args:
       keywords: A list of keywords we are interested in.
+
     Returns:
       A dict mapping each keyword to a list of matching clients.
     """
@@ -176,7 +187,7 @@ class AFF4ClientIndex(keyword_index.AFF4KeywordIndex):
         keyword_string = self._NormalizeKeyword(utils.SmartStr(keyword))
         keywords.append(keyword_string)
         if prefix:
-          keywords.append(prefix + ":" + keyword_string)
+          keywords.append(utils.SmartStr(prefix) + b":" + keyword_string)
 
     def TryAppendPrefixes(prefix, keyword, delimiter):
       TryAppend(prefix, keyword)
@@ -290,6 +301,7 @@ def GetClientURNsForHostnames(hostnames, token=None):
   Args:
     hostnames: A list of hostnames / FQDNs.
     token: An ACL token.
+
   Returns:
     A dict with a list of all known GRR client_ids for each hostname.
   """
@@ -366,7 +378,7 @@ class ClientIndex(object):
     Raises:
       ValueError: A string (single keyword) was passed instead of an iterable.
     """
-    if isinstance(keywords, basestring):
+    if isinstance(keywords, string_types):
       raise ValueError(
           "Keywords should be an iterable, not a string (got %s)." % keywords)
 
@@ -392,6 +404,7 @@ class ClientIndex(object):
 
     Args:
       keywords: A list of keywords we are interested in.
+
     Returns:
       A dict mapping each keyword to a list of matching clients.
     """
@@ -502,7 +515,7 @@ class ClientIndex(object):
     for label in labels:
       keyword_string = self._NormalizeKeyword(utils.SmartStr(label))
       keywords.add(keyword_string)
-      keywords.add("label:" + keyword_string)
+      keywords.add(b"label:" + keyword_string)
 
     data_store.REL_DB.AddClientKeywords(client_id, keywords)
 

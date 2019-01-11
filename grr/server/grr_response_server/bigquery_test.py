@@ -1,5 +1,8 @@
 #!/usr/bin/env python
 """Tests for grr.lib.bigquery."""
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import unicode_literals
 
 import json
 import os
@@ -57,7 +60,7 @@ class BigQueryClientTest(test_lib.GRRBaseTest):
     job = mock.Mock()
     # Always raise errors.HttpError on job.execute()
     job.configure_mock(
-        **{"execute.side_effect": errors.HttpError(resp, "nocontent")})
+        **{"execute.side_effect": errors.HttpError(resp, b"nocontent")})
     job_id = "hunts_HFFE1D044_Results_1446056474"
 
     with tempfile.NamedTemporaryFile() as fd:

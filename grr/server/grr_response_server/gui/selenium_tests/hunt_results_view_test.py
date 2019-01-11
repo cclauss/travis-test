@@ -1,11 +1,13 @@
 #!/usr/bin/env python
 # -*- mode: python; encoding: utf-8 -*-
 """Test the hunt results interface."""
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import unicode_literals
 
 
 import mock
-import unittest
+
 from grr_response_core.lib import flags
 from grr_response_core.lib import rdfvalue
 from grr_response_core.lib.rdfvalues import flows as rdf_flows
@@ -17,6 +19,7 @@ from grr_response_server.output_plugins import csv_plugin
 from grr_response_server.output_plugins import sqlite_plugin
 from grr_response_server.output_plugins import yaml_plugin
 from grr.test_lib import db_test_lib
+from grr.test_lib import test_lib
 
 
 @db_test_lib.DualDBTest
@@ -157,11 +160,5 @@ class TestHuntResultsView(gui_test_lib.GRRSeleniumHuntTest):
     self.WaitUntil(MockMethodIsCalled)
 
 
-def main(argv):
-  del argv  # Unused.
-  # Run the full test suite
-  unittest.main()
-
-
 if __name__ == "__main__":
-  flags.StartMain(main)
+  flags.StartMain(test_lib.main)

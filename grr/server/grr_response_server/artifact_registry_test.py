@@ -1,15 +1,20 @@
 #!/usr/bin/env python
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import unicode_literals
+
+from absl.testing import absltest
 import mock
 
-import unittest
-
+from grr_response_core.lib import flags
 from grr_response_core.lib import rdfvalue
 from grr_response_core.lib.rdfvalues import artifacts as rdf_artifacts
 from grr_response_server import artifact_registry as ar
+from grr.test_lib import temp
 from grr.test_lib import test_lib
 
 
-class ArtifactRegistrySourcesTest(unittest.TestCase):
+class ArtifactRegistrySourcesTest(absltest.TestCase):
 
   def setUp(self):
     super(ArtifactRegistrySourcesTest, self).setUp()
@@ -56,13 +61,13 @@ class ArtifactRegistrySourcesTest(unittest.TestCase):
     self.assertIn(rdfvalue.RDFURN("aff4:/bars"), datastores)
 
   def testGetAllFiles(self):
-    with test_lib.AutoTempDirPath(remove_non_empty=True) as tmpdir_path:
-      foo_path = test_lib.TempFilePath(suffix="foo.yaml")
-      bar_path = test_lib.TempFilePath(suffix="bar.json")
-      baz_path = test_lib.TempFilePath(suffix="baz.yaml")
-      quux_path = test_lib.TempFilePath(dir=tmpdir_path, suffix="quux.yaml")
-      norf_path = test_lib.TempFilePath(dir=tmpdir_path, suffix="norf.json")
-      thud_path = test_lib.TempFilePath(dir=tmpdir_path, suffix="thud.xml")
+    with temp.AutoTempDirPath(remove_non_empty=True) as tmpdir_path:
+      foo_path = temp.TempFilePath(suffix="foo.yaml")
+      bar_path = temp.TempFilePath(suffix="bar.json")
+      baz_path = temp.TempFilePath(suffix="baz.yaml")
+      quux_path = temp.TempFilePath(dir=tmpdir_path, suffix="quux.yaml")
+      norf_path = temp.TempFilePath(dir=tmpdir_path, suffix="norf.json")
+      thud_path = temp.TempFilePath(dir=tmpdir_path, suffix="thud.xml")
 
       self.sources.AddFile(foo_path)
       self.sources.AddFile(bar_path)
@@ -78,8 +83,8 @@ class ArtifactRegistrySourcesTest(unittest.TestCase):
 
   @mock.patch("logging.warn")
   def testGetAllFilesErrors(self, warn):
-    with test_lib.AutoTempDirPath() as foo_dirpath,\
-         test_lib.AutoTempDirPath() as bar_dirpath:
+    with temp.AutoTempDirPath() as foo_dirpath,\
+         temp.AutoTempDirPath() as bar_dirpath:
       self.assertTrue(self.sources.AddDir(foo_dirpath))
       self.assertTrue(self.sources.AddDir("/baz/quux/norf"))
       self.assertTrue(self.sources.AddDir(bar_dirpath))
@@ -93,7 +98,7 @@ class ArtifactRegistrySourcesTest(unittest.TestCase):
       self.assertEqual(warn.call_count, 3)
 
 
-class ArtifactTest(unittest.TestCase):
+class ArtifactTest(absltest.TestCase):
 
   def testValidateSyntaxSimple(self):
     artifact = rdf_artifacts.Artifact(
@@ -191,7 +196,7 @@ class ArtifactTest(unittest.TestCase):
       ar.ValidateSyntax(artifact)
 
 
-class ArtifactSourceTest(unittest.TestCase):
+class ArtifactSourceTest(absltest.TestCase):
 
   def testValidateDirectory(self):
     source = rdf_artifacts.ArtifactSource(
@@ -270,4 +275,4 @@ class ArtifactSourceTest(unittest.TestCase):
 
 
 if __name__ == "__main__":
-  unittest.main()
+  flags.StartMain(test_lib.main)

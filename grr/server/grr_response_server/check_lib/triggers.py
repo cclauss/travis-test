@@ -1,5 +1,9 @@
 #!/usr/bin/env python
 """Map the conditions that trigger checks to the methods that perform them."""
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import unicode_literals
+
 import itertools
 
 
@@ -59,6 +63,9 @@ class Condition(object):
 
   def __eq__(self, other):
     return isinstance(other, Condition) and self.attr == other.attr
+
+  def __ne__(self, other):
+    return not self.__eq__(other)
 
   def Match(self, artifact, os_name=None, cpe=None, label=None):
     """Whether the condition applies to external data.

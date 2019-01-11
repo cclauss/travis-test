@@ -1,11 +1,13 @@
 #!/usr/bin/env python
 """This module tests the RDFValue implementation for performance."""
+from __future__ import absolute_import
 from __future__ import division
 from __future__ import unicode_literals
 
 
-from builtins import range  # pylint: disable=redefined-builtin
+from future.builtins import range
 from future.utils import iteritems
+from typing import Text
 
 from grr_response_core.lib import flags
 from grr_response_core.lib import type_info
@@ -47,7 +49,8 @@ class StructGrrMessage(rdf_structs.RDFProtoStruct):
           name="source",
           field_number=6,
           description=("Client name where the message came from (This is "
-                       "copied from the MessageList)")),)
+                       "copied from the MessageList)")),
+  )
 
 
 class FastGrrMessageList(rdf_structs.RDFProtoStruct):
@@ -206,7 +209,7 @@ class RDFValueBenchmark(benchmark_test_lib.AverageMicroBenchmarks):
 
     serialized = s.SerializeToString()
     unserialized = FastGrrMessageList.FromSerializedString(serialized)
-    self.assertEqual(len(unserialized.job), len(s.job))
+    self.assertLen(unserialized.job, len(s.job))
 
     self.assertEqual(unserialized.job[134].session_id, "test")
     self.assertEqual(unserialized.job[100].request_id, 100)
@@ -223,14 +226,14 @@ class RDFValueBenchmark(benchmark_test_lib.AverageMicroBenchmarks):
       new_s.ParseFromString(data)
 
       self.assertEqual(new_s.session_id, "session")
-      self.assertEqual(new_s.session_id.__class__, unicode)
+      self.assertIsInstance(new_s.session_id, Text)
 
     def RDFStructDecode():
       new_s = StructGrrMessage()
       new_s.ParseFromString(data)
 
       self.assertEqual(new_s.session_id, "session")
-      self.assertEqual(new_s.session_id.__class__, unicode)
+      self.assertIsInstance(new_s.session_id, Text)
 
     self.TimeIt(RDFStructDecode)
     self.TimeIt(ProtoDecode)
@@ -251,14 +254,14 @@ class RDFValueBenchmark(benchmark_test_lib.AverageMicroBenchmarks):
       new_s.ParseFromString(data)
 
       self.assertEqual(new_s.username, "user")
-      self.assertEqual(new_s.username.__class__, unicode)
+      self.assertIsInstance(new_s.username, Text)
 
     def RDFStructDecode():
       new_s = rdf_client.User()
       new_s.ParseFromString(data)
 
       self.assertEqual(new_s.username, "user")
-      self.assertEqual(new_s.username.__class__, unicode)
+      self.assertIsInstance(new_s.username, Text)
 
     self.TimeIt(RDFStructDecode)
     self.TimeIt(ProtoDecode)
@@ -274,14 +277,14 @@ class RDFValueBenchmark(benchmark_test_lib.AverageMicroBenchmarks):
           name=u"foo", request_id=1, response_id=1, session_id=u"session")
 
       test = s1.SerializeToString()
-      self.assertEqual(len(serialized), len(test))
+      self.assertLen(serialized, len(test))
 
     def RDFStructEncode():
       s2 = StructGrrMessage(
           name=u"foo", request_id=1, response_id=1, session_id=u"session")
 
       test = s2.SerializeToString()
-      self.assertEqual(len(serialized), len(test))
+      self.assertLen(serialized, len(test))
 
     self.TimeIt(RDFStructEncode)
     self.TimeIt(ProtoEncode)

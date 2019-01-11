@@ -1,13 +1,14 @@
 #!/usr/bin/env python
 # -*- mode: python; encoding: utf-8 -*-
 """Test the cron_view interface."""
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import unicode_literals
 
 
-import unittest
 from grr_response_core.lib import flags
 from grr_response_core.lib import rdfvalue
-from grr_response_core.lib import utils
+from grr_response_core.lib.util import compatibility
 from grr_response_server import aff4
 from grr_response_server import data_store
 from grr_response_server import notification
@@ -26,7 +27,7 @@ class TestCronView(gui_test_lib.GRRSeleniumTest):
   """Test the Cron view GUI."""
 
   def AddJobStatus(self, job_id, status):
-    if data_store.RelationalDBReadEnabled():
+    if data_store.RelationalDBReadEnabled("cronjobs"):
       status = cron.ApiCronJob().status_map[status]
       data_store.REL_DB.UpdateCronJob(
           job_id,
@@ -52,8 +53,8 @@ class TestCronView(gui_test_lib.GRRSeleniumTest):
 
     manager = cronjobs.GetCronManager()
     manager.RunOnce(token=self.token)
-    if data_store.RelationalDBReadEnabled():
-      manager._GetThreadPool().Join()
+    if data_store.RelationalDBReadEnabled("cronjobs"):
+      manager._GetThreadPool().Stop()
 
   def testCronView(self):
     self.Open("/")
@@ -102,13 +103,13 @@ class TestCronView(gui_test_lib.GRRSeleniumTest):
 
     # Click on the first flow and wait for flow details panel to appear.
     runs = cronjobs.GetCronManager().ReadJobRuns(
-        utils.GetName(cron_system.OSBreakDown))
+        compatibility.GetName(cron_system.OSBreakDown))
     try:
       run_id = runs[0].run_id
     except AttributeError:
       run_id = runs[0].urn.Basename()
 
-    self.assertEqual(len(runs), 1)
+    self.assertLen(runs, 1)
     self.WaitUntil(self.IsElementPresent, "css=td:contains('%s')" % run_id)
 
   def testToolbarStateForDisabledCronJob(self):
@@ -164,8 +165,8 @@ class TestCronView(gui_test_lib.GRRSeleniumTest):
         "css=grr-request-approval-dialog button[name=Proceed]:not([disabled])")
 
     self.WaitUntilEqual(
-        1,
-        lambda: len(self.ListCronJobApprovals(requestor=self.token.username)))
+        1, lambda: len(
+            self.ListCronJobApprovals(requestor=self.token.username)))
 
   def testEnableCronJob(self):
     cronjobs.GetCronManager().DisableJob(job_id=u"OSBreakDown")
@@ -354,10 +355,10 @@ class TestCronView(gui_test_lib.GRRSeleniumTest):
       self.WaitUntilNot(self.IsVisible, "css=.modal-open")
 
       # Relational cron jobs will only be run the next time a worker checks in.
-      if data_store.RelationalDBReadEnabled():
+      if data_store.RelationalDBReadEnabled("cronjobs"):
         manager = cronjobs.GetCronManager()
         manager.RunOnce(token=self.token)
-        manager._GetThreadPool().Join()
+        manager._GetThreadPool().Stop()
 
       # TODO(amoser): The lower pane does not refresh automatically so we need
       # to workaround. Remove when we have implemented this auto refresh.
@@ -424,11 +425,5 @@ class TestCronView(gui_test_lib.GRRSeleniumTest):
     self.WaitUntil(self.IsElementPresent, "css=dd:contains('OSBreakDown')")
 
 
-def main(argv):
-  del argv  # Unused.
-  # Run the full test suite
-  unittest.main()
-
-
 if __name__ == "__main__":
-  flags.StartMain(main)
+  flags.StartMain(test_lib.main)

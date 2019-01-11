@@ -1,6 +1,10 @@
 #!/usr/bin/env python
 """VFS-related test classes."""
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import unicode_literals
 
+import io
 import os
 import time
 
@@ -13,14 +17,22 @@ from grr_response_client import vfs
 # TODO(hanuszczak): This import is required because otherwise VFS handler
 # classes are not registered correctly and things start to fail. This is
 # terrible and has to be fixed as soon as possible.
-from grr_response_client.vfs_handlers import files  # pylint: disable=unused-import
+from grr_response_client.vfs_handlers import registry_init  # pylint: disable=unused-import
 from grr_response_core import config
+from grr_response_core.lib import rdfvalue
 from grr_response_core.lib import utils
 from grr_response_core.lib.rdfvalues import client_fs as rdf_client_fs
+from grr_response_core.lib.rdfvalues import crypto as rdf_crypto
 from grr_response_core.lib.rdfvalues import paths as rdf_paths
+from grr_response_core.lib.util import precondition
+from grr_response_server import aff4
 from grr_response_server import client_fixture
+from grr_response_server import data_store
+from grr_response_server import db
+from grr_response_server import file_store
 from grr_response_server.aff4_objects import aff4_grr
 from grr_response_server.aff4_objects import standard as aff4_standard
+from grr_response_server.rdfvalues import objects as rdf_objects
 
 
 class VFSOverrider(object):
@@ -110,13 +122,9 @@ class ClientVFSHandlerFixture(ClientVFSHandlerFixtureBase):
                base_fd=None,
                prefix=None,
                pathspec=None,
-               progress_callback=None,
-               full_pathspec=None):
+               progress_callback=None):
     super(ClientVFSHandlerFixture, self).__init__(
-        base_fd,
-        pathspec=pathspec,
-        progress_callback=progress_callback,
-        full_pathspec=full_pathspec)
+        base_fd, pathspec=pathspec, progress_callback=progress_callback)
 
     self.prefix = self.prefix or prefix
     self.pathspec.Append(pathspec)
@@ -265,13 +273,9 @@ class FakeTestDataVFSHandler(ClientVFSHandlerFixtureBase):
                base_fd=None,
                prefix=None,
                pathspec=None,
-               progress_callback=None,
-               full_pathspec=None):
+               progress_callback=None):
     super(FakeTestDataVFSHandler, self).__init__(
-        base_fd,
-        pathspec=pathspec,
-        progress_callback=progress_callback,
-        full_pathspec=full_pathspec)
+        base_fd, pathspec=pathspec, progress_callback=progress_callback)
     # This should not really be done since there might be more information
     # in the pathspec than the path but here in the test is ok.
     if not base_fd:
@@ -344,7 +348,8 @@ class RegistryFake(FakeRegistryVFSHandler):
         cache_key = "/" + cache_key
       if cache_key in self.cache[self.prefix]:
         return self.__class__.FakeKeyHandle(cache_key)
-    raise IOError()
+
+    raise OSError()
 
   def QueryValueEx(self, key, value_name):
     full_key = os.path.join(key.value.lower(), value_name).rstrip("/")
@@ -356,7 +361,7 @@ class RegistryFake(FakeRegistryVFSHandler):
     except KeyError:
       pass
 
-    raise IOError()
+    raise OSError()
 
   def QueryInfoKey(self, key):
     num_keys = len(self._GetKeys(key))
@@ -375,7 +380,7 @@ class RegistryFake(FakeRegistryVFSHandler):
     try:
       return self._GetKeys(key)[index]
     except IndexError:
-      raise IOError()
+      raise OSError()
 
   def _GetKeys(self, key):
     res = []
@@ -392,7 +397,7 @@ class RegistryFake(FakeRegistryVFSHandler):
       value, value_type = self.QueryValueEx(key, subkey)
       return subkey, value, value_type
     except IndexError:
-      raise IOError()
+      raise OSError()
 
   def _GetValues(self, key):
     res = []
@@ -402,6 +407,26 @@ class RegistryFake(FakeRegistryVFSHandler):
         if sub_type.__name__ == "VFSFile":
           res.append(os.path.basename(stat_entry.pathspec.path))
     return sorted(res)
+
+
+class FakeWinreg(object):
+  """A class to replace the _winreg module.
+
+  _winreg is only available on Windows so we use this class in tests instead.
+  """
+
+  REG_NONE = 0
+  REG_SZ = 1
+  REG_EXPAND_SZ = 2
+  REG_BINARY = 3
+  REG_DWORD = 4
+  REG_DWORD_LITTLE_ENDIAN = 4
+  REG_DWORD_BIG_ENDIAN = 5
+  REG_LINK = 6
+  REG_MULTI_SZ = 7
+
+  HKEY_USERS = "HKEY_USERS"
+  HKEY_LOCAL_MACHINE = "HKEY_LOCAL_MACHINE"
 
 
 class RegistryVFSStubber(object):
@@ -418,11 +443,9 @@ class RegistryVFSStubber(object):
     """Install the stubs."""
 
     modules = {
-        "_winreg": mock.MagicMock(),
+        "_winreg": FakeWinreg(),
         "ctypes": mock.MagicMock(),
         "ctypes.wintypes": mock.MagicMock(),
-        # Requires mocking because exceptions.WindowsError does not exist
-        "exceptions": mock.MagicMock(),
     }
 
     self.module_patcher = mock.patch.dict("sys.modules", modules)
@@ -430,8 +453,6 @@ class RegistryVFSStubber(object):
 
     # pylint: disable= g-import-not-at-top
     from grr_response_client.vfs_handlers import registry
-    import exceptions
-    import _winreg
     # pylint: enable=g-import-not-at-top
 
     fixture = RegistryFake()
@@ -447,12 +468,91 @@ class RegistryVFSStubber(object):
 
     # Add the Registry handler to the vfs.
     vfs.VFSInit().Run()
-    _winreg.HKEY_USERS = "HKEY_USERS"
-    _winreg.HKEY_LOCAL_MACHINE = "HKEY_LOCAL_MACHINE"
-    exceptions.WindowsError = IOError
 
   def Stop(self):
     """Uninstall the stubs."""
 
     self.module_patcher.stop()
     self.stubber.Stop()
+
+
+def CreateFile(client_path, content=b"", token=None):
+  """Creates a file in datastore-agnostic way.
+
+  Args:
+    client_path: A `ClientPath` instance specifying location of the file.
+    content: A content to write to the file.
+    token: A GRR token for accessing the data store.
+  """
+  precondition.AssertType(client_path, db.ClientPath)
+  precondition.AssertType(content, bytes)
+
+  blob_id = rdf_objects.BlobID.FromBlobData(content)
+
+  stat_entry = rdf_client_fs.StatEntry(
+      pathspec=rdf_paths.PathSpec(
+          pathtype=client_path.path_type,
+          path="/".join(client_path.components)),
+      st_mode=33206,
+      st_size=len(content))
+
+  if data_store.RelationalDBWriteEnabled():
+    data_store.BLOBS.WriteBlobs({blob_id: content})
+    hash_id = file_store.AddFileWithUnknownHash(client_path, [blob_id])
+
+    path_info = rdf_objects.PathInfo()
+    path_info.path_type = client_path.path_type
+    path_info.components = client_path.components
+    path_info.hash_entry.num_bytes = len(content)
+    path_info.hash_entry.sha256 = hash_id.AsBytes()
+    path_info.stat_entry = stat_entry
+
+    data_store.REL_DB.WritePathInfos(client_path.client_id, [path_info])
+
+  urn = aff4.ROOT_URN.Add(client_path.client_id).Add(client_path.vfs_path)
+  with aff4.FACTORY.Create(urn, aff4_grr.VFSBlobImage, token=token) as filedesc:
+    bio = io.BytesIO()
+    bio.write(content)
+    bio.seek(0)
+
+    filedesc.AppendContent(bio)
+    filedesc.Set(filedesc.Schema.STAT, stat_entry)
+
+    filedesc.Set(
+        filedesc.Schema.HASH,
+        rdf_crypto.Hash(
+            sha256=rdf_objects.SHA256HashID.FromData(content).AsBytes(),
+            num_bytes=len(content)))
+
+    filedesc.Set(filedesc.Schema.CONTENT_LAST, rdfvalue.RDFDatetime.Now())
+
+
+def CreateDirectory(client_path, token=None):
+  """Creates a directory in datastore-agnostic way.
+
+  Args:
+    client_path: A `ClientPath` instance specifying location of the file.
+    token: A GRR token for accessing the data store.
+  """
+  precondition.AssertType(client_path, db.ClientPath)
+
+  stat_entry = rdf_client_fs.StatEntry(
+      pathspec=rdf_paths.PathSpec(
+          pathtype=client_path.path_type,
+          path="/".join(client_path.components)),
+      st_mode=16895)
+
+  if data_store.RelationalDBWriteEnabled():
+
+    path_info = rdf_objects.PathInfo()
+    path_info.path_type = client_path.path_type
+    path_info.components = client_path.components
+    path_info.stat_entry = stat_entry
+
+    data_store.REL_DB.WritePathInfos(client_path.client_id, [path_info])
+
+  urn = aff4.ROOT_URN.Add(client_path.client_id).Add(client_path.vfs_path)
+  with aff4.FACTORY.Create(
+      urn, aff4_standard.VFSDirectory, token=token) as filedesc:
+    filedesc.Set(filedesc.Schema.STAT, stat_entry)
+    filedesc.Set(filedesc.Schema.PATHSPEC, stat_entry.pathspec)

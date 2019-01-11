@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 """End to end tests for GRR artifacts."""
+from __future__ import absolute_import
+from __future__ import division
 
 from grr_response_test.end_to_end_tests import test_base
 
@@ -70,10 +72,12 @@ class TestParserDependency(test_base.EndToEndTest):
 
   def testWinUserShellFolder(self):
     results = self._CollectArtifact("WindowsUserShellFolders")
-    # Results should be of type User.
+    # Results should be of type User. Check that each user has
+    # a temp folder and at least one has an appdata folder.
     for r in results:
-      self.assertTrue(r.payload.appdata)
       self.assertTrue(r.payload.temp)
+
+    self.assertNotEmpty([r for r in results if r.payload.appdata])
 
 
 class TestWindowsRegistryCollector(test_base.EndToEndTest):
@@ -90,7 +94,7 @@ class TestWindowsRegistryCollector(test_base.EndToEndTest):
 
     for statentry in [r.payload for r in f.ListResults()]:
       self.assertTrue(hasattr(statentry, "pathspec"))
-      self.assertTrue("namespace" in statentry.pathspec.path.lower())
+      self.assertIn("namespace", statentry.pathspec.path.lower())
 
 
 class TestKnowledgeBaseInitializationFlow(test_base.EndToEndTest):
@@ -122,7 +126,7 @@ class TestKnowledgeBaseInitializationFlow(test_base.EndToEndTest):
     f = self.RunFlowAndWait("KnowledgeBaseInitializationFlow", args=args)
 
     results = list(f.ListResults())
-    self.assertEquals(len(results), 1)
+    self.assertLen(results, 1)
 
     kb = results[0].payload
 

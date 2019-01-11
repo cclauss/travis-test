@@ -1,15 +1,18 @@
 #!/usr/bin/env python
 # -*- mode: python; encoding: utf-8 -*-
 """Linux only tests."""
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import unicode_literals
 
-import __builtin__
 import glob
 import os
 
 from grr_response_client.client_actions.linux import linux
 from grr_response_core.lib import flags
 from grr_response_core.lib import utils
+from grr_response_core.lib.rdfvalues import client_fs as rdf_client_fs
+from grr_response_core.lib.util import compatibility
 from grr.test_lib import client_test_lib
 from grr.test_lib import test_lib
 
@@ -23,11 +26,11 @@ class LinuxOnlyTest(client_test_lib.EmptyActionTest):
       try:
         fixture_path = os.path.join(self.base_path, "VFSFixture",
                                     requested_path.lstrip("/"))
-        return __builtin__.open.old_target(fixture_path, mode)
+        return compatibility.builtins.open.old_target(fixture_path, mode)
       except IOError:
-        return __builtin__.open.old_target(requested_path, mode)
+        return compatibility.builtins.open.old_target(requested_path, mode)
 
-    with utils.MultiStubber((__builtin__, "open", MockedOpen),
+    with utils.MultiStubber((compatibility.builtins, "open", MockedOpen),
                             (glob, "glob", lambda x: ["/var/log/wtmp"])):
       results = self.RunAction(linux.EnumerateUsers)
 
@@ -48,6 +51,28 @@ class LinuxOnlyTest(client_test_lib.EmptyActionTest):
         self.fail("Unexpected user found: %s" % result.username)
 
     self.assertEqual(found, 3)
+
+  def testEnumerateFilesystemsLinux(self):
+    """Enumerate filesystems."""
+
+    def MockCheckMounts(unused_filename):
+      del unused_filename  # Unused.
+      device = "/dev/mapper/dhcp--100--104--9--24--vg-root"
+      fs_type = "ext4"
+      mnt_point = "/"
+      yield device, fs_type, mnt_point
+
+    with utils.Stubber(linux, "CheckMounts", MockCheckMounts):
+      results = self.RunAction(linux.EnumerateFilesystems)
+
+    expected = rdf_client_fs.Filesystem(
+        mount_point="/",
+        type="ext4",
+        device="/dev/mapper/dhcp--100--104--9--24--vg-root")
+
+    self.assertLen(results, 2)
+    for result in results:
+      self.assertEqual(result, expected)
 
 
 def main(argv):

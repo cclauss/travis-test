@@ -1,8 +1,11 @@
 #!/usr/bin/env python
 """Test of "New Hunt" wizard."""
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import unicode_literals
 
-import unittest
+from selenium.webdriver.common import keys
+
 from grr_response_core.lib import flags
 from grr_response_core.lib import rdfvalue
 from grr_response_core.lib.rdfvalues import client as rdf_client
@@ -303,7 +306,7 @@ class TestNewHuntWizard(gui_test_lib.GRRSeleniumHuntTest):
     # Check that the hunt object was actually created
     hunts_root = aff4.FACTORY.Open("aff4:/hunts", token=self.token)
     hunts_list = list(hunts_root.OpenChildren())
-    self.assertEqual(len(hunts_list), 1)
+    self.assertLen(hunts_list, 1)
 
     # Check that the hunt was created with a correct flow
     hunt = hunts_list[0]
@@ -331,7 +334,7 @@ class TestNewHuntWizard(gui_test_lib.GRRSeleniumHuntTest):
     # Check that the hunt was created with correct rules
     hunt_rules = self.FindForemanRules(hunt, token=self.token)
 
-    self.assertEqual(len(hunt_rules), 1)
+    self.assertLen(hunt_rules, 1)
     lifetime = hunt_rules[0].GetLifetime()
     lifetime -= rdfvalue.Duration("2w")
     self.assertLessEqual(lifetime, rdfvalue.Duration("1s"))
@@ -340,7 +343,7 @@ class TestNewHuntWizard(gui_test_lib.GRRSeleniumHuntTest):
 
     self.assertEqual(r.match_mode,
                      foreman_rules.ForemanClientRuleSet.MatchMode.MATCH_ANY)
-    self.assertEqual(len(r.rules), 3)
+    self.assertLen(r.rules, 3)
 
     self.assertEqual(r.rules[0].rule_type,
                      foreman_rules.ForemanClientRule.Type.OS)
@@ -441,7 +444,7 @@ class TestNewHuntWizard(gui_test_lib.GRRSeleniumHuntTest):
     # Check that the hunt object was actually created
     hunts_root = aff4.FACTORY.Open("aff4:/hunts", token=self.token)
     hunts_list = list(hunts_root.OpenChildren())
-    self.assertEqual(len(hunts_list), 1)
+    self.assertLen(hunts_list, 1)
 
     # Check that the hunt was created with a correct literal value.
     hunt = hunts_list[0]
@@ -472,9 +475,8 @@ class TestNewHuntWizard(gui_test_lib.GRRSeleniumHuntTest):
                       "css=grr-wizard-form:contains('Dummy do do')")
 
   def testDefaultOutputPluginIsCorrectlyAddedToThePluginsList(self):
-    with test_lib.ConfigOverrider({
-        "AdminUI.new_hunt_wizard.default_output_plugin": "DummyOutputPlugin"
-    }):
+    with test_lib.ConfigOverrider(
+        {"AdminUI.new_hunt_wizard.default_output_plugin": "DummyOutputPlugin"}):
       self.Open("/#main=ManageHunts")
       self.Click("css=button[name=NewHunt]")
 
@@ -749,7 +751,7 @@ class TestNewHuntWizard(gui_test_lib.GRRSeleniumHuntTest):
     hunts_root = aff4.FACTORY.Open("aff4:/hunts", token=self.token)
     hunts_list = sorted(list(hunts_root.ListChildren()), key=lambda x: x.age)
 
-    self.assertEqual(len(hunts_list), 2)
+    self.assertLen(hunts_list, 2)
 
     first_hunt = aff4.FACTORY.Open(hunts_list[0], token=self.token)
     last_hunt = aff4.FACTORY.Open(hunts_list[1], token=self.token)
@@ -859,7 +861,7 @@ class TestNewHuntWizard(gui_test_lib.GRRSeleniumHuntTest):
     hunts_root = aff4.FACTORY.Open("aff4:/hunts", token=self.token)
     hunts_list = sorted(list(hunts_root.ListChildren()), key=lambda x: x.age)
 
-    self.assertEqual(len(hunts_list), 2)
+    self.assertLen(hunts_list, 2)
     last_hunt = aff4.FACTORY.Open(hunts_list[-1], token=self.token)
 
     self.assertEqual(last_hunt.args.flow_args.pathspec.path,
@@ -868,7 +870,7 @@ class TestNewHuntWizard(gui_test_lib.GRRSeleniumHuntTest):
     self.assertEqual(last_hunt.args.flow_runner_args.flow_name,
                      transfer.GetFile.__name__)
 
-    self.assertEqual(len(last_hunt.runner_args.output_plugins), 2)
+    self.assertLen(last_hunt.runner_args.output_plugins, 2)
     self.assertEqual(last_hunt.runner_args.output_plugins[0].plugin_name,
                      "DummyOutputPlugin")
     self.assertEqual(
@@ -961,7 +963,7 @@ class TestNewHuntWizard(gui_test_lib.GRRSeleniumHuntTest):
     hunts_root = aff4.FACTORY.Open("aff4:/hunts", token=self.token)
     hunts_list = sorted(list(hunts_root.ListChildren()), key=lambda x: x.age)
 
-    self.assertEqual(len(hunts_list), 2)
+    self.assertLen(hunts_list, 2)
     last_hunt = aff4.FACTORY.Open(hunts_list[-1], token=self.token)
 
     # Check that the hunt was created with a correct literal value.
@@ -1070,13 +1072,13 @@ class TestNewHuntWizard(gui_test_lib.GRRSeleniumHuntTest):
     # Check that the hunt object was actually created
     hunts_root = aff4.FACTORY.Open("aff4:/hunts", token=self.token)
     hunts_list = list(hunts_root.OpenChildren())
-    self.assertEqual(len(hunts_list), 1)
+    self.assertLen(hunts_list, 1)
 
     hunt = hunts_list[0]
 
     # Check that the hunt was created with correct rules
     rules = hunt.runner_args.client_rule_set.rules
-    self.assertEqual(len(rules), 1)
+    self.assertLen(rules, 1)
     rule = rules[0]
 
     self.assertEqual(rule.rule_type,
@@ -1086,12 +1088,36 @@ class TestNewHuntWizard(gui_test_lib.GRRSeleniumHuntTest):
     # Assert that the deselected union field is cleared
     self.assertFalse(rule.os.os_windows)
 
+  def testPathAutocomplete(self):
+    self.CreateHuntFixtureWithTwoClients()
 
-def main(argv):
-  del argv  # Unused.
-  # Run the full test suite
-  unittest.main()
+    # Open Hunts
+    self.Open("/#/hunts")
+
+    # Open "New Hunt" wizard
+    self.Click("css=button[name=NewHunt]")
+    self.WaitUntil(self.IsElementPresent,
+                   "css=grr-wizard-form:contains('What to run?')")
+
+    # Click on Filesystem item in flows list
+    self.Click("css=#_Filesystem > i.jstree-icon")
+
+    # Click on the FileFinder item in Filesystem flows list
+    self.Click("link=File Finder")
+
+    input_selector = "css=grr-form-glob-expression input[uib-typeahead]"
+
+    # Change "path"
+    self.Type(input_selector, "/foo/%%path")
+
+    self.WaitUntil(self.IsElementPresent,
+                   "css=[uib-typeahead-popup]:contains('%%environ_path%%')")
+
+    self.GetElement(input_selector).send_keys(keys.Keys.ENTER)
+
+    self.WaitUntilEqual("/foo/%%environ_path%%", self.GetValue,
+                        input_selector + ":text")
 
 
 if __name__ == "__main__":
-  flags.StartMain(main)
+  flags.StartMain(test_lib.main)

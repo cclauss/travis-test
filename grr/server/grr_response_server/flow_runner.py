@@ -55,17 +55,21 @@ queues. Child flow runners all share their parent's queue manager.
 
 
 """
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import unicode_literals
+
 import logging
 import threading
 import traceback
 
 
 from grr_response_core.lib import rdfvalue
-from grr_response_core.lib import stats
 from grr_response_core.lib import utils
 from grr_response_core.lib.rdfvalues import client as rdf_client
 from grr_response_core.lib.rdfvalues import flows as rdf_flows
 from grr_response_core.lib.rdfvalues import protodict as rdf_protodict
+from grr_response_core.stats import stats_collector_instance
 # Note: OutputPluginDescriptor is also needed implicitly by FlowRunnerArgs
 from grr_response_server import aff4
 from grr_response_server import data_store
@@ -207,23 +211,22 @@ class FlowRunner(object):
         continue
 
       plugin_class = plugin_descriptor.GetPluginClass()
-      plugin = plugin_class(
-          self.flow_obj.output_urn,
-          args=plugin_descriptor.plugin_args,
-          token=self.token)
       try:
-        plugin.InitializeState()
+        plugin, plugin_state = plugin_class.CreatePluginAndDefaultState(
+            source_urn=self.flow_obj.output_urn,
+            args=plugin_descriptor.plugin_args,
+            token=self.token)
         # TODO(amoser): Those do not need to be inside the state, they
         # could be part of the plugin descriptor.
-        plugin.state["logs"] = []
-        plugin.state["errors"] = []
+        plugin_state["logs"] = []
+        plugin_state["errors"] = []
 
         output_plugins_states.append(
             rdf_flow_runner.OutputPluginState(
-                plugin_state=plugin.state, plugin_descriptor=plugin_descriptor))
+                plugin_state=plugin_state, plugin_descriptor=plugin_descriptor))
       except Exception as e:  # pylint: disable=broad-except
-        logging.warning("Plugin %s failed to initialize (%s), ignoring it.",
-                        plugin, e)
+        logging.exception("Plugin %s failed to initialize (%s), ignoring it.",
+                          plugin, e)
 
     parent_creator = None
     if self.parent_runner:
@@ -427,7 +430,8 @@ class FlowRunner(object):
 
           # We are missing a needed request - maybe its not completed yet.
           if request.id > self.context.next_processed_request:
-            stats.STATS.IncrementCounter("grr_response_out_of_order")
+            stats_collector_instance.Get().IncrementCounter(
+                "grr_response_out_of_order")
             break
 
           # Not the request we are looking for - we have seen it before
@@ -446,7 +450,8 @@ class FlowRunner(object):
             # automatic retransmission facilitated by the task scheduler (the
             # Task.task_ttl field) which would happen regardless of these.
             if request.transmission_count < 5:
-              stats.STATS.IncrementCounter("grr_request_retransmission_count")
+              stats_collector_instance.Get().IncrementCounter(
+                  "grr_request_retransmission_count")
               request.transmission_count += 1
               self.ReQueueRequest(request)
             break
@@ -477,9 +482,10 @@ class FlowRunner(object):
         # termination.
         if not self.OutstandingRequests():
           # TODO(user): Deprecate in favor of 'flow_completions' metric.
-          stats.STATS.IncrementCounter("grr_flow_completed_count")
+          stats_collector_instance.Get().IncrementCounter(
+              "grr_flow_completed_count")
 
-          stats.STATS.IncrementCounter(
+          stats_collector_instance.Get().IncrementCounter(
               "flow_completions", fields=[self.flow_obj.Name()])
           logging.debug(
               "Destroying session %s(%s) for client %s", self.session_id,
@@ -552,10 +558,10 @@ class FlowRunner(object):
 
       self.SaveResourceUsage(responses.status)
 
-      stats.STATS.IncrementCounter("grr_worker_states_run")
+      stats_collector_instance.Get().IncrementCounter("grr_worker_states_run")
 
       if method_name == "Start":
-        stats.STATS.IncrementCounter(
+        stats_collector_instance.Get().IncrementCounter(
             "flow_starts", fields=[self.flow_obj.Name()])
         method()
       else:
@@ -571,9 +577,10 @@ class FlowRunner(object):
       # This flow will terminate now
 
       # TODO(user): Deprecate in favor of 'flow_errors'.
-      stats.STATS.IncrementCounter("grr_flow_errors")
+      stats_collector_instance.Get().IncrementCounter("grr_flow_errors")
 
-      stats.STATS.IncrementCounter("flow_errors", fields=[self.flow_obj.Name()])
+      stats_collector_instance.Get().IncrementCounter(
+          "flow_errors", fields=[self.flow_obj.Name()])
       logging.exception("Flow %s raised %s.", self.session_id, e)
 
       self.Error(traceback.format_exc(), client_id=client_id)
@@ -764,17 +771,21 @@ class FlowRunner(object):
 
     return child_urn
 
-  def SendReply(self, response):
+  def SendReply(self, response, tag=None):
     """Allows this flow to send a message to its parent flow.
 
     If this flow does not have a parent, the message is ignored.
 
     Args:
       response: An RDFValue() instance to be sent to the parent.
+      tag: If specified, tag the result with the following tag. NOTE: supported
+        in REL_DB implementation only.
 
     Raises:
       ValueError: If responses is not of the correct type.
     """
+    del tag
+
     if not isinstance(response, rdfvalue.RDFValue):
       raise ValueError("SendReply can only send a Semantic Value")
 
@@ -883,13 +894,19 @@ class FlowRunner(object):
     """Processes replies with output plugins."""
     for output_plugin_state in self.context.output_plugins_states:
       plugin_descriptor = output_plugin_state.plugin_descriptor
-      output_plugin = output_plugin_state.GetPlugin()
+      output_plugin_cls = plugin_descriptor.GetPluginClass()
+      output_plugin = output_plugin_cls(
+          source_urn=self.flow_obj.urn,
+          args=plugin_descriptor.plugin_args,
+          token=self.token)
 
       # Extend our lease if needed.
       self.flow_obj.HeartBeat()
       try:
-        output_plugin.ProcessResponses(replies)
-        output_plugin.Flush()
+        output_plugin.ProcessResponses(output_plugin_state.plugin_state,
+                                       replies)
+        output_plugin.Flush(output_plugin_state.plugin_state)
+        output_plugin.UpdateState(output_plugin_state.plugin_state)
 
         log_item = output_plugin_lib.OutputPluginBatchProcessingStatus(
             plugin_descriptor=plugin_descriptor,

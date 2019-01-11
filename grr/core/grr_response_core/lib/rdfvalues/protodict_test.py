@@ -10,13 +10,16 @@ Dict objects behave generally like a dict (with __getitem__, items() and
 an __iter__) method, but are serializable as an RDFProto.
 """
 
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import unicode_literals
 
 import collections
 
 
-from builtins import zip  # pylint: disable=redefined-builtin
+from future.builtins import zip
 from future.utils import iteritems
+from typing import Text
 
 from grr_response_core.lib import flags
 from grr_response_core.lib import rdfvalue
@@ -58,7 +61,7 @@ class DictTest(rdf_test_base.RDFProtoTestMixin, test_lib.GRRBaseTest):
 
   def testIsMapping(self):
     test_dict = rdf_protodict.Dict(a=1)
-    self.assertTrue(isinstance(test_dict, collections.Mapping))
+    self.assertIsInstance(test_dict, collections.Mapping)
 
   def testDictBehaviour(self):
     tested = rdf_protodict.Dict(a=1)
@@ -70,7 +73,7 @@ class DictTest(rdf_test_base.RDFProtoTestMixin, test_lib.GRRBaseTest):
     self.assertEqual(tested["a"], 1)
 
     tested["b"] = rdfvalue.RDFURN("aff4:/users/")
-    self.assertEqual(len(tested), 2)
+    self.assertLen(tested, 2)
     self.assertEqual(tested["b"].SerializeToString(), "aff4:/users")
 
   def testSerialization(self):
@@ -104,9 +107,7 @@ class DictTest(rdf_test_base.RDFProtoTestMixin, test_lib.GRRBaseTest):
   def testNestedDicts(self):
     test_dict = dict(
         key1={"A": 1},
-        key2=rdf_protodict.Dict({
-            "A": 1
-        }),
+        key2=rdf_protodict.Dict({"A": 1}),
     )
 
     sample = rdf_protodict.Dict(**test_dict)
@@ -116,9 +117,7 @@ class DictTest(rdf_test_base.RDFProtoTestMixin, test_lib.GRRBaseTest):
   def testNestedDictsMultipleTypes(self):
     test_dict = dict(
         key1={"A": 1},
-        key2=rdf_protodict.Dict({
-            "A": 1
-        }),
+        key2=rdf_protodict.Dict({"A": 1}),
         key3=[1, 2, 3, [1, 2, [3]]],
         key4=[[], None, ["abc"]],
         key5=set([1, 2, 3]))
@@ -136,9 +135,7 @@ class DictTest(rdf_test_base.RDFProtoTestMixin, test_lib.GRRBaseTest):
 
     test_dict = dict(
         key1={"A": 1},
-        key2=rdf_protodict.Dict({
-            "A": 1
-        }),
+        key2=rdf_protodict.Dict({"A": 1}),
         key3=[1, UnSerializable(), 3, [1, 2, [3]]],
         key4=[[], None, ["abc"]],
         key5=UnSerializable(),
@@ -155,34 +152,34 @@ class DictTest(rdf_test_base.RDFProtoTestMixin, test_lib.GRRBaseTest):
     self.assertEqual(test_dict["key2"], sample["key2"])
 
     self.assertEqual(1, sample["key3"][0])
-    self.assertTrue("Unsupported type" in sample["key3"][1])
-    self.assertItemsEqual(test_dict["key3"][2:], sample["key3"][2:])
+    self.assertIn("Unsupported type", sample["key3"][1])
+    self.assertCountEqual(test_dict["key3"][2:], sample["key3"][2:])
 
     self.assertEqual(test_dict["key4"], sample["key4"])
-    self.assertTrue("Unsupported type" in sample["key5"])
+    self.assertIn("Unsupported type", sample["key5"])
     self.assertEqual("a", sample["key6"][0])
-    self.assertTrue("Unsupported type" in sample["key6"][1])
+    self.assertIn("Unsupported type", sample["key6"][1])
     self.assertEqual("b", sample["key6"][2])
 
   def testBool(self):
     sample = rdf_protodict.Dict(a=True)
-    self.assertTrue(isinstance(sample["a"], bool))
+    self.assertIsInstance(sample["a"], bool)
     sample = rdf_protodict.Dict(a="true")
     self.assertEqual(sample["a"], "true")
 
   def testOverwriting(self):
     req = rdf_client_action.Iterator(client_state=rdf_protodict.Dict({"A": 1}))
     # There should be one element now.
-    self.assertEqual(len(list(iteritems(req.client_state))), 1)
+    self.assertLen(list(iteritems(req.client_state)), 1)
 
     req.client_state = rdf_protodict.Dict({"B": 2})
     # Still one element.
-    self.assertEqual(len(list(iteritems(req.client_state))), 1)
+    self.assertLen(list(iteritems(req.client_state)), 1)
 
     req.client_state = rdf_protodict.Dict({})
 
     # And now it's gone.
-    self.assertEqual(len(list(iteritems(req.client_state))), 0)
+    self.assertEmpty(list(iteritems(req.client_state)))
 
 
 class AttributedDictTest(rdf_test_base.RDFValueTestMixin, test_lib.GRRBaseTest):
@@ -197,19 +194,19 @@ class AttributedDictTest(rdf_test_base.RDFValueTestMixin, test_lib.GRRBaseTest):
     arnie = {"target": "Sarah Connor", "mission": "Protect"}
     t800 = {"target": "Sarah Connor", "mission": "Terminate"}
     terminator = rdf_protodict.AttributedDict(arnie)
-    self.assertEquals(terminator.GetItem("target"), "Sarah Connor")
-    self.assertEquals(terminator.GetItem("mission"), "Protect")
+    self.assertEqual(terminator.GetItem("target"), "Sarah Connor")
+    self.assertEqual(terminator.GetItem("mission"), "Protect")
     terminator = rdf_protodict.AttributedDict(t800)
-    self.assertEquals(terminator.target, "Sarah Connor")
-    self.assertEquals(terminator.mission, "Terminate")
+    self.assertEqual(terminator.target, "Sarah Connor")
+    self.assertEqual(terminator.mission, "Terminate")
     # We don't want a conflicted Terminator
     self.assertFalse(terminator.GetItem("happy_face"))
 
   def testAttributedDictSettingsAreAttr(self):
     t800 = {"target": "Sarah Connor", "mission": "Terminate"}
     terminator = rdf_protodict.AttributedDict(t800)
-    self.assertEquals(terminator.target, "Sarah Connor")
-    self.assertEquals(terminator.mission, "Terminate")
+    self.assertEqual(terminator.target, "Sarah Connor")
+    self.assertEqual(terminator.mission, "Terminate")
 
 
 class RDFValueArrayTest(rdf_test_base.RDFProtoTestMixin, test_lib.GRRBaseTest):
@@ -225,7 +222,7 @@ class RDFValueArrayTest(rdf_test_base.RDFProtoTestMixin, test_lib.GRRBaseTest):
 
     # Add a string.
     sample.Append("hello")
-    self.assertEqual(len(sample), 1)
+    self.assertLen(sample, 1)
     self.assertEqual(sample[0], "hello")
 
     # Add another RDFValue
@@ -235,7 +232,7 @@ class RDFValueArrayTest(rdf_test_base.RDFProtoTestMixin, test_lib.GRRBaseTest):
     # Test iterator.
     sample_list = list(sample)
     self.assertIsInstance(sample_list, list)
-    self.assertIsInstance(sample_list[0], unicode)
+    self.assertIsInstance(sample_list[0], Text)
     self.assertIsInstance(sample_list[1], rdfvalue.RDFString)
 
     # Test initialization from a list of variable types.

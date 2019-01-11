@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 """Tests for frontend server, client communicator, and the GRRHTTPClient."""
+from __future__ import absolute_import
 from __future__ import division
+from __future__ import unicode_literals
 
 import array
 import logging
@@ -22,12 +24,12 @@ from grr_response_core.lib import communicator
 from grr_response_core.lib import flags
 from grr_response_core.lib import queues
 from grr_response_core.lib import rdfvalue
-from grr_response_core.lib import stats
 from grr_response_core.lib import utils
 from grr_response_core.lib.rdfvalues import client as rdf_client
 from grr_response_core.lib.rdfvalues import crypto as rdf_crypto
 from grr_response_core.lib.rdfvalues import flows as rdf_flows
 from grr_response_core.lib.rdfvalues import protodict as rdf_protodict
+from grr_response_core.stats import stats_collector_instance
 from grr_response_server import aff4
 from grr_response_server import data_store
 from grr_response_server import fleetspeak_connector
@@ -60,6 +62,21 @@ class SendingTestFlow(flow.GRRFlow):
           next_state="Incoming")
 
 
+MESSAGE_EXPIRY_TIME = 100
+
+
+def ReceiveMessages(client_id, messages):
+  server = TestServer()
+  server.ReceiveMessages(client_id, messages)
+
+
+def TestServer():
+  return frontend_lib.FrontEndServer(
+      certificate=config.CONFIG["Frontend.certificate"],
+      private_key=config.CONFIG["PrivateKeys.server_key"],
+      message_expiry_time=MESSAGE_EXPIRY_TIME)
+
+
 class GRRFEServerTest(frontend_test_lib.FrontEndServerTest):
   """Tests the GRRFEServer."""
 
@@ -79,16 +96,16 @@ class GRRFEServerTest(frontend_test_lib.FrontEndServerTest):
             payload=rdfvalue.RDFInteger(i)) for i in range(1, 10)
     ]
 
-    self.server.ReceiveMessages(client_id, messages)
+    ReceiveMessages(client_id, messages)
 
     # Make sure the task is still on the client queue
     manager = queue_manager.QueueManager(token=self.token)
     tasks_on_client_queue = manager.Query(client_id, 100)
-    self.assertEqual(len(tasks_on_client_queue), 1)
+    self.assertLen(tasks_on_client_queue, 1)
 
     stored_messages = data_store.DB.ReadResponsesForRequestId(session_id, 1)
 
-    self.assertEqual(len(stored_messages), len(messages))
+    self.assertLen(stored_messages, len(messages))
 
     stored_messages.sort(key=lambda m: m.response_id)
     # Check that messages were stored correctly
@@ -126,16 +143,16 @@ class GRRFEServerTest(frontend_test_lib.FrontEndServerTest):
             payload=status,
             type=rdf_flows.GrrMessage.Type.STATUS))
 
-    self.server.ReceiveMessages(client_id, messages)
+    ReceiveMessages(client_id, messages)
 
     # Make sure the task is still on the client queue
     manager = queue_manager.QueueManager(token=self.token)
     tasks_on_client_queue = manager.Query(client_id, 100)
-    self.assertEqual(len(tasks_on_client_queue), 1)
+    self.assertLen(tasks_on_client_queue, 1)
 
     stored_messages = data_store.DB.ReadResponsesForRequestId(session_id, 1)
 
-    self.assertEqual(len(stored_messages), len(messages))
+    self.assertLen(stored_messages, len(messages))
 
     stored_messages.sort(key=lambda m: m.response_id)
     # Check that messages were stored correctly
@@ -169,10 +186,11 @@ class GRRFEServerTest(frontend_test_lib.FrontEndServerTest):
             type=rdf_flows.GrrMessage.Type.STATUS)
     ]
 
-    self.server.ReceiveMessages(client_id, messages)
+    ReceiveMessages(client_id, messages)
+
     manager = queue_manager.QueueManager(token=self.token)
     completed = list(manager.FetchCompletedRequests(session_id))
-    self.assertEqual(len(completed), 1)
+    self.assertLen(completed, 1)
 
   def testWellKnownFlows(self):
     """Make sure that well known flows can run on the front end."""
@@ -187,10 +205,7 @@ class GRRFEServerTest(frontend_test_lib.FrontEndServerTest):
             payload=rdfvalue.RDFInteger(i)) for i in range(1, 10)
     ]
 
-    self.server.ReceiveMessages(test_lib.TEST_CLIENT_ID, messages)
-
-    # Wait for async actions to complete
-    self.server.thread_pool.Join()
+    ReceiveMessages(test_lib.TEST_CLIENT_ID, messages)
 
     flow_test_lib.WellKnownSessionTest.messages.sort()
 
@@ -204,10 +219,10 @@ class GRRFEServerTest(frontend_test_lib.FrontEndServerTest):
 
     # The well known flow messages should be queued now.
     responses = data_store.DB.ReadResponsesForRequestId(session_id, 0)
-    self.assertEqual(len(responses), 9)
+    self.assertLen(responses, 9)
 
     relational_requests = data_store.REL_DB.ReadMessageHandlerRequests()
-    self.assertEqual(len(relational_requests), 0)
+    self.assertEmpty(relational_requests)
 
   def testMessageHandlers(self):
     """Tests message handlers."""
@@ -221,10 +236,10 @@ class GRRFEServerTest(frontend_test_lib.FrontEndServerTest):
         session_id = self._ReceiveWKFMessages()
 
     responses = data_store.DB.ReadResponsesForRequestId(session_id, 0)
-    self.assertEqual(len(responses), 0)
+    self.assertEmpty(responses)
 
     relational_requests = data_store.REL_DB.ReadMessageHandlerRequests()
-    self.assertEqual(len(relational_requests), 9)
+    self.assertLen(relational_requests, 9)
 
   def _ReceiveWKFMessages(self):
     flow_test_lib.WellKnownSessionTest.messages = []
@@ -239,12 +254,10 @@ class GRRFEServerTest(frontend_test_lib.FrontEndServerTest):
             payload=rdfvalue.RDFInteger(i)) for i in range(1, 10)
     ]
 
-    # Delete the local well known flow cache is empty.
-    self.server.well_known_flows = {}
-    self.server.ReceiveMessages(test_lib.TEST_CLIENT_ID, messages)
-
-    # Wait for async actions to complete
-    self.server.thread_pool.Join()
+    server = TestServer()
+    # Delete the local well known flow cache.
+    server.well_known_flows = {}
+    server.ReceiveMessages(test_lib.TEST_CLIENT_ID, messages)
 
     # None get processed now
     self.assertEqual(flow_test_lib.WellKnownSessionTest.messages, [])
@@ -273,14 +286,12 @@ class GRRFEServerTest(frontend_test_lib.FrontEndServerTest):
               auth_state="AUTHENTICATED",
               payload=rdfvalue.RDFInteger(i)))
 
+    server = TestServer()
     # This test whitelists only one flow.
-    self.assertIn(session_id1.FlowName(), self.server.well_known_flows)
-    self.assertNotIn(session_id2.FlowName(), self.server.well_known_flows)
+    self.assertIn(session_id1.FlowName(), server.well_known_flows)
+    self.assertNotIn(session_id2.FlowName(), server.well_known_flows)
 
-    self.server.ReceiveMessages(test_lib.TEST_CLIENT_ID, messages)
-
-    # Wait for async actions to complete
-    self.server.thread_pool.Join()
+    server.ReceiveMessages(test_lib.TEST_CLIENT_ID, messages)
 
     # Flow 1 should have been processed right away.
     flow_test_lib.WellKnownSessionTest.messages.sort()
@@ -304,7 +315,7 @@ class GRRFEServerTest(frontend_test_lib.FrontEndServerTest):
 
     # But for Flow 2 there should be some responses + a notification.
     responses = list(manager.FetchResponses(session_id2))
-    self.assertEqual(len(responses), 4)
+    self.assertLen(responses, 4)
     self.assertIn(session_id2,
                   [notification.session_id for notification in notifications])
 
@@ -318,7 +329,7 @@ class GRRFEServerTest(frontend_test_lib.FrontEndServerTest):
     # There should be 10 messages in the client's task queue
     manager = queue_manager.QueueManager(token=self.token)
     tasks = manager.Query(client_id, 100)
-    self.assertEqual(len(tasks), 10)
+    self.assertLen(tasks, 10)
 
     requests_by_id = {}
 
@@ -341,10 +352,11 @@ class GRRFEServerTest(frontend_test_lib.FrontEndServerTest):
     # message list.
     response = rdf_flows.MessageList()
 
-    response.job = self.server.DrainTaskSchedulerQueueForClient(client_id, 5)
+    server = TestServer()
+    response.job = server.DrainTaskSchedulerQueueForClient(client_id, 5)
 
     # Check that we received only as many messages as we asked for
-    self.assertEqual(len(response.job), 5)
+    self.assertLen(response.job, 5)
 
     for i in range(4):
       self.assertEqual(response.job[i].session_id, session_id)
@@ -388,10 +400,11 @@ class GRRFEServerTest(frontend_test_lib.FrontEndServerTest):
           message_count=1,
           token=self.token)
 
+    server = TestServer()
     for i in range(default_ttl):
-      with test_lib.FakeTime(base_time + i * (self.MESSAGE_EXPIRY_TIME + 1)):
+      with test_lib.FakeTime(base_time + i * (MESSAGE_EXPIRY_TIME + 1)):
 
-        tasks = self.server.DrainTaskSchedulerQueueForClient(client_id, 100000)
+        tasks = server.DrainTaskSchedulerQueueForClient(client_id, 100000)
         msgs_recvd.append(tasks)
 
     # Should return a client message (ttl-1) times and nothing afterwards.
@@ -417,9 +430,9 @@ class GRRFEServerTest(frontend_test_lib.FrontEndServerTest):
       if i == 2:
         self._ScheduleResponseAndStatus(client_id, flow_id)
 
-      with test_lib.FakeTime(base_time + i * (self.MESSAGE_EXPIRY_TIME + 1)):
+      with test_lib.FakeTime(base_time + i * (MESSAGE_EXPIRY_TIME + 1)):
 
-        tasks = self.server.DrainTaskSchedulerQueueForClient(client_id, 100000)
+        tasks = server.DrainTaskSchedulerQueueForClient(client_id, 100000)
         msgs_recvd.append(tasks)
 
         if not tasks:
@@ -427,7 +440,7 @@ class GRRFEServerTest(frontend_test_lib.FrontEndServerTest):
           # it should be dequeued by now.
           new_tasks = queue_manager.QueueManager(token=self.token).Query(
               queue=rdf_client.ClientURN(client_id).Queue(), limit=1000)
-          self.assertEqual(len(new_tasks), 0)
+          self.assertEmpty(new_tasks)
 
     # Should return a client message twice and nothing afterwards.
     self.assertEqual(
@@ -459,7 +472,8 @@ class GRRFEServerTest(frontend_test_lib.FrontEndServerTest):
             type=rdf_flows.GrrMessage.Type.STATUS)
     ]
 
-    self.server.ReceiveMessages(client_urn, messages)
+    ReceiveMessages(client_urn, messages)
+
     client = aff4.FACTORY.Open(client_urn)
     crash_details = client.Get(client.Schema.LAST_CRASH)
     self.assertTrue(crash_details)
@@ -470,7 +484,7 @@ class GRRFEServerTest(frontend_test_lib.FrontEndServerTest):
     self.assertEqual(crash_details_rel.session_id, session_id)
 
 
-class GRRFEServerTestRelational(db_test_lib.RelationalFlowsEnabledMixin,
+class GRRFEServerTestRelational(db_test_lib.RelationalDBEnabledMixin,
                                 frontend_test_lib.FrontEndServerTest):
   """Tests the GRRFEServer with relational flows enabled."""
 
@@ -480,7 +494,10 @@ class GRRFEServerTestRelational(db_test_lib.RelationalFlowsEnabledMixin,
     flow_id = u"12345678"
     data_store.REL_DB.WriteClientMetadata(client_id, fleetspeak_enabled=False)
 
-    rdf_flow = rdf_flow_objects.Flow(client_id=client_id, flow_id=flow_id)
+    rdf_flow = rdf_flow_objects.Flow(
+        client_id=client_id,
+        flow_id=flow_id,
+        create_time=rdfvalue.RDFDatetime.Now())
     data_store.REL_DB.WriteFlowObject(rdf_flow)
 
     req = rdf_flow_objects.FlowRequest(
@@ -498,22 +515,23 @@ class GRRFEServerTestRelational(db_test_lib.RelationalFlowsEnabledMixin,
             payload=rdfvalue.RDFInteger(i)) for i in range(1, 10)
     ]
 
-    self.server.ReceiveMessages(client_id, messages)
+    ReceiveMessages(client_id, messages)
     received = data_store.REL_DB.ReadAllFlowRequestsAndResponses(
         client_id, flow_id)
-    self.assertEqual(len(received), 1)
+    self.assertLen(received, 1)
     self.assertEqual(received[0][0], req)
-    self.assertEqual(len(received[0][1]), 9)
+    self.assertLen(received[0][1], 9)
 
 
 class FleetspeakFrontendTests(frontend_test_lib.FrontEndServerTest):
 
   def testFleetspeakEnrolment(self):
     client_id = test_lib.TEST_CLIENT_ID.Basename()
-    # An Enrolment flow should start inline and attempt to send at least message
-    # through fleetspeak as part of the resulting interrogate flow.
+    server = TestServer()
+    # An Enrolment flow should start inline and attempt to send at least
+    # message through fleetspeak as part of the resulting interrogate flow.
     with mock.patch.object(fleetspeak_connector, "CONN") as mock_conn:
-      self.server.EnrolFleetspeakClient(client_id)
+      server.EnrolFleetspeakClient(client_id)
       mock_conn.outgoing.InsertMessage.assert_called()
 
 
@@ -593,7 +611,7 @@ class ClientCommsTest(test_lib.GRRBaseTest):
 
     self.assertEqual(source, self.client_communicator.common_name)
     self.assertEqual(client_timestamp, timestamp)
-    self.assertEqual(len(decoded_messages), 10)
+    self.assertLen(decoded_messages, 10)
     for i in range(1, 11):
       self.assertEqual(
           decoded_messages[i - 1].session_id,
@@ -654,7 +672,7 @@ class ClientCommsTest(test_lib.GRRBaseTest):
   def testClientPingStatsUpdated(self):
     """Check client ping stats are updated."""
     self._MakeClientRecord()
-    current_pings = stats.STATS.GetMetricValue(
+    current_pings = stats_collector_instance.Get().GetMetricValue(
         "client_pings_by_label", fields=[u"testlabel"])
 
     self._LabelClient(self.client_id, u"testlabel")
@@ -663,7 +681,7 @@ class ClientCommsTest(test_lib.GRRBaseTest):
     with test_lib.FakeTime(now):
       self.ClientServerCommunicate(timestamp=now)
 
-    new_pings = stats.STATS.GetMetricValue(
+    new_pings = stats_collector_instance.Get().GetMetricValue(
         "client_pings_by_label", fields=[u"testlabel"])
     self.assertEqual(new_pings, current_pings + 1)
 
@@ -807,7 +825,7 @@ class ClientCommsTest(test_lib.GRRBaseTest):
     self.client_communicator.LoadServerCertificate(
         server_certificate=server_certificate,
         ca_certificate=config.CONFIG["CA.certificate"])
-    self.assertEqual(len(list(self.ClientServerCommunicate())), 10)
+    self.assertLen(list(self.ClientServerCommunicate()), 10)
 
 
 class HTTPClientTests(test_lib.GRRBaseTest):
@@ -828,12 +846,6 @@ class HTTPClientTests(test_lib.GRRBaseTest):
 
     # Make a new client
     self.CreateNewClientObject()
-
-    # The housekeeper threads of the time based caches also call time.time and
-    # interfere with some tests so we disable them here.
-    utils.InterruptableThread.exit = True
-    # The same also applies to the StatsCollector thread.
-    stats.StatsCollector.exit = True
 
     # And cache it in the server
     self.CreateNewServerCommunicator()
@@ -942,7 +954,7 @@ class HTTPClientTests(test_lib.GRRBaseTest):
           api_version=self.client_communication.api_version)
 
       return MakeResponse(200, response_comms.SerializeToString())
-    except communicator.UnknownClientCert:
+    except communicator.UnknownClientCertError:
       raise MakeHTTPException(406)
     except Exception as e:
       logging.info("Exception in mock urllib.request.Open: %s.", e)
@@ -1005,7 +1017,7 @@ class HTTPClientTests(test_lib.GRRBaseTest):
       status = self.client_communicator.RunOnce()
 
       # Client should generate enrollment message by itself.
-      self.assertEqual(len(self.messages), 1)
+      self.assertLen(self.messages, 1)
       self.assertEqual(self.messages[0].session_id,
                        ca_enroller.Enroler.well_known_session_id)
 
@@ -1021,20 +1033,20 @@ class HTTPClientTests(test_lib.GRRBaseTest):
     # We expect to receive a 406 and all client messages will be tagged as
     # UNAUTHENTICATED.
     self.assertEqual(status.code, 406)
-    self.assertEqual(len(self.messages), 10)
+    self.assertLen(self.messages, 10)
     self.assertEqual(self.messages[0].auth_state,
                      rdf_flows.GrrMessage.AuthorizationState.UNAUTHENTICATED)
 
     # The next request should be an enrolling request.
     status = self.client_communicator.RunOnce()
 
-    self.assertEqual(len(self.messages), 11)
+    self.assertLen(self.messages, 11)
     enrolment_messages = []
     for m in self.messages:
       if m.session_id == ca_enroller.Enroler.well_known_session_id:
         enrolment_messages.append(m)
 
-    self.assertEqual(len(enrolment_messages), 1)
+    self.assertLen(enrolment_messages, 1)
 
     # Now we manually run the enroll well known flow with the enrollment
     # request. This will start a new flow for enrolling the client, sign the
@@ -1070,7 +1082,7 @@ class HTTPClientTests(test_lib.GRRBaseTest):
     status = self.client_communicator.RunOnce()
     self.assertEqual(status.code, 406)
 
-    self.assertEqual(len(self.messages), 1)
+    self.assertLen(self.messages, 1)
     self.assertEqual(self.messages[0].session_id,
                      ca_enroller.Enroler.well_known_session_id)
 
@@ -1159,7 +1171,11 @@ class HTTPClientTests(test_lib.GRRBaseTest):
           # This converts encryption keys to a string so we can corrupt them.
           field_data = field_data.SerializeToString()
 
-        modified_data = array.array("c", field_data)
+        # TODO: On Python 2.7.6 and lower `array.array` accepts
+        # only byte strings as argument so the call below is necessary. Once
+        # support for old Python versions is dropped, this call should be
+        # removed.
+        modified_data = array.array(str("c"), field_data)
         offset = len(field_data) // 2
         char = field_data[offset]
         modified_data[offset] = chr((ord(char) % 250) + 1).encode("latin-1")
@@ -1170,11 +1186,11 @@ class HTTPClientTests(test_lib.GRRBaseTest):
         self.assertNotEqual(field_data, modified_data)
 
         mod_str_repr = self.client_communication.SerializeToString()
-        self.assertEqual(len(orig_str_repr), len(mod_str_repr))
+        self.assertLen(orig_str_repr, len(mod_str_repr))
         differences = [
             True for x, y in zip(orig_str_repr, mod_str_repr) if x != y
         ]
-        self.assertEqual(len(differences), 1)
+        self.assertLen(differences, 1)
 
       data = self.client_communication.SerializeToString()
       return self.UrlMock(url=url, data=data, **kwargs)
@@ -1224,7 +1240,7 @@ class HTTPClientTests(test_lib.GRRBaseTest):
       self.assertEqual(status.code, 500)
 
       # Server should not receive anything.
-      self.assertEqual(len(self.messages), 0)
+      self.assertEmpty(self.messages)
 
       # Try to send these messages again.
       fail = False
@@ -1240,7 +1256,7 @@ class HTTPClientTests(test_lib.GRRBaseTest):
       self.CheckClientQueue()
 
       # Server should have received 10 messages this time.
-      self.assertEqual(len(self.messages), 10)
+      self.assertLen(self.messages, 10)
 
   # TODO(hanuszczak): We have a separate test suite for the stat collector.
   # Most of these test methods are no longer required, especially that now they
@@ -1257,26 +1273,26 @@ class HTTPClientTests(test_lib.GRRBaseTest):
       self.client_communicator.client_worker.stats_collector._Send()
 
     runs = []
-    with utils.Stubber(admin.GetClientStatsAuto, "Run",
-                       lambda cls, _: runs.append(1)):
+    with utils.Stubber(admin.GetClientStatsAuto,
+                       "Run", lambda cls, _: runs.append(1)):
 
       # No stats collection after 10 minutes.
       with test_lib.FakeTime(now + 600):
         self.client_communicator.client_worker.stats_collector._Send()
-        self.assertEqual(len(runs), 0)
+        self.assertEmpty(runs)
 
       # Let one hour pass.
       with test_lib.FakeTime(now + 3600):
         self.client_communicator.client_worker.stats_collector._Send()
         # This time the client should collect stats.
-        self.assertEqual(len(runs), 1)
+        self.assertLen(runs, 1)
 
       # Let one hour and ten minutes pass.
       with test_lib.FakeTime(now + 3600 + 600):
         self.client_communicator.client_worker.stats_collector._Send()
         # Again, there should be no stats collection, as last collection
         # happened less than an hour ago.
-        self.assertEqual(len(runs), 1)
+        self.assertLen(runs, 1)
 
   def testClientStatsCollectionHappensEveryMinuteWhenClientIsBusy(self):
     """Tests that client stats are collected more often when client is busy."""
@@ -1290,30 +1306,30 @@ class HTTPClientTests(test_lib.GRRBaseTest):
       self.client_communicator.client_worker.stats_collector._Send()
 
     runs = []
-    with utils.Stubber(admin.GetClientStatsAuto, "Run",
-                       lambda cls, _: runs.append(1)):
+    with utils.Stubber(admin.GetClientStatsAuto,
+                       "Run", lambda cls, _: runs.append(1)):
 
       # No stats collection after 30 seconds.
       with test_lib.FakeTime(now + 30):
         self.client_communicator.client_worker.stats_collector._Send()
-        self.assertEqual(len(runs), 0)
+        self.assertEmpty(runs)
 
       # Let 61 seconds pass.
       with test_lib.FakeTime(now + 61):
         self.client_communicator.client_worker.stats_collector._Send()
         # This time the client should collect stats.
-        self.assertEqual(len(runs), 1)
+        self.assertLen(runs, 1)
 
       # No stats collection within one minute from the last time.
       with test_lib.FakeTime(now + 61 + 59):
         self.client_communicator.client_worker.stats_collector._Send()
-        self.assertEqual(len(runs), 1)
+        self.assertLen(runs, 1)
 
       # Stats collection happens as more than one minute has passed since the
       # last one.
       with test_lib.FakeTime(now + 61 + 61):
         self.client_communicator.client_worker.stats_collector._Send()
-        self.assertEqual(len(runs), 2)
+        self.assertLen(runs, 2)
 
   def testClientStatsCollectionAlwaysHappensAfterHandleMessage(self):
     """Tests that client stats are collected more often when client is busy."""
@@ -1326,13 +1342,13 @@ class HTTPClientTests(test_lib.GRRBaseTest):
       self.client_communicator.client_worker.stats_collector._Send()
 
     runs = []
-    with utils.Stubber(admin.GetClientStatsAuto, "Run",
-                       lambda cls, _: runs.append(1)):
+    with utils.Stubber(admin.GetClientStatsAuto,
+                       "Run", lambda cls, _: runs.append(1)):
 
       # No stats collection after 30 seconds.
       with test_lib.FakeTime(now + 30):
         self.client_communicator.client_worker.stats_collector._Send()
-        self.assertEqual(len(runs), 0)
+        self.assertEmpty(runs)
 
       msg = rdf_flows.GrrMessage(
           name=standard.HashFile.__name__, generate_task_id=True)
@@ -1342,13 +1358,13 @@ class HTTPClientTests(test_lib.GRRBaseTest):
       # stats should not be sent.
       with test_lib.FakeTime(now + 59):
         self.client_communicator.client_worker.stats_collector._Send()
-        self.assertEqual(len(runs), 0)
+        self.assertEmpty(runs)
 
       # HandleMessage was called more than one minute ago, so stats
       # should be sent.
       with test_lib.FakeTime(now + 61):
         self.client_communicator.client_worker.stats_collector._Send()
-        self.assertEqual(len(runs), 1)
+        self.assertLen(runs, 1)
 
   def RaiseError(self, **_):
     raise MakeHTTPException(500, "Not a real connection.")

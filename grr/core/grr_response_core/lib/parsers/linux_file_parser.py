@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 """Simple parsers for Linux files."""
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import unicode_literals
 
 import collections
@@ -20,12 +22,11 @@ from grr_response_core.lib.rdfvalues import client as rdf_client
 from grr_response_core.lib.rdfvalues import protodict as rdf_protodict
 
 
-class PCIDevicesInfoParser(parser.FileParser):
+class PCIDevicesInfoParser(parser.FileMultiParser):
   """Parser for PCI devices' info files located in /sys/bus/pci/devices/*/*."""
 
   output_types = ["PCIDevice"]
   supported_artifacts = ["PCIDevicesInfoFiles"]
-  process_together = True
 
   def ParseMultiple(self, stats, file_objects, unused_knowledge_base):
 
@@ -114,7 +115,10 @@ class PasswdParser(parser.FileParser):
   def Parse(self, stat, file_object, knowledge_base):
     """Parse the passwd file."""
     _, _ = stat, knowledge_base
-    lines = [l.strip() for l in file_object.read().splitlines()]
+    lines = [
+        l.strip()
+        for l in utils.ReadFileBytesAsUnicode(file_object).splitlines()
+    ]
     for index, line in enumerate(lines):
       line = self.ParseLine(index, line)
       if line:
@@ -267,7 +271,10 @@ class NetgroupParser(parser.FileParser):
       rdf_client.User
     """
     _, _ = stat, knowledge_base
-    lines = [l.strip() for l in file_object.read().splitlines()]
+    lines = [
+        l.strip()
+        for l in utils.ReadFileBytesAsUnicode(file_object).splitlines()
+    ]
     return self.ParseLines(lines)
 
 
@@ -279,10 +286,10 @@ class NetgroupBufferParser(parser.GrepParser):
   def Parse(self, filefinderresult, knowledge_base):
     _ = knowledge_base
     return NetgroupParser.ParseLines(
-        [x.data.strip() for x in filefinderresult.matches])
+        [x.data.encode("utf-8").strip() for x in filefinderresult.matches])
 
 
-class LinuxBaseShadowParser(parser.FileParser):
+class LinuxBaseShadowParser(parser.FileMultiParser):
   """Base parser to process user/groups with shadow files."""
 
   # A list of hash types and hash matching expressions.
@@ -355,7 +362,9 @@ class LinuxBaseShadowParser(parser.FileParser):
     Raises:
       parser.ParseError if the parser is unable to process the line.
     """
-    lines = [l.strip() for l in file_obj.read().splitlines()]
+    lines = [
+        l.strip() for l in utils.ReadFileBytesAsUnicode(file_obj).splitlines()
+    ]
     try:
       for index, line in enumerate(lines):
         if line:
@@ -412,7 +421,6 @@ class LinuxSystemGroupParser(LinuxBaseShadowParser):
 
   output_types = ["Group"]
   supported_artifacts = ["LoginPolicyConfiguration"]
-  process_together = True
 
   base_store = "GROUP"
   shadow_store = "GSHADOW"
@@ -532,7 +540,6 @@ class LinuxSystemPasswdParser(LinuxBaseShadowParser):
 
   output_types = ["User"]
   supported_artifacts = ["LoginPolicyConfiguration"]
-  process_together = True
 
   base_store = "PASSWD"
   shadow_store = "SHADOW"
@@ -727,8 +734,8 @@ class PathParser(parser.FileParser):
   # Omits more fancy parameter expansion e.g. ${unset_val:=../..}
   _SHELLVAR_RE = re.compile(r'"?\$\{?\s*(\w+)\s*\}?"?')
 
-  def __init__(self):
-    super(PathParser, self).__init__()
+  def __init__(self, *args, **kwargs):
+    super(PathParser, self).__init__(*args, **kwargs)
     # Terminate entries on ";" to capture multiple values on one line.
     self.parser = config_file.FieldParser(term=r"[\r\n;]")
 
@@ -851,7 +858,7 @@ class PathParser(parser.FileParser):
       'vals' contains its vals.
     """
     _ = knowledge_base
-    lines = self.parser.ParseEntries(file_obj.read())
+    lines = self.parser.ParseEntries(utils.ReadFileBytesAsUnicode(file_obj))
     if os.path.basename(stat.pathspec.path) in self._CSH_FILES:
       paths = self._ParseCshVariables(lines)
     else:

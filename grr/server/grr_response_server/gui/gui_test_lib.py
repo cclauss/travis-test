@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 """Helper functionality for gui testing."""
+from __future__ import absolute_import
 from __future__ import division
 from __future__ import unicode_literals
 
@@ -30,14 +31,15 @@ from grr_response_core.lib.rdfvalues import crypto as rdf_crypto
 from grr_response_core.lib.rdfvalues import flows as rdf_flows
 from grr_response_core.lib.rdfvalues import paths as rdf_paths
 from grr_response_core.lib.rdfvalues import structs as rdf_structs
+from grr_response_core.lib.util import compatibility
 from grr_response_proto import tests_pb2
 from grr_response_server import aff4
 from grr_response_server import data_store
-from grr_response_server import flow
+from grr_response_server import db
+from grr_response_server import flow_base
 from grr_response_server import foreman
 from grr_response_server import foreman_rules
 from grr_response_server import output_plugin
-from grr_response_server.aff4_objects import aff4_grr
 from grr_response_server.aff4_objects import standard as aff4_standard
 from grr_response_server.aff4_objects import users
 from grr_response_server.flows.general import processes
@@ -55,6 +57,7 @@ from grr.test_lib import action_mocks
 from grr.test_lib import artifact_test_lib as ar_test_lib
 from grr.test_lib import hunt_test_lib
 from grr.test_lib import test_lib
+from grr.test_lib import vfs_test_lib
 
 flags.DEFINE_string(
     "chrome_driver_path", None,
@@ -65,6 +68,11 @@ flags.DEFINE_bool(
     "use_headless_chrome", False, "If set, run Chrome driver in "
     "headless mode. Useful when running tests in a window-manager-less "
     "environment.")
+
+flags.DEFINE_bool(
+    "disable_chrome_sandboxing", False,
+    "Whether to disable chrome sandboxing (e.g when running in a Docker "
+    "container).")
 
 # A increasing sequence of times.
 TIME_0 = test_lib.FIXED_TIME
@@ -82,20 +90,24 @@ def DateTimeString(t):
 
 def CreateFileVersions(client_id, token):
   """Add new versions for a file."""
+  content_1 = b"Hello World"
+  content_2 = b"Goodbye World"
   # This file already exists in the fixture at TIME_0, we write a
   # later version.
   CreateFileVersion(
       client_id,
       "fs/os/c/Downloads/a.txt",
-      "Hello World".encode("utf-8"),
+      content_1,
       timestamp=TIME_1,
       token=token)
   CreateFileVersion(
       client_id,
       "fs/os/c/Downloads/a.txt",
-      "Goodbye World".encode("utf-8"),
+      content_2,
       timestamp=TIME_2,
       token=token)
+
+  return (content_1, content_2)
 
 
 def CreateFileVersion(client_id, path, content=b"", timestamp=None, token=None):
@@ -104,21 +116,9 @@ def CreateFileVersion(client_id, path, content=b"", timestamp=None, token=None):
     timestamp = rdfvalue.RDFDatetime.Now()
 
   with test_lib.FakeTime(timestamp):
-    with aff4.FACTORY.Create(
-        client_id.Add(path), aff4_type=aff4_grr.VFSFile, mode="w",
-        token=token) as fd:
-      fd.Write(content)
-      fd.Set(fd.Schema.CONTENT_LAST, rdfvalue.RDFDatetime.Now())
-
-    if data_store.RelationalDBWriteEnabled():
-      path_type, components = rdf_objects.ParseCategorizedPath(path)
-
-      path_info = rdf_objects.PathInfo()
-      path_info.path_type = path_type
-      path_info.components = components
-      path_info.directory = False
-
-      data_store.REL_DB.WritePathInfos(client_id.Basename(), [path_info])
+    path_type, components = rdf_objects.ParseCategorizedPath(path)
+    client_path = db.ClientPath(client_id.Basename(), path_type, components)
+    vfs_test_lib.CreateFile(client_path, content=content, token=token)
 
 
 def CreateFolder(client_id, path, timestamp, token=None):
@@ -219,6 +219,9 @@ class GRRSeleniumTest(test_lib.GRRBaseTest, acl_test_lib.AclTestMixin):
       options.add_argument("--headless")
       options.add_argument("--window-size=1400,1080")
 
+    if flags.FLAGS.disable_chrome_sandboxing:
+      options.add_argument("--no-sandbox")
+
     if flags.FLAGS.chrome_driver_path:
       GRRSeleniumTest.driver = webdriver.Chrome(
           flags.FLAGS.chrome_driver_path, chrome_options=options)
@@ -247,11 +250,12 @@ class GRRSeleniumTest(test_lib.GRRBaseTest, acl_test_lib.AclTestMixin):
     with GRRSeleniumTest._selenium_set_up_lock:
       if not GRRSeleniumTest._selenium_set_up_done:
 
-        port = portpicker.PickUnusedPort()
+        port = portpicker.pick_unused_port()
         logging.info("Picked free AdminUI port %d.", port)
 
         # Start up a server in another thread
-        GRRSeleniumTest._server_trd = wsgiapp_testlib.ServerThread(port)
+        GRRSeleniumTest._server_trd = wsgiapp_testlib.ServerThread(
+            port, name="SeleniumServerThread")
         GRRSeleniumTest._server_trd.StartAndWaitUntilServing()
         GRRSeleniumTest._SetUpSelenium(port)
 
@@ -631,16 +635,16 @@ class GRRSeleniumTest(test_lib.GRRBaseTest, acl_test_lib.AclTestMixin):
     webauth.WEBAUTH_MANAGER.SetUserName(self.token.username)
 
     # Make the user use the advanced gui so we can test it.
-    with aff4.FACTORY.Create(
-        aff4.ROOT_URN.Add("users/%s" % self.token.username),
-        aff4_type=users.GRRUser,
-        mode="w",
-        token=self.token) as user_fd:
-      user_fd.Set(user_fd.Schema.GUI_SETTINGS(mode="ADVANCED"))
-
     if data_store.RelationalDBReadEnabled():
       data_store.REL_DB.WriteGRRUser(
           self.token.username, ui_mode=users.GUISettings.UIMode.ADVANCED)
+    else:
+      with aff4.FACTORY.Create(
+          aff4.ROOT_URN.Add("users/%s" % self.token.username),
+          aff4_type=users.GRRUser,
+          mode="w",
+          token=self.token) as user_fd:
+        user_fd.Set(user_fd.Schema.GUI_SETTINGS(mode="ADVANCED"))
 
     self._artifact_patcher = ar_test_lib.PatchDatastoreOnlyArtifactRegistry()
     self._artifact_patcher.start()
@@ -664,19 +668,26 @@ class GRRSeleniumTest(test_lib.GRRBaseTest, acl_test_lib.AclTestMixin):
     self.CheckBrowserErrors()
     super(GRRSeleniumTest, self).tearDown()
 
-  def WaitForNotification(self, user):
+  def WaitForNotification(self, username):
     sleep_time = 0.2
     iterations = 50
     for _ in range(iterations):
       try:
-        fd = aff4.FACTORY.Open(user, users.GRRUser, mode="r", token=self.token)
-        pending_notifications = fd.Get(fd.Schema.PENDING_NOTIFICATIONS)
-        if pending_notifications:
-          return
+        if data_store.RelationalDBReadEnabled():
+          pending_notifications = data_store.REL_DB.ReadUserNotifications(
+              username, state=rdf_objects.UserNotification.State.STATE_PENDING)
+          if pending_notifications:
+            return
+        else:
+          urn = "aff4:/users/%s" % username
+          fd = aff4.FACTORY.Open(urn, users.GRRUser, mode="r", token=self.token)
+          pending_notifications = fd.Get(fd.Schema.PENDING_NOTIFICATIONS)
+          if pending_notifications:
+            return
       except IOError:
         pass
       time.sleep(sleep_time)
-    self.fail("Notification for user %s never sent." % user)
+    self.fail("Notification for user %s never sent." % username)
 
 
 class GRRSeleniumHuntTest(GRRSeleniumTest, hunt_test_lib.StandardHuntTestMixin):
@@ -783,7 +794,8 @@ class RecursiveTestFlowArgs(rdf_structs.RDFProtoStruct):
   protobuf = tests_pb2.RecursiveTestFlowArgs
 
 
-class RecursiveTestFlow(flow.GRRFlow):
+@flow_base.DualDBFlow
+class RecursiveTestFlowMixin(object):
   """A test flow which starts some subflows."""
   args_type = RecursiveTestFlowArgs
 
@@ -796,19 +808,21 @@ class RecursiveTestFlow(flow.GRRFlow):
       for i in range(2):
         self.Log("Subflow call %d", i)
         self.CallFlow(
-            RecursiveTestFlow.__name__,
+            compatibility.GetName(self.__class__),
             depth=self.args.depth + 1,
             next_state="End")
 
 
-class FlowWithOneLogStatement(flow.GRRFlow):
+@flow_base.DualDBFlow
+class FlowWithOneLogStatementMixin(object):
   """Flow that logs a single statement."""
 
   def Start(self):
     self.Log("I do log.")
 
 
-class FlowWithOneStatEntryResult(flow.GRRFlow):
+@flow_base.DualDBFlow
+class FlowWithOneStatEntryResultMixin(object):
   """Test flow that calls SendReply once with a StatEntry value."""
 
   def Start(self):
@@ -819,14 +833,16 @@ class FlowWithOneStatEntryResult(flow.GRRFlow):
                 pathtype=rdf_paths.PathSpec.PathType.OS)))
 
 
-class FlowWithOneNetworkConnectionResult(flow.GRRFlow):
+@flow_base.DualDBFlow
+class FlowWithOneNetworkConnectionResultMixin(object):
   """Test flow that calls SendReply once with a NetworkConnection value."""
 
   def Start(self):
     self.SendReply(rdf_client_network.NetworkConnection(pid=42))
 
 
-class FlowWithOneHashEntryResult(flow.GRRFlow):
+@flow_base.DualDBFlow
+class FlowWithOneHashEntryResultMixin(object):
   """Test flow that calls SendReply once with a HashEntry value."""
 
   def Start(self):
@@ -845,5 +861,5 @@ class DummyOutputPlugin(output_plugin.OutputPlugin):
   description = "Dummy do do."
   args_type = processes.ListProcessesArgs
 
-  def ProcessResponses(self, responses):
+  def ProcessResponses(self, state, responses):
     pass

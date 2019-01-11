@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 """Tests for an ApiCallRouterWithChecks."""
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import unicode_literals
 
 
@@ -127,6 +129,8 @@ class ApiCallRouterWithApprovalChecksTest(test_lib.GRRBaseTest,
       "GetVfsTimeline",
       "GetVfsTimelineAsCsv",
       "UpdateVfsFileContent",
+      "GetFileDecoders",
+      "GetDecodedFileBlob",
   ])
 
   def testVfsMethodsAreAccessChecked(self):

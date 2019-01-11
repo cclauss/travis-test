@@ -1,8 +1,11 @@
 #!/usr/bin/env python
 """Stats server implementation."""
-
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import unicode_literals
 
 import collections
+import errno
 import json
 import logging
 import socket
@@ -15,12 +18,13 @@ from http import server as http_server
 
 from grr_response_core import config
 from grr_response_core.lib import registry
-from grr_response_core.lib import stats
 from grr_response_core.lib import utils
+from grr_response_core.lib.rdfvalues import stats as rdf_stats
+from grr_response_core.stats import stats_collector_instance
 
 
 def _JSONMetricValue(metric_info, value):
-  if metric_info.metric_type == stats.MetricType.EVENT:
+  if metric_info.metric_type == rdf_stats.MetricMetadata.MetricType.EVENT:
     return dict(
         sum=value.sum,
         counter=value.count,
@@ -33,7 +37,8 @@ def BuildVarzJsonString():
   """Builds Varz JSON string from all stats metrics."""
 
   results = {}
-  for name, metric_info in iteritems(stats.STATS.GetAllMetricsMetadata()):
+  for name, metric_info in iteritems(
+      stats_collector_instance.Get().GetAllMetricsMetadata()):
     info_dict = dict(metric_type=metric_info.metric_type.name)
     if metric_info.value_type:
       info_dict["value_type"] = metric_info.value_type.name
@@ -49,14 +54,16 @@ def BuildVarzJsonString():
                                          utils.SmartStr(field_def.field_type)))
 
       value = {}
-      all_fields = stats.STATS.GetMetricFields(name)
+      all_fields = stats_collector_instance.Get().GetMetricFields(name)
       for f in all_fields:
         joined_fields = ":".join(utils.SmartStr(fname) for fname in f)
-        value[joined_fields] = _JSONMetricValue(metric_info,
-                                                stats.STATS.GetMetricValue(
-                                                    name, fields=f))
+        value[joined_fields] = _JSONMetricValue(
+            metric_info,
+            stats_collector_instance.Get().GetMetricValue(name, fields=f))
     else:
-      value = _JSONMetricValue(metric_info, stats.STATS.GetMetricValue(name))
+      value = _JSONMetricValue(
+          metric_info,
+          stats_collector_instance.Get().GetMetricValue(name))
 
     results[name] = dict(info=info_dict, value=value)
 
@@ -123,18 +130,31 @@ class StatsServerInit(registry.InitHook):
 
     # Figure out which port to use.
     port = config.CONFIG["Monitoring.http_port"]
-    if port != 0:
-      logging.info("Starting monitoring server on port %d.", port)
-      try:
-        # pylint: disable=g-import-not-at-top
-        from grr_response_server.local import stats_server
-        # pylint: enable=g-import-not-at-top
-        server_obj = stats_server.StatsServer(port)
-        logging.debug("Using local StatsServer")
-      except ImportError:
-        logging.debug("Using default StatsServer")
-        server_obj = StatsServer(port)
-
-      server_obj.Start()
-    else:
+    if not port:
       logging.info("Monitoring server disabled.")
+      return
+
+    max_port = config.CONFIG.Get("Monitoring.http_port_max",
+                                 config.CONFIG["Monitoring.http_port"])
+
+    try:
+      # pylint: disable=g-import-not-at-top
+      from grr_response_server.local import stats_server
+      # pylint: enable=g-import-not-at-top
+      server_cls = stats_server.StatsServer
+      logging.debug("Using local StatsServer")
+    except ImportError:
+      logging.debug("Using default StatsServer")
+      server_cls = StatsServer
+
+    for port in range(port, max_port + 1):
+      try:
+        logging.info("Starting monitoring server on port %d.", port)
+        server_obj = server_cls(port)
+        server_obj.Start()
+        return
+      except socket.error as e:
+        if e.errno == errno.EADDRINUSE and port < max_port:
+          logging.info("Port %s in use", port)
+          continue
+        raise

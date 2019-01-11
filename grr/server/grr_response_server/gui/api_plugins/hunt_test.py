@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 """This modules contains tests for hunts API handlers."""
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import unicode_literals
 
 import io
@@ -12,10 +14,8 @@ from builtins import range  # pylint: disable=redefined-builtin
 import yaml
 
 from grr_response_core.lib import flags
-
 from grr_response_core.lib import rdfvalue
 from grr_response_core.lib import utils
-
 from grr_response_core.lib.rdfvalues import file_finder as rdf_file_finder
 from grr_response_core.lib.rdfvalues import flows as rdf_flows
 from grr_response_core.lib.rdfvalues import test_base as rdf_test_base
@@ -32,6 +32,7 @@ from grr_response_server.output_plugins import test_plugins
 from grr_response_server.rdfvalues import flow_runner as rdf_flow_runner
 from grr_response_server.rdfvalues import output_plugin as rdf_output_plugin
 from grr.test_lib import action_mocks
+from grr.test_lib import db_test_lib
 from grr.test_lib import flow_test_lib
 from grr.test_lib import hunt_test_lib
 from grr.test_lib import test_lib
@@ -100,9 +101,9 @@ class ApiListHuntsHandlerTest(api_test_lib.ApiCallHandlerTest,
         hunt_plugin.ApiListHuntsArgs(), token=self.token)
     descriptions = set(r.description for r in result.items)
 
-    self.assertEqual(len(descriptions), 10)
+    self.assertLen(descriptions, 10)
     for i in range(10):
-      self.assertTrue("hunt_%d" % i in descriptions)
+      self.assertIn("hunt_%d" % i, descriptions)
 
   def testHuntListIsSortedInReversedCreationTimestampOrder(self):
     for i in range(1, 11):
@@ -113,7 +114,7 @@ class ApiListHuntsHandlerTest(api_test_lib.ApiCallHandlerTest,
         hunt_plugin.ApiListHuntsArgs(), token=self.token)
     create_times = [r.created.AsMicrosecondsSinceEpoch() for r in result.items]
 
-    self.assertEqual(len(create_times), 10)
+    self.assertLen(create_times, 10)
     for index, expected_time in enumerate(reversed(range(1, 11))):
       self.assertEqual(create_times[index], expected_time * 1000000000)
 
@@ -126,7 +127,7 @@ class ApiListHuntsHandlerTest(api_test_lib.ApiCallHandlerTest,
         hunt_plugin.ApiListHuntsArgs(offset=2, count=2), token=self.token)
     create_times = [r.created.AsMicrosecondsSinceEpoch() for r in result.items]
 
-    self.assertEqual(len(create_times), 2)
+    self.assertLen(create_times, 2)
     self.assertEqual(create_times[0], 8 * 1000000000)
     self.assertEqual(create_times[1], 7 * 1000000000)
 
@@ -141,7 +142,7 @@ class ApiListHuntsHandlerTest(api_test_lib.ApiCallHandlerTest,
 
     create_times = [r.created for r in result.items]
 
-    self.assertEqual(len(create_times), 2)
+    self.assertLen(create_times, 2)
     self.assertEqual(create_times[0], 10 * 60 * 1000000)
     self.assertEqual(create_times[1], 9 * 60 * 1000000)
 
@@ -166,14 +167,14 @@ class ApiListHuntsHandlerTest(api_test_lib.ApiCallHandlerTest,
     result = self.handler.Handle(
         hunt_plugin.ApiListHuntsArgs(created_by="user-foo", active_within="1d"),
         token=self.token)
-    self.assertEqual(len(result.items), 5)
+    self.assertLen(result.items, 5)
     for item in result.items:
       self.assertEqual(item.creator, "user-foo")
 
     result = self.handler.Handle(
         hunt_plugin.ApiListHuntsArgs(created_by="user-bar", active_within="1d"),
         token=self.token)
-    self.assertEqual(len(result.items), 3)
+    self.assertLen(result.items, 3)
     for item in result.items:
       self.assertEqual(item.creator, "user-bar")
 
@@ -195,17 +196,17 @@ class ApiListHuntsHandlerTest(api_test_lib.ApiCallHandlerTest,
         hunt_plugin.ApiListHuntsArgs(
             description_contains="foo", active_within="1d"),
         token=self.token)
-    self.assertEqual(len(result.items), 5)
+    self.assertLen(result.items, 5)
     for item in result.items:
-      self.assertTrue("foo" in item.description)
+      self.assertIn("foo", item.description)
 
     result = self.handler.Handle(
         hunt_plugin.ApiListHuntsArgs(
             description_contains="bar", active_within="1d"),
         token=self.token)
-    self.assertEqual(len(result.items), 3)
+    self.assertLen(result.items, 3)
     for item in result.items:
-      self.assertTrue("bar" in item.description)
+      self.assertIn("bar", item.description)
 
   def testOffsetIsRelativeToFilteredResultsWhenFilterIsPresent(self):
     for i in range(5):
@@ -218,25 +219,26 @@ class ApiListHuntsHandlerTest(api_test_lib.ApiCallHandlerTest,
         hunt_plugin.ApiListHuntsArgs(
             description_contains="bar", active_within="1d", offset=1),
         token=self.token)
-    self.assertEqual(len(result.items), 2)
+    self.assertLen(result.items, 2)
     for item in result.items:
-      self.assertTrue("bar" in item.description)
+      self.assertIn("bar", item.description)
 
     result = self.handler.Handle(
         hunt_plugin.ApiListHuntsArgs(
             description_contains="bar", active_within="1d", offset=2),
         token=self.token)
-    self.assertEqual(len(result.items), 1)
+    self.assertLen(result.items, 1)
     for item in result.items:
-      self.assertTrue("bar" in item.description)
+      self.assertIn("bar", item.description)
 
     result = self.handler.Handle(
         hunt_plugin.ApiListHuntsArgs(
             description_contains="bar", active_within="1d", offset=3),
         token=self.token)
-    self.assertEqual(len(result.items), 0)
+    self.assertEmpty(result.items)
 
 
+@db_test_lib.DualDBTest
 class ApiGetHuntFilesArchiveHandlerTest(api_test_lib.ApiCallHandlerTest,
                                         hunt_test_lib.StandardHuntTestMixin):
 
@@ -256,6 +258,7 @@ class ApiGetHuntFilesArchiveHandlerTest(api_test_lib.ApiCallHandlerTest,
         client_rate=0,
         token=self.token)
     self.hunt.Run()
+    self.hunt_id = self.hunt.urn.Basename()
 
     client_ids = self.SetupClients(10)
     self.AssignTasksToClients(client_ids=client_ids)
@@ -265,7 +268,7 @@ class ApiGetHuntFilesArchiveHandlerTest(api_test_lib.ApiCallHandlerTest,
   def testGeneratesZipArchive(self):
     result = self.handler.Handle(
         hunt_plugin.ApiGetHuntFilesArchiveArgs(
-            hunt_id=self.hunt.urn.Basename(), archive_format="ZIP"),
+            hunt_id=self.hunt_id, archive_format="ZIP"),
         token=self.token)
 
     out_fd = io.BytesIO()
@@ -278,15 +281,17 @@ class ApiGetHuntFilesArchiveHandlerTest(api_test_lib.ApiCallHandlerTest,
       if name.endswith("MANIFEST"):
         manifest = yaml.safe_load(zip_fd.read(name))
 
-    self.assertEqual(manifest["archived_files"], 10)
-    self.assertEqual(manifest["failed_files"], 0)
-    self.assertEqual(manifest["processed_files"], 10)
-    self.assertEqual(manifest["ignored_files"], 0)
+    self.assertDictContainsSubset({
+        "archived_files": 10,
+        "failed_files": 0,
+        "processed_files": 10,
+        "ignored_files": 0,
+    }, manifest)
 
   def testGeneratesTarGzArchive(self):
     result = self.handler.Handle(
         hunt_plugin.ApiGetHuntFilesArchiveArgs(
-            hunt_id=self.hunt.urn.Basename(), archive_format="TAR_GZ"),
+            hunt_id=self.hunt_id, archive_format="TAR_GZ"),
         token=self.token)
 
     with utils.TempDirectory() as temp_dir:
@@ -308,12 +313,15 @@ class ApiGetHuntFilesArchiveHandlerTest(api_test_lib.ApiCallHandlerTest,
       with open(manifest_file_path, "rb") as fd:
         manifest = yaml.safe_load(fd.read())
 
-        self.assertEqual(manifest["archived_files"], 10)
-        self.assertEqual(manifest["failed_files"], 0)
-        self.assertEqual(manifest["processed_files"], 10)
-        self.assertEqual(manifest["ignored_files"], 0)
+        self.assertDictContainsSubset({
+            "archived_files": 10,
+            "failed_files": 0,
+            "processed_files": 10,
+            "ignored_files": 0,
+        }, manifest)
 
 
+@db_test_lib.DualDBTest
 class ApiGetHuntFileHandlerTest(api_test_lib.ApiCallHandlerTest,
                                 hunt_test_lib.StandardHuntTestMixin):
 
@@ -350,24 +358,24 @@ class ApiGetHuntFileHandlerTest(api_test_lib.ApiCallHandlerTest,
         vfs_path=self.aff4_file_path,
         timestamp=rdfvalue.RDFDatetime.Now())
 
+    args = model_args.Copy()
+    args.hunt_id = None
     with self.assertRaises(ValueError):
-      args = model_args.Copy()
-      args.hunt_id = None
       self.handler.Handle(args)
 
+    args = model_args.Copy()
+    args.client_id = None
     with self.assertRaises(ValueError):
-      args = model_args.Copy()
-      args.client_id = None
       self.handler.Handle(args)
 
+    args = model_args.Copy()
+    args.vfs_path = None
     with self.assertRaises(ValueError):
-      args = model_args.Copy()
-      args.vfs_path = None
       self.handler.Handle(args)
 
+    args = model_args.Copy()
+    args.timestamp = None
     with self.assertRaises(ValueError):
-      args = model_args.Copy()
-      args.timestamp = None
       self.handler.Handle(args)
 
   def testRaisesIfVfsRootIsNotWhitelisted(self):
@@ -434,26 +442,30 @@ class ApiGetHuntFileHandlerTest(api_test_lib.ApiCallHandlerTest,
 
     self.handler.Handle(args, token=self.token)
 
-  def testRaisesIfResultFileIsNotStream(self):
-    original_results = implementation.GRRHunt.ResultCollectionForHID(
+  def testRaisesIfResultFileDoesNotExist(self):
+    results = implementation.GRRHunt.ResultCollectionForHID(
         self.hunt.urn, token=self.token)
-    original_result = original_results[0]
+    original_result = results[0]
 
-    with aff4.FACTORY.Create(
-        original_result.payload.stat_entry.AFF4Path(self.client_id),
-        aff4_type=aff4.AFF4Volume,
-        token=self.token):
-      pass
+    with data_store.DB.GetMutationPool() as pool:
+      wrong_result = original_result.Copy()
+      payload = wrong_result.payload
+      payload.stat_entry.pathspec.path += "blah"
+      wrong_result.payload = payload
+      wrong_result.age -= rdfvalue.Duration("1s")
+
+      results.Add(wrong_result, timestamp=wrong_result.age, mutation_pool=pool)
 
     args = hunt_plugin.ApiGetHuntFileArgs(
         hunt_id=self.hunt.urn.Basename(),
         client_id=self.client_id,
-        vfs_path=self.aff4_file_path,
-        timestamp=original_result.age)
+        vfs_path=self.aff4_file_path + "blah",
+        timestamp=wrong_result.age)
 
     with self.assertRaises(hunt_plugin.HuntFileNotFoundError):
       self.handler.Handle(args, token=self.token)
 
+  @db_test_lib.LegacyDataStoreOnly
   def testRaisesIfResultIsEmptyStream(self):
     original_results = implementation.GRRHunt.ResultCollectionForHID(
         self.hunt.urn, token=self.token)
@@ -529,7 +541,7 @@ class ApiListHuntOutputPluginLogsHandlerTest(
         token=self.token)
 
     self.assertEqual(result.total_count, 5)
-    self.assertEqual(len(result.items), 5)
+    self.assertLen(result.items, 5)
     for item in result.items:
       self.assertEqual("foo", item.plugin_descriptor.plugin_args.filename_regex)
 
@@ -542,7 +554,7 @@ class ApiListHuntOutputPluginLogsHandlerTest(
         token=self.token)
 
     self.assertEqual(result.total_count, 5)
-    self.assertEqual(len(result.items), 5)
+    self.assertLen(result.items, 5)
     for item in result.items:
       self.assertEqual("bar", item.plugin_descriptor.plugin_args.filename_regex)
 
@@ -557,7 +569,7 @@ class ApiListHuntOutputPluginLogsHandlerTest(
         token=self.token)
 
     self.assertEqual(result.total_count, 5)
-    self.assertEqual(len(result.items), 2)
+    self.assertLen(result.items, 2)
 
   def testSlicesLogsWhenMultiplePlugins(self):
     hunt_urn = self.RunHuntWithOutputPlugins(self.output_plugins)
@@ -570,7 +582,7 @@ class ApiListHuntOutputPluginLogsHandlerTest(
         token=self.token)
 
     self.assertEqual(result.total_count, 5)
-    self.assertEqual(len(result.items), 2)
+    self.assertLen(result.items, 2)
 
 
 class ApiModifyHuntHandlerTest(api_test_lib.ApiCallHandlerTest,
@@ -599,24 +611,24 @@ class ApiModifyHuntHandlerTest(api_test_lib.ApiCallHandlerTest,
     self.assertEqual(before, after)
 
   def testRaisesIfStateIsSetToNotStartedOrStopped(self):
+    self.args.state = "COMPLETED"
     with self.assertRaises(hunt_plugin.InvalidHuntStateError):
-      self.args.state = "COMPLETED"
       self.handler.Handle(self.args, token=self.token)
 
   def testRaisesWhenStartingHuntInTheWrongState(self):
     self.hunt.Run()
     self.hunt.Stop()
 
+    self.args.state = "STARTED"
     with self.assertRaises(hunt_plugin.HuntNotStartableError):
-      self.args.state = "STARTED"
       self.handler.Handle(self.args, token=self.token)
 
   def testRaisesWhenStoppingHuntInTheWrongState(self):
     self.hunt.Run()
     self.hunt.Stop()
 
+    self.args.state = "STOPPED"
     with self.assertRaises(hunt_plugin.HuntNotStoppableError):
-      self.args.state = "STOPPED"
       self.handler.Handle(self.args, token=self.token)
 
   def testStartsHuntCorrectly(self):
@@ -636,8 +648,8 @@ class ApiModifyHuntHandlerTest(api_test_lib.ApiCallHandlerTest,
   def testRaisesWhenModifyingHuntInNonPausedState(self):
     self.hunt.Run()
 
+    self.args.client_rate = 100
     with self.assertRaises(hunt_plugin.HuntNotModifiableError):
-      self.args.client_rate = 100
       self.handler.Handle(self.args, token=self.token)
 
   def testModifiesHuntCorrectly(self):
@@ -655,9 +667,9 @@ class ApiModifyHuntHandlerTest(api_test_lib.ApiCallHandlerTest,
                      rdfvalue.RDFDatetime.FromSecondsSinceEpoch(42))
 
   def testDoesNotModifyHuntIfStateChangeFails(self):
+    self.args.client_limit = 42
+    self.args.state = "COMPLETED"
     with self.assertRaises(hunt_plugin.InvalidHuntStateError):
-      self.args.client_limit = 42
-      self.args.state = "COMPLETED"
       self.handler.Handle(self.args, token=self.token)
 
     after = hunt_plugin.ApiHunt().InitFromAff4Object(

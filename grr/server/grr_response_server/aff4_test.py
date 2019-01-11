@@ -1,6 +1,10 @@
 #!/usr/bin/env python
 # -*- mode: python; encoding: utf-8 -*-
 """Tests for the flow."""
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import unicode_literals
+
 import itertools
 import os
 import threading
@@ -198,8 +202,8 @@ class DeletionPoolTest(aff4_test_lib.AFF4ObjectTest):
     self._CreateObject("aff4:/obj2", aff4.AFF4MemoryStream)
 
     result = list(
-        self.pool.MultiOpen(
-            ["aff4:/obj1", "aff4:/obj2"], aff4_type=collects.GRRSignedBlob))
+        self.pool.MultiOpen(["aff4:/obj1", "aff4:/obj2"],
+                            aff4_type=collects.GRRSignedBlob))
     self.assertFalse(result)
 
     self._CreateObject("aff4:/obj1", aff4.AFF4Volume)
@@ -217,7 +221,7 @@ class DeletionPoolTest(aff4_test_lib.AFF4ObjectTest):
     self._CreateObject("aff4:/obj2", aff4.AFF4MemoryStream)
 
     result = list(self.pool.MultiOpen(["aff4:/obj1"]))
-    self.assertEqual(len(result), 1)
+    self.assertLen(result, 1)
     self.assertEqual(result[0].Get(result[0].Schema.TYPE), "AFF4MemoryStream")
 
     self._CreateObject("aff4:/obj1", aff4.AFF4Volume)
@@ -327,61 +331,61 @@ class AFF4MemoryStreamTest(aff4_test_lib.AFF4ObjectTest):
   def testMultiStreamStreamsSingleFileWithSingleChunk(self):
     with aff4.FACTORY.Create(
         "aff4:/foo", aff4_type=aff4.AFF4MemoryStream, token=self.token) as fd:
-      fd.Write("123456789")
+      fd.Write(b"123456789")
 
     fd = aff4.FACTORY.Open("aff4:/foo", token=self.token)
     chunks_fds = list(aff4.AFF4Stream.MultiStream([fd]))
 
-    self.assertEqual(len(chunks_fds), 1)
-    self.assertEqual(chunks_fds[0][1], "123456789")
+    self.assertLen(chunks_fds, 1)
+    self.assertEqual(chunks_fds[0][1], b"123456789")
     self.assertIs(chunks_fds[0][0], fd)
 
   def testMultiStreamStreamsSinglfeFileWithTwoChunks(self):
     with aff4.FACTORY.Create(
         "aff4:/foo", aff4_type=aff4.AFF4MemoryStream, token=self.token) as fd:
-      fd.Write("123456789")
+      fd.Write(b"123456789")
 
     with aff4.FACTORY.Create(
         "aff4:/bar", aff4_type=aff4.AFF4MemoryStream, token=self.token) as fd:
-      fd.Write("abcd")
+      fd.Write(b"abcd")
 
     fd1 = aff4.FACTORY.Open("aff4:/foo", token=self.token)
     fd2 = aff4.FACTORY.Open("aff4:/bar", token=self.token)
     chunks_fds = list(aff4.AFF4Stream.MultiStream([fd1, fd2]))
 
-    self.assertEqual(len(chunks_fds), 2)
+    self.assertLen(chunks_fds, 2)
 
-    self.assertEqual(chunks_fds[0][1], "123456789")
+    self.assertEqual(chunks_fds[0][1], b"123456789")
     self.assertIs(chunks_fds[0][0], fd1)
 
-    self.assertEqual(chunks_fds[1][1], "abcd")
+    self.assertEqual(chunks_fds[1][1], b"abcd")
     self.assertIs(chunks_fds[1][0], fd2)
 
   def testMultiStreamStreamsTwoFilesWithTwoChunksInEach(self):
     with aff4.FACTORY.Create(
         "aff4:/foo", aff4_type=aff4.AFF4MemoryStream, token=self.token) as fd:
-      fd.Write("*" * 10 + "123456789")
+      fd.Write(b"*" * 10 + b"123456789")
 
     with aff4.FACTORY.Create(
         "aff4:/bar", aff4_type=aff4.AFF4MemoryStream, token=self.token) as fd:
-      fd.Write("*" * 10 + "abcd")
+      fd.Write(b"*" * 10 + b"abcd")
 
     fd1 = aff4.FACTORY.Open("aff4:/foo", token=self.token)
     fd2 = aff4.FACTORY.Open("aff4:/bar", token=self.token)
     chunks_fds = list(aff4.AFF4Stream.MultiStream([fd1, fd2]))
 
-    self.assertEqual(len(chunks_fds), 4)
+    self.assertLen(chunks_fds, 4)
 
-    self.assertEqual(chunks_fds[0][1], "*" * 10)
+    self.assertEqual(chunks_fds[0][1], b"*" * 10)
     self.assertIs(chunks_fds[0][0], fd1)
 
-    self.assertEqual(chunks_fds[1][1], "123456789")
+    self.assertEqual(chunks_fds[1][1], b"123456789")
     self.assertIs(chunks_fds[1][0], fd1)
 
-    self.assertEqual(chunks_fds[2][1], "*" * 10)
+    self.assertEqual(chunks_fds[2][1], b"*" * 10)
     self.assertIs(chunks_fds[2][0], fd2)
 
-    self.assertEqual(chunks_fds[3][1], "abcd")
+    self.assertEqual(chunks_fds[3][1], b"abcd")
     self.assertIs(chunks_fds[3][0], fd2)
 
 
@@ -393,72 +397,72 @@ class AFF4ImageTest(aff4_test_lib.AFF4ObjectTest):
     with aff4.FACTORY.Create(
         "aff4:/foo", aff4_type=aff4.AFF4Image, token=self.token) as fd:
       fd.SetChunksize(10)
-      fd.Write("123456789")
+      fd.Write(b"123456789")
 
     fd = aff4.FACTORY.Open("aff4:/foo", token=self.token)
     chunks_fds = list(aff4.AFF4Stream.MultiStream([fd]))
 
-    self.assertEqual(len(chunks_fds), 1)
-    self.assertEqual(chunks_fds[0][1], "123456789")
+    self.assertLen(chunks_fds, 1)
+    self.assertEqual(chunks_fds[0][1], b"123456789")
     self.assertIs(chunks_fds[0][0], fd)
 
   def testMultiStreamStreamsSinglfeFileWithTwoChunks(self):
     with aff4.FACTORY.Create(
         "aff4:/foo", aff4_type=aff4.AFF4Image, token=self.token) as fd:
       fd.SetChunksize(10)
-      fd.Write("123456789")
+      fd.Write(b"123456789")
 
     with aff4.FACTORY.Create(
         "aff4:/bar", aff4_type=aff4.AFF4Image, token=self.token) as fd:
       fd.SetChunksize(10)
-      fd.Write("abcd")
+      fd.Write(b"abcd")
 
     fd1 = aff4.FACTORY.Open("aff4:/foo", token=self.token)
     fd2 = aff4.FACTORY.Open("aff4:/bar", token=self.token)
     chunks_fds = list(aff4.AFF4Stream.MultiStream([fd1, fd2]))
 
-    self.assertEqual(len(chunks_fds), 2)
+    self.assertLen(chunks_fds, 2)
 
-    self.assertEqual(chunks_fds[0][1], "123456789")
+    self.assertEqual(chunks_fds[0][1], b"123456789")
     self.assertIs(chunks_fds[0][0], fd1)
 
-    self.assertEqual(chunks_fds[1][1], "abcd")
+    self.assertEqual(chunks_fds[1][1], b"abcd")
     self.assertIs(chunks_fds[1][0], fd2)
 
   def testMultiStreamStreamsTwoFilesWithTwoChunksInEach(self):
     with aff4.FACTORY.Create(
         "aff4:/foo", aff4_type=aff4.AFF4Image, token=self.token) as fd:
       fd.SetChunksize(10)
-      fd.Write("*" * 10 + "123456789")
+      fd.Write(b"*" * 10 + b"123456789")
 
     with aff4.FACTORY.Create(
         "aff4:/bar", aff4_type=aff4.AFF4Image, token=self.token) as fd:
       fd.SetChunksize(10)
-      fd.Write("*" * 10 + "abcd")
+      fd.Write(b"*" * 10 + b"abcd")
 
     fd1 = aff4.FACTORY.Open("aff4:/foo", token=self.token)
     fd2 = aff4.FACTORY.Open("aff4:/bar", token=self.token)
     chunks_fds = list(aff4.AFF4Stream.MultiStream([fd1, fd2]))
 
-    self.assertEqual(len(chunks_fds), 4)
+    self.assertLen(chunks_fds, 4)
 
-    self.assertEqual(chunks_fds[0][1], "*" * 10)
+    self.assertEqual(chunks_fds[0][1], b"*" * 10)
     self.assertIs(chunks_fds[0][0], fd1)
 
-    self.assertEqual(chunks_fds[1][1], "123456789")
+    self.assertEqual(chunks_fds[1][1], b"123456789")
     self.assertIs(chunks_fds[1][0], fd1)
 
-    self.assertEqual(chunks_fds[2][1], "*" * 10)
+    self.assertEqual(chunks_fds[2][1], b"*" * 10)
     self.assertIs(chunks_fds[2][0], fd2)
 
-    self.assertEqual(chunks_fds[3][1], "abcd")
+    self.assertEqual(chunks_fds[3][1], b"abcd")
     self.assertIs(chunks_fds[3][0], fd2)
 
   def testMultiStreamChunkIsMissing(self):
     with aff4.FACTORY.Create(
         "aff4:/foo", aff4_type=aff4.AFF4Image, token=self.token) as fd:
       fd.SetChunksize(10)
-      fd.Write("123456789")
+      fd.Write(b"123456789")
 
     aff4.FACTORY.Delete("aff4:/foo/0000000000", token=self.token)
 
@@ -473,7 +477,7 @@ class AFF4ImageTest(aff4_test_lib.AFF4ObjectTest):
     with aff4.FACTORY.Create(
         "aff4:/foo", aff4_type=aff4.AFF4Image, token=self.token) as fd:
       fd.SetChunksize(10)
-      fd.Write("*" * 10 + "123456789")
+      fd.Write(b"*" * 10 + b"123456789")
 
     aff4.FACTORY.Delete("aff4:/foo/0000000000", token=self.token)
 
@@ -491,7 +495,7 @@ class AFF4ImageTest(aff4_test_lib.AFF4ObjectTest):
     with aff4.FACTORY.Create(
         "aff4:/foo", aff4_type=aff4.AFF4Image, token=self.token) as fd:
       fd.SetChunksize(10)
-      fd.Write("*" * 10 + "123456789")
+      fd.Write(b"*" * 10 + b"123456789")
 
     aff4.FACTORY.Delete("aff4:/foo/0000000001", token=self.token)
 
@@ -504,7 +508,7 @@ class AFF4ImageTest(aff4_test_lib.AFF4ObjectTest):
       else:
         got_exception = True
 
-    self.assertEqual(content, ["*" * 10])
+    self.assertEqual(content, [b"*" * 10])
     self.assertTrue(got_exception)
 
   @mock.patch.object(aff4.AFF4Image, "MULTI_STREAM_CHUNKS_READ_AHEAD", 1)
@@ -512,7 +516,7 @@ class AFF4ImageTest(aff4_test_lib.AFF4ObjectTest):
     with aff4.FACTORY.Create(
         "aff4:/foo", aff4_type=aff4.AFF4Image, token=self.token) as fd:
       fd.SetChunksize(10)
-      fd.Write("*" * 10 + "123456789")
+      fd.Write(b"*" * 10 + b"123456789")
 
     aff4.FACTORY.Delete("aff4:/foo/0000000000", token=self.token)
 
@@ -532,17 +536,17 @@ class AFF4StreamTest(aff4_test_lib.AFF4ObjectTest):
     with aff4.FACTORY.Create(
         "aff4:/foo", aff4_type=aff4.AFF4Image, token=self.token) as fd:
       fd.SetChunksize(10)
-      fd.Write("*" * 10 + "123456789")
+      fd.Write(b"*" * 10 + b"123456789")
 
     with aff4.FACTORY.Create(
         "aff4:/bar", aff4_type=aff4.AFF4MemoryStream, token=self.token) as fd:
-      fd.Write("*" * 10 + "abcd")
+      fd.Write(b"*" * 10 + b"abcd")
 
     fd1 = aff4.FACTORY.Open("aff4:/foo", token=self.token)
     fd2 = aff4.FACTORY.Open("aff4:/bar", token=self.token)
     chunks_fds = list(aff4.AFF4Stream.MultiStream([fd1, fd2]))
 
-    self.assertEqual(len(chunks_fds), 4)
+    self.assertLen(chunks_fds, 4)
 
     # We don't know the order in advance, because files are grouped in groups
     # by file type and the order of these groups is random (although the order
@@ -551,16 +555,16 @@ class AFF4StreamTest(aff4_test_lib.AFF4ObjectTest):
     if chunks_fds[0][0] == fd2:
       chunks_fds = chunks_fds[2:] + chunks_fds[:2]
 
-    self.assertEqual(chunks_fds[0][1], "*" * 10)
+    self.assertEqual(chunks_fds[0][1], b"*" * 10)
     self.assertIs(chunks_fds[0][0], fd1)
 
-    self.assertEqual(chunks_fds[1][1], "123456789")
+    self.assertEqual(chunks_fds[1][1], b"123456789")
     self.assertIs(chunks_fds[1][0], fd1)
 
-    self.assertEqual(chunks_fds[2][1], "*" * 10)
+    self.assertEqual(chunks_fds[2][1], b"*" * 10)
     self.assertIs(chunks_fds[2][0], fd2)
 
-    self.assertEqual(chunks_fds[3][1], "abcd")
+    self.assertEqual(chunks_fds[3][1], b"abcd")
     self.assertIs(chunks_fds[3][0], fd2)
 
 
@@ -621,7 +625,7 @@ class AFF4Test(aff4_test_lib.AFF4ObjectTest):
 
     # Versions are represented by the TYPE attribute.
     versions = list(client_fd.GetValuesForAttribute(client_fd.Schema.TYPE))
-    self.assertEqual(len(versions), 2)
+    self.assertLen(versions, 2)
 
     # Now update the CLOCK attribute twice. Since CLOCK is not versioned, this
     # should not add newer versions to this object.
@@ -641,7 +645,7 @@ class AFF4Test(aff4_test_lib.AFF4ObjectTest):
 
     # There should also only be one clock attribute
     clocks = list(client_fd.GetValuesForAttribute(client_fd.Schema.CLOCK))
-    self.assertEqual(len(clocks), 1)
+    self.assertLen(clocks, 1)
     self.assertEqual(clocks[0].age, 0)
 
     fd = aff4.FACTORY.Create("aff4:/foobar", aff4.AFF4Image, token=self.token)
@@ -673,12 +677,12 @@ class AFF4Test(aff4_test_lib.AFF4ObjectTest):
       ver_list = list(
           aff4.FACTORY.OpenDiscreteVersions(
               self.client_id, diffs_only=diffs_only, token=self.token))
-      self.assertEqual(len(ver_list), 3)
+      self.assertLen(ver_list, 3)
       v1, v2, v3 = ver_list
 
-      self.assertTrue(isinstance(v1, aff4_grr.VFSGRRClient))
-      self.assertTrue(isinstance(v2, aff4_grr.VFSGRRClient))
-      self.assertTrue(isinstance(v3, aff4_grr.VFSFile))
+      self.assertIsInstance(v1, aff4_grr.VFSGRRClient)
+      self.assertIsInstance(v2, aff4_grr.VFSGRRClient)
+      self.assertIsInstance(v3, aff4_grr.VFSFile)
       self.assertTrue(
           int(v1.Get(v1.Schema.TYPE).age) < int(v2.Get(v2.Schema.TYPE).age))
       self.assertTrue(
@@ -728,11 +732,10 @@ class AFF4Test(aff4_test_lib.AFF4ObjectTest):
                       "DOESNOTEXIST")
 
     # Check we get the same result from MultiOpen
-    clients = aff4.FACTORY.MultiOpen(
-        [self.client_id],
-        aff4_type=aff4_grr.VFSGRRClient,
-        mode="rw",
-        token=self.token)
+    clients = aff4.FACTORY.MultiOpen([self.client_id],
+                                     aff4_type=aff4_grr.VFSGRRClient,
+                                     mode="rw",
+                                     token=self.token)
     for client in clients:
       self.assertEqual(client.Get(client.Schema.HOSTNAME), "client1")
       self.assertRaises(aff4.BadGetAttributeError, getattr, client.Schema,
@@ -745,8 +748,9 @@ class AFF4Test(aff4_test_lib.AFF4ObjectTest):
     self.assertEqual(client.Get(client.Schema.DOESNOTEXIST), None)
 
     # Check we get the same result from MultiOpen
-    clients = aff4.FACTORY.MultiOpen(
-        [self.client_id], mode="rw", token=self.token)
+    clients = aff4.FACTORY.MultiOpen([self.client_id],
+                                     mode="rw",
+                                     token=self.token)
     for client in clients:
       self.assertEqual(client.Get(client.Schema.HOSTNAME), "client1")
       self.assertEqual(client.Get(client.Schema.DOESNOTEXIST), None)
@@ -760,19 +764,19 @@ class AFF4Test(aff4_test_lib.AFF4ObjectTest):
 
     obj = aff4.FACTORY.Open(
         "foobar", mode="rw", token=self.token, age=aff4.ALL_TIMES)
-    self.assertEqual(1, len(list(obj.GetValuesForAttribute(obj.Schema.STORED))))
+    self.assertLen(list(obj.GetValuesForAttribute(obj.Schema.STORED)), 1)
 
     # Add a bunch of attributes now.
     for i in range(5):
       obj.AddAttribute(obj.Schema.STORED("example.com/%s" % i))
 
     # There should be 6 there now
-    self.assertEqual(6, len(list(obj.GetValuesForAttribute(obj.Schema.STORED))))
+    self.assertLen(list(obj.GetValuesForAttribute(obj.Schema.STORED)), 6)
     obj.Close()
 
     # Check that when read back from the data_store we stored them all
     obj = aff4.FACTORY.Open("foobar", token=self.token, age=aff4.ALL_TIMES)
-    self.assertEqual(6, len(list(obj.GetValuesForAttribute(obj.Schema.STORED))))
+    self.assertLen(list(obj.GetValuesForAttribute(obj.Schema.STORED)), 6)
 
   def testLastAddedAttributeWinsWhenTimestampsAreEqual(self):
     with test_lib.FakeTime(42):
@@ -794,14 +798,14 @@ class AFF4Test(aff4_test_lib.AFF4ObjectTest):
     obj = aff4.FACTORY.Open(
         "foobar", mode="rw", token=self.token, age=aff4.NEWEST_TIME)
 
-    self.assertEqual(1, len(obj.synced_attributes[obj.Schema.STORED.predicate]))
+    self.assertLen(obj.synced_attributes[obj.Schema.STORED.predicate], 1)
 
     # Add a bunch of attributes now.
     for i in range(5):
       obj.AddAttribute(obj.Schema.STORED("example.com/%s" % i))
 
     # There should be 5 unsynced versions now
-    self.assertEqual(5, len(obj.new_attributes[obj.Schema.STORED.predicate]))
+    self.assertLen(obj.new_attributes[obj.Schema.STORED.predicate], 5)
     obj.Flush()
 
     # When we sync there should be no more unsynced attributes.
@@ -809,7 +813,7 @@ class AFF4Test(aff4_test_lib.AFF4ObjectTest):
 
     # But there should only be a single synced attribute since this object has a
     # NEWEST_TIME age policy.
-    self.assertEqual(1, len(obj.synced_attributes[obj.Schema.STORED.predicate]))
+    self.assertLen(obj.synced_attributes[obj.Schema.STORED.predicate], 1)
 
     # The latest version should be kept.
     self.assertEqual(obj.Get(obj.Schema.STORED), "example.com/4")
@@ -825,7 +829,7 @@ class AFF4Test(aff4_test_lib.AFF4ObjectTest):
     obj = aff4.FACTORY.Open(
         "foobar", mode="r", token=self.token, age=aff4.ALL_TIMES)
     # There should be 5 attributes now
-    self.assertEqual(5, len(list(obj.GetValuesForAttribute(obj.Schema.STORED))))
+    self.assertLen(list(obj.GetValuesForAttribute(obj.Schema.STORED)), 5)
 
     new_obj = aff4.FACTORY.Create(
         "new_foobar", aff4.AFF4Object, token=self.token)
@@ -857,11 +861,11 @@ class AFF4Test(aff4_test_lib.AFF4ObjectTest):
     fd.Flush()
 
     # Now object is ready for use
-    fd.Write("hello")
+    fd.Write(b"hello")
     fd.Close()
 
     fd = aff4.FACTORY.Open(path, token=self.token)
-    self.assertEqual(fd.Read(100), "hello")
+    self.assertEqual(fd.Read(100), b"hello")
 
     # Make sure that we have intermediate objects created.
     for path in [
@@ -887,7 +891,7 @@ class AFF4Test(aff4_test_lib.AFF4ObjectTest):
           mode="w",
           mutation_pool=pool,
           token=self.token)
-      content = "TestData" * 10
+      content = b"TestData" * 10
       fd.Write(content)
       fd.Close()
 
@@ -927,11 +931,11 @@ class AFF4Test(aff4_test_lib.AFF4ObjectTest):
     # Overwrite with a new object of different type
     with aff4.FACTORY.Create(
         path, aff4.AFF4MemoryStream, token=self.token) as fd:
-      fd.Write("hello")
+      fd.Write(b"hello")
 
     # Check that the object is now an AFF4MemoryStream
     with aff4.FACTORY.Open(path, aff4.AFF4MemoryStream, token=self.token) as fd:
-      self.assertEqual(fd.Read(100), "hello")
+      self.assertEqual(fd.Read(100), b"hello")
       self.assertEqual(fd.Get(fd.Schema.TYPE), "AFF4MemoryStream")
       self.assertRaises(aff4.BadGetAttributeError, getattr, fd.Schema,
                         "HOSTNAME")
@@ -939,7 +943,7 @@ class AFF4Test(aff4_test_lib.AFF4ObjectTest):
     # Attributes of previous objects are actually still accessible. Some code
     # relies on this behaviour so we verify it here.
     with aff4.FACTORY.Open(path, token=self.token) as fd:
-      self.assertEqual(fd.Read(100), "hello")
+      self.assertEqual(fd.Read(100), b"hello")
       self.assertEqual(fd.Get(original_fd.Schema.HOSTNAME), "blah")
 
   def testDelete(self):
@@ -947,7 +951,7 @@ class AFF4Test(aff4_test_lib.AFF4ObjectTest):
     path = "/C.0123456789abcdef/foo/bar/hello.txt"
 
     fd = aff4.FACTORY.Create(path, aff4.AFF4MemoryStream, token=self.token)
-    fd.Write("hello")
+    fd.Write(b"hello")
     fd.Close()
 
     # Delete the directory and check that the file in it is also removed.
@@ -975,7 +979,7 @@ class AFF4Test(aff4_test_lib.AFF4ObjectTest):
     for path in paths_to_delete + safe_paths:
       with aff4.FACTORY.Create(
           path, aff4.AFF4MemoryStream, token=self.token) as fd:
-        fd.Write("hello")
+        fd.Write(b"hello")
 
     fd = aff4.FACTORY.Open("aff4:/tmp", token=self.token)
     self.assertListEqual(
@@ -1021,13 +1025,13 @@ class AFF4Test(aff4_test_lib.AFF4ObjectTest):
 
     if isinstance(data_store.DB, fake_data_store.FakeDataStore):
       for subject, subject_data in iteritems(data_store.DB.subjects):
-        self.assertFalse(unique_token in subject)
+        self.assertNotIn(unique_token, subject)
 
         for column_name, values in iteritems(subject_data):
-          self.assertFalse(unique_token in column_name)
+          self.assertNotIn(unique_token, column_name)
 
           for value, _ in values:
-            self.assertFalse(unique_token in utils.SmartUnicode(value))
+            self.assertNotIn(unique_token, utils.SmartUnicode(value))
 
     else:
       for subject in subjects:
@@ -1054,7 +1058,7 @@ class AFF4Test(aff4_test_lib.AFF4ObjectTest):
 
     size = 0
     for i in range(100):
-      data = "Test%08X\n" % i
+      data = b"Test%08X\n" % i
       fd.Write(data)
       size += len(data)
       self.assertEqual(fd.size, size)
@@ -1067,15 +1071,15 @@ class AFF4Test(aff4_test_lib.AFF4ObjectTest):
     fd.Seek(size)
     self.assertEqual(fd.Tell(), size)
     fd.Seek(100)
-    fd.Write("Hello World!")
+    fd.Write(b"Hello World!")
     self.assertEqual(fd.size, size)
     fd.Close()
 
     fd = aff4.FACTORY.Open(path, mode="rw", token=self.token)
     self.assertEqual(fd.size, size)
     data = fd.Read(size)
-    self.assertEqual(len(data), size)
-    self.assertTrue("Hello World!" in data)
+    self.assertLen(data, size)
+    self.assertTrue(b"Hello World!" in data)
     fd.Close()
 
   def ExerciseAFF4ImageBase(self, classname):
@@ -1088,35 +1092,35 @@ class AFF4Test(aff4_test_lib.AFF4ObjectTest):
       # Make lots of small writes - The length of this string and the chunk size
       # are relative primes for worst case.
       for i in range(10):
-        fd.Write("Test%08X\n" % i)
+        fd.Write(b"Test%08X\n" % i)
 
     with aff4.FACTORY.Open(path, token=self.token) as fd:
       for i in range(10):
-        self.assertEqual(fd.Read(13), "Test%08X\n" % i)
+        self.assertEqual(fd.Read(13), b"Test%08X\n" % i)
 
     with aff4.FACTORY.Create(
         path, classname, mode="rw", token=self.token) as fd:
       fd.Set(fd.Schema._CHUNKSIZE(10))
 
       # Overflow the cache (Cache is 100 chunks, can hold 10*100 bytes).
-      fd.Write("X" * 1100)
+      fd.Write(b"X" * 1100)
       self.assertEqual(fd.size, 1100)
       # Now rewind a bit and write something.
       fd.seek(fd.size - 100)
-      fd.Write("Hello World")
+      fd.Write(b"Hello World")
       self.assertEqual(fd.size, 1100)
       # Now append to the end.
       fd.seek(fd.size)
-      fd.Write("Y" * 10)
+      fd.Write(b"Y" * 10)
       self.assertEqual(fd.size, 1110)
       # And verify everything worked as expected.
       fd.seek(997)
       data = fd.Read(17)
-      self.assertEqual("XXXHello WorldXXX", data)
+      self.assertEqual(b"XXXHello WorldXXX", data)
 
       fd.seek(1097)
       data = fd.Read(6)
-      self.assertEqual("XXXYYY", data)
+      self.assertEqual(b"XXXYYY", data)
 
     # Set the max_unbound_read_size to last size of object at path
     # before object creation for unbound read() tests.
@@ -1127,10 +1131,10 @@ class AFF4Test(aff4_test_lib.AFF4ObjectTest):
         fd.Set(fd.Schema._CHUNKSIZE(10))
         # Verify the unbound read returns 110 bytes
         data = fd.read()
-        self.assertEqual(len(data), 1110)
+        self.assertLen(data, 1110)
         # Append additional data and retry as oversized unbound read
         fd.seek(fd.size)
-        fd.Write("X" * 10)
+        fd.Write(b"X" * 10)
         fd.seek(0)
         self.assertRaises(aff4.OversizedRead, fd.read)
 
@@ -1148,7 +1152,7 @@ class AFF4Test(aff4_test_lib.AFF4ObjectTest):
 
     size = 0
     for i in range(99):
-      data = "Test%08X\n" % i
+      data = b"Test%08X\n" % i
       fd.Write(data)
       size += len(data)
       self.assertEqual(fd.size, size)
@@ -1162,7 +1166,7 @@ class AFF4Test(aff4_test_lib.AFF4ObjectTest):
     # Now append some more data.
     fd.seek(fd.size)
     for i in range(99):
-      data = "Test%08X\n" % i
+      data = b"Test%08X\n" % i
       fd.Write(data)
       size += len(data)
       self.assertEqual(fd.size, size)
@@ -1177,7 +1181,7 @@ class AFF4Test(aff4_test_lib.AFF4ObjectTest):
     # Writes in the middle should not change size.
     fd = aff4.FACTORY.Open(path, mode="rw", token=self.token)
     fd.Seek(100)
-    fd.Write("Hello World!")
+    fd.Write(b"Hello World!")
     self.assertEqual(fd.size, size)
     fd.Close()
 
@@ -1185,23 +1189,23 @@ class AFF4Test(aff4_test_lib.AFF4ObjectTest):
     fd = aff4.FACTORY.Open(path, mode="rw", token=self.token)
     self.assertEqual(fd.size, size)
     data = fd.Read(fd.size)
-    self.assertEqual(len(data), size)
-    self.assertTrue("Hello World" in data)
+    self.assertLen(data, size)
+    self.assertTrue(b"Hello World!" in data)
     fd.Close()
 
   def testAFF4ImageWithFlush(self):
     """Make sure the AFF4Image can survive with partial flushes."""
     path = "/C.12345/foo"
 
-    self.WriteImage(path, "Test")
+    self.WriteImage(path, b"Test")
 
     fd = aff4.FACTORY.Open(path, token=self.token)
     for i in range(100):
-      self.assertEqual(fd.Read(13), "Test%08X\n" % i)
+      self.assertEqual(fd.Read(13), b"Test%08X\n" % i)
 
   def WriteImage(self,
                  path,
-                 prefix="Test",
+                 prefix=b"Test",
                  timestamp=0,
                  classname=aff4.AFF4Image):
     with utils.Stubber(time, "time", lambda: timestamp):
@@ -1213,7 +1217,7 @@ class AFF4Test(aff4_test_lib.AFF4ObjectTest):
       # Make lots of small writes - The length of this string and the chunk size
       # are relative primes for worst case.
       for i in range(100):
-        fd.Write("%s%08X\n" % (prefix, i))
+        fd.Write(b"%s%08X\n" % (prefix, i))
 
         # Flush after every write.
         fd.Flush()
@@ -1227,20 +1231,20 @@ class AFF4Test(aff4_test_lib.AFF4ObjectTest):
     """Make sure the AFF4Image can do multiple versions."""
     path = "/C.12345/foowithtime"
 
-    self.WriteImage(path, "Time1", timestamp=1000)
+    self.WriteImage(path, b"Time1", timestamp=1000)
 
     # Write a newer version.
-    self.WriteImage(path, "Time2", timestamp=2000)
+    self.WriteImage(path, b"Time2", timestamp=2000)
 
     fd = aff4.FACTORY.Open(path, token=self.token, age=(0, 1150 * 1e6))
 
     for i in range(100):
-      s = "Time1%08X\n" % i
+      s = b"Time1%08X\n" % i
       self.assertEqual(fd.Read(len(s)), s)
 
     fd = aff4.FACTORY.Open(path, token=self.token, age=(0, 2250 * 1e6))
     for i in range(100):
-      s = "Time2%08X\n" % i
+      s = b"Time2%08X\n" % i
       self.assertEqual(fd.Read(len(s)), s)
 
   def testAFF4ImageWithoutVersioning(self):
@@ -1248,21 +1252,21 @@ class AFF4Test(aff4_test_lib.AFF4ObjectTest):
     path = "/C.12345/foowithtime"
 
     self.WriteImage(
-        path, "Time1", timestamp=1000, classname=aff4.AFF4UnversionedImage)
+        path, b"Time1", timestamp=1000, classname=aff4.AFF4UnversionedImage)
 
     # Write a newer version.
     self.WriteImage(
-        path, "Time2", timestamp=2000, classname=aff4.AFF4UnversionedImage)
+        path, b"Time2", timestamp=2000, classname=aff4.AFF4UnversionedImage)
 
     fd = aff4.FACTORY.Open(path, token=self.token, age=(0, 1150 * 1e6))
 
     for i in range(100):
-      s = "Time2%08X\n" % i
+      s = b"Time2%08X\n" % i
       self.assertEqual(fd.Read(len(s)), s)
 
     fd = aff4.FACTORY.Open(path, token=self.token, age=(0, 2250 * 1e6))
     for i in range(100):
-      s = "Time2%08X\n" % i
+      s = b"Time2%08X\n" % i
       self.assertEqual(fd.Read(len(s)), s)
 
   def testAFF4ImageContentLastUpdated(self):
@@ -1322,6 +1326,39 @@ class AFF4Test(aff4_test_lib.AFF4ObjectTest):
     self.assertListEqual(
         sorted([x.urn for x in all_children]),
         [root_urn.Add("some1"), root_urn.Add("some2")])
+
+  def testMultiOpenOrdered(self):
+    foo_urn = aff4.ROOT_URN.Add("foo")
+    with aff4.FACTORY.Create(
+        foo_urn, aff4_type=aff4.AFF4MemoryStream, token=self.token) as filedesc:
+      filedesc.Write(b"FOO")
+
+    bar_urn = aff4.ROOT_URN.Add("bar")
+    with aff4.FACTORY.Create(
+        bar_urn, aff4_type=aff4.AFF4MemoryStream, token=self.token) as filedesc:
+      filedesc.Write(b"BAR")
+
+    baz_urn = aff4.ROOT_URN.Add("baz")
+    with aff4.FACTORY.Create(
+        baz_urn, aff4_type=aff4.AFF4MemoryStream, token=self.token) as filedesc:
+      filedesc.Write(b"BAZ")
+
+    filedescs = list(aff4.FACTORY.MultiOpenOrdered([foo_urn, bar_urn, baz_urn]))
+    self.assertLen(filedescs, 3)
+    self.assertEqual(filedescs[0].Read(1337), b"FOO")
+    self.assertEqual(filedescs[1].Read(1337), b"BAR")
+    self.assertEqual(filedescs[2].Read(1337), b"BAZ")
+
+  def testMultiOpenOrderedNonExistingObject(self):
+    foo_urn = aff4.ROOT_URN.Add("foo")
+    bar_urn = aff4.ROOT_URN.Add("bar")
+
+    with aff4.FACTORY.Create(
+        foo_urn, aff4_type=aff4.AFF4MemoryStream, token=self.token) as filedesc:
+      del filedesc  # Unused.
+
+    with self.assertRaisesRegexp(IOError, "bar"):
+      aff4.FACTORY.MultiOpenOrdered([foo_urn, bar_urn], token=self.token)
 
   def testObjectListChildren(self):
     root_urn = aff4.ROOT_URN.Add("path")
@@ -1385,7 +1422,7 @@ class AFF4Test(aff4_test_lib.AFF4ObjectTest):
 
     fd = aff4.FACTORY.Open(self.client_id, token=self.token)
     children = list(fd.ListChildren())
-    self.assertEqual(len(children), 1)
+    self.assertLen(children, 1)
     self.assertEqual(children[0].age,
                      rdfvalue.RDFDatetime.FromSecondsSinceEpoch(100))
 
@@ -1399,7 +1436,7 @@ class AFF4Test(aff4_test_lib.AFF4ObjectTest):
 
     fd = aff4.FACTORY.Open(self.client_id, token=self.token)
     children = list(fd.ListChildren())
-    self.assertEqual(len(children), 1)
+    self.assertLen(children, 1)
     self.assertEqual(children[0].age,
                      rdfvalue.RDFDatetime.FromSecondsSinceEpoch(100))
 
@@ -1413,7 +1450,7 @@ class AFF4Test(aff4_test_lib.AFF4ObjectTest):
 
     fd = aff4.FACTORY.Open(self.client_id, token=self.token)
     children = list(fd.ListChildren())
-    self.assertEqual(len(children), 1)
+    self.assertLen(children, 1)
     self.assertEqual(children[0].age,
                      rdfvalue.RDFDatetime.FromSecondsSinceEpoch(100))
 
@@ -1427,7 +1464,7 @@ class AFF4Test(aff4_test_lib.AFF4ObjectTest):
 
     fd = aff4.FACTORY.Open(self.client_id, token=self.token)
     children = list(fd.ListChildren())
-    self.assertEqual(len(children), 1)
+    self.assertLen(children, 1)
     self.assertEqual(children[0].age,
                      rdfvalue.RDFDatetime.FromSecondsSinceEpoch(latest_time))
 
@@ -1847,12 +1884,12 @@ class AFF4SymlinkTest(aff4_test_lib.AFF4ObjectTest):
     fd = aff4.FACTORY.Create(fd_urn2, aff4.AFF4Image, token=self.token)
     fd.Close()
 
-    for fd in aff4.FACTORY.MultiOpen(
-        [self.symlink_source_urn, fd_urn2], token=self.token):
+    for fd in aff4.FACTORY.MultiOpen([self.symlink_source_urn, fd_urn2],
+                                     token=self.token):
       if fd.urn == fd_urn2:
-        self.assertTrue(isinstance(fd, aff4.AFF4Image))
+        self.assertIsInstance(fd, aff4.AFF4Image)
       elif fd.urn == fd_urn1:
-        self.assertTrue(isinstance(fd, AFF4SymlinkTestSubject))
+        self.assertIsInstance(fd, AFF4SymlinkTestSubject)
         self.assertIsNotNone(fd.symlink_urn)
         self.assertEqual(fd.urn, self.symlink_target_urn)
         self.assertEqual(fd.symlink_urn, self.symlink_source_urn)
@@ -1870,22 +1907,20 @@ class AFF4SymlinkTest(aff4_test_lib.AFF4ObjectTest):
     # At the same, type check shouldn't filter out the symlink,
     # but should check the symlinked object.
     fds = list(
-        aff4.FACTORY.MultiOpen(
-            [self.symlink_source_urn, fd_urn2],
-            aff4_type=AFF4SymlinkTestSubject,
-            token=self.token))
-    self.assertEqual(len(fds), 1)
-    self.assertTrue(isinstance(fds[0], AFF4SymlinkTestSubject))
+        aff4.FACTORY.MultiOpen([self.symlink_source_urn, fd_urn2],
+                               aff4_type=AFF4SymlinkTestSubject,
+                               token=self.token))
+    self.assertLen(fds, 1)
+    self.assertIsInstance(fds[0], AFF4SymlinkTestSubject)
 
     # AFF4Image should be returned, but symlinked AFF4SymlinkTestSubject should
     # get filtered out due to aff4_type restriction.
     fds = list(
-        aff4.FACTORY.MultiOpen(
-            [self.symlink_source_urn, fd_urn2],
-            aff4_type=aff4.AFF4Image,
-            token=self.token))
-    self.assertEqual(len(fds), 1)
-    self.assertTrue(isinstance(fds[0], aff4.AFF4Image))
+        aff4.FACTORY.MultiOpen([self.symlink_source_urn, fd_urn2],
+                               aff4_type=aff4.AFF4Image,
+                               token=self.token))
+    self.assertLen(fds, 1)
+    self.assertIsInstance(fds[0], aff4.AFF4Image)
 
   def testOpenedSymlinkAFF4AttributesAreEqualToTarget(self):
     fd, symlink_obj = self.CreateAndOpenObjectAndSymlink()

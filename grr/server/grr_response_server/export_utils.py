@@ -1,11 +1,15 @@
 #!/usr/bin/env python
 """Utils exporting data from AFF4 to the rest of the world."""
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import unicode_literals
 
 import logging
 import os
-import Queue
 import stat
 import time
+
+import queue
 
 from grr_response_core.lib import rdfvalue
 from grr_response_core.lib import utils
@@ -13,6 +17,7 @@ from grr_response_core.lib.rdfvalues import client as rdf_client
 from grr_response_core.lib.rdfvalues import client_fs as rdf_client_fs
 from grr_response_core.lib.rdfvalues import file_finder as rdf_file_finder
 from grr_response_core.lib.rdfvalues import flows as rdf_flows
+from grr_response_core.lib.util import collection
 from grr_response_server import aff4
 from grr_response_server import client_index
 from grr_response_server import sequential_collection
@@ -24,6 +29,8 @@ from grr_response_server.flows.general import collectors
 from grr_response_server.hunts import results
 
 BUFFER_SIZE = 16 * 1024 * 1024
+
+THREADPOOL_JOIN_TIMEOUT = 1200
 
 
 def GetAllClients(token=None):
@@ -56,7 +63,7 @@ class IterateAllClientUrns(object):
     self.func = func
     self.broken_subjects = []  # Entries that are broken or fail to run.
 
-    self.out_queue = Queue.Queue()
+    self.out_queue = queue.Queue()
 
   def GetInput(self):
     """Yield client urns."""
@@ -82,11 +89,11 @@ class IterateAllClientUrns(object):
         if out:
           yield out
           count -= 1
-      except Queue.Empty:
+      except queue.Empty:
         break
 
     # Join and stop to clean up the threadpool.
-    self.thread_pool.Stop()
+    self.thread_pool.Stop(join_timeout=THREADPOOL_JOIN_TIMEOUT)
 
   def IterFunction(self, *args):
     """Function to run on each input. This can be overridden."""
@@ -112,7 +119,7 @@ class IterateAllClients(IterateAllClientUrns):
     """Yield client urns."""
     client_list = GetAllClients(token=self.token)
     logging.debug("Got %d clients", len(client_list))
-    for client_group in utils.Grouper(client_list, self.client_chunksize):
+    for client_group in collection.Batch(client_list, self.client_chunksize):
       for fd in aff4.FACTORY.MultiOpen(
           client_group,
           mode="r",
@@ -202,18 +209,18 @@ def RecursiveDownload(dir_obj,
 
   # Join and stop the threadpool.
   if depth <= 1:
-    thread_pool.Stop()
+    thread_pool.Stop(join_timeout=THREADPOOL_JOIN_TIMEOUT)
 
 
 def _OpenCollectionPath(coll_path):
   """Tries to open various types of collections at the given path."""
-  collection = results.HuntResultCollection(coll_path)
-  if collection and collection[0].payload:
-    return collection
+  hunt_collection = results.HuntResultCollection(coll_path)
+  if hunt_collection and hunt_collection[0].payload:
+    return hunt_collection
 
-  collection = sequential_collection.GeneralIndexedCollection(coll_path)
-  if collection:
-    return collection
+  indexed_collection = sequential_collection.GeneralIndexedCollection(coll_path)
+  if indexed_collection:
+    return indexed_collection
 
 
 def DownloadCollection(coll_path,
@@ -234,14 +241,15 @@ def DownloadCollection(coll_path,
       version of the client object to the root path. This is useful for seeing
       the hostname/users of the machine the client id refers to.
     flatten: If True, produce a "files" flat folder with links to all the found
-             files.
+      files.
     max_threads: Use this many threads to do the downloads.
   """
   completed_clients = set()
   coll = _OpenCollectionPath(coll_path)
   if coll is None:
-    logging.error("%s is not a valid collection. Typo? "
-                  "Are you sure something was written to it?", coll_path)
+    logging.error(
+        "%s is not a valid collection. Typo? "
+        "Are you sure something was written to it?", coll_path)
     return
 
   thread_pool = threadpool.ThreadPool.Factory("Downloader", max_threads)
@@ -321,7 +329,7 @@ def DownloadCollection(coll_path,
     thread_pool.AddTask(target=target, args=args, name="Downloader")
 
   # Join and stop the threadpool.
-  thread_pool.Stop()
+  thread_pool.Stop(join_timeout=THREADPOOL_JOIN_TIMEOUT)
 
 
 def CopyAFF4ToLocal(aff4_urn, target_dir, token=None, overwrite=False):

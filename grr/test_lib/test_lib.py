@@ -1,42 +1,38 @@
 #!/usr/bin/env python
 """A library for tests."""
+from __future__ import absolute_import
 from __future__ import division
+from __future__ import unicode_literals
 
-import codecs
 import datetime
 import email
 import functools
 import logging
 import os
-import pdb
-import platform
 import shutil
-import socket
-import sys
-import tempfile
 import threading
 import time
 import unittest
 
 
+from absl.testing import absltest
 from builtins import range  # pylint: disable=redefined-builtin
 from future.utils import iteritems
+from future.utils import itervalues
 import mock
 import pkg_resources
 
-import unittest
-
 from grr_response_client import comms
-
 from grr_response_core import config
 from grr_response_core.lib import rdfvalue
 from grr_response_core.lib import utils
-
 from grr_response_core.lib.rdfvalues import client as rdf_client
 from grr_response_core.lib.rdfvalues import client_network as rdf_client_network
 from grr_response_core.lib.rdfvalues import crypto as rdf_crypto
+from grr_response_core.stats import default_stats_collector
+from grr_response_core.stats import stats_collector_instance
+from grr_response_core.stats import stats_test_utils
 from grr_response_server import access_control
-
 from grr_response_server import aff4
 from grr_response_server import artifact
 from grr_response_server import client_index
@@ -44,19 +40,18 @@ from grr_response_server import data_store
 from grr_response_server import email_alerts
 from grr_response_server.aff4_objects import aff4_grr
 from grr_response_server.aff4_objects import filestore
-from grr_response_server.aff4_objects import users
+from grr_response_server.aff4_objects import users as aff4_users
 from grr_response_server.flows.general import audit
-
 from grr_response_server.hunts import results as hunts_results
 from grr_response_server.rdfvalues import objects as rdf_objects
-
+from grr.test_lib import temp
 from grr.test_lib import testing_startup
 
 FIXED_TIME = rdfvalue.RDFDatetime.Now() - rdfvalue.Duration("8d")
 TEST_CLIENT_ID = rdf_client.ClientURN("C.1000000000000000")
 
 
-class GRRBaseTest(unittest.TestCase):
+class GRRBaseTest(absltest.TestCase):
   """This is the base class for all GRR tests."""
 
   use_relational_reads = False
@@ -74,25 +69,14 @@ class GRRBaseTest(unittest.TestCase):
     super(GRRBaseTest, self).__init__(methodName=methodName or "__init__")
     self.base_path = config.CONFIG["Test.data_dir"]
     test_user = u"test"
-    users.GRRUser.SYSTEM_USERS.add(test_user)
+    aff4_users.GRRUser.SYSTEM_USERS.add(test_user)
     self.token = access_control.ACLToken(
         username=test_user, reason="Running tests")
-
-  _set_up_lock = threading.RLock()
-  _set_up_done = False
-
-  @classmethod
-  def setUpClass(cls):
-    super(GRRBaseTest, cls).setUpClass()
-    with GRRBaseTest._set_up_lock:
-      if not GRRBaseTest._set_up_done:
-        testing_startup.TestInit()
-        GRRBaseTest._set_up_done = True
 
   def setUp(self):
     super(GRRBaseTest, self).setUp()
 
-    self.temp_dir = TempDirPath()
+    self.temp_dir = temp.TempDirPath()
     config.CONFIG.SetWriteBack(os.path.join(self.temp_dir, "writeback.yaml"))
 
     logging.info("Starting test: %s.%s", self.__class__.__name__,
@@ -112,7 +96,7 @@ class GRRBaseTest(unittest.TestCase):
     filestore.FileStoreInit().Run()
     hunts_results.ResultQueueInitHook().Run()
     email_alerts.EmailAlerterInit().RunOnce()
-    audit.AuditEventListener.created_logs.clear()
+    audit.AuditEventListener._created_logs.clear()
 
     # Stub out the email function
     self.emails_sent = []
@@ -140,6 +124,18 @@ class GRRBaseTest(unittest.TestCase):
       self.relational_read_stubber = utils.Stubber(
           data_store, "RelationalDBReadEnabled", lambda: True)
       self.relational_read_stubber.Start()
+
+    self._SetupFakeStatsContext()
+
+  def _SetupFakeStatsContext(self):
+    """Creates a stats context for running tests based on defined metrics."""
+    metrics_metadata = list(
+        itervalues(stats_collector_instance.Get().GetAllMetricsMetadata()))
+    fake_stats_collector = default_stats_collector.DefaultStatsCollector(
+        metrics_metadata)
+    fake_stats_context = stats_test_utils.FakeStatsContext(fake_stats_collector)
+    fake_stats_context.start()
+    self.addCleanup(fake_stats_context.stop)
 
   def tearDown(self):
     super(GRRBaseTest, self).tearDown()
@@ -198,6 +194,7 @@ class GRRBaseTest(unittest.TestCase):
                        os_version="buster/sid",
                        ping=None,
                        system="Linux",
+                       users=None,
                        memory_size=None,
                        add_cert=True,
                        fleetspeak_enabled=False):
@@ -246,7 +243,7 @@ class GRRBaseTest(unittest.TestCase):
 
       kb = rdf_client.KnowledgeBase()
       kb.fqdn = fqdn or "Host-%x.example.com" % client_nr
-      kb.users = [
+      kb.users = users or [
           rdf_client.User(username="user1"),
           rdf_client.User(username="user2"),
       ]
@@ -276,6 +273,7 @@ class GRRBaseTest(unittest.TestCase):
                   os_version="buster/sid",
                   ping=None,
                   system="Linux",
+                  users=None,
                   memory_size=None,
                   add_cert=True,
                   fleetspeak_enabled=False):
@@ -292,6 +290,7 @@ class GRRBaseTest(unittest.TestCase):
       os_version: string
       ping: RDFDatetime
       system: string
+      users: list of rdf_client.User objects.
       memory_size: bytes
       add_cert: boolean
       fleetspeak_enabled: boolean
@@ -299,38 +298,44 @@ class GRRBaseTest(unittest.TestCase):
     Returns:
       rdf_client.ClientURN
     """
-    # Make it possible to use SetupClient for both REL_DB and legacy tests.
-    self.SetupTestClientObject(
-        client_nr,
-        add_cert=add_cert,
-        arch=arch,
-        fqdn=fqdn,
-        install_time=install_time,
-        last_boot_time=last_boot_time,
-        kernel=kernel,
-        memory_size=memory_size,
-        os_version=os_version,
-        ping=ping or rdfvalue.RDFDatetime.Now(),
-        system=system,
-        fleetspeak_enabled=fleetspeak_enabled)
-
-    with client_index.CreateClientIndex(token=self.token) as index:
-      client_id_urn = self._SetupClientImpl(
+    res = None
+    if data_store.RelationalDBWriteEnabled():
+      client = self.SetupTestClientObject(
           client_nr,
-          index=index,
+          add_cert=add_cert,
           arch=arch,
           fqdn=fqdn,
           install_time=install_time,
           last_boot_time=last_boot_time,
           kernel=kernel,
-          os_version=os_version,
-          ping=ping,
-          system=system,
           memory_size=memory_size,
-          add_cert=add_cert,
+          os_version=os_version,
+          ping=ping or rdfvalue.RDFDatetime.Now(),
+          system=system,
+          users=users,
           fleetspeak_enabled=fleetspeak_enabled)
+      # TODO(amoser): Make this function return unicode client ids only.
+      res = rdf_client.ClientURN(client.client_id)
 
-    return client_id_urn
+    if data_store.AFF4Enabled():
+      with client_index.CreateClientIndex(token=self.token) as index:
+        res = self._SetupClientImpl(
+            client_nr,
+            index=index,
+            arch=arch,
+            fqdn=fqdn,
+            install_time=install_time,
+            last_boot_time=last_boot_time,
+            kernel=kernel,
+            os_version=os_version,
+            ping=ping,
+            system=system,
+            users=users,
+            memory_size=memory_size,
+            add_cert=add_cert,
+            fleetspeak_enabled=fleetspeak_enabled)
+
+    return res
 
   def SetupClients(self, nr_clients, *args, **kwargs):
     """Prepares nr_clients test client mocks to be used."""
@@ -378,6 +383,7 @@ class GRRBaseTest(unittest.TestCase):
                              os_version="buster/sid",
                              ping=None,
                              system="Linux",
+                             users=None,
                              labels=None,
                              fleetspeak_enabled=False):
     res = {}
@@ -394,6 +400,7 @@ class GRRBaseTest(unittest.TestCase):
           os_version=os_version,
           ping=ping,
           system=system,
+          users=users,
           labels=labels,
           fleetspeak_enabled=fleetspeak_enabled)
       res[client.client_id] = client
@@ -411,6 +418,7 @@ class GRRBaseTest(unittest.TestCase):
                             os_version="buster/sid",
                             ping=None,
                             system="Linux",
+                            users=None,
                             labels=None,
                             fleetspeak_enabled=False):
     """Prepares a test client object."""
@@ -423,10 +431,11 @@ class GRRBaseTest(unittest.TestCase):
 
     client.knowledge_base.fqdn = fqdn or "Host-%x.example.com" % client_nr
     client.knowledge_base.os = system
-    client.knowledge_base.users = [
+    client.knowledge_base.users = users or [
         rdf_client.User(username=u"user1"),
         rdf_client.User(username=u"user2"),
     ]
+
     client.os_version = os_version
     client.arch = arch
     client.kernel = kernel
@@ -689,7 +698,8 @@ class FakeTimeline(object):
       self._worker_thread_done = True
       self._owner_thread_turn.set()
 
-    self._worker_thread = threading.Thread(target=Worker)
+    self._worker_thread = threading.Thread(
+        target=Worker, name="FakeTimelineThread")
     self._worker_thread.start()
 
     return self
@@ -699,6 +709,9 @@ class FakeTimeline(object):
 
     self._worker_thread_done = True
     self._worker_thread_turn.set()
+    self._worker_thread.join(5.0)
+    if self._worker_thread.is_alive():
+      raise RuntimeError("FakeTimelineThread did not complete.")
 
   def _Sleep(self, seconds):
     if threading.current_thread() is not self._worker_thread:
@@ -816,191 +829,6 @@ def RequiresPackage(package_name):
   return Decorator
 
 
-class RemotePDB(pdb.Pdb):
-  """A Remote debugger facility.
-
-  Place breakpoints in the code using:
-  test_lib.RemotePDB().set_trace()
-
-  Once the debugger is attached all remote break points will use the same
-  connection.
-  """
-  handle = None
-  prompt = "RemotePDB>"
-
-  def __init__(self):
-    # Use a global socket for remote debugging.
-    if RemotePDB.handle is None:
-      self.ListenForConnection()
-
-    pdb.Pdb.__init__(
-        self, stdin=self.handle, stdout=codecs.getwriter("utf8")(self.handle))
-
-  def ListenForConnection(self):
-    """Listens and accepts a single connection."""
-    logging.warn("Remote debugger waiting for connection on %s",
-                 config.CONFIG["Test.remote_pdb_port"])
-
-    RemotePDB.old_stdout = sys.stdout
-    RemotePDB.old_stdin = sys.stdin
-    RemotePDB.skt = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    RemotePDB.skt.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-
-    RemotePDB.skt.bind(("127.0.0.1", config.CONFIG["Test.remote_pdb_port"]))
-    RemotePDB.skt.listen(1)
-
-    (clientsocket, address) = RemotePDB.skt.accept()
-    RemotePDB.handle = clientsocket.makefile("rw", 1)
-    logging.warn("Received a connection from %s", address)
-
-
-def _TempRootPath():
-  try:
-    root = os.environ.get("TEST_TMPDIR") or config.CONFIG["Test.tmpdir"]
-  except RuntimeError:
-    return None
-
-  if platform.system() != "Windows":
-    return root
-  else:
-    return None
-
-
-# TODO(hanuszczak): Consider moving this to some utility module.
-def TempDirPath(suffix="", prefix="tmp"):
-  """Creates a temporary directory based on the environment configuration.
-
-  The directory will be placed in folder as specified by the `TEST_TMPDIR`
-  environment variable if available or fallback to `Test.tmpdir` of the current
-  configuration if not.
-
-  Args:
-    suffix: A suffix to end the directory name with.
-    prefix: A prefix to begin the directory name with.
-
-  Returns:
-    An absolute path to the created directory.
-  """
-  return tempfile.mkdtemp(suffix=suffix, prefix=prefix, dir=_TempRootPath())
-
-
-# TODO(hanuszczak): Consider moving this to some utility module.
-def TempFilePath(suffix="", prefix="tmp", dir=None):  # pylint: disable=redefined-builtin
-  """Creates a temporary file based on the environment configuration.
-
-  If no directory is specified the file will be placed in folder as specified by
-  the `TEST_TMPDIR` environment variable if available or fallback to
-  `Test.tmpdir` of the current configuration if not.
-
-  If directory is specified it must be part of the default test temporary
-  directory.
-
-  Args:
-    suffix: A suffix to end the file name with.
-    prefix: A prefix to begin the file name with.
-    dir: A directory to place the file in.
-
-  Returns:
-    An absolute path to the created file.
-
-  Raises:
-    ValueError: If the specified directory is not part of the default test
-        temporary directory.
-  """
-  root = _TempRootPath()
-  if not dir:
-    dir = root
-  elif root and not os.path.commonprefix([dir, root]):
-    raise ValueError("path '%s' must start with '%s'" % (dir, root))
-
-  _, path = tempfile.mkstemp(suffix=suffix, prefix=prefix, dir=dir)
-  return path
-
-
-class AutoTempDirPath(object):
-  """Creates a temporary directory based on the environment configuration.
-
-  The directory will be placed in folder as specified by the `TEST_TMPDIR`
-  environment variable if available or fallback to `Test.tmpdir` of the current
-  configuration if not.
-
-  This object is a context manager and the directory is automatically removed
-  when it goes out of scope.
-
-  Args:
-    suffix: A suffix to end the directory name with.
-    prefix: A prefix to begin the directory name with.
-    remove_non_empty: If set to `True` the directory removal will succeed even
-      if it is not empty.
-
-  Returns:
-    An absolute path to the created directory.
-  """
-
-  def __init__(self, suffix="", prefix="tmp", remove_non_empty=False):
-    self.suffix = suffix
-    self.prefix = prefix
-    self.remove_non_empty = remove_non_empty
-
-  def __enter__(self):
-    self.path = TempDirPath(suffix=self.suffix, prefix=self.prefix)
-    return self.path
-
-  def __exit__(self, exc_type, exc_value, traceback):
-    del exc_type  # Unused.
-    del exc_value  # Unused.
-    del traceback  # Unused.
-
-    if self.remove_non_empty:
-      shutil.rmtree(self.path)
-    else:
-      os.rmdir(self.path)
-
-
-class AutoTempFilePath(object):
-  """Creates a temporary file based on the environment configuration.
-
-  If no directory is specified the file will be placed in folder as specified by
-  the `TEST_TMPDIR` environment variable if available or fallback to
-  `Test.tmpdir` of the current configuration if not.
-
-  If directory is specified it must be part of the default test temporary
-  directory.
-
-  This object is a context manager and the associated file is automatically
-  removed when it goes out of scope.
-
-  Args:
-    suffix: A suffix to end the file name with.
-    prefix: A prefix to begin the file name with.
-    dir: A directory to place the file in.
-
-  Returns:
-    An absolute path to the created file.
-
-  Raises:
-    ValueError: If the specified directory is not part of the default test
-        temporary directory.
-  """
-
-  def __init__(self, suffix="", prefix="tmp", dir=None):  # pylint: disable=redefined-builtin
-    self.suffix = suffix
-    self.prefix = prefix
-    self.dir = dir
-
-  def __enter__(self):
-    self.path = TempFilePath(
-        suffix=self.suffix, prefix=self.prefix, dir=self.dir)
-    return self.path
-
-  def __exit__(self, exc_type, exc_value, traceback):
-    del exc_type  # Unused.
-    del exc_value  # Unused.
-    del traceback  # Unused.
-
-    os.remove(self.path)
-
-
 class SuppressLogs(object):
   """A context manager for suppressing logging."""
 
@@ -1025,4 +853,5 @@ class SuppressLogs(object):
 
 def main(argv=None):
   del argv  # Unused.
-  unittest.main()
+  testing_startup.TestInit()
+  absltest.main()

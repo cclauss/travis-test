@@ -1,6 +1,9 @@
 #!/usr/bin/env python
 """A collection of DDL for use by the mysql database implementation."""
 
+from __future__ import absolute_import
+from __future__ import division
+
 SCHEMA_SETUP = [
     """
 CREATE TABLE IF NOT EXISTS clients(
@@ -55,6 +58,16 @@ CREATE TABLE IF NOT EXISTS client_keywords(
 )""", """
 CREATE INDEX IF NOT EXISTS keyword_client_idx ON client_keywords(keyword(64))
 """, """
+CREATE TABLE IF NOT EXISTS client_stats(
+    client_id BIGINT UNSIGNED,
+    payload MEDIUMBLOB,
+    timestamp DATETIME(6),
+    -- Timestamp is the first part of the primary key, because both
+    -- ReadClientStats and DeleteOldClientStats filter by timestamp, but only
+    -- ReadClientStats filters by client_id.
+    PRIMARY KEY (timestamp, client_id),
+    FOREIGN KEY (client_id) REFERENCES clients(client_id)
+)""", """
 CREATE TABLE IF NOT EXISTS grr_users(
     username VARCHAR(128) PRIMARY KEY,
     password VARBINARY(255),
@@ -92,13 +105,20 @@ CREATE TABLE IF NOT EXISTS user_notification(
     PRIMARY KEY (username, timestamp),
     FOREIGN KEY (username) REFERENCES grr_users (username)
 )""", """
-CREATE TABLE IF NOT EXISTS audit_event(
+CREATE TABLE IF NOT EXISTS admin_ui_access_audit_entry(
     username VARCHAR(128),
-    urn VARCHAR(128),
-    client_id BIGINT UNSIGNED,
-    timestamp DATETIME(6),
-    details MEDIUMBLOB
+    router_method_name VARCHAR(128),
+    timestamp DATETIME(6) DEFAULT CURRENT_TIMESTAMP,
+    details MEDIUMBLOB,
+    PRIMARY KEY (username, timestamp),
+    FOREIGN KEY (username) REFERENCES grr_users (username)
 )""", """
+CREATE INDEX IF NOT EXISTS timestamp_idx
+ON admin_ui_access_audit_entry(timestamp)
+""", """
+CREATE INDEX IF NOT EXISTS router_method_name_idx
+ON admin_ui_access_audit_entry(router_method_name)
+""", """
 CREATE TABLE IF NOT EXISTS message_handler_requests(
     handlername VARCHAR(128),
     timestamp DATETIME(6),
@@ -143,7 +163,62 @@ CREATE TABLE IF NOT EXISTS client_messages(
     message MEDIUMBLOB,
     leased_until DATETIME(6),
     leased_by VARCHAR(128),
+    leased_count INT DEFAULT 0,
     PRIMARY KEY (client_id, message_id),
     FOREIGN KEY (client_id) REFERENCES clients(client_id)
+)""", """
+CREATE TABLE IF NOT EXISTS flows(
+    client_id BIGINT UNSIGNED,
+    flow_id BIGINT UNSIGNED,
+    long_flow_id VARCHAR(255),
+    parent_flow_id BIGINT UNSIGNED,
+    flow BLOB,
+    client_crash_info MEDIUMBLOB,
+    next_request_to_process INT UNSIGNED,
+    pending_termination MEDIUMBLOB,
+    processing_deadline DATETIME(6),
+    processing_on VARCHAR(128),
+    processing_since DATETIME(6),
+    timestamp DATETIME(6),
+    last_update DATETIME(6),
+    PRIMARY KEY (client_id, flow_id),
+    FOREIGN KEY (client_id) REFERENCES clients(client_id)
+)""", """
+CREATE INDEX IF NOT EXISTS timestamp_idx ON flows(timestamp)
+""", """
+CREATE TABLE IF NOT EXISTS flow_requests(
+    client_id BIGINT UNSIGNED,
+    flow_id BIGINT UNSIGNED,
+    request_id BIGINT UNSIGNED,
+    needs_processing BOOL,
+    responses_expected BIGINT UNSIGNED,
+    request MEDIUMBLOB,
+    timestamp DATETIME(6),
+    PRIMARY KEY (client_id, flow_id, request_id),
+    FOREIGN KEY (client_id, flow_id) REFERENCES flows(client_id, flow_id)
+)""", """
+CREATE TABLE IF NOT EXISTS flow_responses(
+    client_id BIGINT UNSIGNED,
+    flow_id BIGINT UNSIGNED,
+    request_id BIGINT UNSIGNED,
+    response_id BIGINT UNSIGNED,
+    response MEDIUMBLOB,
+    status MEDIUMBLOB,
+    iterator MEDIUMBLOB,
+    timestamp DATETIME(6),
+    PRIMARY KEY (client_id, flow_id, request_id, response_id),
+    FOREIGN KEY (client_id, flow_id, request_id)
+    REFERENCES flow_requests(client_id, flow_id, request_id)
+)""", """
+CREATE TABLE IF NOT EXISTS flow_processing_requests(
+    client_id BIGINT UNSIGNED,
+    flow_id BIGINT UNSIGNED,
+    timestamp DATETIME(6),
+    request MEDIUMBLOB,
+    delivery_time DATETIME(6),
+    leased_until DATETIME(6),
+    leased_by VARCHAR(128),
+    PRIMARY KEY (client_id, flow_id, timestamp),
+    FOREIGN KEY (client_id, flow_id) REFERENCES flows(client_id, flow_id)
 )"""
 ]

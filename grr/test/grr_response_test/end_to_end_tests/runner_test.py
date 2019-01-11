@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+from __future__ import absolute_import
+from __future__ import division
+
 import os
 import sys
 import unittest
@@ -172,8 +175,9 @@ class E2ETestRunnerTest(test_lib.GRRBaseTest):
     e2e_runner = self._CreateE2ETestRunner(
         blacklisted_tests=["FakeE2ETestLinux"], max_test_attempts=4)
     e2e_runner.Initialize()
-    actual_results = e2e_runner.RunTestsAgainstClient(api_client.client_id)
-    expected_results = [
+    actual_results, actual_report = e2e_runner.RunTestsAgainstClient(
+        api_client.client_id)
+    expected_report = [
         "Results for %s:" % api_client.client_id,
         "\tFakeE2ETestAll.testCommon:                [ PASS ]",
         "\tFakeE2ETestDarwinLinux.testCommon:        [ FAIL ]",
@@ -183,11 +187,21 @@ class E2ETestRunnerTest(test_lib.GRRBaseTest):
         "FakeE2ETestAll": 1,
         "FakeE2ETestDarwinLinux": 8  # 4 retries for each failing test.
     }
-    self.assertEqual(expected_results, actual_results)
+    self.assertEqual(expected_report, actual_report)
     self.assertEqual(expected_counts, unittest_runner.test_counts)
+    self.assertCountEqual(actual_results.keys(), [
+        "FakeE2ETestAll.testCommon",
+        "FakeE2ETestDarwinLinux.testCommon",
+        "FakeE2ETestDarwinLinux.testDarwinLinux",
+    ])
+    self.assertEmpty(actual_results["FakeE2ETestAll.testCommon"].errors)
+    self.assertNotEmpty(
+        actual_results["FakeE2ETestDarwinLinux.testCommon"].errors)
+    self.assertNotEmpty(
+        actual_results["FakeE2ETestDarwinLinux.testDarwinLinux"].errors)
 
     # Test data sent to the Appveyor API.
-    self.assertEqual(3, len(self.requests_post.call_args_list))
+    self.assertLen(self.requests_post.call_args_list, 3)
     test0_args, test0_kwargs = self.requests_post.call_args_list[0]
     test1_args, test1_kwargs = self.requests_post.call_args_list[1]
     self.assertEqual(("http://appvyr/api/tests",), test0_args)
@@ -228,15 +242,26 @@ class E2ETestRunnerTest(test_lib.GRRBaseTest):
         "FakeE2ETestLinux.testLinux", "FakeE2ETestDarwinLinux"
     ])
     e2e_runner.Initialize()
-    actual_results = e2e_runner.RunTestsAgainstClient(api_client.client_id)
-    expected_results = [
+    actual_results, actual_report = e2e_runner.RunTestsAgainstClient(
+        api_client.client_id)
+    expected_report = [
         "Results for %s:" % api_client.client_id,
         "\tFakeE2ETestDarwinLinux.testCommon:        [ FAIL ]",
         "\tFakeE2ETestDarwinLinux.testDarwinLinux:   [ FAIL ]",
         "\tFakeE2ETestLinux.testLinux:               [ PASS ]"
     ]
-    self.assertEqual(expected_results, actual_results)
-    self.assertEqual(3, len(self.requests_post.call_args_list))
+    self.assertEqual(expected_report, actual_report)
+    self.assertCountEqual(actual_results.keys(), [
+        "FakeE2ETestDarwinLinux.testCommon",
+        "FakeE2ETestDarwinLinux.testDarwinLinux", "FakeE2ETestLinux.testLinux"
+    ])
+    self.assertNotEmpty(
+        actual_results["FakeE2ETestDarwinLinux.testCommon"].errors)
+    self.assertNotEmpty(
+        actual_results["FakeE2ETestDarwinLinux.testDarwinLinux"].errors)
+    self.assertEmpty(actual_results["FakeE2ETestLinux.testLinux"].errors)
+
+    self.assertLen(self.requests_post.call_args_list, 3)
 
   @mock.patch.dict(
       test_base.REGISTRY, {"FakeE2ETestAll": fake_tests.FakeE2ETestAll},
@@ -248,15 +273,18 @@ class E2ETestRunnerTest(test_lib.GRRBaseTest):
     self.unittest_runner.return_value = FakeUnittestRunner(flakiness=2)
     e2e_runner = self._CreateE2ETestRunner(max_test_attempts=3)
     e2e_runner.Initialize()
-    actual_results = e2e_runner.RunTestsAgainstClient(api_client.client_id)
-    expected_results = [
+    actual_results, actual_report = e2e_runner.RunTestsAgainstClient(
+        api_client.client_id)
+    expected_report = [
         "Results for %s:" % api_client.client_id,
         "\tFakeE2ETestAll.testCommon:   [ PASS ]",
     ]
-    self.assertEqual(expected_results, actual_results)
+    self.assertEqual(expected_report, actual_report)
+    self.assertCountEqual(actual_results.keys(), ["FakeE2ETestAll.testCommon"])
+    self.assertFalse(actual_results["FakeE2ETestAll.testCommon"].errors)
 
     # Test data sent to the Appveyor API.
-    self.assertEqual(2, len(self.requests_post.call_args_list))
+    self.assertLen(self.requests_post.call_args_list, 2)
     req0_args, req0_kwargs = self.requests_post.call_args_list[0]
     req1_args, req1_kwargs = self.requests_post.call_args_list[1]
     self.assertEqual(("http://appvyr/api/build/messages",), req0_args)

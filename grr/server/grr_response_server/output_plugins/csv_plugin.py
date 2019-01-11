@@ -1,13 +1,19 @@
 #!/usr/bin/env python
 """CSV single-pass output plugin."""
-
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import unicode_literals
 
 import os
 import zipfile
 
+from future.builtins import str
+
 import yaml
 
 from grr_response_core.lib import utils
+from grr_response_core.lib.util import collection
+from grr_response_core.lib.util import csv
 from grr_response_server import instant_output_plugin
 
 
@@ -40,7 +46,7 @@ class CSVInstantOutputPlugin(
       if type_info.__class__.__name__ == "ProtoEmbedded":
         row.extend(self._GetCSVRow(value.Get(type_info.name)))
       else:
-        row.append(unicode(value.Get(type_info.name)))
+        row.append(str(value.Get(type_info.name)))
 
     return row
 
@@ -65,7 +71,7 @@ class CSVInstantOutputPlugin(
         "%s/%s/from_%s.csv" % (self.path_prefix, first_value.__class__.__name__,
                                original_value_type.__name__))
 
-    writer = utils.CsvWriter()
+    writer = csv.Writer()
     # Write the CSV header based on first value class and write
     # the first value itself. All other values are guaranteed
     # to have the same class (see ProcessSingleTypeExportedValues definition).
@@ -77,10 +83,10 @@ class CSVInstantOutputPlugin(
 
     # Counter starts from 1, as 1 value has already been written.
     counter = 1
-    for batch in utils.Grouper(exported_values, self.ROW_BATCH):
+    for batch in collection.Batch(exported_values, self.ROW_BATCH):
       counter += len(batch)
 
-      writer = utils.CsvWriter()
+      writer = csv.Writer()
       for value in batch:
         writer.WriteRow(self._GetCSVRow(value))
 

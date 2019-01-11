@@ -1,16 +1,20 @@
 #!/usr/bin/env python
 """Flows for handling the collection for artifacts."""
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import unicode_literals
 
 import logging
 
 
-from builtins import map  # pylint: disable=redefined-builtin
+from future.builtins import map
+from future.builtins import str
 from future.utils import iteritems
+from future.utils import string_types
 
 from grr_response_core import config
 from grr_response_core.lib import artifact_utils
-from grr_response_core.lib import parser
+from grr_response_core.lib import parsers
 from grr_response_core.lib import rdfvalue
 from grr_response_core.lib import utils
 # For file collection artifacts. pylint: disable=unused-import
@@ -22,8 +26,8 @@ from grr_response_core.lib.rdfvalues import client_action as rdf_client_action
 from grr_response_core.lib.rdfvalues import client_fs as rdf_client_fs
 from grr_response_core.lib.rdfvalues import file_finder as rdf_file_finder
 from grr_response_core.lib.rdfvalues import paths as rdf_paths
-from grr_response_core.lib.rdfvalues import rekall_types as rdf_rekall_types
 from grr_response_core.lib.rdfvalues import structs as rdf_structs
+from grr_response_core.lib.util import collection
 from grr_response_proto import flows_pb2
 from grr_response_server import aff4
 from grr_response_server import aff4_flows
@@ -34,10 +38,21 @@ from grr_response_server import flow
 from grr_response_server import flow_base
 from grr_response_server import sequential_collection
 from grr_response_server import server_stubs
+from grr_response_server.flows.general import artifact_fallbacks
 from grr_response_server.flows.general import file_finder
 from grr_response_server.flows.general import filesystem
-from grr_response_server.flows.general import memory
 from grr_response_server.flows.general import transfer
+
+
+def _ReadClientKnowledgeBase(client_id, allow_uninitialized=False, token=None):
+  if data_store.RelationalDBReadEnabled():
+    client = data_store.REL_DB.ReadClientSnapshot(client_id)
+    return artifact.GetKnowledgeBase(
+        client, allow_uninitialized=allow_uninitialized)
+  else:
+    client = aff4.FACTORY.Open(client_id, token=token)
+    return artifact.GetArtifactKnowledgeBase(
+        client, allow_uninitialized=allow_uninitialized)
 
 
 @flow_base.DualDBFlow
@@ -75,8 +90,6 @@ class ArtifactCollectorFlowMixin(object):
 
   def Start(self):
     """For each artifact, create subflows for each collector."""
-    self.client = aff4.FACTORY.Open(self.client_id, token=self.token)
-
     self.state.artifacts_failed = []
     self.state.artifacts_skipped_due_to_condition = []
     self.state.called_fallbacks = set()
@@ -84,8 +97,8 @@ class ArtifactCollectorFlowMixin(object):
     self.state.knowledge_base = self.args.knowledge_base
     self.state.response_count = 0
 
-    if (self.args.dependencies == rdf_artifacts.ArtifactCollectorFlowArgs
-        .Dependency.FETCH_NOW):
+    if (self.args.dependencies ==
+        rdf_artifacts.ArtifactCollectorFlowArgs.Dependency.FETCH_NOW):
       # String due to dependency loop with discover.py.
       self.CallFlow("Interrogate", next_state="StartCollection")
       return
@@ -94,8 +107,8 @@ class ArtifactCollectorFlowMixin(object):
           .Dependency.USE_CACHED) and (not self.state.knowledge_base):
       # If not provided, get a knowledge base from the client.
       try:
-        self.state.knowledge_base = artifact.GetArtifactKnowledgeBase(
-            self.client)
+        self.state.knowledge_base = _ReadClientKnowledgeBase(
+            self.client_id, token=self.token)
       except artifact_utils.KnowledgeBaseUninitializedError:
         # If no-one has ever initialized the knowledge base, we should do so
         # now.
@@ -107,6 +120,16 @@ class ArtifactCollectorFlowMixin(object):
     # In all other cases start the collection state.
     self.CallState(next_state="StartCollection")
 
+  def _GetArtifactFromName(self, name):
+    """Gets an artifact from the registry, refreshing the registry if needed."""
+    try:
+      return artifact_registry.REGISTRY.GetArtifact(name)
+    except artifact_registry.ArtifactNotRegisteredError:
+      # If we don't have an artifact, things shouldn't have passed validation
+      # so we assume it's a new one in the datastore.
+      artifact_registry.REGISTRY.ReloadDatastoreArtifacts()
+      return artifact_registry.REGISTRY.GetArtifact(name)
+
   def StartCollection(self, responses):
     """Start collecting."""
     if not responses.success:
@@ -114,13 +137,11 @@ class ArtifactCollectorFlowMixin(object):
           "Attempt to initialize Knowledge Base failed.")
 
     if not self.state.knowledge_base:
-      self.client = aff4.FACTORY.Open(self.client_id, token=self.token)
-      # If we are processing the knowledge base, it still won't exist yet.
-      self.state.knowledge_base = artifact.GetArtifactKnowledgeBase(
-          self.client, allow_uninitialized=True)
+      self.state.knowledge_base = _ReadClientKnowledgeBase(
+          self.client_id, allow_uninitialized=True, token=self.token)
 
     for artifact_name in self.args.artifact_list:
-      artifact_obj = artifact_registry.REGISTRY.GetArtifact(artifact_name)
+      artifact_obj = self._GetArtifactFromName(artifact_name)
 
       # Ensure artifact has been written sanely. Note that this could be
       # removed if it turns out to be expensive. Artifact tests should catch
@@ -187,7 +208,8 @@ class ArtifactCollectorFlowMixin(object):
         elif type_name == source_type.WMI:
           self.WMIQuery(source)
         elif type_name == source_type.REKALL_PLUGIN:
-          self.RekallPlugin(source)
+          raise NotImplementedError(
+              "Running Rekall artifacts is not supported anymore.")
         elif type_name == source_type.ARTIFACT_GROUP:
           self.CollectArtifacts(source)
         elif type_name == source_type.ARTIFACT_FILES:
@@ -385,6 +407,7 @@ class ArtifactCollectorFlowMixin(object):
         max_file_size=self.args.max_file_size,
         ignore_interpolation_errors=self.args.ignore_interpolation_errors,
         dependencies=self.args.dependencies,
+        knowledge_base=self.args.knowledge_base,
         request_data={
             "artifact_name": self.current_artifact_name,
             "source": source.ToPrimitiveDict()
@@ -435,25 +458,6 @@ class ArtifactCollectorFlowMixin(object):
           },
           next_state="ProcessCollected")
 
-  def RekallPlugin(self, source):
-    request = rdf_rekall_types.RekallRequest()
-    request.plugins = [
-        # Only use these methods for listing processes.
-        rdf_rekall_types.PluginRequest(
-            plugin=source.attributes["plugin"],
-            args=source.attributes.get("args", {}))
-    ]
-
-    self.CallFlow(
-        memory.AnalyzeClientMemory.__name__,
-        request=request,
-        request_data={
-            "artifact_name": self.current_artifact_name,
-            "rekall_plugin": source.attributes["plugin"],
-            "source": source.ToPrimitiveDict()
-        },
-        next_state="ProcessCollected")
-
   def _GetSingleExpansion(self, value):
     results = list(
         artifact_utils.InterpolateKbAttributes(
@@ -477,7 +481,7 @@ class ArtifactCollectorFlowMixin(object):
     """
     new_args = {}
     for key, value in iteritems(input_dict):
-      if isinstance(value, basestring):
+      if isinstance(value, string_types):
         new_args[key] = self._GetSingleExpansion(value)
       elif isinstance(value, list):
         new_args[key] = self.InterpolateList(value)
@@ -496,7 +500,7 @@ class ArtifactCollectorFlowMixin(object):
     """
     new_args = []
     for value in input_list:
-      if isinstance(value, basestring):
+      if isinstance(value, string_types):
         results = list(
             artifact_utils.InterpolateKbAttributes(
                 value,
@@ -527,31 +531,29 @@ class ArtifactCollectorFlowMixin(object):
         **self.InterpolateDict(source.attributes.get("action_args", {})))
 
   def CallFallback(self, artifact_name, request_data):
-    classes = iteritems(artifact.ArtifactFallbackCollector.classes)
-    for clsname, fallback_class in classes:
 
-      if not aff4.issubclass(fallback_class,
-                             artifact.ArtifactFallbackCollector):
-        continue
+    if artifact_name not in artifact_fallbacks.FALLBACK_REGISTRY:
+      return False
 
-      if artifact_name in fallback_class.artifacts:
-        if artifact_name in self.state.called_fallbacks:
-          self.Log("Already called fallback class %s for artifact: %s", clsname,
-                   artifact_name)
-        else:
-          self.Log("Calling fallback class %s for artifact: %s", clsname,
-                   artifact_name)
+    fallback_flow = artifact_fallbacks.FALLBACK_REGISTRY[artifact_name]
 
-          self.CallFlow(
-              clsname,
-              request_data=request_data.ToDict(),
-              artifact_name=artifact_name,
-              next_state="ProcessCollected")
+    if artifact_name in self.state.called_fallbacks:
+      self.Log("Already called fallback class %s for artifact: %s",
+               fallback_flow, artifact_name)
+      return False
 
-          # Make sure we only try this once
-          self.state.called_fallbacks.add(artifact_name)
-          return True
-    return False
+    self.Log("Calling fallback class %s for artifact: %s", fallback_flow,
+             artifact_name)
+
+    self.CallFlow(
+        fallback_flow,
+        request_data=request_data.ToDict(),
+        artifact_name=artifact_name,
+        next_state="ProcessCollected")
+
+    # Make sure we only try this once
+    self.state.called_fallbacks.add(artifact_name)
+    return True
 
   def ProcessCollected(self, responses):
     """Each individual collector will call back into here.
@@ -564,14 +566,10 @@ class ArtifactCollectorFlowMixin(object):
       artifact_utils.ArtifactProcessingError: On failure to process.
     """
     flow_name = self.__class__.__name__
-    artifact_name = responses.request_data["artifact_name"]
+    artifact_name = str(responses.request_data["artifact_name"])
     source = responses.request_data.GetItem("source", None)
 
-    if responses.success:
-      self.Log(
-          "Artifact data collection %s completed successfully in flow %s "
-          "with %d responses", artifact_name, flow_name, len(responses))
-    else:
+    if not responses.success:
       self.Log("Artifact %s data collection failed. Status: %s.", artifact_name,
                responses.status)
       if not self.CallFallback(artifact_name, responses.request_data):
@@ -579,36 +577,12 @@ class ArtifactCollectorFlowMixin(object):
         self.state.artifacts_failed.append(artifact_name)
       return
 
-    output_collection_map = {}
+    self.Log(
+        "Artifact data collection %s completed successfully in flow %s "
+        "with %d responses", artifact_name, flow_name, len(responses))
 
     # Now process the responses.
-    processors = parser.Parser.GetClassesByArtifact(artifact_name)
-    saved_responses = {}
-    for response in responses:
-      if processors and self.args.apply_parsers:
-        for processor in processors:
-          processor_obj = processor()
-          if processor_obj.process_together:
-            # Store the response until we have them all.
-            saved_responses.setdefault(processor.__name__, []).append(response)
-          else:
-            # Process the response immediately
-            self._ParseResponses(processor_obj, response, responses,
-                                 artifact_name, source, output_collection_map)
-      else:
-        # We don't have any defined processors for this artifact.
-        self._ParseResponses(None, response, responses, artifact_name, source,
-                             output_collection_map)
-
-    # If we were saving responses, process them now:
-    for processor_name, responses_list in iteritems(saved_responses):
-      processor_obj = parser.Parser.classes[processor_name]()
-      self._ParseResponses(processor_obj, responses_list, responses,
-                           artifact_name, source, output_collection_map)
-
-    # Flush the results to the objects.
-    if self.args.split_output_by_artifact:
-      self._FinalizeSplitCollection(output_collection_map)
+    self._ParseResponses(list(responses), artifact_name, source)
 
   def ProcessCollectedRegistryStatEntry(self, responses):
     """Create AFF4 objects for registry statentries.
@@ -645,7 +619,7 @@ class ArtifactCollectorFlowMixin(object):
 
     Raises:
       RuntimeError: if pathspec value is not a PathSpec instance and not
-                    a basestring.
+                    a string_types.
     """
     self.download_list = []
     source = responses.request_data.GetItem("source")
@@ -669,7 +643,7 @@ class ArtifactCollectorFlowMixin(object):
         except AttributeError:
           pass
 
-      if isinstance(pathspec, basestring):
+      if isinstance(pathspec, string_types):
         pathspec = rdf_paths.PathSpec(path=pathspec)
         if self.args.use_tsk:
           pathspec.pathtype = rdf_paths.PathSpec.PathType.TSK
@@ -703,80 +677,36 @@ class ArtifactCollectorFlowMixin(object):
     if source:
       return source["returned_types"]
 
-  def _ParseResponses(self, processor_obj, responses, responses_obj,
-                      artifact_name, source, output_collection_map):
+  def _ParseResponses(self, responses, artifact_name, source):
     """Create a result parser sending different arguments for diff parsers.
 
     Args:
-      processor_obj: A Processor object that inherits from Parser.
-      responses: A list of, or single response depending on the processors
-        process_together setting.
-      responses_obj: The responses object itself.
+      responses: A list of responses.
       artifact_name: Name of the artifact that generated the responses.
       source: The source responsible for producing the responses.
-      output_collection_map: dict of collections when splitting by artifact
-
-    Raises:
-      RuntimeError: On bad parser.
     """
-    _ = responses_obj
-    result_iterator = artifact.ApplyParserToResponses(processor_obj, responses,
-                                                      source, self, self.token)
-
     artifact_return_types = self._GetArtifactReturnTypes(source)
 
-    if result_iterator:
-      with data_store.DB.GetMutationPool() as pool:
-        # If we have a parser, do something with the results it produces.
-        for result in result_iterator:
-          result_type = result.__class__.__name__
-          if result_type == "Anomaly":
-            self.SendReply(result)
-          elif (not artifact_return_types or
-                result_type in artifact_return_types):
-            self.state.response_count += 1
-            self.SendReply(result)
-            self._WriteResultToSplitCollection(result, artifact_name,
-                                               output_collection_map, pool)
+    if self.args.apply_parsers:
+      parser_factory = parsers.ArtifactParserFactory(artifact_name)
+      results = artifact.ApplyParsersToResponses(parser_factory, responses,
+                                                 self)
+    else:
+      results = responses
+
+    for result in results:
+      result_type = result.__class__.__name__
+      if result_type == "Anomaly":
+        self.SendReply(result)
+      elif (not artifact_return_types or result_type in artifact_return_types):
+        self.state.response_count += 1
+        self.SendReply(result, tag="artifact:%s" % artifact_name)
 
   @classmethod
   def ResultCollectionForArtifact(cls, session_id, artifact_name):
     urn = rdfvalue.RDFURN("_".join((str(session_id.Add(flow.RESULTS_SUFFIX)),
                                     utils.SmartStr(artifact_name))))
     return sequential_collection.GeneralIndexedCollection(urn)
-
-  def _WriteResultToSplitCollection(self, result, artifact_name,
-                                    output_collection_map, mutation_pool):
-    """Write any results to the collection if we are splitting by artifact.
-
-    If not splitting, SendReply will handle writing to the collection.
-
-    Args:
-      result: result to write
-      artifact_name: artifact name string
-      output_collection_map: dict of collections when splitting by artifact
-      mutation_pool: A MutationPool object to write to.
-    """
-    if self.args.split_output_by_artifact and self.runner.IsWritingResults():
-      if artifact_name not in output_collection_map:
-        # TODO(amoser): Make this work in the UI...
-        # Create the new collections in the same directory but not as children,
-        # so they are visible in the GUI
-        collection = self.ResultCollectionForArtifact(self.urn, artifact_name)
-        output_collection_map[artifact_name] = collection
-      output_collection_map[artifact_name].Add(
-          result, mutation_pool=mutation_pool)
-
-  def _FinalizeSplitCollection(self, output_collection_map):
-    """Flush all of the collections that were split by artifact."""
-    total = 0
-    for artifact_name, collection in iteritems(output_collection_map):
-      l = len(collection)
-      total += l
-      self.Log("Wrote results from Artifact %s to %s. Collection size %d.",
-               artifact_name, collection.collection_id, l)
-
-    self.Log("Total collection size: %d", total)
 
   def End(self, responses):
     del responses
@@ -806,7 +736,8 @@ class ArtifactFilesDownloaderResult(rdf_structs.RDFProtoStruct):
       return rdfvalue.RDFValue.classes.get(self.original_result_type)
 
 
-class ArtifactFilesDownloaderFlow(transfer.MultiGetFileLogic, flow.GRRFlow):
+@flow_base.DualDBFlow
+class ArtifactFilesDownloaderFlowMixin(transfer.MultiGetFileLogic):
   """Flow that downloads files referenced by collected artifacts."""
 
   category = "/Collectors/"
@@ -822,8 +753,7 @@ class ArtifactFilesDownloaderFlow(transfer.MultiGetFileLogic, flow.GRRFlow):
         ]):
       return [response.pathspec]
 
-    client = aff4.FACTORY.Open(self.client_id, token=self.token)
-    knowledge_base = artifact.GetArtifactKnowledgeBase(client)
+    knowledge_base = _ReadClientKnowledgeBase(self.client_id, token=self.token)
 
     if self.args.use_tsk:
       path_type = rdf_paths.PathSpec.PathType.TSK
@@ -836,7 +766,7 @@ class ArtifactFilesDownloaderFlow(transfer.MultiGetFileLogic, flow.GRRFlow):
     return [item.pathspec for item in parsed_items]
 
   def Start(self):
-    super(ArtifactFilesDownloaderFlow, self).Start()
+    super(ArtifactFilesDownloaderFlowMixin, self).Start()
 
     self.state.file_size = self.args.max_file_size
     self.state.results_to_download = []
@@ -870,8 +800,8 @@ class ArtifactFilesDownloaderFlow(transfer.MultiGetFileLogic, flow.GRRFlow):
             original_result=response)
         results_without_pathspecs.append(result)
 
-    grouped_results = utils.GroupBy(results_with_pathspecs,
-                                    lambda x: x.found_pathspec)
+    grouped_results = collection.Group(
+        results_with_pathspecs, lambda x: x.found_pathspec)
     for pathspec, group in iteritems(grouped_results):
       self.StartFileFetch(pathspec, request_data=dict(results=group))
 
@@ -925,9 +855,8 @@ class ClientArtifactCollectorMixin(object):
           not self.state.knowledge_base):
         # If not provided, get a knowledge base from the client.
         try:
-          with aff4.FACTORY.Open(self.client_id, token=self.token) as client:
-            self.state.knowledge_base = artifact.GetArtifactKnowledgeBase(
-                client)
+          self.state.knowledge_base = _ReadClientKnowledgeBase(
+              self.client_id, token=self.token)
         except artifact_utils.KnowledgeBaseUninitializedError:
           # If no-one has ever initialized the knowledge base, we should do so
           # now.
@@ -948,10 +877,8 @@ class ClientArtifactCollectorMixin(object):
     # TODO(hanuszczak): Flow arguments also appear to have some knowledgebase.
     # Do we use it in any way?
     if not self.state.knowledge_base:
-      with aff4.FACTORY.Open(self.client_id, token=self.token) as client:
-        # If we are processing the knowledge base, it still won't exist yet.
-        self.state.knowledge_base = artifact.GetArtifactKnowledgeBase(
-            client, allow_uninitialized=True)
+      self.state.knowledge_base = _ReadClientKnowledgeBase(
+          self.client_id, allow_uninitialized=True, token=self.token)
 
     request = GetArtifactCollectorArgs(self.args, self.state.knowledge_base)
     self.CollectArtifacts(request)
@@ -1301,15 +1228,15 @@ class ArtifactArranger(object):
     of artifact names.
 
     Returns:
-      A list of artifacts such that if they are collected in the given order
-      their dependencies are resolved.
+      A list of `ArtifactName` instances such that if they are collected in the
+      given order their dependencies are resolved.
     """
     artifact_list = []
     while self.reachable_nodes:
       node_name = self.reachable_nodes.pop()
       node = self.graph[node_name]
       if node.is_artifact:
-        artifact_list.append(unicode(node_name))
+        artifact_list.append(node_name)
       for next_node_name in node.outgoing:
         if next_node_name not in self.graph:
           continue

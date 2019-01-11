@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 """This file contains various utility classes used by GRR."""
+from __future__ import absolute_import
+from __future__ import division
 
 from __future__ import print_function
 from __future__ import unicode_literals
@@ -7,8 +9,6 @@ from __future__ import unicode_literals
 import array
 import base64
 import collections
-import copy
-import csv
 import errno
 import functools
 import getpass
@@ -16,31 +16,35 @@ import io
 import os
 import pipes
 import platform
-import Queue
 import random
 import re
 import shutil
 import socket
 import stat
 import struct
-import sys
 import tarfile
 import tempfile
 import threading
 import time
-import types
 import weakref
 import zipfile
 import zlib
 
 
-from builtins import range  # pylint: disable=redefined-builtin
+from future.builtins import map
+from future.builtins import range
+from future.builtins import str
 from future.utils import iteritems
 from future.utils import iterkeys
 from future.utils import itervalues
+from future.utils import python_2_unicode_compatible
 import psutil
+import queue
 
-from typing import Any, List, Optional, Text
+from typing import Any, Optional, Text
+
+from grr_response_core.lib.util import compatibility
+from grr_response_core.lib.util import precondition
 
 
 class Error(Exception):
@@ -162,6 +166,7 @@ class Node(object):
 # TODO(user):pytype: self.next and self.prev are assigned to self but then
 # are used in AppendNode in a very different way. Should be redesigned.
 # pytype: disable=attribute-error
+@python_2_unicode_compatible
 class LinkedList(object):
   """A simple doubly linked list used for fast caches."""
 
@@ -215,13 +220,7 @@ class LinkedList(object):
     return self.size
 
   def __str__(self):
-    p = self.next
-    s = []
-    while p is not self:
-      s.append(str(p.data))
-      p = p.next
-
-    return "[" + ", ".join(s) + "]"
+    return "[" + ", ".join(map(str, self)) + "]"
 
   def Print(self):
     p = self.next
@@ -442,95 +441,6 @@ class TimeBasedCache(FastStore):
     super(TimeBasedCache, self).Put(key, [time.time(), obj])
 
 
-class Memoize(object):
-  """A decorator to produce a memoizing version of a method."""
-
-  def __init__(self, deep_copy=False):
-    """Constructor.
-
-    Args:
-      deep_copy: Whether to perform a deep copy of the returned object.
-        Otherwise, a direct reference is returned.
-    """
-    self.deep_copy = deep_copy
-
-  def __call__(self, f):
-    """Produce a memoizing version of f.
-
-    Requires that all parameters are hashable. Also, it does not copy the return
-    value, so changes to a returned object may be visible in future invocations.
-
-    Args:
-      f: The function which will be wrapped.
-
-    Returns:
-      A wrapped function which memoizes all values returned by f, keyed by
-      the arguments to f.
-
-    """
-    f.memo_pad = {}
-    f.memo_deep_copy = self.deep_copy
-
-    @functools.wraps(f)
-    def Wrapped(self, *args, **kwargs):
-      # We keep args and kwargs separate to avoid confusing an arg which is a
-      # pair with a kwarg. Also, we don't try to match calls when an argument
-      # moves between args and kwargs.
-      key = tuple(args), tuple(sorted(iteritems(kwargs), key=lambda x: x[0]))
-      if key not in f.memo_pad:
-        f.memo_pad[key] = f(self, *args, **kwargs)
-      if f.memo_deep_copy:
-        return copy.deepcopy(f.memo_pad[key])
-      else:
-        return f.memo_pad[key]
-
-    return Wrapped
-
-
-class MemoizeFunction(object):
-  """A decorator to produce a memoizing version a function.
-
-  """
-
-  def __init__(self, deep_copy=False):
-    """Constructor.
-
-    Args:
-      deep_copy: Whether to perform a deep copy of the returned object.
-        Otherwise, a direct reference is returned.
-    """
-    self.deep_copy = deep_copy
-
-  def __call__(self, f):
-    """Produce a memoizing version of f.
-
-    Requires that all parameters are hashable. Also, it does not copy the return
-    value, so changes to a returned object may be visible in future invocations.
-
-    Args:
-      f: The function which will be wrapped.
-
-    Returns:
-      A wrapped function which memoizes all values returned by f, keyed by
-      the arguments to f.
-
-    """
-    f.memo_pad = {}
-    f.memo_deep_copy = self.deep_copy
-
-    @functools.wraps(f)
-    def Wrapped(*args, **kwargs):
-      key = tuple(args), tuple(sorted(iteritems(kwargs), key=lambda x: x[0]))
-      if key not in f.memo_pad:
-        f.memo_pad[key] = f(*args, **kwargs)
-      if f.memo_deep_copy:
-        return copy.deepcopy(f.memo_pad[key])
-      else:
-        return f.memo_pad[key]
-
-    return Wrapped
-
-
 class AgeBasedCache(TimeBasedCache):
   """A cache which holds objects for a maximum length of time.
 
@@ -583,49 +493,6 @@ class Struct(object):
     return struct.calcsize(format_str)
 
 
-def GroupBy(items, key):
-  """A generator that groups all items by a key.
-
-  Args:
-    items:  A list of items or a single item.
-    key: A function which given each item will return the key.
-
-  Returns:
-    A dict with keys being each unique key and values being a list of items of
-    that key.
-  """
-  key_map = {}
-
-  # Make sure we are given a sequence of items here.
-  try:
-    item_iter = iter(items)
-  except TypeError:
-    item_iter = [items]
-
-  for item in item_iter:
-    key_id = key(item)
-    key_map.setdefault(key_id, []).append(item)
-
-  return key_map
-
-
-def Trim(lst, limit):
-  """Trims a given list so that it is not longer than given limit.
-
-  Args:
-    lst: A list to trim.
-    limit: A maximum number of elements in the list after trimming.
-
-  Returns:
-    A suffix of the input list that was trimmed.
-  """
-  limit = max(0, limit)
-
-  clipping = lst[limit:]
-  del lst[limit:]
-  return clipping
-
-
 def SmartStr(string):
   """Returns a string or encodes a unicode object.
 
@@ -638,10 +505,10 @@ def SmartStr(string):
   Returns:
     an encoded string.
   """
-  if type(string) == unicode:  # pylint: disable=unidiomatic-typecheck
+  if type(string) == Text:  # pylint: disable=unidiomatic-typecheck
     return string.encode("utf8", "ignore")
 
-  return str(string)
+  return bytes(string)
 
 
 def SmartUnicode(string):
@@ -656,11 +523,11 @@ def SmartUnicode(string):
   Returns:
     a unicode object.
   """
-  if type(string) != unicode:  # pylint: disable=unidiomatic-typecheck
+  if not isinstance(string, Text):
     try:
       return string.__unicode__()  # pytype: disable=attribute-error
     except (AttributeError, UnicodeError):
-      return str(string).decode("utf8", "ignore")
+      return bytes(string).decode("utf8", "ignore")
 
   return string
 
@@ -671,9 +538,9 @@ def Xor(bytestr, key):
   # pytype: disable=import-error
   from builtins import bytes  # pylint: disable=redefined-builtin, g-import-not-at-top
   # pytype: enable=import-error
-  AssertType(bytestr, bytes)
+  precondition.AssertType(bytestr, bytes)
 
-  # TODO(hanuszczak): This seemingly no-op operation actually changes things.
+  # TODO: This seemingly no-op operation actually changes things.
   # In Python 2 this function receives a `str` object which has different
   # iterator semantics. So we use a `bytes` wrapper from the `future` package to
   # get the Python 3 behaviour. In Python 3 this should be indeed a no-op. Once
@@ -699,10 +566,7 @@ def FormatAsTimestamp(timestamp):
   if not timestamp:
     return "-"
 
-  # TODO(hanuszczak): Remove these string conversion functions once support for
-  # Python 2 is dropped.
-  fmt = str("%Y-%m-%d %H:%M:%S")
-  return unicode(time.strftime(fmt, time.gmtime(timestamp)))
+  return compatibility.FormatTime("%Y-%m-%d %H:%M:%S", time.gmtime(timestamp))
 
 
 def NormalizePath(path, sep="/"):
@@ -807,20 +671,6 @@ def Join(*parts):
   return "/".join(parts)
 
 
-def Grouper(iterable, n):
-  """Group iterable into lists of size n. Last list will be short."""
-  AssertType(n, int)
-
-  items = []
-  for count, item in enumerate(iterable):
-    items.append(item)
-    if (count + 1) % n == 0:
-      yield items
-      items = []
-  if items:
-    yield items
-
-
 def EncodeReasonString(reason):
   return base64.urlsafe_b64encode(SmartStr(reason))
 
@@ -863,37 +713,6 @@ def PassphraseCallback(verify=False,
   return p1
 
 
-class PRNG(object):
-  """An optimized PRNG."""
-
-  random_list = []  # type: List[int]
-
-  @classmethod
-  def GetUInt16(cls):
-    return cls.GetUInt32() & 0xFFFF
-
-  @classmethod
-  def GetUInt32(cls):
-    while True:
-      try:
-        return cls.random_list.pop()
-      except IndexError:
-        PRNG.random_list = list(
-            struct.unpack("=" + "L" * 1000,
-                          os.urandom(struct.calcsize("=L") * 1000)))
-
-  @classmethod
-  def GetPositiveUInt32(cls):
-    res = cls.GetUInt32()
-    while res == 0:
-      res = cls.GetUInt32()
-    return res
-
-  @classmethod
-  def GetUInt64(cls):
-    return (cls.GetUInt32() << 32) + cls.GetUInt32()
-
-
 def FormatNumberAsString(num):
   """Return a large number in human readable form."""
   for suffix in ["b", "KB", "MB", "GB"]:
@@ -907,11 +726,11 @@ class NotAValue(object):
   pass
 
 
-class HeartbeatQueue(Queue.Queue):
+class HeartbeatQueue(queue.Queue):
   """A queue that periodically calls a provided callback while waiting."""
 
   def __init__(self, callback=None, fast_poll_time=60, *args, **kw):
-    Queue.Queue.__init__(self, *args, **kw)
+    queue.Queue.__init__(self, *args, **kw)
     self.callback = callback or (lambda: None)
     self.last_item_time = time.time()
     self.fast_poll_time = fast_poll_time
@@ -924,13 +743,13 @@ class HeartbeatQueue(Queue.Queue):
         # to a more efficient polling method if there is no activity for
         # <fast_poll_time> seconds.
         if time.time() - self.last_item_time < self.fast_poll_time:
-          message = Queue.Queue.get(self, block=True, timeout=poll_interval)
+          message = queue.Queue.get(self, block=True, timeout=poll_interval)
         else:
           time.sleep(poll_interval)
-          message = Queue.Queue.get(self, block=False)
+          message = queue.Queue.get(self, block=False)
         break
 
-      except Queue.Empty:
+      except queue.Empty:
         self.callback()
 
     self.last_item_time = time.time()
@@ -1241,62 +1060,6 @@ class StreamingZipGenerator(object):
 # pytype: enable=attribute-error,wrong-arg-types
 
 
-class StreamingZipWriter(object):
-  """A streaming zip file writer which can copy from file like objects.
-
-  The streaming writer should be capable of compressing files of arbitrary
-  size without eating all the memory. It's built on top of Python's zipfile
-  module, but has to use some hacks, as standard library doesn't provide
-  all the necessary API to do streaming writes.
-  """
-
-  def __init__(self, fd_or_path, mode="wb", compression=zipfile.ZIP_STORED):
-    """Open streaming ZIP file with mode read "r", write "w" or append "a".
-
-    Args:
-      fd_or_path: Either the path to the file, or a file-like object. If it is a
-        path, the file will be opened and closed by ZipFile.
-      mode: The mode can be either read "r", write "w" or append "a".
-      compression: ZIP_STORED (no compression) or ZIP_DEFLATED (requires zlib).
-    """
-
-    if hasattr(fd_or_path, "write"):
-      self._fd = fd_or_path
-    else:
-      self._fd = open(fd_or_path, mode)
-
-    self._generator = StreamingZipGenerator(compression=compression)
-
-  def __enter__(self):
-    return self
-
-  def __exit__(self, unused_type, unused_value, unused_traceback):
-    self.Close()
-
-  def Close(self):
-    self._fd.write(self._generator.Close())
-
-  def WriteSymlink(self, src_arcname, dst_arcname):
-    """Writes a symlink into the archive."""
-    self._fd.write(self._generator.WriteSymlink(src_arcname, dst_arcname))
-
-  def WriteFromFD(self, src_fd, arcname=None, compress_type=None, st=None):
-    """Write a zip member from a file like object.
-
-    Args:
-      src_fd: A file like object, must support seek(), tell(), read().
-      arcname: The name in the archive this should take.
-      compress_type: Compression type (zipfile.ZIP_DEFLATED, or ZIP_STORED)
-      st: An optional stat object to be used for setting headers.
-
-    Raises:
-      ArchiveAlreadyClosedError: If the zip if already closed.
-    """
-    for chunk in self._generator.WriteFromFD(
-        src_fd, arcname=arcname, compress_type=compress_type, st=st):
-      self._fd.write(chunk)
-
-
 class StreamingTarGenerator(object):
   """A streaming tar generator that can archive file-like objects."""
 
@@ -1431,72 +1194,6 @@ class StreamingTarGenerator(object):
     return self._stream.tell()
 
 
-class StreamingTarWriter(object):
-  """A streaming tar file writer which can copy from file like objects.
-
-  The streaming writer should be capable of compressing files of arbitrary
-  size without eating all the memory. It's built on top of Python's tarfile
-  module.
-  """
-
-  def __init__(self, fd_or_path, mode="w"):
-    # TODO(hanuszczak): Incorrect type specification for `tarfile.open`.
-    # pytype: disable=wrong-arg-types
-    if hasattr(fd_or_path, "write"):
-      self.tar_fd = tarfile.open(
-          mode=mode, fileobj=fd_or_path, encoding="utf-8")
-    else:
-      self.tar_fd = tarfile.open(name=fd_or_path, mode=mode, encoding="utf-8")
-    # pytype: enable=wrong-arg-types
-
-  def __enter__(self):
-    return self
-
-  def __exit__(self, unused_type, unused_value, unused_traceback):
-    self.Close()
-
-  def Close(self):
-    self.tar_fd.close()
-
-  def WriteSymlink(self, src_arcname, dst_arcname):
-    """Writes a symlink into the archive."""
-
-    info = self.tar_fd.tarinfo()
-    info.tarfile = self.tar_fd
-    info.name = SmartStr(dst_arcname)
-    info.size = 0
-    info.mtime = time.time()
-    info.type = tarfile.SYMTYPE
-    info.linkname = SmartStr(src_arcname)
-
-    self.tar_fd.addfile(info)
-
-  def WriteFromFD(self, src_fd, arcname=None, st=None):
-    """Write an archive member from a file like object.
-
-    Args:
-      src_fd: A file like object, must support seek(), tell(), read().
-      arcname: The name in the archive this should take.
-      st: A stat object to be used for setting headers.
-
-    Raises:
-      ValueError: If st is omitted.
-    """
-
-    if st is None:
-      raise ValueError("Stat object can't be None.")
-
-    info = self.tar_fd.tarinfo()
-    info.tarfile = self.tar_fd
-    info.type = tarfile.REGTYPE
-    info.name = SmartStr(arcname)
-    info.size = st.st_size
-    info.mode = st.st_mode
-    info.mtime = st.st_mtime or time.time()
-
-    self.tar_fd.addfile(info, src_fd)
-
-
 class Stubber(object):
   """A context manager for doing simple stubs."""
 
@@ -1542,42 +1239,6 @@ class MultiStubber(object):
 
   def __exit__(self, t, value, traceback):
     self.Stop()
-
-
-class DataObject(dict):
-  """This class wraps a dict and provides easier access functions."""
-
-  def Register(self, item, value=None):
-    if item in self:
-      raise AttributeError("Item %s already registered." % item)
-
-    self[item] = value
-
-  def __setattr__(self, item, value):
-    self[item] = value
-
-  def __getattr__(self, item):
-    try:
-      return self[item]
-    except KeyError as e:
-      raise AttributeError(e)
-
-  def __dir__(self):
-    return sorted(iterkeys(self)) + dir(self.__class__)
-
-  def __str__(self):
-    result = []
-    for k, v in iteritems(self):
-      tmp = "  %s = " % k
-      try:
-        for line in SmartUnicode(v).splitlines():
-          tmp += "    %s\n" % line
-      except Exception as e:  # pylint: disable=broad-except
-        tmp += "Error: %s\n" % e
-
-      result.append(tmp)
-
-    return "{\n%s}\n" % "".join(result)
 
 
 def EnsureDirExists(path):
@@ -1704,13 +1365,13 @@ class Stat(object):
     try:
       # This import is Linux-specific.
       import fcntl  # pylint: disable=g-import-not-at-top
-      # TODO(hanuszczak): On Python 2.7.6 `array.array` accepts only bytestrings
-      # as an argument. On Python 2.7.12 and 2.7.13 unicodes are supported as
-      # well. On Python 3, only unicode strings are supported. This is why, as
-      # a temporary hack, we wrap the literal with `str` call that will convert
-      # it to whatever is the default on given Python version. This should be
-      # changed to raw literal once support for Python 2 is dropped.
-      buf = array.array(str("l"), [0])
+      # TODO: On Python 2.7.6 `array.array` accepts only byte
+      # strings as an argument. On Python 2.7.12 and 2.7.13 unicodes are
+      # supported as well. On Python 3, only unicode strings are supported. This
+      # is why, as a temporary hack, we wrap the literal with `str` call that
+      # will convert it to whatever is the default on given Python version. This
+      # should be changed to raw literal once support for Python 2 is dropped.
+      buf = array.array(compatibility.NativeStr("l"), [0])
       # TODO(user):pytype: incorrect type spec for fcntl.ioctl
       # pytype: disable=wrong-arg-types
       fcntl.ioctl(fd, self.FS_IOC_GETFLAGS, buf)
@@ -1776,343 +1437,19 @@ def ProcessIdString():
                        os.getpid())
 
 
-class CsvWriter(object):
-  """A compatibility class for writing CSV files.
-
-  This class should be used instead of the `csv.writer` that has API differences
-  across Python 2 and Python 3. This class provides unified interface that
-  should work the same way on both versions. Once support for Python 2 is
-  dropped, this class can be removed and code can be refactored to use the
-  native class.
-
-  Args:
-    delimiter: A delimiter to separate the values with. Defaults to a comma.
-  """
-
-  def __init__(self, delimiter=","):
-    AssertType(delimiter, unicode)
-
-    # TODO(hanuszczak): According to pytype, `sys.version_info` is a tuple of
-    # two elements which is not true.
-    # pytype: disable=attribute-error
-    if sys.version_info.major == 2:
-      self._output = io.BytesIO()
-    else:
-      self._output = io.StringIO()
-    # pytype: enable=attribute-error
-
-    # We call `str` on the delimiter in order to ensure it is `bytes` on Python
-    # 2 and `unicode` on Python 3.
-    self._csv = csv.writer(
-        self._output, delimiter=str(delimiter), lineterminator=str("\n"))
-
-  def WriteRow(self, values):
-    """Writes a single row to the underlying buffer.
-
-    Args:
-      values: A list of string values to be inserted into the CSV output.
-    """
-    AssertListType(values, unicode)
-
-    # TODO(hanuszczak): According to pytype, `sys.version_info` is a tuple of
-    # two elements which is not true.
-    # pytype: disable=attribute-error
-    if sys.version_info.major == 2:
-      self._csv.writerow([value.encode("utf-8") for value in values])
-    else:
-      self._csv.writerow(values)
-    # pytype: enable=attribute-error
-
-  def Content(self):
-    # TODO(hanuszczak): According to pytype, `sys.version_info` is a tuple of
-    # two elements which is not true.
-    # pytype: disable=attribute-error
-    if sys.version_info.major == 2:
-      return self._output.getvalue().decode("utf-8")
-    else:
-      return self._output.getvalue()
-    # pytype: enable=attribute-error
-
-
-class CsvDictWriter(object):
-  """A compatibility class for writing CSV files.
-
-  This class is to `csv.DictWriter` what `CsvWriter` is `csv.writer`. Consult
-  documentation for `CsvWriter` for more rationale.
-
-  Args:
-    columns: A list of column names to base row writing on.
-    delimiter: A delimiter to separate the values with. Defaults to a comma.
-  """
-
-  def __init__(self, columns, delimiter=","):
-    AssertListType(columns, unicode)
-    AssertType(delimiter, unicode)
-
-    self._writer = CsvWriter(delimiter=delimiter)
-    self._columns = columns
-
-  def WriteHeader(self):
-    """Writes header to the CSV file.
-
-    A header consist of column names of this particular writer separated by
-    specified delimiter.
-    """
-    self._writer.WriteRow(self._columns)
-
-  def WriteRow(self, values):
-    """Writes a single row to the underlying buffer.
-
-    Args:
-      values: A dictionary mapping column names to values to be inserted into
-        the CSV output.
-    """
-    AssertDictType(values, unicode, unicode)
-
-    row = []
-    for column in self._columns:
-      try:
-        value = values[column]
-      except KeyError:
-        raise ValueError("Row does not contain required column `%s`" % column)
-
-      row.append(value)
-
-    self._writer.WriteRow(row)
-
-  def Content(self):
-    return self._writer.Content()
-
-
-# TODO(hanuszczak): We should create some module with general-purpose functions
-# that should be in standard library but are not for some reason.
-def IterableStartsWith(this, that):
-  """Checks whether an iterable `this` starts with `that`."""
-  this_iter = iter(this)
-  that_iter = iter(that)
-
-  while True:
-    try:
-      this_value = next(that_iter)
-    except StopIteration:
-      return True
-
-    try:
-      that_value = next(this_iter)
-    except StopIteration:
-      return False
-
-    if this_value != that_value:
-      return False
-
-
-def AssertType(value, expected_type):
-  """Ensures that given value has certain type.
-
-  Args:
-    value: A value to assert the type for.
-    expected_type: An expected type for the given value.
-
-  Raises:
-    TypeError: If given value does not have the expected type.
-  """
-  if not isinstance(value, expected_type):
-    message = "Expected type `%s`, but got value `%s` of type `%s`"
-    message %= (expected_type, value, type(value))
-    raise TypeError(message)
-
-
-def AssertIterableType(iterable, expected_item_type):
-  """Ensures that given iterable container has certain type.
-
-  Args:
-    iterable: An iterable container to assert the type for.
-    expected_item_type: An expected type of the container items.
-
-  Raises:
-    TypeError: If given container does is not an iterable or its items do not
-               have the expected type.
-  """
-  # We do not consider iterators to be iterables even though Python does. An
-  # "iterable" should be a type that can be iterated (that is: an iterator can
-  # be constructed for them). Iterators should not be considered to be iterable
-  # because it makes no sense to construct an iterator for iterator. The most
-  # important practical implication is that act of iterating an iterator drains
-  # it whereas act of iterating the iterable does not.
-  if isinstance(iterable, collections.Iterator):
-    message = "Expected iterable container but got iterator `%s` instead"
-    message %= iterable
-    raise TypeError(message)
-
-  AssertType(iterable, collections.Iterable)
-  for item in iterable:
-    AssertType(item, expected_item_type)
-
-
-def AssertListType(lst, expected_item_type):
-  """Ensures that given list is actually a list of items of a certain type.
-
-  Args:
-    lst: A list to assert the type for.
-    expected_item_type: An expected type for list items.
-
-  Raises:
-    TypeError: If given list is not really a list or its items do not have the
-               expected type.
-  """
-  AssertType(lst, list)
-  AssertIterableType(lst, expected_item_type)
-
-
-def AssertTupleType(tpl, expected_item_type):
-  """Ensures that given tuple is actually a tuple of items of a certain type.
-
-  Args:
-    tpl: A tuple to assert the type for.
-    expected_item_type: An expected type for tuple items.
-
-  Raises:
-    TypeError: If given tuple is not really a tuple or its items do not have the
-               expected type.
-  """
-  AssertType(tpl, tuple)
-  AssertIterableType(tpl, expected_item_type)
-
-
-def AssertDictType(dct, expected_key_type, expected_value_type):
-  """Ensures that given dictionary is actually a dictionary of specified type.
-
-  Args:
-    dct: A dictionary to assert the type for.
-    expected_key_type: An expected type for dictionary keys.
-    expected_value_type: An expected type for dicionary values.
-
-  Raises:
-    TypeError: If given dictionary is not really a dictionary or not all its
-               keys and values have the expected type.
-  """
-  AssertType(dct, dict)
-  for key, value in iteritems(dct):
-    AssertType(key, expected_key_type)
-    AssertType(value, expected_value_type)
-
-
-def MakeType(name, base_classes, namespace):
-  """A compatibility wrapper for the `type` built-in function.
-
-  In Python 2 `type` (used as a type constructor) requires the name argument to
-  be a `bytes` object whereas in Python 3 it is required to be an `unicode`
-  object. Since class name is human readable text rather than arbitrary stream
-  of bytes, the Python 3 behaviour is considered to be the sane one.
-
-  Once support for Python 2 is dropped all invocations of this call can be
-  replaced with the `type` built-in.
-
-  Args:
-    name: A name of the type to create.
-    base_classes: A tuple of base classes that the returned type is supposed to
-      derive from.
-    namespace: A dictionary of methods and fields that the returned type is
-      supposed to contain.
-
-  Returns:
-    A new type with specified parameters.
-  """
-  AssertType(name, unicode)
-
-  # TODO(hanuszczak): According to pytype, `sys.version_info` is a tuple of two
-  # elements which is not true.
-  # pytype: disable=attribute-error
-  if sys.version_info.major == 2:
-    name = name.encode("ascii")
-  # pytype: enable=attribute-error
-
-  return type(name, base_classes, namespace)
-
-
-def GetName(obj):
-  """A compatibility wrapper for getting object's name.
-
-  In Python 2 class names are returned as `bytes` (since class names can contain
-  only ASCII characters) whereas in Python 3 they are `unicode` (since class
-  names can contain arbitrary unicode characters).
-
-  This function makes this behaviour consistent and always returns class name as
-  an unicode string.
-
-  Once support for Python 2 is dropped all invocations of this call can be
-  replaced with ordinary `__name__` access.
-
-  Args:
-    obj: A type or function object to get the name for.
-
-  Returns:
-    Name of the specified class as unicode string.
-  """
-  AssertType(obj, (types.TypeType, types.FunctionType))
-
-  # TODO(hanuszczak): According to pytype, `sys.version_info` is a tuple of two
-  # elements which is not true.
-  # pytype: disable=attribute-error
-  if sys.version_info.major == 2:
-    return obj.__name__.decode("ascii")
-  else:
-    return obj.__name__
-  # pytype: enable=attribute-error
-
-
-def SetName(obj, name):
-  """A compatibility wrapper for setting object's name.
-
-  See documentation for `GetName` for more information.
-
-  Args:
-    obj: A type or function object to set the name for.
-    name: A name to set.
-  """
-  AssertType(obj, (types.TypeType, types.FunctionType))
-  AssertType(name, unicode)
-
-  # TODO(hanuszczak): According to pytype, `sys.version_info` is a tuple of two
-  # elements which is not true.
-  # pytype: disable=attribute-error
-  if sys.version_info.major == 2:
-    obj.__name__ = name.encode("ascii")
-  else:
-    obj.__name__ = name
-  # pytype: disable=attribute-error
-
-
-def ListAttrs(cls):
-  """A compatibility wrapper for listing class attributes.
-
-  This method solves similar Python 2 compatibility issues for `dir` function as
-  `GetName` does for `__name__` invocations. See documentation for `GetName` for
-  more details.
-
-  Once support for Python 2 is dropped all invocations of this function should
-  be replaced with ordinary `dir` calls.
-
-  Args:
-    cls: A class object to list the attributes for.
-
-  Returns:
-    A list of attribute names as unicode strings.
-  """
-  AssertType(cls, type)
-
-  # TODO(hanuszczak): According to pytype, `sys.version_info` is a tuple of two
-  # elements which is not true.
-  # pytype: disable=attribute-error
-  if sys.version_info.major == 2:
-    return [item.decode("ascii") for item in dir(cls)]
-  else:
-    return dir(cls)
-  # pytype: enable=attribute-error
-
-
 def IterValuesInSortedKeysOrder(d):
   """Iterates dict's values in sorted keys order."""
 
   for key in sorted(iterkeys(d)):
     yield d[key]
+
+
+def RegexListDisjunction(regex_list):
+  return "(" + ")|(".join(regex_list) + ")"
+
+
+def ReadFileBytesAsUnicode(file_obj):
+  data = file_obj.read()
+  precondition.AssertType(data, bytes)
+
+  return data.decode("utf-8")

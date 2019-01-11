@@ -1,24 +1,24 @@
 #!/usr/bin/env python
 """Tests the client artifactor collection."""
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import unicode_literals
 
-import __builtin__
 import glob
+import io
 import os
 
 from builtins import filter  # pylint: disable=redefined-builtin
 import mock
 import psutil
 
-from grr_response_client import client_utils
-from grr_response_client import client_utils_common
 from grr_response_client.client_actions import artifact_collector
-from grr_response_client.client_actions.file_finder_utils import globbing
 from grr_response_core import config
+from grr_response_core.lib import factory
 from grr_response_core.lib import flags
 from grr_response_core.lib import parser
+from grr_response_core.lib import parsers
 from grr_response_core.lib import utils
-from grr_response_core.lib.parsers import config_file
 from grr_response_core.lib.rdfvalues import anomaly as rdf_anomaly
 from grr_response_core.lib.rdfvalues import artifacts as rdf_artifact
 from grr_response_core.lib.rdfvalues import client as rdf_client
@@ -27,10 +27,22 @@ from grr_response_core.lib.rdfvalues import client_fs as rdf_client_fs
 from grr_response_core.lib.rdfvalues import client_network as rdf_client_network
 from grr_response_core.lib.rdfvalues import paths as rdf_paths
 from grr_response_core.lib.rdfvalues import protodict as rdf_protodict
+from grr_response_core.lib.util import compatibility
 from grr.test_lib import artifact_test_lib
 from grr.test_lib import client_test_lib
+from grr.test_lib import osx_launchd_testdata
 from grr.test_lib import test_lib
 from grr.test_lib import vfs_test_lib
+
+
+def GetRequest(source, artifact_name, knowledge_base=None):
+  expanded_source = rdf_artifact.ExpandedSource(base_source=source)
+  expanded_artifact = rdf_artifact.ExpandedArtifact(
+      name=artifact_name, sources=[expanded_source])
+  return rdf_artifact.ClientArtifactCollectorArgs(
+      artifacts=[expanded_artifact],
+      apply_parsers=False,
+      knowledge_base=knowledge_base)
 
 
 class ArtifactCollectorTest(client_test_lib.EmptyActionTest):
@@ -41,14 +53,6 @@ class ArtifactCollectorTest(client_test_lib.EmptyActionTest):
     self.source_type = rdf_artifact.ArtifactSource.SourceType
     self.test_artifacts_file = os.path.join(config.CONFIG["Test.data_dir"],
                                             "artifacts", "test_artifacts.json")
-
-  def GetRequest(self, source, artifact_name):
-    expanded_source = rdf_artifact.ExpandedSource(base_source=source)
-    expanded_artifact = rdf_artifact.ExpandedArtifact(
-        name=artifact_name, sources=[expanded_source])
-    request = rdf_artifact.ClientArtifactCollectorArgs(
-        artifacts=[expanded_artifact], apply_parsers=False)
-    return request
 
   def RunArtifactCollector(self, request):
     result = self.RunAction(artifact_collector.ArtifactCollector, request)[0]
@@ -63,12 +67,12 @@ class ArtifactCollectorTest(client_test_lib.EmptyActionTest):
 
     registry.AddFileSource(self.test_artifacts_file)
     artifact = registry.GetArtifact("TestCmdArtifact")
-    request = self.GetRequest(artifact.sources[0], artifact.name)
+    request = GetRequest(artifact.sources[0], artifact.name)
     collected_artifact = self.RunArtifactCollector(request)
     execute_response = collected_artifact.action_results[0].value
 
     self.assertEqual(collected_artifact.name, "TestCmdArtifact")
-    self.assertTrue(execute_response.time_used > 0)
+    self.assertGreater(execute_response.time_used, 0)
 
   def testGRRClientActionGetHostname(self):
     """Test the GRR Client Action GetHostname."""
@@ -76,7 +80,7 @@ class ArtifactCollectorTest(client_test_lib.EmptyActionTest):
     source = rdf_artifact.ArtifactSource(
         type=self.source_type.GRR_CLIENT_ACTION,
         attributes={"client_action": "GetHostname"})
-    request = self.GetRequest(source, "TestClientActionArtifact")
+    request = GetRequest(source, "TestClientActionArtifact")
     collected_artifact = self.RunArtifactCollector(request)
     for action_result in collected_artifact.action_results:
       value = action_result.value
@@ -91,7 +95,7 @@ class ArtifactCollectorTest(client_test_lib.EmptyActionTest):
     source = rdf_artifact.ArtifactSource(
         type=self.source_type.GRR_CLIENT_ACTION,
         attributes={"client_action": "ListProcesses"})
-    request = self.GetRequest(source, "TestClientActionArtifact")
+    request = GetRequest(source, "TestClientActionArtifact")
 
     with utils.Stubber(psutil, "process_iter", ProcessIter):
       collected_artifact = self.RunArtifactCollector(request)
@@ -105,7 +109,7 @@ class ArtifactCollectorTest(client_test_lib.EmptyActionTest):
     source = rdf_artifact.ArtifactSource(
         type=self.source_type.GRR_CLIENT_ACTION,
         attributes={"client_action": "EnumerateInterfaces"})
-    request = self.GetRequest(source, "TestClientActionArtifact")
+    request = GetRequest(source, "TestClientActionArtifact")
 
     collected_artifact = self.RunArtifactCollector(request)
 
@@ -121,21 +125,21 @@ class ArtifactCollectorTest(client_test_lib.EmptyActionTest):
       try:
         fixture_path = os.path.join(self.base_path, "VFSFixture",
                                     requested_path.lstrip("/"))
-        return __builtin__.open.old_target(fixture_path, mode)
+        return compatibility.builtins.open.old_target(fixture_path, mode)
       except IOError:
-        return __builtin__.open.old_target(requested_path, mode)
+        return compatibility.builtins.open.old_target(requested_path, mode)
 
     source = rdf_artifact.ArtifactSource(
         type=self.source_type.GRR_CLIENT_ACTION,
         attributes={"client_action": "EnumerateUsers"})
-    request = self.GetRequest(source, "TestClientActionArtifact")
+    request = GetRequest(source, "TestClientActionArtifact")
 
-    with utils.MultiStubber((__builtin__, "open", MockedOpen),
+    with utils.MultiStubber((compatibility.builtins, "open", MockedOpen),
                             (glob, "glob", lambda x: ["/var/log/wtmp"])):
       result = self.RunAction(artifact_collector.ArtifactCollector, request)[0]
       collected_artifact = result.collected_artifacts[0]
 
-      self.assertEqual(len(collected_artifact.action_results), 4)
+      self.assertLen(collected_artifact.action_results, 4)
       for action_result in collected_artifact.action_results:
         value = action_result.value
         self.assertIsInstance(value, rdf_client.User)
@@ -143,7 +147,7 @@ class ArtifactCollectorTest(client_test_lib.EmptyActionTest):
           self.fail("Unexpected user found: %s" % value.username)
 
       # Test that the users were added to the knowledge base
-      self.assertEqual(len(result.knowledge_base.users), 4)
+      self.assertLen(result.knowledge_base.users, 4)
       for user in result.knowledge_base.users:
         self.assertIn(user.username, ["user1", "user2", "user3", "utuser"])
 
@@ -153,24 +157,13 @@ class ArtifactCollectorTest(client_test_lib.EmptyActionTest):
     source = rdf_artifact.ArtifactSource(
         type=self.source_type.GRR_CLIENT_ACTION,
         attributes={"client_action": "ListNetworkConnections"})
-    request = self.GetRequest(source, "TestClientActionArtifact")
+    request = GetRequest(source, "TestClientActionArtifact")
 
     collected_artifact = self.RunArtifactCollector(request)
 
     for action_result in collected_artifact.action_results:
       value = action_result.value
       self.assertIsInstance(value, rdf_client_network.NetworkConnection)
-
-  def testGRRClientActionEnumerateFilesystems(self):
-    """Test the GRR Client Action EnumerateFilesystems."""
-
-    source = rdf_artifact.ArtifactSource(
-        type=self.source_type.GRR_CLIENT_ACTION,
-        attributes={"client_action": "EnumerateFilesystems"})
-    request = self.GetRequest(source, "TestClientActionArtifact")
-
-    with self.assertRaises(ValueError):
-      self.RunAction(artifact_collector.ArtifactCollector, request)
 
   def testGRRClientActionStatFS(self):
     """Test the GRR Client Action StatFS."""
@@ -185,30 +178,19 @@ class ArtifactCollectorTest(client_test_lib.EmptyActionTest):
                 "path_list": [file_path]
             }
         })
-    request = self.GetRequest(source, "TestClientActionArtifact")
+    request = GetRequest(source, "TestClientActionArtifact")
 
     collected_artifact = self.RunArtifactCollector(request)
 
-    self.assertEqual(len(collected_artifact.action_results), 1)
+    self.assertLen(collected_artifact.action_results, 1)
     action_result = collected_artifact.action_results[0].value
     self.assertIsInstance(action_result, rdf_client_fs.Volume)
-
-  def testGRRClientActionOSXEnumerateRunningServices(self):
-    """Test the GRR Client Action OSXEnumerateRunningServices."""
-
-    source = rdf_artifact.ArtifactSource(
-        type=self.source_type.GRR_CLIENT_ACTION,
-        attributes={"client_action": "OSXEnumerateRunningServices"})
-    request = self.GetRequest(source, "TestClientActionArtifact")
-
-    with self.assertRaises(ValueError):
-      self.RunAction(artifact_collector.ArtifactCollector, request)
 
   def testRegistryValueArtifact(self):
     """Test the basic Registry Value collection."""
 
     source = rdf_artifact.ArtifactSource(
-        type=rdf_artifact.ArtifactSource.SourceType.REGISTRY_VALUE,
+        type=self.source_type.REGISTRY_VALUE,
         attributes={
             "key_value_pairs": [{
                 "key": (r"HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet"
@@ -217,7 +199,7 @@ class ArtifactCollectorTest(client_test_lib.EmptyActionTest):
                     "BootExecute"
             }]
         })
-    request = self.GetRequest(source, "FakeRegistryValue")
+    request = GetRequest(source, "FakeRegistryValue")
 
     with vfs_test_lib.VFSOverrider(rdf_paths.PathSpec.PathType.REGISTRY,
                                    vfs_test_lib.FakeRegistryVFSHandler):
@@ -225,9 +207,102 @@ class ArtifactCollectorTest(client_test_lib.EmptyActionTest):
                                      vfs_test_lib.FakeFullVFSHandler):
         collected_artifact = self.RunArtifactCollector(request)
         file_stat = collected_artifact.action_results[0].value
-        self.assertTrue(isinstance(file_stat, rdf_client_fs.StatEntry))
+        self.assertIsInstance(file_stat, rdf_client_fs.StatEntry)
         urn = file_stat.pathspec.AFF4Path(self.SetupClient(0))
-        self.assertTrue(str(urn).endswith("BootExecute"))
+        self.assertEndsWith(str(urn), "BootExecute")
+
+  def testRegistryKeyArtifact(self):
+    """Test the basic Registry Key collection."""
+
+    source = rdf_artifact.ArtifactSource(
+        type=self.source_type.REGISTRY_KEY,
+        attributes={
+            "keys": [
+                r"HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet"
+                r"\Control\Session Manager\*"
+            ],
+        })
+    request = GetRequest(source, "TestRegistryKey")
+
+    with vfs_test_lib.VFSOverrider(rdf_paths.PathSpec.PathType.REGISTRY,
+                                   vfs_test_lib.FakeRegistryVFSHandler):
+      with vfs_test_lib.VFSOverrider(rdf_paths.PathSpec.PathType.OS,
+                                     vfs_test_lib.FakeFullVFSHandler):
+        collected_artifact = self.RunArtifactCollector(request)
+        self.assertLen(collected_artifact.action_results, 1)
+        file_stat = collected_artifact.action_results[0].value
+        self.assertIsInstance(file_stat, rdf_client_fs.StatEntry)
+
+  def testRegistryNoKeysArtifact(self):
+    """Test the basic Registry Key collection."""
+
+    source = rdf_artifact.ArtifactSource(
+        type=self.source_type.REGISTRY_KEY, attributes={
+            "keys": [],
+        })
+    request = GetRequest(source, "TestRegistryKey")
+
+    with vfs_test_lib.VFSOverrider(rdf_paths.PathSpec.PathType.REGISTRY,
+                                   vfs_test_lib.FakeRegistryVFSHandler):
+      with vfs_test_lib.VFSOverrider(rdf_paths.PathSpec.PathType.OS,
+                                     vfs_test_lib.FakeFullVFSHandler):
+        collected_artifact = self.RunArtifactCollector(request)
+        self.assertEmpty(collected_artifact.action_results)
+
+  def testDirectoryArtifact(self):
+    """Test the source type `DIRECTORY`."""
+
+    paths = [
+        os.path.join(self.base_path, "%%Users.username%%*"),
+        os.path.join(self.base_path, "VFSFixture", "var", "*", "wtmp")
+    ]
+    expected = [
+        os.path.join(self.base_path, "test.plist"),
+        os.path.join(self.base_path, "test_img.dd"),
+        os.path.join(self.base_path, "tests"),
+        os.path.join(self.base_path, "tests_long"),
+        os.path.join(self.base_path, "syslog"),
+        os.path.join(self.base_path, "syslog_compress.gz"),
+        os.path.join(self.base_path, "syslog_false.gz"),
+        os.path.join(self.base_path, "VFSFixture", "var", "log", "wtmp"),
+    ]
+    source = rdf_artifact.ArtifactSource(
+        type=self.source_type.DIRECTORY, attributes={"paths": paths})
+    knowledge_base = rdf_client.KnowledgeBase(users=[
+        rdf_client.User(username="test"),
+        rdf_client.User(username="syslog")
+    ])
+    request = GetRequest(source, "TestDirectory", knowledge_base)
+
+    collected_artifact = self.RunArtifactCollector(request)
+    self.assertGreater(len(collected_artifact.action_results), 0)
+
+    for file_stat in collected_artifact.action_results:
+      self.assertIsInstance(file_stat.value, rdf_client_fs.StatEntry)
+      self.assertIn(file_stat.value.pathspec.path, expected)
+
+  def testGrepArtifact(self):
+    """Test the source type `GREP`."""
+
+    paths = [
+        os.path.join(self.base_path, "searching", "dpkg.log"),
+        os.path.join(self.base_path, "searching", "dpkg_false.log"),
+        os.path.join(self.base_path, "searching", "auth.log")
+    ]
+    content_regex_list = [r"mydo....\.com"]
+    source = rdf_artifact.ArtifactSource(
+        type=self.source_type.GREP,
+        attributes={
+            "paths": paths,
+            "content_regex_list": content_regex_list
+        })
+    request = GetRequest(source, "TestGrep")
+
+    collected_artifact = self.RunArtifactCollector(request)
+    self.assertLen(collected_artifact.action_results, 1)
+    result = collected_artifact.action_results[0].value
+    self.assertIsInstance(result, rdf_client_fs.StatEntry)
+    self.assertEndsWith(result.pathspec.path, "auth.log")
 
   @artifact_test_lib.PatchCleanArtifactRegistry
   def testMultipleArtifacts(self, registry):
@@ -245,7 +320,7 @@ class ArtifactCollectorTest(client_test_lib.EmptyActionTest):
     request.artifacts.append(ext_art)
     result = self.RunAction(artifact_collector.ArtifactCollector, request)[0]
     collected_artifacts = list(result.collected_artifacts)
-    self.assertEqual(len(collected_artifacts), 2)
+    self.assertLen(collected_artifacts, 2)
     self.assertEqual(collected_artifacts[0].name, "TestCmdArtifact")
     self.assertEqual(collected_artifacts[1].name, "TestCmdArtifact")
     execute_response_1 = collected_artifacts[0].action_results[0].value
@@ -271,7 +346,7 @@ class ArtifactCollectorTest(client_test_lib.EmptyActionTest):
     request.artifacts.append(ext_art)
     result = self.RunAction(artifact_collector.ArtifactCollector, request)[0]
     collected_artifacts = list(result.collected_artifacts)
-    self.assertEqual(len(collected_artifacts), 1)
+    self.assertLen(collected_artifacts, 1)
     self.assertEqual(collected_artifacts[0].name, "TestCmdArtifact")
     execute_response = collected_artifacts[0].action_results[0].value
     self.assertGreater(execute_response.time_used, 0)
@@ -319,6 +394,80 @@ class ArtifactCollectorTest(client_test_lib.EmptyActionTest):
     # been expanded on the server.
     with self.assertRaises(ValueError):
       self.RunAction(artifact_collector.ArtifactCollector, request)
+
+
+class OSXArtifactCollectorTests(client_test_lib.OSSpecificClientTests):
+
+  def setUp(self):
+    super(OSXArtifactCollectorTests, self).setUp()
+    # pylint: disable=g-import-not-at-top
+    from grr_response_client.client_actions import operating_system
+    from grr_response_client.client_actions.osx import osx
+    # pylint: enable=g-import-not-at-top
+    self.os = operating_system
+    self.osx = osx
+    self.source_type = rdf_artifact.ArtifactSource.SourceType
+
+  def EnumerateFilesystemsStub(self, args):
+    del args  # Unused.
+    path = os.path.join(self.base_path, "osx_fsdata")
+    with io.open(path, "rb") as f:
+      filesystems = self.osx.client_utils_osx.ParseFileSystemsStruct(
+          self.osx.client_utils_osx.StatFS64Struct, 7, f.read())
+    for fs_struct in filesystems:
+      yield rdf_client_fs.Filesystem(
+          device=fs_struct.f_mntfromname,
+          mount_point=fs_struct.f_mntonname,
+          type=fs_struct.f_fstypename)
+
+  def OSXEnumerateRunningServicesStub(self, args):
+    del args  # Unused.
+    job = osx_launchd_testdata.JOB[0]
+    yield rdf_client.OSXServiceInformation(
+        label=job.get("Label"),
+        program=job.get("Program"),
+        sessiontype=job.get("LimitLoadToSessionType"),
+        lastexitstatus=int(job["LastExitStatus"]),
+        timeout=int(job["TimeOut"]),
+        ondemand=bool(job["OnDemand"]))
+
+  def testGRRClientActionEnumerateFilesystems(self):
+    """Test the GRR Client Action EnumerateFilesystems."""
+
+    source = rdf_artifact.ArtifactSource(
+        type=self.source_type.GRR_CLIENT_ACTION,
+        attributes={"client_action": "EnumerateFilesystems"})
+    request = GetRequest(source, "TestClientActionArtifact")
+
+    with utils.Stubber(self.os, "EnumerateFilesystemsFromClient",
+                       self.EnumerateFilesystemsStub):
+      result = self.RunAction(artifact_collector.ArtifactCollector, request)[0]
+      collected_artifact = result.collected_artifacts[0]
+
+      self.assertLen(collected_artifact.action_results, 7)
+
+      res = collected_artifact.action_results[0].value
+      self.assertIsInstance(res, rdf_client_fs.Filesystem)
+      self.assertEqual(res.type, "hfs")
+
+  def testGRRClientActionOSXEnumerateRunningServices(self):
+    """Test the GRR Client Action OSXEnumerateRunningServices."""
+
+    source = rdf_artifact.ArtifactSource(
+        type=self.source_type.GRR_CLIENT_ACTION,
+        attributes={"client_action": "OSXEnumerateRunningServices"})
+    request = GetRequest(source, "TestClientActionArtifact")
+
+    with utils.Stubber(self.os, "EnumerateRunningServices",
+                       self.OSXEnumerateRunningServicesStub):
+      result = self.RunAction(artifact_collector.ArtifactCollector, request)[0]
+      collected_artifact = result.collected_artifacts[0]
+
+      self.assertLen(collected_artifact.action_results, 1)
+
+      res = collected_artifact.action_results[0].value
+      self.assertIsInstance(res, rdf_client.OSXServiceInformation)
+      self.assertEqual(res.label, "com.apple.FileSyncAgent.PHD")
 
 
 class WindowsArtifactCollectorTests(client_test_lib.OSSpecificClientTests):
@@ -413,11 +562,10 @@ class FakeFileParser(parser.FileParser):
     yield rdf_protodict.AttributedDict(**cfg)
 
 
-class FakeFileParserProcessTogether(parser.FileParser):
+class FakeFileMultiParser(parser.FileMultiParser):
 
   output_types = ["AttributedDict"]
   supported_artifacts = ["FakeFileArtifact2"]
-  process_together = True
 
   def ParseMultiple(self, stats, file_objects, knowledge_base):
 
@@ -438,42 +586,12 @@ class FakeFileParserProcessTogether(parser.FileParser):
 
 class ParseResponsesTest(client_test_lib.EmptyActionTest):
 
-  def testParsersAreLoaded(self):
-    """Test the parsers are loaded before processing the responses."""
-    processors = parser.Parser.GetClassesByArtifact("InternetExplorerHistory")
-    self.assertEqual(len(processors), 1)
-
-  def testCmdArtifact(self):
-    """Test the parsing of an Echo Command with a TestParser."""
-    client_test_lib.Command("/bin/echo", args=["1"])
-
-    processor = parser.Parser.GetClassesByArtifact("TestEchoCmdArtifact")[0]()
-
-    self.assertIsInstance(processor, TestEchoCmdParser)
-
-    request = rdf_client_action.ExecuteRequest(cmd="/bin/echo", args=["1"])
-    res = client_utils_common.Execute(request.cmd, request.args)
-    (stdout, stderr, status, time_used) = res
-
-    response = rdf_client_action.ExecuteResponse(
-        request=request,
-        stdout=stdout,
-        stderr=stderr,
-        exit_status=status,
-        time_used=int(1e6 * time_used))
-
-    path_type = rdf_paths.PathSpec.PathType.OS
-    results = []
-    for res in artifact_collector.ParseSingleResponse(processor, response, {},
-                                                      path_type):
-      results.append(res)
-
-    self.assertEqual(len(results), 1)
-    self.assertIsInstance(results[0], rdf_client.SoftwarePackage)
-    self.assertEqual(results[0].description, "1\n")
-
+  @mock.patch.object(parsers, "SINGLE_RESPONSE_PARSER_FACTORY",
+                     factory.Factory(parser.SingleResponseParser))
   def testCmdArtifactAction(self):
     """Test the actual client action with parsers."""
+    parsers.SINGLE_RESPONSE_PARSER_FACTORY.Register("Cmd", TestEchoCmdParser)
+
     client_test_lib.Command("/bin/echo", args=["1"])
 
     source = rdf_artifact.ArtifactSource(
@@ -492,59 +610,16 @@ class ParseResponsesTest(client_test_lib.EmptyActionTest):
         apply_parsers=True)
     result = self.RunAction(artifact_collector.ArtifactCollector, request)[0]
     self.assertIsInstance(result, rdf_artifact.ClientArtifactCollectorResult)
-    self.assertTrue(len(result.collected_artifacts), 1)
+    self.assertLen(result.collected_artifacts, 1)
     res = result.collected_artifacts[0].action_results[0].value
     self.assertIsInstance(res, rdf_client.SoftwarePackage)
     self.assertEqual(res.description, "1\n")
 
-  def testFileArtifactParser(self):
-    """Test parsing a fake file artifact with a file parser."""
-
-    processor = config_file.CronAtAllowDenyParser()
-
-    source = rdf_artifact.ArtifactSource(
-        type=rdf_artifact.ArtifactSource.SourceType.FILE,
-        attributes={
-            "paths": ["VFSFixture/etc/passwd", "numbers.txt"],
-        })
-
-    paths = []
-    for path in source.attributes["paths"]:
-      paths.append(os.path.join(self.base_path, path))
-
-    stat_cache = utils.StatCache()
-
-    expanded_paths = []
-    opts = globbing.PathOpts(follow_links=True)
-    for path in paths:
-      for expanded_path in globbing.ExpandPath(path, opts):
-        expanded_paths.append(expanded_path)
-
-    path_type = rdf_paths.PathSpec.PathType.OS
-
-    results = []
-    for path in expanded_paths:
-      stat = stat_cache.Get(path, follow_symlink=True)
-      pathspec = rdf_paths.PathSpec(
-          pathtype=path_type,
-          path=client_utils.LocalPathToCanonicalPath(stat.GetPath()),
-          path_options=rdf_paths.PathSpec.Options.CASE_LITERAL)
-      response = rdf_client_fs.FindSpec(pathspec=pathspec)
-
-      for res in artifact_collector.ParseSingleResponse(processor, response, {},
-                                                        path_type):
-        results.append(res)
-
-    self.assertEqual(len(results), 3)
-    self.assertTrue(
-        results[0]["filename"].endswith("test_data/VFSFixture/etc/passwd"))
-    self.assertIsInstance(results[0], rdf_protodict.AttributedDict)
-    self.assertEqual(len(results[0]["users"]), 3)
-    self.assertIsInstance(results[1], rdf_anomaly.Anomaly)
-    self.assertEqual(len(results[2]["users"]), 1000)
-
+  @mock.patch.object(parsers, "SINGLE_FILE_PARSER_FACTORY",
+                     factory.Factory(parser.SingleFileParser))
   def testFakeFileArtifactAction(self):
     """Test collecting a file artifact and parsing the response."""
+    parsers.SINGLE_FILE_PARSER_FACTORY.Register("Fake", FakeFileParser)
 
     file_path = os.path.join(self.base_path, "numbers.txt")
     source = rdf_artifact.ArtifactSource(
@@ -560,14 +635,17 @@ class ParseResponsesTest(client_test_lib.EmptyActionTest):
         ignore_interpolation_errors=True,
         apply_parsers=True)
     result = self.RunAction(artifact_collector.ArtifactCollector, request)[0]
-    self.assertEqual(len(result.collected_artifacts[0].action_results), 1)
+    self.assertLen(result.collected_artifacts[0].action_results, 1)
     res = result.collected_artifacts[0].action_results[0].value
     self.assertIsInstance(res, rdf_protodict.AttributedDict)
-    self.assertEqual(len(res.users), 1000)
+    self.assertLen(res.users, 1000)
     self.assertEqual(res.filename, file_path)
 
+  @mock.patch.object(parsers, "MULTI_FILE_PARSER_FACTORY",
+                     factory.Factory(parser.MultiFileParser))
   def testFakeFileArtifactActionProcessTogether(self):
     """Test collecting a file artifact and parsing the responses together."""
+    parsers.MULTI_FILE_PARSER_FACTORY.Register("Fake", FakeFileMultiParser)
 
     file_path = os.path.join(self.base_path, "numbers.txt")
     source = rdf_artifact.ArtifactSource(
@@ -583,10 +661,10 @@ class ParseResponsesTest(client_test_lib.EmptyActionTest):
         ignore_interpolation_errors=True,
         apply_parsers=True)
     result = self.RunAction(artifact_collector.ArtifactCollector, request)[0]
-    self.assertEqual(len(result.collected_artifacts[0].action_results), 1)
+    self.assertLen(result.collected_artifacts[0].action_results, 1)
     res = result.collected_artifacts[0].action_results[0].value
     self.assertIsInstance(res, rdf_protodict.AttributedDict)
-    self.assertEqual(len(res.users), 1000)
+    self.assertLen(res.users, 1000)
     self.assertEqual(res.filename, file_path)
 
 
@@ -624,7 +702,7 @@ class KnowledgeBaseUpdateTest(client_test_lib.EmptyActionTest):
     self.request = self.InitializeRequest()
     self.response = rdf_client.User(username="user1", homedir="/home/foo")
     knowledge_base = self.GetUpdatedKnowledgeBase()
-    self.assertEqual(len(knowledge_base.users), 1)
+    self.assertLen(knowledge_base.users, 1)
     user = knowledge_base.users[0]
     self.assertEqual(user.username, "user1")
     self.assertEqual(user.homedir, "/home/foo")
@@ -636,7 +714,7 @@ class KnowledgeBaseUpdateTest(client_test_lib.EmptyActionTest):
     self.request = self.InitializeRequest(initial_knowledge_base)
     self.response = rdf_client.User(username="user1", homedir="/home/foo")
     knowledge_base = self.GetUpdatedKnowledgeBase()
-    self.assertEqual(len(knowledge_base.users), 1)
+    self.assertLen(knowledge_base.users, 1)
     user = knowledge_base.users[0]
     self.assertEqual(user.username, "user1")
     self.assertEqual(user.homedir, "/home/foo")

@@ -1,26 +1,27 @@
 #!/usr/bin/env python
 """Implementation of a router class that has approvals-based ACL checks."""
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import unicode_literals
 
-from grr_response_core.lib import stats
+from future.builtins import str
+from typing import Text
+
 from grr_response_core.lib import utils
+from grr_response_core.lib.util import precondition
+from grr_response_core.stats import stats_collector_instance
 from grr_response_server import access_control
 from grr_response_server import aff4
-
 from grr_response_server import data_store
 from grr_response_server import flow
-
 from grr_response_server.aff4_objects import user_managers
 from grr_response_server.gui import api_call_handler_base
 from grr_response_server.gui import api_call_router
-
 from grr_response_server.gui import api_call_router_without_checks
 from grr_response_server.gui import approval_checks
 from grr_response_server.gui.api_plugins import flow as api_flow
 from grr_response_server.gui.api_plugins import user as api_user
-
 from grr_response_server.hunts import implementation
-
 from grr_response_server.rdfvalues import objects as rdf_objects
 
 
@@ -61,15 +62,17 @@ class RelDBChecker(object):
 
   def _CheckAccess(self, username, subject_id, approval_type):
     """Checks access to a given subject by a given user."""
-    utils.AssertType(subject_id, unicode)
+    precondition.AssertType(subject_id, Text)
 
     cache_key = (username, subject_id, approval_type)
     try:
       self.acl_cache.Get(cache_key)
-      stats.STATS.IncrementCounter("approval_searches", fields=["-", "cache"])
+      stats_collector_instance.Get().IncrementCounter(
+          "approval_searches", fields=["-", "cache"])
       return True
     except KeyError:
-      stats.STATS.IncrementCounter("approval_searches", fields=["-", "reldb"])
+      stats_collector_instance.Get().IncrementCounter(
+          "approval_searches", fields=["-", "reldb"])
 
     approvals = data_store.REL_DB.ReadApprovalRequests(
         username, approval_type, subject_id=subject_id, include_expired=False)
@@ -94,34 +97,32 @@ class RelDBChecker(object):
   def CheckClientAccess(self, username, client_id):
     """Checks whether a given user can access given client."""
     self._CheckAccess(
-        username, unicode(client_id),
+        username, str(client_id),
         rdf_objects.ApprovalRequest.ApprovalType.APPROVAL_TYPE_CLIENT)
 
   def CheckHuntAccess(self, username, hunt_id):
     """Checks whether a given user can access given hunt."""
 
     self._CheckAccess(
-        username, unicode(hunt_id),
+        username, str(hunt_id),
         rdf_objects.ApprovalRequest.ApprovalType.APPROVAL_TYPE_HUNT)
 
   def CheckCronJobAccess(self, username, cron_job_id):
     """Checks whether a given user can access given cron job."""
 
     self._CheckAccess(
-        username, unicode(cron_job_id),
+        username, str(cron_job_id),
         rdf_objects.ApprovalRequest.ApprovalType.APPROVAL_TYPE_CRON_JOB)
 
   def CheckIfCanStartClientFlow(self, username, flow_name):
     """Checks whether a given user can start a given flow."""
+    del username  # Unused.
 
     flow_cls = flow.GRRFlow.GetPlugin(flow_name)
 
     if not flow_cls.category:
       raise access_control.UnauthorizedAccess(
-          "Flow %s can't be started on a client by non-suid users." % flow_name)
-
-    if flow_cls.AUTHORIZED_LABELS:
-      self.CheckIfUserIsAdmin(username)
+          "Flow %s can't be started via the API." % flow_name)
 
   def CheckIfUserIsAdmin(self, username):
     """Checks whether the user is an admin."""
@@ -305,6 +306,14 @@ class ApiCallRouterWithApprovalChecks(api_call_router.ApiCallRouterStub):
     # operations started by him- or herself.
 
     return self.delegate.GetVfsFileContentUpdateState(args, token=token)
+
+  def GetFileDecoders(self, args, token=None):
+    self.access_checker.CheckClientAccess(token.username, args.client_id)
+    return self.delegate.GetFileDecoders(args, token=token)
+
+  def GetDecodedFileBlob(self, args, token=None):
+    self.access_checker.CheckClientAccess(token.username, args.client_id)
+    return self.delegate.GetDecodedFileBlob(args, token=token)
 
   # Clients labels methods.
   # ======================
@@ -669,6 +678,11 @@ class ApiCallRouterWithApprovalChecks(api_call_router.ApiCallRouterStub):
 
     return self.delegate.ListCronJobApprovals(args, token=token)
 
+  def ListApproverSuggestions(self, args, token=None):
+    # Everybody can list suggestions for approver usernames.
+
+    return self.delegate.ListApproverSuggestions(args, token=token)
+
   # User settings methods.
   # =====================
   #
@@ -707,16 +721,6 @@ class ApiCallRouterWithApprovalChecks(api_call_router.ApiCallRouterStub):
     # Everybody can update their own user settings.
 
     return self.delegate.UpdateGrrUser(args, token=token)
-
-  def ListPendingGlobalNotifications(self, args, token=None):
-    # Everybody can get their global pending notifications.
-
-    return self.delegate.ListPendingGlobalNotifications(args, token=token)
-
-  def DeletePendingGlobalNotification(self, args, token=None):
-    # Everybody can delete their global pending notifications.
-
-    return self.delegate.DeletePendingGlobalNotification(args, token=token)
 
   # Config methods.
   # ==============

@@ -1,8 +1,10 @@
 #!/usr/bin/env python
 """Test the flow_management interface."""
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import unicode_literals
 
-import unittest
+
 from grr_response_core.lib import flags
 
 from grr_response_server import foreman
@@ -12,6 +14,7 @@ from grr_response_server.hunts import standard
 from grr.test_lib import db_test_lib
 from grr.test_lib import flow_test_lib
 from grr.test_lib import hunt_test_lib
+from grr.test_lib import test_lib
 
 
 @db_test_lib.DualDBTest
@@ -70,7 +73,8 @@ class TestCrashView(gui_test_lib.GRRSeleniumHuntTest):
     # Check that "Flow Information" tab displays crash data.
     self.WaitUntil(self.AllTextsPresent, [
         "CLIENT_CRASHED",
-        "aff4:/%s/flows/" % self.client_id, "Reason: Client crashed."
+        self.client_id,
+        "Client crashed.",
     ])
 
   def SetUpCrashedFlowInHunt(self):
@@ -151,11 +155,5 @@ class TestCrashView(gui_test_lib.GRRSeleniumHuntTest):
         "css=grr-hunt-crashes dt:contains('Timestamp') ~ dd:contains('UTC')")
 
 
-def main(argv):
-  del argv  # Unused.
-  # Run the full test suite
-  unittest.main()
-
-
 if __name__ == "__main__":
-  flags.StartMain(main)
+  flags.StartMain(test_lib.main)

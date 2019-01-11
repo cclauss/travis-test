@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 """Configuration parameters for the admin UI."""
 
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import unicode_literals
 
 from grr_response_core.lib import config_lib
@@ -109,6 +111,12 @@ config_lib.DEFINE_semantic_struct(
     rdf_config.AdminUIClientWarningsConfigOption, "AdminUI.client_warnings",
     None, "List of per-client-label warning messages to be shown.")
 
+config_lib.DEFINE_bool(
+    "AdminUI.rapid_hunts_enabled", False,
+    "If True, enabled 'rapid hunts' feature in the Hunts Wizard. Rapid hunts "
+    "support will automatically set client rate to 0 in FileFinder hunts "
+    "matching certain criteria (no recursive globs, no file downloads, etc).")
+
 # Temporary option that allows limiting access to legacy UI renderers. Useful
 # when giving access to GRR AdminUI to parties that have to use the HTTP API
 # only.
@@ -125,3 +133,9 @@ config_lib.DEFINE_string(
     "NOTE: for debugging purposes only! If set, every request AdminUI gets "
     "will be attributed to the specified user. Useful for checking how AdminUI "
     "looks like for an access-restricted user.")
+
+config_lib.DEFINE_bool(
+    "AdminUI.headless", False,
+    "When running in headless mode, AdminUI ignores checks for JS/CSS compiled "
+    "bundles being present. AdminUI.headless=True should be used to run "
+    "the AdminUI as an API endpoint only.")

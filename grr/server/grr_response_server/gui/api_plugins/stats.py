@@ -1,18 +1,18 @@
 #!/usr/bin/env python
 """API handlers for stats."""
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import unicode_literals
 
-
-from future.utils import iterkeys
+from future.utils import itervalues
 
 from grr_response_core.lib import rdfvalue
-from grr_response_core.lib import stats
-from grr_response_core.lib import utils
+from grr_response_core.lib.rdfvalues import stats as rdf_stats
 from grr_response_core.lib.rdfvalues import structs as rdf_structs
+from grr_response_core.stats import stats_collector_instance
 from grr_response_proto.api import stats_pb2
-from grr_response_server import aff4
+from grr_response_server import stats_store
 from grr_response_server import timeseries
-from grr_response_server.aff4_objects import stats_store as stats_store_lib
 from grr_response_server.gui import api_call_handler_base
 from grr_response_server.gui.api_plugins.report_plugins import rdf_report_plugins
 from grr_response_server.gui.api_plugins.report_plugins import report_plugins
@@ -40,7 +40,7 @@ class ApiListStatsStoreMetricsMetadataArgs(rdf_structs.RDFProtoStruct):
 class ApiListStatsStoreMetricsMetadataResult(rdf_structs.RDFProtoStruct):
   protobuf = stats_pb2.ApiListStatsStoreMetricsMetadataResult
   rdf_deps = [
-      stats.MetricMetadata,
+      rdf_stats.MetricMetadata,
   ]
 
 
@@ -52,21 +52,9 @@ class ApiListStatsStoreMetricsMetadataHandler(
   result_type = ApiListStatsStoreMetricsMetadataResult
 
   def Handle(self, args, token=None):
-    stats_store = aff4.FACTORY.Create(
-        None, aff4_type=stats_store_lib.StatsStore, mode="w", token=token)
-
-    process_ids = [
-        pid for pid in stats_store.ListUsedProcessIds()
-        if pid.startswith(args.component.name.lower())
-    ]
-
-    result = ApiListStatsStoreMetricsMetadataResult()
-    if not process_ids:
-      return result
-    else:
-      metadata = stats_store.ReadMetadata(process_id=process_ids[0])
-      result.items = sorted(metadata.metrics, key=lambda m: m.varname)
-      return result
+    metric_metadata = stats_collector_instance.Get().GetAllMetricsMetadata()
+    return ApiListStatsStoreMetricsMetadataResult(
+        items=sorted(itervalues(metric_metadata), key=lambda m: m.varname))
 
 
 class ApiGetStatsStoreMetricArgs(rdf_structs.RDFProtoStruct):
@@ -84,24 +72,10 @@ class ApiGetStatsStoreMetricHandler(api_call_handler_base.ApiCallHandler):
   result_type = ApiStatsStoreMetric
 
   def Handle(self, args, token):
-    stats_store = aff4.FACTORY.Create(
-        stats_store_lib.StatsStore.DATA_STORE_ROOT,
-        aff4_type=stats_store_lib.StatsStore,
-        mode="rw",
-        token=token)
-
-    process_ids = stats_store.ListUsedProcessIds()
-    filtered_ids = [
-        pid for pid in process_ids
-        if pid.startswith(args.component.name.lower())
-    ]
-
     start_time = args.start
     end_time = args.end
-
     if not end_time:
       end_time = rdfvalue.RDFDatetime.Now()
-
     if not start_time:
       start_time = end_time - rdfvalue.Duration("1h")
 
@@ -118,19 +92,19 @@ class ApiGetStatsStoreMetricHandler(api_call_handler_base.ApiCallHandler):
     result = ApiStatsStoreMetric(
         start=base_start_time, end=end_time, metric_name=args.metric_name)
 
-    data = stats_store.MultiReadStats(
-        process_ids=filtered_ids,
-        metric_name=utils.SmartStr(args.metric_name),
-        timestamp=(start_time, end_time))
+    data = stats_store.ReadStats(
+        args.component.name.lower(),
+        args.metric_name,
+        time_range=(start_time, end_time),
+        token=token)
 
     if not data:
       return result
 
-    pid = next(iterkeys(data))
-    metadata = stats_store.ReadMetadata(process_id=pid)
-    metric_metadata = metadata.AsDict()[args.metric_name]
+    metric_metadata = stats_collector_instance.Get().GetMetricMetadata(
+        args.metric_name)
 
-    query = stats_store_lib.StatsStoreDataQuery(data)
+    query = stats_store.StatsStoreDataQuery(data)
     query.In(args.component.name.lower() + ".*").In(args.metric_name)
     if metric_metadata.fields_defs:
       query.InAll()

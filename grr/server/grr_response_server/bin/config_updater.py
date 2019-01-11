@@ -1,15 +1,16 @@
 #!/usr/bin/env python
 """Util for modifying the GRR server configuration."""
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
-import argparse
-import os
 import sys
 
 
-import builtins
-from future.utils import iterkeys
+from absl import app
+from absl.flags import argparse_flags
+from future.builtins import input
 import yaml
 
 # pylint: disable=unused-import,g-bad-import-order
@@ -21,30 +22,22 @@ from grr_response_core import config as grr_config
 from grr_response_core.config import contexts
 from grr_response_core.config import server as config_server
 from grr_response_core.lib import config_lib
-from grr_response_core.lib import flags
-from grr_response_core.lib import rdfvalue
 from grr_response_core.lib import repacking
-from grr_response_server import aff4
 from grr_response_server import artifact
 from grr_response_server import artifact_registry
 from grr_response_server import maintenance_utils
-from grr_response_server import rekall_profile_server
 from grr_response_server import server_startup
-from grr_response_server.aff4_objects import users as aff4_users
+from grr_response_server.bin import config_updater_keys_util
 from grr_response_server.bin import config_updater_util
+from grr_response_server.rdfvalues import objects as rdf_objects
 
-parser = flags.PARSER
-parser.description = ("Set configuration parameters for the GRR Server."
-                      "\nThis script has numerous subcommands to perform "
-                      "various actions. When you are first setting up, you "
-                      "probably only care about 'initialize'.")
+parser = argparse_flags.ArgumentParser(
+    description=("Set configuration parameters for the GRR Server."
+                 "\nThis script has numerous subcommands to perform "
+                 "various actions. When you are first setting up, you "
+                 "probably only care about 'initialize'."))
 
 # Generic arguments.
-parser.add_argument(
-    "--version",
-    action="version",
-    version=config_server.VERSION["packageversion"])
-
 parser.add_argument(
     "--share_dir",
     default="/usr/share/grr",
@@ -54,6 +47,15 @@ subparsers = parser.add_subparsers(
     title="subcommands", dest="subparser_name", description="valid subcommands")
 
 # Subparsers.
+
+# TODO: Before Python 3.3 there is no way to make subparsers
+# optional, so having a `--version` flag in a non-magic way (through `version`
+# action) is impossible. As a temporary hack we use `version` command instead
+# of a flag to achieve that. Once we migrate to Abseil this should no longer be
+# an issue and version should be declarable as an optional flag again.
+parser_version = subparsers.add_parser(
+    "version", help="Print config updater version number and exit immediately")
+
 parser_generate_keys = subparsers.add_parser(
     "generate_keys", help="Generate crypto keys in the configuration.")
 
@@ -79,17 +81,10 @@ parser_update_user.add_argument(
     help="Reset the password for this user (will prompt for password).")
 
 parser_update_user.add_argument(
-    "--add_labels",
-    default=[],
-    action="append",
-    help="Add labels to the user object. These are used to control access.")
-
-parser_update_user.add_argument(
-    "--delete_labels",
-    default=[],
-    action="append",
-    help="Delete labels from the user object. These are used to control "
-    "access.")
+    "--admin",
+    default=True,
+    action="store_true",
+    help="Make the user an admin, if they aren't already.")
 
 parser_add_user = subparsers.add_parser("add_user", help="Add a new user.")
 
@@ -97,16 +92,10 @@ parser_add_user.add_argument("username", help="Username to create.")
 parser_add_user.add_argument("--password", default=None, help="Set password.")
 
 parser_add_user.add_argument(
-    "--labels",
-    default=[],
-    action="append",
-    help="Create user with labels. These are used to control access.")
-
-parser_add_user.add_argument(
-    "--noadmin",
-    default=False,
+    "--admin",
+    default=True,
     action="store_true",
-    help="Don't create the user as an administrator.")
+    help="Add the user with admin privileges.")
 
 parser_initialize.add_argument(
     "--external_hostname", default=None, help="External hostname to use.")
@@ -127,17 +116,12 @@ parser_initialize.add_argument(
     help="Re-download templates during noninteractive config initialization "
     "(server debs already include templates).")
 
+# TODO(hanuszczak): Rename this flag to `repack_templates` (true by default).
 parser_initialize.add_argument(
     "--norepack_templates",
     default=False,
     action="store_true",
     help="Skip template repacking during noninteractive config initialization.")
-
-parser_initialize.add_argument(
-    "--enable_rekall",
-    default=False,
-    action="store_true",
-    help="Enable Rekall during noninteractive config initialization.")
 
 parser_initialize.add_argument(
     "--mysql_hostname",
@@ -163,6 +147,18 @@ parser_initialize.add_argument(
     help="Password for GRR MySQL database user (only applies if --noprompt is "
     "set).")
 
+parser_initialize.add_argument(
+    "--mysql_client_key_path",
+    help="The path name of the client private key file.")
+
+parser_initialize.add_argument(
+    "--mysql_client_cert_path",
+    help="The path name of the client public key certificate file.")
+
+parser_initialize.add_argument(
+    "--mysql_ca_cert_path",
+    help="The path name of the Certificate Authority (CA) certificate file.")
+
 parser_set_var.add_argument("var", help="Variable to set.")
 parser_set_var.add_argument("val", help="Value to set.")
 
@@ -177,7 +173,7 @@ parser_show_user = subparsers.add_parser(
     "show_user", help="Display user settings or list all users.")
 
 parser_show_user.add_argument(
-    "username",
+    "--username",
     default=None,
     nargs="?",
     help="Username to display. If not specified, list all users.")
@@ -196,47 +192,36 @@ parser_repack_clients.add_argument(
     action="store_true",
     help="Don't upload the client binaries to the datastore.")
 
-# Parent parser used in other upload based parsers.
-parser_upload_args = argparse.ArgumentParser(add_help=False)
-parser_upload_signed_args = argparse.ArgumentParser(add_help=False)
 
-# Upload arguments.
-parser_upload_args.add_argument(
-    "--file", help="The file to upload", required=True)
+def _ExtendWithUploadArgs(upload_parser):
+  upload_parser.add_argument("--file", help="The file to upload", required=True)
 
-parser_upload_args.add_argument(
-    "--dest_path",
-    required=False,
-    default=None,
-    help="The destination path to upload the file to, specified in aff4: form,"
-    "e.g. aff4:/config/test.raw")
 
-parser_upload_signed_args.add_argument(
-    "--platform",
-    required=True,
-    choices=maintenance_utils.SUPPORTED_PLATFORMS,
-    default="windows",
-    help="The platform the file will be used on. This determines which signing"
-    " keys to use, and the path on the server the file will be uploaded to.")
+def _ExtendWithUploadSignedArgs(upload_signed_parser):
+  upload_signed_parser.add_argument(
+      "--platform",
+      required=True,
+      choices=maintenance_utils.SUPPORTED_PLATFORMS,
+      help="The platform the file will be used on. This determines which "
+      "signing keys to use, and the path on the server the file will be "
+      "uploaded to.")
+  upload_signed_parser.add_argument(
+      "--upload_subdirectory",
+      required=False,
+      default="",
+      help="Directory path under which to place an uploaded python-hack "
+      "or executable, e.g for a Windows executable named 'hello.exe', "
+      "if --upload_subdirectory is set to 'test', the path of the "
+      "uploaded binary will be 'windows/test/hello.exe', relative to "
+      "the root path for executables.")
 
-parser_upload_signed_args.add_argument(
-    "--arch",
-    required=True,
-    choices=maintenance_utils.SUPPORTED_ARCHITECTURES,
-    default="amd64",
-    help="The architecture the file will be used on. This determines "
-    " the path on the server the file will be uploaded to.")
 
 # Upload parsers.
-parser_upload_raw = subparsers.add_parser(
-    "upload_raw",
-    parents=[parser_upload_args],
-    help="Upload a raw file to an aff4 path.")
 
 parser_upload_artifact = subparsers.add_parser(
-    "upload_artifact",
-    parents=[parser_upload_args],
-    help="Upload a raw json artifact file.")
+    "upload_artifact", help="Upload a raw json artifact file.")
+
+_ExtendWithUploadArgs(parser_upload_artifact)
 
 parser_upload_artifact.add_argument(
     "--overwrite_artifact",
@@ -245,66 +230,29 @@ parser_upload_artifact.add_argument(
     help="Overwrite existing artifact.")
 
 parser_delete_artifacts = subparsers.add_parser(
-    "delete_artifacts",
-    parents=[],
-    help="Delete a list of artifacts from the data store.")
+    "delete_artifacts", help="Delete a list of artifacts from the data store.")
 
 parser_delete_artifacts.add_argument(
     "--artifact", default=[], action="append", help="The artifacts to delete.")
 
 parser_upload_python = subparsers.add_parser(
     "upload_python",
-    parents=[parser_upload_args, parser_upload_signed_args],
     help="Sign and upload a 'python hack' which can be used to execute code on "
     "a client.")
 
+_ExtendWithUploadArgs(parser_upload_python)
+_ExtendWithUploadSignedArgs(parser_upload_python)
+
 parser_upload_exe = subparsers.add_parser(
     "upload_exe",
-    parents=[parser_upload_args, parser_upload_signed_args],
     help="Sign and upload an executable which can be used to execute code on "
     "a client.")
 
-subparsers.add_parser(
-    "download_missing_rekall_profiles",
-    parents=[],
-    help="Downloads all Rekall profiles from the repository that are not "
-    "currently present in the database.")
-
-set_global_notification = subparsers.add_parser(
-    "set_global_notification",
-    parents=[],
-    help="Sets a global notification for all GRR users to see.")
-
-set_global_notification.add_argument(
-    "--type",
-    choices=list(iterkeys(aff4_users.GlobalNotification.Type.enum_dict)),
-    default="INFO",
-    help="Global notification type.")
-
-set_global_notification.add_argument(
-    "--header", default="", required=True, help="Global notification header.")
-
-set_global_notification.add_argument(
-    "--content", default="", help="Global notification content.")
-
-set_global_notification.add_argument(
-    "--link", default="", help="Global notification link.")
-
-set_global_notification.add_argument(
-    "--show_from",
-    default="",
-    help="When to start showing the notification (in a "
-    "human-readable format, i.e. 2011-11-01 10:23:00). Timestamp is "
-    "assumed to be in UTC timezone.")
-
-set_global_notification.add_argument(
-    "--duration",
-    default=None,
-    help="How much time the notification is valid (duration in "
-    "human-readable form, i.e. 1h, 1d, etc).")
+_ExtendWithUploadArgs(parser_upload_exe)
+_ExtendWithUploadSignedArgs(parser_upload_exe)
 
 parser_rotate_key = subparsers.add_parser(
-    "rotate_server_key", parents=[], help="Sets a new server key.")
+    "rotate_server_key", help="Sets a new server key.")
 
 parser_rotate_key.add_argument(
     "--common_name", default="grr", help="The common name to use for the cert.")
@@ -316,20 +264,44 @@ parser_rotate_key.add_argument(
     "Defaults to the Server.rsa_key_length config option.")
 
 
-def main(argv):
+def main(args):
   """Main."""
-  del argv  # Unused.
+
+  if args.subparser_name == "version":
+    version = config_server.VERSION["packageversion"]
+    print("GRR configuration updater {}".format(version))
+    return
 
   token = config_updater_util.GetToken()
   grr_config.CONFIG.AddContext(contexts.COMMAND_LINE_CONTEXT)
   grr_config.CONFIG.AddContext(contexts.CONFIG_UPDATER_CONTEXT)
 
-  if flags.FLAGS.subparser_name == "initialize":
+  if args.subparser_name == "initialize":
     config_lib.ParseConfigCommandLine()
-    if flags.FLAGS.noprompt:
-      config_updater_util.InitializeNoPrompt(grr_config.CONFIG, token=token)
+    if args.noprompt:
+      config_updater_util.InitializeNoPrompt(
+          grr_config.CONFIG,
+          external_hostname=args.external_hostname,
+          admin_password=args.admin_password,
+          mysql_hostname=args.mysql_hostname,
+          mysql_port=args.mysql_port,
+          mysql_username=args.mysql_username,
+          mysql_password=args.mysql_password,
+          mysql_db=args.mysql_db,
+          mysql_client_key_path=args.mysql_client_key_path,
+          mysql_client_cert_path=args.mysql_client_cert_path,
+          mysql_ca_cert_path=args.mysql_ca_cert_path,
+          redownload_templates=args.redownload_templates,
+          repack_templates=not args.norepack_templates,
+          token=token)
     else:
-      config_updater_util.Initialize(grr_config.CONFIG, token=token)
+      config_updater_util.Initialize(
+          grr_config.CONFIG,
+          external_hostname=args.external_hostname,
+          admin_password=args.admin_password,
+          redownload_templates=args.redownload_templates,
+          repack_templates=not args.norepack_templates,
+          token=token)
     return
 
   server_startup.Init()
@@ -339,141 +311,80 @@ def main(argv):
   except AttributeError:
     raise RuntimeError("No valid config specified.")
 
-  if flags.FLAGS.subparser_name == "generate_keys":
+  if args.subparser_name == "generate_keys":
     try:
-      config_updater_util.GenerateKeys(
-          grr_config.CONFIG, overwrite_keys=flags.FLAGS.overwrite_keys)
+      config_updater_keys_util.GenerateKeys(
+          grr_config.CONFIG, overwrite_keys=args.overwrite_keys)
     except RuntimeError as e:
       # GenerateKeys will raise if keys exist and overwrite_keys is not set.
       print("ERROR: %s" % e)
       sys.exit(1)
     grr_config.CONFIG.Write()
 
-  elif flags.FLAGS.subparser_name == "repack_clients":
-    upload = not flags.FLAGS.noupload
+  elif args.subparser_name == "repack_clients":
+    upload = not args.noupload
     repacking.TemplateRepacker().RepackAllTemplates(upload=upload, token=token)
 
-  elif flags.FLAGS.subparser_name == "show_user":
-    maintenance_utils.ShowUser(flags.FLAGS.username, token=token)
-
-  elif flags.FLAGS.subparser_name == "update_user":
-    try:
-      maintenance_utils.UpdateUser(
-          flags.FLAGS.username,
-          flags.FLAGS.password,
-          flags.FLAGS.add_labels,
-          flags.FLAGS.delete_labels,
-          token=token)
-    except maintenance_utils.UserError as e:
-      print(e)
-
-  elif flags.FLAGS.subparser_name == "delete_user":
-    maintenance_utils.DeleteUser(flags.FLAGS.username, token=token)
-
-  elif flags.FLAGS.subparser_name == "add_user":
-    labels = []
-    if not flags.FLAGS.noadmin:
-      labels.append("admin")
-
-    if flags.FLAGS.labels:
-      labels.extend(flags.FLAGS.labels)
-
-    try:
-      maintenance_utils.AddUser(
-          flags.FLAGS.username, flags.FLAGS.password, labels, token=token)
-    except maintenance_utils.UserError as e:
-      print(e)
-
-  elif flags.FLAGS.subparser_name == "upload_python":
-    python_hack_root_urn = grr_config.CONFIG.Get("Config.python_hack_root")
-    content = open(flags.FLAGS.file, "rb").read(1024 * 1024 * 30)
-    aff4_path = flags.FLAGS.dest_path
-    platform = flags.FLAGS.platform
-    if not aff4_path:
-      aff4_path = python_hack_root_urn.Add(platform.lower()).Add(
-          os.path.basename(flags.FLAGS.file))
-    if not str(aff4_path).startswith(str(python_hack_root_urn)):
-      raise ValueError("AFF4 path must start with %s." % python_hack_root_urn)
-    context = ["Platform:%s" % platform.title(), "Client Context"]
-    maintenance_utils.UploadSignedConfigBlob(
-        content, aff4_path=aff4_path, client_context=context, token=token)
-
-  elif flags.FLAGS.subparser_name == "upload_exe":
-    content = open(flags.FLAGS.file, "rb").read(1024 * 1024 * 30)
-    context = ["Platform:%s" % flags.FLAGS.platform.title(), "Client Context"]
-
-    if flags.FLAGS.dest_path:
-      dest_path = rdfvalue.RDFURN(flags.FLAGS.dest_path)
+  elif args.subparser_name == "show_user":
+    if args.username:
+      print(config_updater_util.GetUserSummary(args.username))
     else:
-      dest_path = grr_config.CONFIG.Get(
-          "Executables.aff4_path", context=context).Add(
-              os.path.basename(flags.FLAGS.file))
+      print(config_updater_util.GetAllUserSummaries())
 
-    # Now upload to the destination.
-    maintenance_utils.UploadSignedConfigBlob(
-        content, aff4_path=dest_path, client_context=context, token=token)
+  elif args.subparser_name == "update_user":
+    config_updater_util.UpdateUser(
+        args.username, password=args.password, is_admin=args.admin)
 
-    print("Uploaded to %s" % dest_path)
+  elif args.subparser_name == "delete_user":
+    config_updater_util.DeleteUser(args.username)
 
-  elif flags.FLAGS.subparser_name == "set_var":
+  elif args.subparser_name == "add_user":
+    config_updater_util.CreateUser(
+        args.username, password=args.password, is_admin=args.admin)
+
+  elif args.subparser_name == "upload_python":
+    config_updater_util.UploadSignedBinary(
+        args.file,
+        rdf_objects.SignedBinaryID.BinaryType.PYTHON_HACK,
+        args.platform,
+        upload_subdirectory=args.upload_subdirectory,
+        token=token)
+
+  elif args.subparser_name == "upload_exe":
+    config_updater_util.UploadSignedBinary(
+        args.file,
+        rdf_objects.SignedBinaryID.BinaryType.EXECUTABLE,
+        args.platform,
+        upload_subdirectory=args.upload_subdirectory,
+        token=token)
+
+  elif args.subparser_name == "set_var":
+    var = args.var
+    val = args.val
+
     config = grr_config.CONFIG
-    print("Setting %s to %s" % (flags.FLAGS.var, flags.FLAGS.val))
-    if flags.FLAGS.val.startswith("["):  # Allow setting of basic lists.
-      flags.FLAGS.val = flags.FLAGS.val[1:-1].split(",")
-    config.Set(flags.FLAGS.var, flags.FLAGS.val)
+    print("Setting %s to %s" % (var, val))
+    if val.startswith("["):  # Allow setting of basic lists.
+      val = val[1:-1].split(",")
+    config.Set(var, val)
     config.Write()
 
-  elif flags.FLAGS.subparser_name == "upload_raw":
-    if not flags.FLAGS.dest_path:
-      flags.FLAGS.dest_path = aff4.ROOT_URN.Add("config").Add("raw")
-    uploaded = config_updater_util.UploadRaw(
-        flags.FLAGS.file, flags.FLAGS.dest_path, token=token)
-    print("Uploaded to %s" % uploaded)
-
-  elif flags.FLAGS.subparser_name == "upload_artifact":
-    yaml.load(open(flags.FLAGS.file, "rb"))  # Check it will parse.
+  elif args.subparser_name == "upload_artifact":
+    yaml.load(open(args.file, "rb"))  # Check it will parse.
     try:
       artifact.UploadArtifactYamlFile(
-          open(flags.FLAGS.file, "rb").read(),
-          overwrite=flags.FLAGS.overwrite_artifact)
+          open(args.file, "rb").read(), overwrite=args.overwrite_artifact)
     except rdf_artifacts.ArtifactDefinitionError as e:
       print("Error %s. You may need to set --overwrite_artifact." % e)
 
-  elif flags.FLAGS.subparser_name == "delete_artifacts":
-    artifact_list = flags.FLAGS.artifact
+  elif args.subparser_name == "delete_artifacts":
+    artifact_list = args.artifact
     if not artifact_list:
       raise ValueError("No artifact to delete given.")
     artifact_registry.DeleteArtifactsFromDatastore(artifact_list, token=token)
     print("Artifacts %s deleted." % artifact_list)
 
-  elif flags.FLAGS.subparser_name == "download_missing_rekall_profiles":
-    print("Downloading missing Rekall profiles.")
-    s = rekall_profile_server.GRRRekallProfileServer()
-    s.GetMissingProfiles()
-
-  elif flags.FLAGS.subparser_name == "set_global_notification":
-    notification = aff4_users.GlobalNotification(
-        type=flags.FLAGS.type,
-        header=flags.FLAGS.header,
-        content=flags.FLAGS.content,
-        link=flags.FLAGS.link)
-    if flags.FLAGS.show_from:
-      notification.show_from = rdfvalue.RDFDatetime().ParseFromHumanReadable(
-          flags.FLAGS.show_from)
-    if flags.FLAGS.duration:
-      notification.duration = rdfvalue.Duration().ParseFromHumanReadable(
-          flags.FLAGS.duration)
-
-    print("Setting global notification.")
-    print(notification)
-
-    with aff4.FACTORY.Create(
-        aff4_users.GlobalNotificationStorage.DEFAULT_PATH,
-        aff4_type=aff4_users.GlobalNotificationStorage,
-        mode="rw",
-        token=token) as storage:
-      storage.AddNotification(notification)
-  elif flags.FLAGS.subparser_name == "rotate_server_key":
+  elif args.subparser_name == "rotate_server_key":
     print("""
 You are about to rotate the server key. Note that:
 
@@ -486,15 +397,19 @@ You are about to rotate the server key. Note that:
     point on.
     """)
 
-    if builtins.input("Continue? [yN]: ").upper() == "Y":
-      if flags.FLAGS.keylength:
-        keylength = int(flags.FLAGS.keylength)
+    if input("Continue? [yN]: ").upper() == "Y":
+      if args.keylength:
+        keylength = int(args.keylength)
       else:
         keylength = grr_config.CONFIG["Server.rsa_key_length"]
 
       maintenance_utils.RotateServerKey(
-          cn=flags.FLAGS.common_name, keylength=keylength)
+          cn=args.common_name, keylength=keylength)
+
+
+def Run():
+  app.run(main, flags_parser=lambda argv: parser.parse_args(argv[1:]))
 
 
 if __name__ == "__main__":
-  flags.StartMain(main)
+  Run()

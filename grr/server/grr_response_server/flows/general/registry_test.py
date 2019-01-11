@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 # -*- mode: python; encoding: utf-8 -*-
 """Tests for the registry flows."""
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import unicode_literals
 
 import os
@@ -8,20 +10,21 @@ import os
 from grr_response_client.client_actions import file_fingerprint
 from grr_response_client.client_actions import searching
 from grr_response_client.client_actions import standard
-from grr_response_core import config
 from grr_response_core.lib import flags
 from grr_response_core.lib import rdfvalue
 from grr_response_core.lib.rdfvalues import client as rdf_client
 from grr_response_core.lib.rdfvalues import file_finder as rdf_file_finder
 from grr_response_core.lib.rdfvalues import paths as rdf_paths
 from grr_response_server import aff4
+from grr_response_server import aff4_flows
 from grr_response_server import artifact
-from grr_response_server import flow
+from grr_response_server import data_store
 from grr_response_server.flows.general import registry
 from grr_response_server.flows.general import transfer
 from grr.test_lib import action_mocks
-from grr.test_lib import fixture_test_lib
+from grr.test_lib import db_test_lib
 from grr.test_lib import flow_test_lib
+from grr.test_lib import parser_test_lib
 from grr.test_lib import test_lib
 from grr.test_lib import vfs_test_lib
 
@@ -40,6 +43,7 @@ class RegistryFlowTest(flow_test_lib.FlowTestsBaseclass):
     self.vfs_overrider.Stop()
 
 
+@db_test_lib.DualDBTest
 class TestFakeRegistryFinderFlow(RegistryFlowTest):
   """Tests for the RegistryFinder flow."""
 
@@ -69,20 +73,13 @@ class TestFakeRegistryFinderFlow(RegistryFlowTest):
 
     return session_id
 
-  def AssertNoResults(self, session_id):
-    res = flow.GRRFlow.ResultCollectionForFID(session_id)
-    self.assertEqual(len(res), 0)
-
-  def GetResults(self, session_id):
-    return list(flow.GRRFlow.ResultCollectionForFID(session_id))
-
   def testFindsNothingIfNothingMatchesTheGlob(self):
     client_id = self.SetupClient(0)
     session_id = self.RunFlow(client_id, [
         "HKEY_USERS/S-1-5-20/Software/Microsoft/"
         "Windows/CurrentVersion/Run/NonMatch*"
     ])
-    self.AssertNoResults(session_id)
+    self.assertFalse(flow_test_lib.GetFlowResults(client_id, session_id))
 
   def testFindsKeysWithSingleGlobWithoutConditions(self):
     client_id = self.SetupClient(0)
@@ -91,12 +88,12 @@ class TestFakeRegistryFinderFlow(RegistryFlowTest):
         "Windows/CurrentVersion/Run/*"
     ])
 
-    results = self.GetResults(session_id)
-    self.assertEqual(len(results), 2)
+    results = flow_test_lib.GetFlowResults(client_id, session_id)
+    self.assertLen(results, 2)
     # We expect Sidebar and MctAdmin keys here (see
     # test_data/client_fixture.py).
     basenames = [os.path.basename(r.stat_entry.pathspec.path) for r in results]
-    self.assertItemsEqual(basenames, ["Sidebar", "MctAdmin"])
+    self.assertCountEqual(basenames, ["Sidebar", "MctAdmin"])
 
   def testFindsKeysWithTwoGlobsWithoutConditions(self):
     client_id = self.SetupClient(0)
@@ -107,30 +104,24 @@ class TestFakeRegistryFinderFlow(RegistryFlowTest):
         "Windows/CurrentVersion/Run/Mct*"
     ])
 
-    results = self.GetResults(session_id)
-    self.assertEqual(len(results), 2)
+    results = flow_test_lib.GetFlowResults(client_id, session_id)
+    self.assertLen(results, 2)
     # We expect Sidebar and MctAdmin keys here (see
     # test_data/client_fixture.py).
     basenames = [os.path.basename(r.stat_entry.pathspec.path) for r in results]
-    self.assertItemsEqual(basenames, ["Sidebar", "MctAdmin"])
+    self.assertCountEqual(basenames, ["Sidebar", "MctAdmin"])
 
   def testFindsKeyWithInterpolatedGlobWithoutConditions(self):
-    # Initialize client's knowledge base in order for the interpolation
-    # to work.
     user = rdf_client.User(sid="S-1-5-20")
-    kb = rdf_client.KnowledgeBase(users=[user])
-    client_id = self.SetupClient(0)
-
-    with aff4.FACTORY.Open(client_id, mode="rw", token=self.token) as client:
-      client.Set(client.Schema.KNOWLEDGE_BASE, kb)
+    client_id = self.SetupClient(0, users=[user])
 
     session_id = self.RunFlow(client_id, [
         "HKEY_USERS/%%users.sid%%/Software/Microsoft/Windows/"
         "CurrentVersion/*"
     ])
 
-    results = self.GetResults(session_id)
-    self.assertEqual(len(results), 1)
+    results = flow_test_lib.GetFlowResults(client_id, session_id)
+    self.assertLen(results, 1)
 
     key = ("/HKEY_USERS/S-1-5-20/"
            "Software/Microsoft/Windows/CurrentVersion/Run")
@@ -152,7 +143,7 @@ class TestFakeRegistryFinderFlow(RegistryFlowTest):
             .VALUE_LITERAL_MATCH,
             value_literal_match=vlm)
     ])
-    self.AssertNoResults(session_id)
+    self.assertFalse(flow_test_lib.GetFlowResults(client_id, session_id))
 
   def testFindsKeyIfItMatchesLiteralMatchCondition(self):
     vlm = rdf_file_finder.FileFinderContentsLiteralMatchCondition(
@@ -168,9 +159,9 @@ class TestFakeRegistryFinderFlow(RegistryFlowTest):
             value_literal_match=vlm)
     ])
 
-    results = self.GetResults(session_id)
-    self.assertEqual(len(results), 1)
-    self.assertEqual(len(results[0].matches), 1)
+    results = flow_test_lib.GetFlowResults(client_id, session_id)
+    self.assertLen(results, 1)
+    self.assertLen(results[0].matches, 1)
 
     self.assertEqual(results[0].matches[0].offset, 15)
     self.assertEqual(results[0].matches[0].data,
@@ -198,7 +189,7 @@ class TestFakeRegistryFinderFlow(RegistryFlowTest):
             .VALUE_REGEX_MATCH,
             value_regex_match=value_regex_match)
     ])
-    self.AssertNoResults(session_id)
+    self.assertFalse(flow_test_lib.GetFlowResults(client_id, session_id))
 
   def testFindsKeyIfItMatchesRegexMatchCondition(self):
     value_regex_match = rdf_file_finder.FileFinderContentsRegexMatchCondition(
@@ -212,9 +203,9 @@ class TestFakeRegistryFinderFlow(RegistryFlowTest):
             value_regex_match=value_regex_match)
     ])
 
-    results = self.GetResults(session_id)
-    self.assertEqual(len(results), 1)
-    self.assertEqual(len(results[0].matches), 1)
+    results = flow_test_lib.GetFlowResults(client_id, session_id)
+    self.assertLen(results, 1)
+    self.assertLen(results[0].matches, 1)
 
     self.assertEqual(results[0].matches[0].offset, 15)
     self.assertEqual(results[0].matches[0].data,
@@ -243,7 +234,7 @@ class TestFakeRegistryFinderFlow(RegistryFlowTest):
             .MODIFICATION_TIME,
             modification_time=modification_time)
     ])
-    self.AssertNoResults(session_id)
+    self.assertFalse(flow_test_lib.GetFlowResults(client_id, session_id))
 
   def testFindsKeysIfModificationTimeConditionMatches(self):
     modification_time = rdf_file_finder.FileFinderModificationTimeCondition(
@@ -260,12 +251,12 @@ class TestFakeRegistryFinderFlow(RegistryFlowTest):
             modification_time=modification_time)
     ])
 
-    results = self.GetResults(session_id)
-    self.assertEqual(len(results), 2)
+    results = flow_test_lib.GetFlowResults(client_id, session_id)
+    self.assertLen(results, 2)
     # We expect Sidebar and MctAdmin keys here (see
     # test_data/client_fixture.py).
     basenames = [os.path.basename(r.stat_entry.pathspec.path) for r in results]
-    self.assertItemsEqual(basenames, ["Sidebar", "MctAdmin"])
+    self.assertCountEqual(basenames, ["Sidebar", "MctAdmin"])
 
   def testFindsKeyWithLiteralAndModificationTimeConditions(self):
     modification_time = rdf_file_finder.FileFinderModificationTimeCondition(
@@ -291,8 +282,8 @@ class TestFakeRegistryFinderFlow(RegistryFlowTest):
             value_literal_match=vlm)
     ])
 
-    results = self.GetResults(session_id)
-    self.assertEqual(len(results), 1)
+    results = flow_test_lib.GetFlowResults(client_id, session_id)
+    self.assertLen(results, 1)
     # We expect Sidebar and MctAdmin keys here (see
     # test_data/client_fixture.py).
     self.assertEqual(
@@ -308,28 +299,19 @@ class TestFakeRegistryFinderFlow(RegistryFlowTest):
             condition_type=registry.RegistryFinderCondition.Type.SIZE,
             size=rdf_file_finder.FileFinderSizeCondition(min_file_size=50))
     ])
-    results = self.GetResults(session_id)
-    self.assertEqual(len(results), 1)
+    results = flow_test_lib.GetFlowResults(client_id, session_id)
+    self.assertLen(results, 1)
     self.assertGreater(results[0].stat_entry.st_size, 50)
 
 
+@db_test_lib.DualDBTest
 class TestRegistryFlows(RegistryFlowTest):
   """Test the Run Key registry flows."""
 
+  @parser_test_lib.WithAllParsers
   def testCollectRunKeyBinaries(self):
     """Read Run key from the client_fixtures to test parsing and storage."""
-    client_id = self.SetupClient(0)
-    fixture_test_lib.ClientFixture(client_id, token=self.token)
-
-    client = aff4.FACTORY.Open(client_id, token=self.token, mode="rw")
-    client.Set(client.Schema.SYSTEM("Windows"))
-    client.Set(client.Schema.OS_VERSION("6.2"))
-
-    client_info = client.Get(client.Schema.CLIENT_INFO)
-    client_info.client_version = config.CONFIG["Source.version_numeric"]
-    client.Set(client.Schema.CLIENT_INFO, client_info)
-
-    client.Flush()
+    client_id = self.SetupClient(0, system="Windows", os_version="6.2")
 
     with vfs_test_lib.VFSOverrider(rdf_paths.PathSpec.PathType.OS,
                                    vfs_test_lib.FakeFullVFSHandler):
@@ -347,12 +329,23 @@ class TestRegistryFlows(RegistryFlowTest):
           client_id=client_id,
           token=self.token)
 
-      col = flow.GRRFlow.ResultCollectionForFID(session_id)
-      client.Set(client.Schema.KNOWLEDGE_BASE, list(col)[0])
-      client.Flush()
+      kb = flow_test_lib.GetFlowResults(client_id, session_id)[0]
 
-      with test_lib.Instrument(transfer.MultiGetFileMixin,
-                               "Start") as getfile_instrument:
+      if data_store.RelationalDBReadEnabled():
+        client = data_store.REL_DB.ReadClientSnapshot(client_id.Basename())
+        client.knowledge_base = kb
+        data_store.REL_DB.WriteClientSnapshot(client)
+      else:
+        with aff4.FACTORY.Open(
+            client_id, token=self.token, mode="rw") as client:
+          client.Set(client.Schema.KNOWLEDGE_BASE, kb)
+
+      if data_store.RelationalDBFlowsEnabled():
+        flow_cls = transfer.MultiGetFile
+      else:
+        flow_cls = aff4_flows.MultiGetFile
+
+      with test_lib.Instrument(flow_cls, "Start") as getfile_instrument:
         # Run the flow in the emulated way.
         flow_test_lib.TestFlowHelper(
             registry.CollectRunKeyBinaries.__name__,

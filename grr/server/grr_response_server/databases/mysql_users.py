@@ -1,11 +1,13 @@
 #!/usr/bin/env python
 """The MySQL database methods for GRR users and approval handling."""
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import unicode_literals
 
 import MySQLdb
 
 from grr_response_core.lib import rdfvalue
-from grr_response_core.lib import utils
+from grr_response_core.lib.util import random
 from grr_response_server import db
 from grr_response_server.databases import mysql_utils
 from grr_response_server.rdfvalues import objects as rdf_objects
@@ -76,6 +78,7 @@ class MySQLDBUsersMixin(object):
       columns.append("canary_mode")
       # TODO(amoser): This int conversion is dirty but necessary with
       # the current MySQL driver.
+      # TODO: We can remove this once the bug is fixed.
       values.append(int(bool(canary_mode)))
     if user_type is not None:
       columns.append("user_type")
@@ -84,10 +87,11 @@ class MySQLDBUsersMixin(object):
     query = "INSERT INTO grr_users ({cols}) VALUES ({vals})".format(
         cols=", ".join(columns), vals=", ".join(["%s"] * len(columns)))
 
-    if len(values) > 1:
-      updates = ", ".join(
-          ["{c} = VALUES ({c})".format(c=col) for col in columns[1:]])
-      query += "ON DUPLICATE KEY UPDATE " + updates
+    # Always execute ON DUPLICATE KEY UPDATE username=%s. Although a no-op, the
+    # statement is required to allow error-free writing of an existing user
+    # with no other fields. See DatabaseTestUsersMixin.testInsertUserTwice.
+    updates = ", ".join(["{c} = VALUES ({c})".format(c=col) for col in columns])
+    query += "ON DUPLICATE KEY UPDATE " + updates
 
     cursor.execute(query, values)
 
@@ -114,18 +118,35 @@ class MySQLDBUsersMixin(object):
 
     row = cursor.fetchone()
     if row is None:
-      raise db.UnknownGRRUserError("User '%s' not found." % username)
+      raise db.UnknownGRRUserError(username)
 
     return self._RowToGRRUser(row)
 
   @mysql_utils.WithTransaction(readonly=True)
-  def ReadAllGRRUsers(self, cursor=None):
-    cursor.execute("SELECT username, password, ui_mode, canary_mode, user_type "
-                   "FROM grr_users")
-    res = []
-    for row in cursor.fetchall():
-      res.append(self._RowToGRRUser(row))
-    return res
+  def ReadGRRUsers(self, offset=0, count=None, cursor=None):
+    """Reads GRR users with optional pagination, sorted by username."""
+    if count is None:
+      count = 18446744073709551615  # 2^64-1, as suggested by MySQL docs
+
+    cursor.execute(
+        "SELECT username, password, ui_mode, canary_mode, user_type "
+        "FROM grr_users ORDER BY username ASC "
+        "LIMIT %s OFFSET %s", [count, offset])
+    return [self._RowToGRRUser(row) for row in cursor.fetchall()]
+
+  @mysql_utils.WithTransaction(readonly=True)
+  def CountGRRUsers(self, cursor=None):
+    """Returns the total count of GRR users."""
+    cursor.execute("SELECT COUNT(*) FROM grr_users")
+    return cursor.fetchone()[0]
+
+  @mysql_utils.WithTransaction()
+  def DeleteGRRUser(self, username, cursor=None):
+    """Deletes the user with the given username."""
+    cursor.execute("DELETE FROM grr_users WHERE username = %s", (username,))
+
+    if cursor.rowcount == 0:
+      raise db.UnknownGRRUserError(username)
 
   @mysql_utils.WithTransaction()
   def WriteApprovalRequest(self, approval_request, cursor=None):
@@ -133,7 +154,7 @@ class MySQLDBUsersMixin(object):
     # Copy the approval_request to ensure we don't modify the source object.
     approval_request = approval_request.Copy()
     # Generate random approval id.
-    approval_id_int = utils.PRNG.GetUInt64()
+    approval_id_int = random.UInt64()
     now_str = mysql_utils.RDFDatetimeToMysqlString(rdfvalue.RDFDatetime.Now())
 
     grants = approval_request.grants
@@ -270,7 +291,7 @@ class MySQLDBUsersMixin(object):
     try:
       cursor.execute(query, args)
     except MySQLdb.IntegrityError:
-      raise db.UnknownGRRUserError("User %s not found!" % notification.username)
+      raise db.UnknownGRRUserError(notification.username)
 
   @mysql_utils.WithTransaction(readonly=True)
   def ReadUserNotifications(self,

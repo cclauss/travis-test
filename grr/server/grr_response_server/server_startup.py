@@ -1,19 +1,34 @@
 #!/usr/bin/env python
 """Server startup routines."""
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import unicode_literals
+
 import logging
 import os
 import platform
 
 from grr_response_core import config
+from grr_response_core.lib import communicator
 from grr_response_core.lib import config_lib
 from grr_response_core.lib import registry
-from grr_response_core.lib import stats
 # pylint: disable=unused-import
 from grr_response_core.lib.local import plugins
 # pylint: enable=unused-import
+from grr_response_core.lib.parsers import all as all_parsers
+from grr_response_core.stats import default_stats_collector
+from grr_response_core.stats import stats_collector_instance
 from grr_response_server import server_logging
-from grr_response_server import threadpool
-from grr_response_server.local import registry_init
+from grr_response_server import server_metrics
+
+# This import is a prerequisite for Init().
+# pylint: disable=unused-import
+from grr_response_server import server_plugins
+# pylint: enable=unused-import
+
+from grr_response_server.blob_stores import registry_init as bs_registry_init
+from grr_response_server.decoders import all as all_decoders
+
 
 # pylint: disable=g-import-not-at-top
 if platform.system() != "Windows":
@@ -59,16 +74,17 @@ def Init():
     syslog_logger.exception("Died during config initialization")
     raise
 
-  if hasattr(registry_init, "stats"):
-    logging.debug("Using local stats collector.")
-    stats.STATS = registry_init.stats.StatsCollector()
-  else:
-    logging.debug("Using default stats collector.")
-    stats.STATS = stats.StatsCollector()
+  metric_metadata = server_metrics.GetMetadata()
+  metric_metadata.extend(communicator.GetMetricMetadata())
+  stats_collector = default_stats_collector.DefaultStatsCollector(
+      metric_metadata)
+  stats_collector_instance.Set(stats_collector)
 
-  threadpool.InitializeMetrics()
   server_logging.ServerLoggingStartupInit()
 
+  bs_registry_init.RegisterBlobStores()
+  all_decoders.Register()
+  all_parsers.Register()
   registry.Init()
 
   # Exempt config updater from this check because it is the one responsible for

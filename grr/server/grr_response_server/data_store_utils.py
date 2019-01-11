@@ -5,6 +5,9 @@ This module serves simple functions that delegate calls to appropriate store
 (legacy or relational). Once the legacy data store is deprecated functions
 provided in this module should be no longer useful.
 """
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import unicode_literals
 
 from grr_response_core import config
 from grr_response_server import aff4
@@ -44,7 +47,8 @@ def GetFileHashEntry(fd):
   """Returns an `rdf_crypto.Hash` instance for given AFF4 file descriptor."""
   # Hash file store is not migrated to RELDB just yet, hence the first check.
   if (not fd.urn.Path().startswith("/files/hash/generic") and
-      data_store.RelationalDBReadEnabled(category="vfs")):
+      data_store.RelationalDBReadEnabled(category="vfs") and
+      data_store.RelationalDBReadEnabled(category="filestore")):
     return GetUrnHashEntry(fd.urn)
   else:
     return fd.Get(fd.Schema.HASH)
@@ -52,7 +56,9 @@ def GetFileHashEntry(fd):
 
 def GetUrnHashEntry(urn, token=None):
   """Returns an `rdf_crypto.Hash` instance for given URN of an AFF4 file."""
-  if data_store.RelationalDBReadEnabled(category="vfs"):
+  if data_store.RelationalDBReadEnabled(
+      category="vfs") and data_store.RelationalDBReadEnabled(
+          category="filestore"):
     client_id, vfs_path = urn.Split(2)
     path_type, components = rdf_objects.ParseCategorizedPath(vfs_path)
 
@@ -61,3 +67,14 @@ def GetUrnHashEntry(urn, token=None):
   else:
     with aff4.FACTORY.Open(urn, token=token) as fd:
       return GetFileHashEntry(fd)
+
+
+def GetClientKnowledgeBase(client_id, token=None):
+  if data_store.RelationalDBReadEnabled():
+    client = data_store.REL_DB.ReadClientSnapshot(client_id)
+    if client is None:
+      return None
+    return client.knowledge_base
+  else:
+    client = aff4.FACTORY.Open(client_id, token=token)
+    return client.Get(client.Schema.KNOWLEDGE_BASE)

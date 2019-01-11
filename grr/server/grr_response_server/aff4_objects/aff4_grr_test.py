@@ -1,7 +1,9 @@
 #!/usr/bin/env python
 """Test the grr aff4 objects."""
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import unicode_literals
 
-import hashlib
 import io
 import time
 
@@ -21,6 +23,7 @@ from grr_response_server import data_store
 from grr_response_server import events
 from grr_response_server.aff4_objects import aff4_grr
 from grr_response_server.flows.general import transfer
+from grr_response_server.rdfvalues import objects as rdf_objects
 from grr.test_lib import action_mocks
 from grr.test_lib import aff4_test_lib
 from grr.test_lib import flow_test_lib
@@ -105,7 +108,7 @@ class AFF4GRRTest(aff4_test_lib.AFF4ObjectTest):
       # Make lots of small writes - The length of this string and the chunk size
       # are relative primes for worst case.
       for i in range(100):
-        fd.Write("%s%08X\n" % ("Test", i))
+        fd.Write(b"%s%08X\n" % (b"Test", i))
 
         # Flush after every write.
         fd.Flush()
@@ -153,7 +156,7 @@ class AFF4GRRTest(aff4_test_lib.AFF4ObjectTest):
     # Check that there is exactly one flow on the client.
     flows_fd = aff4.FACTORY.Open(client_id.Add("flows"), token=self.token)
     flows = list(flows_fd.ListChildren())
-    self.assertEqual(len(flows), 1)
+    self.assertLen(flows, 1)
 
     # The flow is the MultiGetFile flow holding the lock on the file.
     flow_obj = aff4.FACTORY.Open(flows[0], token=self.token)
@@ -168,7 +171,7 @@ class AFF4GRRTest(aff4_test_lib.AFF4ObjectTest):
     # There should still be only one flow on the client.
     flows_fd = aff4.FACTORY.Open(client_id.Add("flows"), token=self.token)
     flows = list(flows_fd.ListChildren())
-    self.assertEqual(len(flows), 1)
+    self.assertLen(flows, 1)
 
   def testVFSFileStartsNewMultiGetFileWhenLockingFlowHasFinished(self):
     """A new MultiFileGet can be started when the locking flow has finished."""
@@ -190,7 +193,7 @@ class AFF4GRRTest(aff4_test_lib.AFF4ObjectTest):
     # Check that there is exactly one flow on the client.
     flows_fd = aff4.FACTORY.Open(client_id.Add("flows"), token=self.token)
     flows = list(flows_fd.ListChildren())
-    self.assertEqual(len(flows), 1)
+    self.assertLen(flows, 1)
 
     # Finish the flow holding the lock.
     client_mock = action_mocks.ActionMock()
@@ -204,7 +207,7 @@ class AFF4GRRTest(aff4_test_lib.AFF4ObjectTest):
     # There should be two flows now.
     flows_fd = aff4.FACTORY.Open(client_id.Add("flows"), token=self.token)
     flows = list(flows_fd.ListChildren())
-    self.assertEqual(len(flows), 2)
+    self.assertLen(flows, 2)
 
     # Make sure that each Update() started a new flow and that the second flow
     # is holding the lock.
@@ -281,8 +284,8 @@ class AFF4GRRTest(aff4_test_lib.AFF4ObjectTest):
         self.assertEqual(summary.system_info.fqdn, fqdn)
         self.assertEqual(summary.system_info.machine, arch)
         self.assertEqual(summary.system_info.install_date, install_time)
-        self.assertItemsEqual(summary.users, [userobj])
-        self.assertItemsEqual(summary.interfaces, [interface])
+        self.assertCountEqual(summary.users, [userobj])
+        self.assertCountEqual(summary.interfaces, [interface])
         self.assertFalse(summary.client_info)
 
         self.assertEqual(summary.timestamp.AsSecondsSinceEpoch(), 101)
@@ -295,9 +298,8 @@ class AFF4GRRTest(aff4_test_lib.AFF4ObjectTest):
         self.assertEqual(summary.system_uuid, system_uuid)
 
 
-def StoreBlobStub(blob, token=None):
-  del token  # Unused.
-  return hashlib.sha256(blob).hexdigest()
+def WriteBlobWithUnknownHashStub(blob):
+  return rdf_objects.BlobID.FromBlobData(blob)
 
 
 class BlobImageTest(aff4_test_lib.AFF4ObjectTest):
@@ -358,7 +360,7 @@ class BlobImageTest(aff4_test_lib.AFF4ObjectTest):
     fd = aff4.FACTORY.Open("aff4:/foo", token=self.token)
     chunks_fds = list(aff4.AFF4Stream.MultiStream([fd]))
 
-    self.assertEqual(len(chunks_fds), 1)
+    self.assertLen(chunks_fds, 1)
     self.assertEqual(chunks_fds[0][1], b"123456789")
     self.assertIs(chunks_fds[0][0], fd)
 
@@ -377,7 +379,7 @@ class BlobImageTest(aff4_test_lib.AFF4ObjectTest):
     fd2 = aff4.FACTORY.Open("aff4:/bar", token=self.token)
     chunks_fds = list(aff4.AFF4Stream.MultiStream([fd1, fd2]))
 
-    self.assertEqual(len(chunks_fds), 2)
+    self.assertLen(chunks_fds, 2)
 
     self.assertEqual(chunks_fds[0][1], b"123456789")
     self.assertIs(chunks_fds[0][0], fd1)
@@ -400,7 +402,7 @@ class BlobImageTest(aff4_test_lib.AFF4ObjectTest):
     fd2 = aff4.FACTORY.Open("aff4:/bar", token=self.token)
     chunks_fds = list(aff4.AFF4Stream.MultiStream([fd1, fd2]))
 
-    self.assertEqual(len(chunks_fds), 4)
+    self.assertLen(chunks_fds, 4)
 
     self.assertEqual(chunks_fds[0][1], b"*" * 10)
     self.assertIs(chunks_fds[0][0], fd1)
@@ -418,13 +420,16 @@ class BlobImageTest(aff4_test_lib.AFF4ObjectTest):
     with aff4.FACTORY.Create(
         "aff4:/foo", aff4_type=aff4_grr.VFSBlobImage, token=self.token) as fd:
       fd.SetChunksize(10)
-      # Patching StoreBlob prevents the blobs from actually being written.
+      # Patching WriteBlobWithUnknownHash prevents the blobs from actually being
+      # written.
       with mock.patch.object(
-          data_store.DB, "StoreBlob", side_effect=StoreBlobStub):
+          data_store.BLOBS,
+          "WriteBlobWithUnknownHash",
+          side_effect=WriteBlobWithUnknownHashStub):
         fd.AppendContent(io.BytesIO(b"123456789"))
 
       fd.index.seek(0)
-      blob_id = fd.index.read(fd._HASH_SIZE).encode("hex")
+      blob_id = rdf_objects.BlobID.FromBytes(fd.index.read(fd._HASH_SIZE))
 
     fd = aff4.FACTORY.Open("aff4:/foo", token=self.token)
     returned_fd, _, e = list(aff4.AFF4Stream.MultiStream([fd]))[0]
@@ -438,9 +443,12 @@ class BlobImageTest(aff4_test_lib.AFF4ObjectTest):
       fd.SetChunksize(10)
       fd.AppendContent(io.BytesIO(b"*" * 10))
 
-      # Patching StoreBlob prevents the blobs from actually being written.
+      # Patching WriteBlobWithUnknownHash prevents the blobs from actually being
+      # written.
       with mock.patch.object(
-          data_store.DB, "StoreBlob", side_effect=StoreBlobStub):
+          data_store.BLOBS,
+          "WriteBlobWithUnknownHash",
+          side_effect=WriteBlobWithUnknownHashStub):
         fd.AppendContent(io.BytesIO(b"123456789"))
 
     fd = aff4.FACTORY.Open("aff4:/foo", token=self.token)
@@ -461,9 +469,12 @@ class BlobImageTest(aff4_test_lib.AFF4ObjectTest):
       fd.SetChunksize(10)
       fd.AppendContent(io.BytesIO(b"*" * 10))
 
-      # Patching StoreBlob prevents the blobs from actually being written.
+      # Patching WriteBlobWithUnknownHash prevents the blobs from actually being
+      # written.
       with mock.patch.object(
-          data_store.DB, "StoreBlob", side_effect=StoreBlobStub):
+          data_store.BLOBS,
+          "WriteBlobWithUnknownHash",
+          side_effect=WriteBlobWithUnknownHashStub):
         fd.AppendContent(io.BytesIO(b"123456789"))
 
     fd = aff4.FACTORY.Open("aff4:/foo", token=self.token)
@@ -486,9 +497,12 @@ class BlobImageTest(aff4_test_lib.AFF4ObjectTest):
         "aff4:/foo", aff4_type=aff4_grr.VFSBlobImage, token=self.token) as fd:
       fd.SetChunksize(10)
 
-      # Patching StoreBlob prevents the blobs from actually being written.
+      # Patching WriteBlobWithUnknownHash prevents the blobs from actually being
+      # written.
       with mock.patch.object(
-          data_store.DB, "StoreBlob", side_effect=StoreBlobStub):
+          data_store.BLOBS,
+          "WriteBlobWithUnknownHash",
+          side_effect=WriteBlobWithUnknownHashStub):
         fd.AppendContent(io.BytesIO(b"*" * 10))
 
       fd.AppendContent(io.BytesIO(b"123456789"))

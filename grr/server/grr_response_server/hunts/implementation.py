@@ -5,7 +5,9 @@ A hunt is a mechanism for automatically scheduling flows on a selective subset
 of clients, managing these flows, collecting and presenting the combined results
 of all these flows.
 """
+from __future__ import absolute_import
 from __future__ import division
+from __future__ import unicode_literals
 
 import logging
 import threading
@@ -13,7 +15,6 @@ import traceback
 
 from grr_response_core.lib import rdfvalue
 from grr_response_core.lib import registry
-from grr_response_core.lib import stats
 from grr_response_core.lib import type_info
 from grr_response_core.lib import utils
 from grr_response_core.lib.rdfvalues import client as rdf_client
@@ -22,6 +23,9 @@ from grr_response_core.lib.rdfvalues import events as rdf_events
 from grr_response_core.lib.rdfvalues import flows as rdf_flows
 from grr_response_core.lib.rdfvalues import protodict as rdf_protodict
 from grr_response_core.lib.rdfvalues import stats as rdf_stats
+from grr_response_core.lib.util import collection
+from grr_response_core.lib.util import random
+from grr_response_core.stats import stats_collector_instance
 from grr_response_server import access_control
 from grr_response_server import aff4
 from grr_response_server import data_store
@@ -33,7 +37,6 @@ from grr_response_server import foreman_rules
 from grr_response_server import grr_collections
 from grr_response_server import multi_type_collection
 from grr_response_server import notification as notification_lib
-from grr_response_server import output_plugin as output_plugin_lib
 from grr_response_server import queue_manager
 from grr_response_server.aff4_objects import aff4_grr
 from grr_response_server.hunts import results as hunts_results
@@ -60,7 +63,7 @@ def StartHunt(args=None, runner_args=None, token=None, **kwargs):
 
   # Is the required hunt a known hunt?
   hunt_cls = GRRHunt.classes.get(runner_args.hunt_name)
-  if not hunt_cls or not aff4.issubclass(hunt_cls, GRRHunt):
+  if not hunt_cls or not issubclass(hunt_cls, GRRHunt):
     raise RuntimeError("Unable to locate hunt %s" % runner_args.hunt_name)
 
   # Make a new hunt object and initialize its runner.
@@ -125,12 +128,6 @@ class HuntResultsMetadata(aff4.AFF4Object):
         "aff4:output_plugins_state_dict",
         rdf_protodict.AttributedDict,
         "Serialized output plugin state.",
-        versioned=False)
-
-    OUTPUT_PLUGINS_VERIFICATION_RESULTS = aff4.Attribute(
-        "aff4:output_plugins_verification_results",
-        output_plugin_lib.OutputPluginVerificationResultsList,
-        "Verification results list.",
         versioned=False)
 
 
@@ -227,7 +224,8 @@ class HuntRunner(object):
             # automatic retransmission facilitated by the task scheduler (the
             # Task.task_ttl field) which would happen regardless of these.
             if request.transmission_count < 5:
-              stats.STATS.IncrementCounter("grr_request_retransmission_count")
+              stats_collector_instance.Get().IncrementCounter(
+                  "grr_request_retransmission_count")
               request.transmission_count += 1
               self.QueueRequest(request)
             break
@@ -310,7 +308,7 @@ class HuntRunner(object):
         if responses.status:
           self.SaveResourceUsage(request.client_id, responses.status)
 
-        stats.STATS.IncrementCounter("grr_worker_states_run")
+        stats_collector_instance.Get().IncrementCounter("grr_worker_states_run")
 
         method(responses)
 
@@ -319,9 +317,10 @@ class HuntRunner(object):
     except Exception as e:  # pylint: disable=broad-except
 
       # TODO(user): Deprecate in favor of 'flow_errors'.
-      stats.STATS.IncrementCounter("grr_flow_errors")
+      stats_collector_instance.Get().IncrementCounter("grr_flow_errors")
 
-      stats.STATS.IncrementCounter("flow_errors", fields=[self.hunt_obj.Name()])
+      stats_collector_instance.Get().IncrementCounter(
+          "flow_errors", fields=[self.hunt_obj.Name()])
       logging.exception("Hunt %s raised %s.", self.session_id, e)
 
       self.Error(traceback.format_exc(), client_id=client_id)
@@ -340,13 +339,56 @@ class HuntRunner(object):
     """Sends the message to event listeners."""
     events_lib.Events.PublishEvent(event_name, msg, delay=delay)
 
-  def CallFlow(self,
-               flow_name=None,
-               next_state=None,
-               request_data=None,
-               client_id=None,
-               base_session_id=None,
-               **kwargs):
+  def _GetSubFlowCPULimit(self):
+    """Get current CPU limit for subflows."""
+
+    subflow_cpu_limit = None
+
+    if self.runner_args.per_client_cpu_limit:
+      subflow_cpu_limit = self.runner_args.per_client_cpu_limit
+
+    if self.runner_args.cpu_limit:
+      cpu_usage_data = self.context.client_resources.cpu_usage
+      remaining_cpu_quota = (
+          self.runner_args.cpu_limit - cpu_usage_data.user_cpu_time -
+          cpu_usage_data.system_cpu_time)
+      if subflow_cpu_limit is None:
+        subflow_cpu_limit = remaining_cpu_quota
+      else:
+        subflow_cpu_limit = min(subflow_cpu_limit, remaining_cpu_quota)
+
+      if subflow_cpu_limit == 0:
+        raise RuntimeError("Out of CPU quota.")
+
+    return subflow_cpu_limit
+
+  def _GetSubFlowNetworkLimit(self):
+    """Get current network limit for subflows."""
+
+    subflow_network_limit = None
+
+    if self.runner_args.per_client_network_limit_bytes:
+      subflow_network_limit = self.runner_args.per_client_network_limit_bytes
+
+    if self.runner_args.network_bytes_limit:
+      remaining_network_quota = (
+          self.runner_args.network_bytes_limit -
+          self.context.network_bytes_sent)
+      if subflow_network_limit is None:
+        subflow_network_limit = remaining_network_quota
+      else:
+        subflow_network_limit = min(subflow_network_limit,
+                                    remaining_network_quota)
+
+    return subflow_network_limit
+
+  def _CallFlowLegacy(self,
+                      flow_name=None,
+                      next_state=None,
+                      request_data=None,
+                      client_id=None,
+                      base_session_id=None,
+                      **kwargs):
     """Creates a new flow and send its responses to a state.
 
     This creates a new flow. The flow may send back many responses which will be
@@ -398,47 +440,14 @@ class HuntRunner(object):
     # the call chain.
     write_intermediate = kwargs.pop("write_intermediate_results", False)
 
-    subflow_cpu_limit = None
-
-    if self.runner_args.per_client_cpu_limit:
-      subflow_cpu_limit = self.runner_args.per_client_cpu_limit
-
-    if self.runner_args.cpu_limit:
-      cpu_usage_data = self.context.client_resources.cpu_usage
-      remaining_cpu_quota = (
-          self.runner_args.cpu_limit - cpu_usage_data.user_cpu_time -
-          cpu_usage_data.system_cpu_time)
-      if subflow_cpu_limit is None:
-        subflow_cpu_limit = remaining_cpu_quota
-      else:
-        subflow_cpu_limit = min(subflow_cpu_limit, remaining_cpu_quota)
-
-      if subflow_cpu_limit == 0:
-        raise RuntimeError("Out of CPU quota.")
-
-    subflow_network_limit = None
-
-    if self.runner_args.per_client_network_limit_bytes:
-      subflow_network_limit = self.runner_args.per_client_network_limit_bytes
-
-    if self.runner_args.network_bytes_limit:
-      remaining_network_quota = (
-          self.runner_args.network_bytes_limit -
-          self.context.network_bytes_sent)
-      if subflow_network_limit is None:
-        subflow_network_limit = remaining_network_quota
-      else:
-        subflow_network_limit = min(subflow_network_limit,
-                                    remaining_network_quota)
-
     # Create the new child flow but do not notify the user about it.
     child_urn = self.hunt_obj.StartAFF4Flow(
         base_session_id=base_session_id or self.session_id,
         client_id=client_id,
-        cpu_limit=subflow_cpu_limit,
+        cpu_limit=self._GetSubFlowCPULimit(),
         flow_name=flow_name,
         logs_collection_urn=logs_urn,
-        network_bytes_limit=subflow_network_limit,
+        network_bytes_limit=self._GetSubFlowNetworkLimit(),
         notify_to_user=False,
         parent_flow=self.hunt_obj,
         queue=self.runner_args.queue,
@@ -451,6 +460,99 @@ class HuntRunner(object):
     self.QueueRequest(state)
 
     return child_urn
+
+  def _CallFlowRelational(self,
+                          flow_name=None,
+                          args=None,
+                          runner_args=None,
+                          client_id=None,
+                          **kwargs):
+    """Creates a new flow and send its responses to a state.
+
+    This creates a new flow. The flow may send back many responses which will be
+    queued by the framework until the flow terminates. The final status message
+    will cause the entire transaction to be committed to the specified state.
+
+    Args:
+       flow_name: The name of the flow to invoke.
+       args: Flow arguments.
+       runner_args: Flow runner arguments.
+       client_id: If given, the flow is started for this client.
+       **kwargs: Arguments for the child flow.
+
+    Returns:
+       The URN of the child flow which was created.
+
+    Raises:
+       RuntimeError: In case of no cpu quota left to start more clients.
+    """
+    if isinstance(client_id, rdfvalue.RDFURN):
+      client_id = client_id.Basename()
+
+    if flow_name is None and runner_args is not None:
+      flow_name = runner_args.flow_name
+
+    flow_cls = registry.FlowRegistry.FlowClassByName(flow_name)
+
+    flow_id = flow.StartFlow(
+        client_id=client_id,
+        creator=self.hunt_obj.creator,
+        cpu_limit=self._GetSubFlowCPULimit(),
+        network_bytes_limit=self._GetSubFlowNetworkLimit(),
+        flow_cls=flow_cls,
+        flow_args=args,
+        parent_hunt_id=self.hunt_obj.urn.Basename(),
+        **kwargs)
+
+    return rdfvalue.RDFURN(client_id).Add("flows").Add(flow_id)
+
+  def CallFlow(self,
+               flow_name=None,
+               next_state=None,
+               request_data=None,
+               client_id=None,
+               base_session_id=None,
+               **kwargs):
+    """Creates a new flow and send its responses to a state.
+
+    This creates a new flow. The flow may send back many responses which will be
+    queued by the framework until the flow terminates. The final status message
+    will cause the entire transaction to be committed to the specified state.
+
+    Args:
+       flow_name: The name of the flow to invoke.
+       next_state: The state in this flow, that responses to this message should
+         go to.
+       request_data: Any dict provided here will be available in the
+         RequestState protobuf. The Responses object maintains a reference to
+         this protobuf for use in the execution of the state method. (so you can
+         access this data by responses.request). There is no format mandated on
+         this data but it may be a serialized protobuf.
+       client_id: If given, the flow is started for this client.
+       base_session_id: A URN which will be used to build a URN.
+       **kwargs: Arguments for the child flow.
+
+    Returns:
+       The URN of the child flow which was created.
+
+    Raises:
+       RuntimeError: In case of no cpu quota left to start more clients.
+    """
+    if data_store.RelationalDBFlowsEnabled():
+      if request_data is not None:
+        raise ValueError("Hunt's CallFlow does not support 'request_data' arg "
+                         "when REL_DB is enabled.")
+
+      return self._CallFlowRelational(
+          flow_name=flow_name, client_id=client_id, **kwargs)
+    else:
+      return self._CallFlowLegacy(
+          flow_name=flow_name,
+          next_state=next_state,
+          request_data=request_data,
+          client_id=client_id,
+          base_session_id=base_session_id,
+          **kwargs)
 
   def FlushQueuedReplies(self):
     # Hunts do not send replies.
@@ -469,13 +571,18 @@ class HuntRunner(object):
     for output_plugin_state in self.context.output_plugins_states:
       plugin_descriptor = output_plugin_state.plugin_descriptor
       plugin_state = output_plugin_state.plugin_state
-      output_plugin = plugin_descriptor.GetPluginForState(plugin_state)
+      output_plugin_cls = plugin_descriptor.GetPluginClass()
+      output_plugin = output_plugin_cls(
+          source_urn=self.results_collection_urn,
+          args=plugin_descriptor.plugin_args,
+          token=self.token)
 
       # Extend our lease if needed.
       self.hunt_obj.HeartBeat()
       try:
-        output_plugin.ProcessResponses(replies)
-        output_plugin.Flush()
+        output_plugin.ProcessResponses(plugin_state, replies)
+        output_plugin.Flush(plugin_state)
+        output_plugin.UpdateState(plugin_state)
 
         log_item = output_plugin.OutputPluginBatchProcessingStatus(
             plugin_descriptor=plugin_descriptor,
@@ -484,7 +591,7 @@ class HuntRunner(object):
         # Cannot append to lists in AttributedDicts.
         plugin_state["logs"] += [log_item]
 
-        self.Log("Plugin %s sucessfully processed %d flow replies.",
+        self.Log("Plugin %s successfully processed %d flow replies.",
                  plugin_descriptor, len(replies))
       except Exception as e:  # pylint: disable=broad-except
         error = output_plugin.OutputPluginBatchProcessingStatus(
@@ -886,7 +993,7 @@ class HuntRunner(object):
     # flow. Randomize the request_id so we do not overwrite other messages in
     # the queue.
     request_state = rdf_flow_runner.RequestState(
-        id=utils.PRNG.GetUInt32(),
+        id=random.UInt32(),
         session_id=self.context.session_id,
         client_id=client_id,
         next_state=next_state)
@@ -969,8 +1076,7 @@ class GRRHunt(flow.FlowBase):
     # without taking a lock on the hunt object.
     STATE = aff4.Attribute(
         "aff4:hunt_state",
-        rdfvalue.RDFString,
-        "The state of a hunt can be "
+        rdfvalue.RDFString, "The state of a hunt can be "
         "'STARTED': running, "
         "'STOPPED': stopped by the user, "
         "'PAUSED': paused due to client limit, "
@@ -1235,7 +1341,7 @@ class GRRHunt(flow.FlowBase):
         # flow. Randomize the request_id so we do not overwrite other messages
         # in the queue.
         state = rdf_flow_runner.RequestState(
-            id=utils.PRNG.GetUInt32(),
+            id=random.UInt32(),
             session_id=hunt_id,
             client_id=client_id,
             next_state="AddClient")
@@ -1350,7 +1456,8 @@ class GRRHunt(flow.FlowBase):
         self.StopHuntIfAverageLimitsExceeded()
 
         # Update stats.
-        stats.STATS.IncrementCounter("hunt_results_added", delta=len(msgs))
+        stats_collector_instance.Get().IncrementCounter(
+            "hunt_results_added", delta=len(msgs))
     else:
       self.LogClientError(
           client_id, log_message=utils.SmartStr(responses.status))
@@ -1426,13 +1533,13 @@ class GRRHunt(flow.FlowBase):
 
     for index, plugin_descriptor in enumerate(plugins_descriptors):
       plugin_class = plugin_descriptor.GetPluginClass()
-      plugin_obj = plugin_class(
-          self.results_collection_urn,
+      _, plugin_state = plugin_class.CreatePluginAndDefaultState(
+          source_urn=self.results_collection_urn,
           args=plugin_descriptor.plugin_args,
           token=self.token)
 
       state["%s_%d" % (plugin_descriptor.plugin_name, index)] = [
-          plugin_descriptor, plugin_obj.state
+          plugin_descriptor, plugin_state
       ]
 
     return state
@@ -1464,7 +1571,10 @@ class GRRHunt(flow.FlowBase):
       client_id: Client id.
       status: The status object returned from the client.
     """
-    flow_path = status.child_session_id
+    if hasattr(status, "child_session_id"):
+      flow_path = status.child_session_id
+    else:
+      flow_path = "aff4:/%s/flows/%s" % (status.client_id, status.flow_id)
 
     resources = rdf_client_stats.ClientResources()
     resources.client_id = client_id
@@ -1479,11 +1589,11 @@ class GRRHunt(flow.FlowBase):
     collections_dict = dict(
         (urn, col_type(urn))
         for urn, col_type in [(self.all_clients_collection_urn,
-                               grr_collections.ClientUrnCollection), (
-                                   self.completed_clients_collection_urn,
-                                   grr_collections.ClientUrnCollection), (
-                                       self.clients_errors_collection_urn,
-                                       grr_collections.HuntErrorCollection)])
+                               grr_collections.ClientUrnCollection),
+                              (self.completed_clients_collection_urn,
+                               grr_collections.ClientUrnCollection),
+                              (self.clients_errors_collection_urn,
+                               grr_collections.HuntErrorCollection)])
 
     def CollectionLen(collection_urn):
       if collection_urn in collections_dict:
@@ -1499,9 +1609,9 @@ class GRRHunt(flow.FlowBase):
     return all_clients_count, completed_clients_count, clients_errors_count
 
   def GetClientsErrors(self, client_id=None):
-    collection = grr_collections.HuntErrorCollection(
+    hunt_collection = grr_collections.HuntErrorCollection(
         self.clients_errors_collection_urn)
-    errors = collection.GenerateItems()
+    errors = hunt_collection.GenerateItems()
     if not client_id:
       return errors
     else:
@@ -1529,7 +1639,7 @@ class GRRHunt(flow.FlowBase):
 
   def GetClientStates(self, client_list, client_chunk=50):
     """Take in a client list and return dicts with their age and hostname."""
-    for client_group in utils.Grouper(client_list, client_chunk):
+    for client_group in collection.Batch(client_list, client_chunk):
       for fd in aff4.FACTORY.MultiOpen(
           client_group,
           mode="r",
@@ -1555,10 +1665,3 @@ class GRRHunt(flow.FlowBase):
       self.Set(self.Schema.HUNT_ARGS(self.args))
       self.Set(self.Schema.HUNT_CONTEXT(self.context))
       self.Set(self.Schema.HUNT_RUNNER_ARGS(self.runner_args))
-
-
-class HuntInitHook(registry.InitHook):
-
-  def RunOnce(self):
-    """Register standard hunt-related stats."""
-    stats.STATS.RegisterCounterMetric("hunt_results_added")

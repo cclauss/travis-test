@@ -1,6 +1,8 @@
 #!/usr/bin/env python
-"""Cron job to process hunt results.
-"""
+"""Cron job to process hunt results."""
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import unicode_literals
 
 import logging
 
@@ -9,8 +11,9 @@ from future.utils import iteritems
 from future.utils import itervalues
 
 from grr_response_core.lib import rdfvalue
-from grr_response_core.lib import stats
 from grr_response_core.lib import utils
+from grr_response_core.lib.util import collection
+from grr_response_core.stats import stats_collector_instance
 from grr_response_server import aff4
 from grr_response_server import data_store
 from grr_response_server import output_plugin
@@ -40,7 +43,9 @@ class ResultsProcessingError(Exception):
     return "\n".join(messages)
 
 
-class ProcessHuntResultCollectionsCronFlow(cronjobs.SystemCronFlow):
+@cronjobs.DualDBSystemCronJob(
+    legacy_name="ProcessHuntResultCollectionsCronFlow", stateful=False)
+class ProcessHuntResultCollectionsCronJob(object):
   """Periodic cron flow that processes hunt results.
 
   The ProcessHuntResultCollectionsCronFlow reads hunt results stored in
@@ -54,13 +59,17 @@ class ProcessHuntResultCollectionsCronFlow(cronjobs.SystemCronFlow):
   BATCH_SIZE = 5000
 
   def CheckIfRunningTooLong(self):
+    """Return True if the cron job's time is expired."""
+
     if self.max_running_time:
       elapsed = rdfvalue.RDFDatetime.Now() - self.start_time
       if elapsed > self.max_running_time:
         return True
     return False
 
-  def LoadPlugins(self, metadata_obj):
+  def LoadPlugins(self, hunt_urn, metadata_obj):
+    """Loads plugins from given hunt metadata object."""
+
     output_plugins = metadata_obj.Get(metadata_obj.Schema.OUTPUT_PLUGINS)
     if not output_plugins:
       return output_plugins, []
@@ -70,23 +79,28 @@ class ProcessHuntResultCollectionsCronFlow(cronjobs.SystemCronFlow):
     unused_plugins = []
 
     for plugin_def, state in itervalues(output_plugins):
-      if not hasattr(plugin_def, "GetPluginForState"):
-        logging.error("Invalid plugin_def: %s", plugin_def)
-        continue
-      used_plugins.append((plugin_def, plugin_def.GetPluginForState(state)))
+      plugin_cls = plugin_def.GetPluginClass()
+      plugin_obj = plugin_cls(
+          source_urn=rdfvalue.RDFURN(hunt_urn).Add("Results"),
+          args=plugin_def.plugin_args,
+          token=metadata_obj.token)
+      used_plugins.append((plugin_def, plugin_obj, state))
     return output_plugins, used_plugins
 
   def RunPlugins(self, hunt_urn, plugins, results, exceptions_by_plugin):
-    for plugin_def, plugin in plugins:
+    """Runs given plugins on a given hunt."""
+
+    for plugin_def, plugin, plugin_state in plugins:
       try:
-        plugin.ProcessResponses(results)
-        plugin.Flush()
+        plugin.ProcessResponses(plugin_state, results)
+        plugin.Flush(plugin_state)
+        plugin.UpdateState(plugin_state)
 
         plugin_status = output_plugin.OutputPluginBatchProcessingStatus(
             plugin_descriptor=plugin_def,
             status="SUCCESS",
             batch_size=len(results))
-        stats.STATS.IncrementCounter(
+        stats_collector_instance.Get().IncrementCounter(
             "hunt_results_ran_through_plugin",
             delta=len(results),
             fields=[plugin_def.plugin_name])
@@ -97,7 +111,7 @@ class ProcessHuntResultCollectionsCronFlow(cronjobs.SystemCronFlow):
             "plugin %s", hunt_urn, utils.SmartStr(plugin))
         self.Log("Error processing hunt results (hunt %s, "
                  "plugin %s): %s" % (hunt_urn, utils.SmartStr(plugin), e))
-        stats.STATS.IncrementCounter(
+        stats_collector_instance.Get().IncrementCounter(
             "hunt_output_plugin_errors", fields=[plugin_def.plugin_name])
 
         plugin_status = output_plugin.OutputPluginBatchProcessingStatus(
@@ -133,10 +147,10 @@ class ProcessHuntResultCollectionsCronFlow(cronjobs.SystemCronFlow):
     try:
       with aff4.FACTORY.OpenWithLock(
           metadata_urn, lease_time=600, token=self.token) as metadata_obj:
-        all_plugins, used_plugins = self.LoadPlugins(metadata_obj)
+        all_plugins, used_plugins = self.LoadPlugins(hunt_urn, metadata_obj)
         num_processed = int(
             metadata_obj.Get(metadata_obj.Schema.NUM_PROCESSED_RESULTS))
-        for batch in utils.Grouper(results, batch_size):
+        for batch in collection.Batch(results, batch_size):
           results = list(
               collection_obj.MultiResolve(
                   [r.value.ResultRecord() for r in batch]))
@@ -171,7 +185,8 @@ class ProcessHuntResultCollectionsCronFlow(cronjobs.SystemCronFlow):
     logging.debug("Processed %d results.", num_processed_for_hunt)
     return len(results)
 
-  def Start(self):
+  def Run(self):
+    """Run this cron job."""
     self.start_time = rdfvalue.RDFDatetime.Now()
 
     exceptions_by_hunt = {}

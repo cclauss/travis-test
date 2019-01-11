@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 """This modules contains regression tests for hunts API handlers."""
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import unicode_literals
 
 import pdb
@@ -33,6 +35,8 @@ class ApiListHuntsHandlerRegressionTest(
 
   api_method = "ListHunts"
   handler = hunt_plugin.ApiListHuntsHandler
+  # Hunts are aff4 only for now.
+  aff4_only_test = True
 
   def Run(self):
     replace = {}
@@ -61,6 +65,8 @@ class ApiListHuntResultsRegressionTest(
 
   api_method = "ListHuntResults"
   handler = hunt_plugin.ApiListHuntResultsHandler
+  # Hunts are aff4 only for now.
+  aff4_only_test = True
 
   def Run(self):
     hunt_urn = rdfvalue.RDFURN("aff4:/hunts/H:123456")
@@ -103,6 +109,8 @@ class ApiGetHuntHandlerRegressionTest(api_regression_test_lib.ApiRegressionTest,
 
   api_method = "GetHunt"
   handler = hunt_plugin.ApiGetHuntHandler
+  # Hunts are aff4 only for now.
+  aff4_only_test = True
 
   def Run(self):
     with test_lib.FakeTime(42):
@@ -125,6 +133,8 @@ class ApiGetHuntHandlerHuntCopyRegressionTest(
 
   api_method = "GetHunt"
   handler = hunt_plugin.ApiGetHuntHandler
+  # Hunts are aff4 only for now.
+  aff4_only_test = True
 
   def Run(self):
     with test_lib.FakeTime(42):
@@ -151,6 +161,8 @@ class ApiGetHuntHandlerFlowCopyRegressionTest(
 
   api_method = "GetHunt"
   handler = hunt_plugin.ApiGetHuntHandler
+  # Hunts are aff4 only for now.
+  aff4_only_test = True
 
   def Run(self):
     with test_lib.FakeTime(42):
@@ -178,6 +190,8 @@ class ApiListHuntLogsHandlerRegressionTest(
 
   api_method = "ListHuntLogs"
   handler = hunt_plugin.ApiListHuntLogsHandler
+  # Hunts are aff4 only for now.
+  aff4_only_test = True
 
   def Run(self):
     with test_lib.FakeTime(42):
@@ -211,6 +225,8 @@ class ApiListHuntErrorsHandlerRegressionTest(
 
   api_method = "ListHuntErrors"
   handler = hunt_plugin.ApiListHuntErrorsHandler
+  # Hunts are aff4 only for now.
+  aff4_only_test = True
 
   def Run(self):
     with test_lib.FakeTime(42):
@@ -247,6 +263,8 @@ class ApiListHuntCrashesHandlerRegressionTest(
 
   api_method = "ListHuntCrashes"
   handler = hunt_plugin.ApiListHuntCrashesHandler
+  # Hunts are aff4 only for now.
+  aff4_only_test = True
 
   def Run(self):
     if data_store.RelationalDBReadEnabled():
@@ -296,6 +314,8 @@ class ApiGetHuntClientCompletionStatsHandlerRegressionTest(
 
   api_method = "GetHuntClientCompletionStats"
   handler = hunt_plugin.ApiGetHuntClientCompletionStatsHandler
+  # Hunts are aff4 only for now.
+  aff4_only_test = True
 
   def Run(self):
     if data_store.RelationalDBReadEnabled():
@@ -342,6 +362,8 @@ class ApiGetHuntResultsExportCommandHandlerRegressionTest(
 
   api_method = "GetHuntResultsExportCommand"
   handler = hunt_plugin.ApiGetHuntResultsExportCommandHandler
+  # Hunts are aff4 only for now.
+  aff4_only_test = True
 
   def Run(self):
     with test_lib.FakeTime(42):
@@ -361,6 +383,8 @@ class ApiListHuntOutputPluginsHandlerRegressionTest(
 
   api_method = "ListHuntOutputPlugins"
   handler = hunt_plugin.ApiListHuntOutputPluginsHandler
+  # Hunts are aff4 only for now.
+  aff4_only_test = True
 
   # ApiOutputPlugin's state is an AttributedDict containing URNs that
   # are always random. Given that currently their JSON representation
@@ -393,6 +417,8 @@ class ApiListHuntOutputPluginLogsHandlerRegressionTest(
 
   api_method = "ListHuntOutputPluginLogs"
   handler = hunt_plugin.ApiListHuntOutputPluginLogsHandler
+  # Hunts are aff4 only for now.
+  aff4_only_test = True
 
   # ApiOutputPlugin's state is an AttributedDict containing URNs that
   # are always random. Given that currently their JSON representation
@@ -432,6 +458,8 @@ class ApiListHuntOutputPluginErrorsHandlerRegressionTest(
 
   api_method = "ListHuntOutputPluginErrors"
   handler = hunt_plugin.ApiListHuntOutputPluginErrorsHandler
+  # Hunts are aff4 only for now.
+  aff4_only_test = True
 
   # ApiOutputPlugin's state is an AttributedDict containing URNs that
   # are always random. Given that currently their JSON representation
@@ -472,6 +500,8 @@ class ApiGetHuntStatsHandlerRegressionTest(
 
   api_method = "GetHuntStats"
   handler = hunt_plugin.ApiGetHuntStatsHandler
+  # Hunts are aff4 only for now.
+  aff4_only_test = True
 
   def Run(self):
     with test_lib.FakeTime(42):
@@ -505,6 +535,8 @@ class ApiListHuntClientsHandlerRegressionTest(
 
   api_method = "ListHuntClients"
   handler = hunt_plugin.ApiListHuntClientsHandler
+  # Hunts are aff4 only for now.
+  aff4_only_test = True
 
   def Run(self):
     with test_lib.FakeTime(42):
@@ -549,6 +581,8 @@ class ApiModifyHuntHandlerRegressionTest(
 
   api_method = "ModifyHunt"
   handler = hunt_plugin.ApiModifyHuntHandler
+  # Hunts are aff4 only for now.
+  aff4_only_test = True
 
   def Run(self):
     # Check client_limit update.
@@ -577,6 +611,8 @@ class ApiDeleteHuntHandlerRegressionTest(
 
   api_method = "DeleteHunt"
   handler = hunt_plugin.ApiDeleteHuntHandler
+  # Hunts are aff4 only for now.
+  aff4_only_test = True
 
   def Run(self):
     with test_lib.FakeTime(42):

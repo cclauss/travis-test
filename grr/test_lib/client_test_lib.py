@@ -1,5 +1,8 @@
 #!/usr/bin/env python
 """Test classes for clients-related testing."""
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import unicode_literals
 
 import collections
 import platform
@@ -132,7 +135,7 @@ class MockWindowsProcess(object):
     return "running"
 
   def cwd(self):
-    return "X:\\RECEP\xc3\x87\xc3\x95ES"
+    return b"X:\\RECEP\xc3\x87\xc3\x95ES"
 
   def num_threads(self):
     return 1
@@ -265,7 +268,7 @@ class Popen(object):
       Popen.binary = None
 
   def communicate(self):  # pylint: disable=g-bad-name
-    return "stdout here", "stderr here"
+    return b"stdout here", b"stderr here"
 
 
 class Test(server_stubs.ClientActionStub):
@@ -298,7 +301,7 @@ def Command(name, args=None, system=None, message=None):
     raise unittest.SkipTest("`%s` available only on `%s`" % (name, system))
   if subprocess.call(["which", name], stdout=open("/dev/null", "w")) != 0:
     raise unittest.SkipTest("`%s` command is not available" % name)
-  if subprocess.call([name] + args) != 0:
+  if subprocess.call([name] + args, stdout=open("/dev/null", "w")) != 0:
     raise unittest.SkipTest(message or "`%s` call failed" % name)
 
 

@@ -1,5 +1,8 @@
 #!/usr/bin/env python
 """Functions for server logging."""
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import unicode_literals
 
 import logging
 from logging import handlers
@@ -9,6 +12,8 @@ import time
 
 from grr_response_core import config
 from grr_response_core.lib import flags
+from grr_response_server import data_store
+from grr_response_server.rdfvalues import objects as rdf_objects
 
 try:
   # pylint: disable=g-import-not-at-top
@@ -52,6 +57,12 @@ class GrrApplicationLogger(object):
         event_id, api_method, request.user, api_reason, request.full_path,
         response.status_code)
     logging.info(log_msg)
+
+    if response.headers.get("X-No-Log") != "True":
+      if data_store.RelationalDBWriteEnabled():
+        entry = rdf_objects.APIAuditEntry.FromHttpRequestResponse(
+            request, response)
+        data_store.REL_DB.WriteAPIAuditEntry(entry)
 
   def LogHttpFrontendAccess(self, request, source=None, message_count=None):
     """Write a log entry for a Frontend or UI Request.

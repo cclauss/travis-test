@@ -1,4 +1,6 @@
 #!/usr/bin/env python
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import unicode_literals
 
 import io
@@ -27,7 +29,7 @@ class RawConnectorTest(test_lib.GRRBaseTest):
 
     args = client_pb2.ApiSearchClientsArgs(query=".")
     result = self.connector.SendRequest("SearchClients", args=args)
-    self.assertEqual(len(result.items), 10)
+    self.assertLen(result.items, 10)
 
   def testCorrectlyCallsStreamingMethod(self):
     client_id = self.SetupClients(1)[0]

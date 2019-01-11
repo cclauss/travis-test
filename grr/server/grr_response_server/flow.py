@@ -41,8 +41,10 @@ self.runner_args: The flow runners args. This is an instance of
   FlowRunnerArgs() which may be build from keyword args.
 
 """
+from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
+from __future__ import unicode_literals
 
 import logging
 
@@ -52,13 +54,13 @@ from future.utils import with_metaclass
 
 from grr_response_core.lib import rdfvalue
 from grr_response_core.lib import registry
-from grr_response_core.lib import stats
 from grr_response_core.lib import type_info
-from grr_response_core.lib import utils
 from grr_response_core.lib.rdfvalues import client as rdf_client
 from grr_response_core.lib.rdfvalues import events as rdf_events
 from grr_response_core.lib.rdfvalues import protodict as rdf_protodict
 from grr_response_core.lib.rdfvalues import structs as rdf_structs
+from grr_response_core.lib.util import random
+from grr_response_core.stats import stats_collector_instance
 from grr_response_proto import jobs_pb2
 from grr_response_server import access_control
 from grr_response_server import aff4
@@ -155,6 +157,10 @@ RESULTS_PER_TYPE_SUFFIX = "ResultsPerType"
 LOGS_SUFFIX = "Logs"
 
 
+def IsLegacyHunt(hunt_id):
+  return hunt_id.startswith("H:")
+
+
 def FilterArgsFromSemanticProtobuf(protobuf, kwargs):
   """Assign kwargs to the protobuf, and remove them from the kwargs dict."""
   for descriptor in protobuf.type_infos:
@@ -168,10 +174,9 @@ def GetOutputPluginStates(output_plugins, source=None, token=None):
   output_plugins_states = []
   for plugin_descriptor in output_plugins:
     plugin_class = plugin_descriptor.GetPluginClass()
-    plugin = plugin_class(
-        source_urn=source, args=plugin_descriptor.plugin_args, token=token)
     try:
-      plugin.InitializeState()
+      plugin, plugin_state = plugin_class.CreatePluginAndDefaultState(
+          source_urn=source, args=plugin_descriptor.plugin_args, token=token)
     except Exception as e:  # pylint: disable=broad-except
       logging.warning("Plugin %s failed to initialize (%s), ignoring it.",
                       plugin, e)
@@ -179,12 +184,12 @@ def GetOutputPluginStates(output_plugins, source=None, token=None):
 
     # TODO(amoser): Those do not need to be inside the state, they
     # could be part of the plugin descriptor.
-    plugin.state["logs"] = []
-    plugin.state["errors"] = []
+    plugin_state["logs"] = []
+    plugin_state["errors"] = []
 
     output_plugins_states.append(
         rdf_flow_runner.OutputPluginState(
-            plugin_state=plugin.state, plugin_descriptor=plugin_descriptor))
+            plugin_state=plugin_state, plugin_descriptor=plugin_descriptor))
 
   return output_plugins_states
 
@@ -225,7 +230,8 @@ def StartAFF4Flow(args=None,
   try:
     flow_cls = registry.AFF4FlowRegistry.FlowClassByName(runner_args.flow_name)
   except ValueError:
-    stats.STATS.IncrementCounter("grr_flow_invalid_flow_count")
+    stats_collector_instance.Get().IncrementCounter(
+        "grr_flow_invalid_flow_count")
     raise RuntimeError("Unable to locate flow %s" % runner_args.flow_name)
 
   # If no token is specified, raise.
@@ -308,15 +314,22 @@ def StartAFF4Flow(args=None,
   return flow_obj.urn
 
 
+def RandomFlowId():
+  """Returns a random flow id encoded as a hex string."""
+  return "%08X" % random.PositiveUInt32()
+
+
 def StartFlow(client_id=None,
-              cpu_limit=7200,
+              cpu_limit=None,
               creator=None,
               flow_args=None,
               flow_cls=None,
               network_bytes_limit=None,
               original_flow=None,
               output_plugins=None,
+              start_at=None,
               parent_flow_obj=None,
+              parent_hunt_id=None,
               **kwargs):
   """The main factory function for creating and executing a new flow.
 
@@ -332,7 +345,11 @@ def StartFlow(client_id=None,
       another flow.
     output_plugins: An OutputPluginDescriptor object indicating what output
       plugins should be used for this flow.
+    start_at: If specified, flow will be started not immediately, but at a given
+      time.
     parent_flow_obj: A parent flow object. None if this is a top level flow.
+    parent_hunt_id: String identifying parent hunt. Can't be passed together
+      with parent_flow_obj.
     **kwargs: If args or runner_args are not specified, we construct these
       protobufs from these keywords.
 
@@ -342,11 +359,17 @@ def StartFlow(client_id=None,
   Raises:
     ValueError: Unknown or invalid parameters were provided.
   """
+
+  if parent_flow_obj is not None and parent_hunt_id is not None:
+    raise ValueError(
+        "parent_flow_obj and parent_hunt_id are mutually exclusive.")
+
   # Is the required flow a known flow?
   try:
     registry.FlowRegistry.FlowClassByName(flow_cls.__name__)
   except ValueError:
-    stats.STATS.IncrementCounter("grr_flow_invalid_flow_count")
+    stats_collector_instance.Get().IncrementCounter(
+        "grr_flow_invalid_flow_count")
     raise ValueError("Unable to locate flow %s" % flow_cls.__name__)
 
   if not client_id:
@@ -375,17 +398,26 @@ def StartFlow(client_id=None,
       original_flow=original_flow,
       flow_state="RUNNING")
 
-  rdf_flow.flow_id = "%08X" % utils.PRNG.GetPositiveUInt32()
+  if parent_hunt_id is not None and parent_flow_obj is None:
+    rdf_flow.flow_id = parent_hunt_id
+    if IsLegacyHunt(parent_hunt_id):
+      rdf_flow.flow_id = rdf_flow.flow_id[2:]
+  else:
+    rdf_flow.flow_id = RandomFlowId()
 
-  if parent_flow_obj:
+  if parent_flow_obj:  # A flow is a nested flow.
     parent_rdf_flow = parent_flow_obj.rdf_flow
     rdf_flow.long_flow_id = "%s/%s" % (parent_rdf_flow.long_flow_id,
                                        rdf_flow.flow_id)
     rdf_flow.parent_flow_id = parent_rdf_flow.flow_id
+    rdf_flow.parent_hunt_id = parent_rdf_flow.parent_hunt_id
     rdf_flow.parent_request_id = parent_flow_obj.GetCurrentOutboundId()
     if parent_rdf_flow.creator:
       rdf_flow.creator = parent_rdf_flow.creator
-  else:
+  elif parent_hunt_id:  # A flow is a root-level hunt-induced flow.
+    rdf_flow.long_flow_id = "%s/%s" % (client_id, rdf_flow.flow_id)
+    rdf_flow.parent_hunt_id = parent_hunt_id
+  else:  # A flow is a root-level non-hunt flow.
     rdf_flow.long_flow_id = "%s/%s" % (client_id, rdf_flow.flow_id)
 
   if output_plugins:
@@ -402,17 +434,23 @@ def StartFlow(client_id=None,
   logging.info(u"Scheduling %s(%s) on %s", rdf_flow.long_flow_id,
                rdf_flow.flow_class_name, client_id)
 
-  flow_obj = flow_cls(rdf_flow)
-  # Just run the first state inline. NOTE: Running synchronously means
-  # that this runs on the thread that starts the flow. The advantage is
-  # that that Start method can raise any errors immediately.
-  flow_obj.Start()
-  flow_obj.PersistState()
+  rdf_flow.current_state = "Start"
 
-  # The flow does not need to actually remain running.
-  if not flow_obj.outstanding_requests:
-    flow_obj.RunStateMethod("End")
-    flow_obj.MarkDone()
+  flow_obj = flow_cls(rdf_flow)
+  if start_at is None:
+    # Just run the first state inline. NOTE: Running synchronously means
+    # that this runs on the thread that starts the flow. The advantage is
+    # that that Start method can raise any errors immediately.
+    flow_obj.Start()
+
+    # The flow does not need to actually remain running.
+    if not flow_obj.outstanding_requests:
+      flow_obj.RunStateMethod("End")
+      flow_obj.MarkDone()
+  else:
+    flow_obj.CallState("Start", start_time=start_at)
+
+  flow_obj.PersistState()
 
   data_store.REL_DB.WriteFlowObject(flow_obj.rdf_flow)
 
@@ -498,32 +536,11 @@ class FlowBase(with_metaclass(registry.AFF4FlowRegistry, aff4.AFF4Volume)):
     """Write all the messages queued in the queue manager."""
     self.GetRunner().FlushMessages()
 
-  def NotifyAboutEnd(self):
-    """Send out a final notification about the end of this flow."""
-    if not self.runner.ShouldSendNotifications():
-      return
-
-    flow_ref = None
-    if self.runner_args.client_id:
-      flow_ref = rdf_objects.FlowReference(
-          client_id=self.client_id, flow_id=self.urn.Basename())
-
-    num_results = len(self.ResultCollection())
-    notification_lib.Notify(
-        self.token.username,
-        rdf_objects.UserNotification.Type.TYPE_FLOW_RUN_COMPLETED,
-        "Flow %s completed with %d %s" % (self.__class__.__name__, num_results,
-                                          num_results == 1 and "result" or
-                                          "results"),
-        rdf_objects.ObjectReference(
-            reference_type=rdf_objects.ObjectReference.Type.FLOW,
-            flow=flow_ref))
-
   def ShouldSendNotifications(self):
-    return self.runner.ShouldSendNotifications()
+    return self.GetRunner().ShouldSendNotifications()
 
   def Terminate(self, status=None):
-    self.NotifyAboutEnd()
+    """Terminates the flow."""
 
   def End(self, responses):
     """Final state.
@@ -532,7 +549,7 @@ class FlowBase(with_metaclass(registry.AFF4FlowRegistry, aff4.AFF4Volume)):
     the flow a chance to clean up.
 
     Args:
-      responses: An flow_responses.Responses object.
+      responses: A flow_responses.Responses object.
     """
 
   def Start(self):
@@ -565,6 +582,10 @@ class FlowBase(with_metaclass(registry.AFF4FlowRegistry, aff4.AFF4Volume)):
   @property
   def session_id(self):
     return self.context.session_id
+
+  @property
+  def creator(self):
+    return self.context.creator
 
   def Log(self, format_str, *args):
     """Logs the message using the flow's standard logging.
@@ -691,10 +712,6 @@ class GRRFlow(FlowBase):
   category = ""
   friendly_name = None
 
-  # If this is set, the flow is only displayed in the UI if the user has one of
-  # the labels given.
-  AUTHORIZED_LABELS = []
-
   # Behaviors set attributes of this flow. See FlowBehavior() above.
   behaviours = FlowBehaviour("ADVANCED")
 
@@ -703,6 +720,7 @@ class GRRFlow(FlowBase):
     super(GRRFlow, self).Initialize()
     self._client_version = None
     self._client_os = None
+    self._client_knowledge_base = None
 
     if "r" in self.mode:
       state = self.Get(self.Schema.FLOW_STATE_DICT)
@@ -741,6 +759,23 @@ class GRRFlow(FlowBase):
     """
     return cls.args_type()
 
+  def NotifyAboutEnd(self):
+    """Send out a final notification about the end of this flow."""
+    flow_ref = None
+    if self.runner_args.client_id:
+      flow_ref = rdf_objects.FlowReference(
+          client_id=self.client_id, flow_id=self.urn.Basename())
+
+    num_results = len(self.ResultCollection())
+    notification_lib.Notify(
+        self.creator, rdf_objects.UserNotification.Type.TYPE_FLOW_RUN_COMPLETED,
+        "Flow %s completed with %d %s" % (self.__class__.__name__, num_results,
+                                          num_results == 1 and "result" or
+                                          "results"),
+        rdf_objects.ObjectReference(
+            reference_type=rdf_objects.ObjectReference.Type.FLOW,
+            flow=flow_ref))
+
   def HeartBeat(self):
     if self.locked:
       lease_time = self.transaction.lease_time
@@ -765,16 +800,17 @@ class GRRFlow(FlowBase):
       protodict = rdf_protodict.AttributedDict().FromDict(self.state)
       self.Set(self.Schema.FLOW_STATE_DICT(protodict))
 
-  def SendReply(self, response):
-    return self.runner.SendReply(response)
+  def SendReply(self, response, tag=None):
+    return self.runner.SendReply(response, tag=tag)
 
   def Error(self, backtrace, client_id=None):
     return self.runner.Error(backtrace, client_id=client_id)
 
   def Terminate(self, status=None):
     super(GRRFlow, self).Terminate(status=status)
-
-    return self.runner.Terminate(status=status)
+    self.runner.Terminate(status=status)
+    if self.GetRunner().ShouldSendNotifications():
+      self.NotifyAboutEnd()
 
   @property
   def client_id(self):
@@ -800,16 +836,19 @@ class GRRFlow(FlowBase):
 
     return self._client_os
 
+  @property
+  def client_knowledge_base(self):
+    if self._client_knowledge_base is None:
+      self._client_knowledge_base = data_store_utils.GetClientKnowledgeBase(
+          self.client_id, token=self.token)
+    return self._client_knowledge_base
+
   def Name(self):
     return self.__class__.__name__
 
   @property
-  def creator(self):
-    return self.token.username
-
-  @property
   def outstanding_requests(self):
-    return self.runner.OutstandingRequests()
+    return self.GetRunner().OutstandingRequests()
 
   @classmethod
   def MarkForTermination(cls, flow_urn, reason=None, mutation_pool=None):
@@ -952,7 +991,7 @@ class WellKnownFlow(GRRFlow):
     """Get instances of all well known flows."""
     well_known_flows = {}
     for cls in itervalues(registry.AFF4FlowRegistry.FLOW_REGISTRY):
-      if aff4.issubclass(cls, WellKnownFlow) and cls.well_known_session_id:
+      if issubclass(cls, WellKnownFlow) and cls.well_known_session_id:
         well_known_flow = cls(cls.well_known_session_id, mode="rw", token=token)
         well_known_flows[cls.well_known_session_id.FlowName()] = well_known_flow
 
@@ -963,7 +1002,7 @@ class WellKnownFlow(GRRFlow):
       self.ProcessMessage(*args, **kwargs)
     except Exception as e:  # pylint: disable=broad-except
       logging.exception("Error in WellKnownFlow.ProcessMessage: %s", e)
-      stats.STATS.IncrementCounter(
+      stats_collector_instance.Get().IncrementCounter(
           "well_known_flow_errors", fields=[str(self.session_id)])
 
   @property
@@ -1021,30 +1060,3 @@ class WellKnownFlow(GRRFlow):
   def UpdateKillNotification(self):
     # For WellKnownFlows it doesn't make sense to kill them ever.
     pass
-
-
-class FlowInit(registry.InitHook):
-  """Sets up flow-related stats."""
-
-  pre = [aff4.AFF4InitHook]
-
-  def RunOnce(self):
-    # Counters defined here
-    stats.STATS.RegisterCounterMetric("grr_flow_completed_count")
-    stats.STATS.RegisterCounterMetric("grr_flow_errors")
-    stats.STATS.RegisterCounterMetric("grr_flow_invalid_flow_count")
-    stats.STATS.RegisterCounterMetric("grr_request_retransmission_count")
-    stats.STATS.RegisterCounterMetric("grr_response_out_of_order")
-    stats.STATS.RegisterCounterMetric("grr_unique_clients")
-    stats.STATS.RegisterCounterMetric("grr_worker_states_run")
-    stats.STATS.RegisterCounterMetric("grr_well_known_flow_requests")
-
-    # Flow-aware counters
-    stats.STATS.RegisterCounterMetric("flow_starts", fields=[("flow", str)])
-    stats.STATS.RegisterCounterMetric("flow_errors", fields=[("flow", str)])
-    stats.STATS.RegisterCounterMetric(
-        "flow_completions", fields=[("flow", str)])
-    stats.STATS.RegisterCounterMetric(
-        "well_known_flow_requests", fields=[("flow", str)])
-    stats.STATS.RegisterCounterMetric(
-        "well_known_flow_errors", fields=[("flow", str)])

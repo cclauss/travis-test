@@ -1,5 +1,9 @@
 #!/usr/bin/env python
 """Registry for filters and abstract classes for basic filter functionality."""
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import unicode_literals
+
 import collections
 import glob
 import itertools
@@ -10,6 +14,7 @@ import os
 from future.utils import iteritems
 from future.utils import iterkeys
 from future.utils import itervalues
+from future.utils import string_types
 import yaml
 
 from grr_response_core import config
@@ -60,7 +65,7 @@ def MatchStrToList(match=None):
   # Allow multiple match types, either as a list or as a string.
   if match is None:
     match = ["ANY"]
-  elif isinstance(match, basestring):
+  elif isinstance(match, string_types):
     match = match.split()
   return match
 
@@ -399,7 +404,7 @@ class Check(rdf_structs.RDFProtoStruct):
     # If artifact is a single string, see if it is in the list of artifacts
     # as-is. Otherwise, test whether any of the artifacts passed in to this
     # function exist in the list of artifacts.
-    if isinstance(artifacts, basestring):
+    if isinstance(artifacts, string_types):
       return artifacts in self.artifacts
     else:
       return any(True for artifact in artifacts if artifact in self.artifacts)
@@ -572,7 +577,8 @@ class CheckRegistry(object):
   @staticmethod
   def _AsList(arg):
     """Encapsulates an argument in a list, if it's not already iterable."""
-    if isinstance(arg, basestring) or not isinstance(arg, collections.Iterable):
+    if (isinstance(arg, string_types) or
+        not isinstance(arg, collections.Iterable)):
       return [arg]
     else:
       return list(arg)

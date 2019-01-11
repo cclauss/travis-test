@@ -1,13 +1,17 @@
 #!/usr/bin/env python
 # -*- mode: python; encoding: utf-8 -*-
 """Tests for grr.tools.fuse_mount.py."""
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import unicode_literals
 
 import datetime
 import os
 
 
+from typing import Text
+
 from grr_response_client.client_actions import admin
-from grr_response_client.client_actions import file_fingerprint
 from grr_response_client.client_actions import searching
 from grr_response_client.client_actions import standard
 from grr_response_client.client_actions.linux import linux
@@ -86,7 +90,7 @@ class GRRFuseDatastoreOnlyTest(GRRFuseTestBase):
 
     for item in contents:
       # All the filenames should be unicode strings.
-      self.assertTrue(isinstance(item, unicode))
+      self.assertIsInstance(item, Text)
     self.assertTrue("." in contents and ".." in contents)
     contents.remove(".")
     contents.remove("..")
@@ -111,8 +115,8 @@ class GRRFuseDatastoreOnlyTest(GRRFuseTestBase):
 
   def testReadDirFile(self):
     # We can't ls a file.
+    file_path = os.path.join(self.root, self.client_name, "fs/os/c/bin/bash")
     with self.assertRaises(MockFuseOSError):
-      file_path = os.path.join(self.root, self.client_name, "fs/os/c/bin/bash")
       # We iterate through the generator so the error actually gets thrown.
       list(self.passthrough.readdir(file_path))
 
@@ -181,11 +185,11 @@ class GRRFuseDatastoreOnlyTest(GRRFuseTestBase):
     }
 
     bash_path = os.path.join("/", self.client_name, "fs/os/c/bin/bash")
-    self.assertItemsEqual(self.passthrough.getattr(bash_path), bash_stat)
+    self.assertCountEqual(self.passthrough.getattr(bash_path), bash_stat)
 
   def testReadNotFile(self):
+    existing_dir = os.path.join(self.root, self.client_name, "/fs/os/c/bin")
     with self.assertRaises(MockFuseOSError):
-      existing_dir = os.path.join(self.root, self.client_name, "/fs/os/c/bin")
       self.passthrough.Read(existing_dir)
 
 
@@ -197,14 +201,9 @@ class GRRFuseTest(GRRFuseTestBase):
   def setUp(self):
     super(GRRFuseTest, self).setUp()
 
-    self.client_id = self.SetupClient(0)
+    self.client_id = self.SetupClient(0, system="Linux")
 
     self.client_name = str(self.client_id)[len("aff4:/"):]
-
-    with aff4.FACTORY.Open(self.client_id, token=self.token, mode="rw") as fd:
-      fd.Set(fd.Schema.SYSTEM("Linux"))
-      kb = fd.Schema.KNOWLEDGE_BASE()
-      fd.Set(kb)
 
     with aff4.FACTORY.Create(
         self.client_id.Add("fs/os"),
@@ -221,13 +220,13 @@ class GRRFuseTest(GRRFuseTestBase):
         admin.GetClientInfo,
         admin.GetConfiguration,
         admin.GetPlatformInfo,
-        file_fingerprint.FingerprintFile,
         linux.EnumerateFilesystems,
         linux.EnumerateInterfaces,
         linux.EnumerateUsers,
         linux.GetInstallDate,
         searching.Find,
         standard.HashBuffer,
+        standard.HashFile,
         standard.ListDirectory,
         standard.GetFileStat,
         standard.TransferBuffer,
@@ -303,10 +302,10 @@ class GRRFuseTest(GRRFuseTestBase):
 
   def testUpdateSparseImageChunks(self):
     """Make sure the right chunks get updated when we read a sparse file."""
-    with utils.MultiStubber(
-        (self.grr_fuse, "force_sparse_image", True),
-        (self.grr_fuse, "max_age_before_refresh",
-         datetime.timedelta(seconds=30)), (self.grr_fuse, "size_threshold", 0)):
+    with utils.MultiStubber((self.grr_fuse, "force_sparse_image", True),
+                            (self.grr_fuse, "max_age_before_refresh",
+                             datetime.timedelta(seconds=30)),
+                            (self.grr_fuse, "size_threshold", 0)):
       self._testUpdateSparseImageChunks()
 
   def _testUpdateSparseImageChunks(self):
@@ -331,8 +330,8 @@ class GRRFuseTest(GRRFuseTestBase):
     self.ListDirectoryOnClient(self.temp_dir)
 
     # Make sure refreshing is allowed.
-    with utils.Stubber(
-        self.grr_fuse, "max_age_before_refresh", datetime.timedelta(seconds=0)):
+    with utils.Stubber(self.grr_fuse, "max_age_before_refresh",
+                       datetime.timedelta(seconds=0)):
       # Read 3 chunks, from #2 to #4.
       data = self.grr_fuse.Read(
           client_path, length=read_len, offset=start_point)
@@ -349,8 +348,8 @@ class GRRFuseTest(GRRFuseTestBase):
     self.assertEqual(missing_chunks, [0, 1, 5, 6, 7, 8, 9])
 
     # Make sure refreshing is allowed.
-    with utils.Stubber(
-        self.grr_fuse, "max_age_before_refresh", datetime.timedelta(seconds=0)):
+    with utils.Stubber(self.grr_fuse, "max_age_before_refresh",
+                       datetime.timedelta(seconds=0)):
       # Now we read and make sure the contents are as we expect.
       fuse_contents = self.grr_fuse.Read(
           client_path, length=8 * chunksize, offset=0)
@@ -367,8 +366,8 @@ class GRRFuseTest(GRRFuseTestBase):
       f.write(expected_contents)
 
     # Enable refresh.
-    with utils.Stubber(
-        self.grr_fuse, "max_age_before_refresh", datetime.timedelta(seconds=0)):
+    with utils.Stubber(self.grr_fuse, "max_age_before_refresh",
+                       datetime.timedelta(seconds=0)):
       fuse_contents = self.grr_fuse.Read(
           client_path, length=len(contents), offset=0)
 
@@ -436,12 +435,12 @@ class GRRFuseTest(GRRFuseTestBase):
   def RunFakeWorkerAndClient(self, client_mock, worker_mock):
     """Runs a fake client and worker until both have empty queues.
 
+    This function will run in a background thread while the tests run, and will
+    end when self.done is True.
+
     Args:
       client_mock: The MockClient object whose queue we'll grab tasks from.
       worker_mock: Used to mock run the flows.
-
-    This function will run in a background thread while the tests run, and
-    will end when self.done is True.
     """
     # Run the client and worker until nothing changes any more.
     while True:

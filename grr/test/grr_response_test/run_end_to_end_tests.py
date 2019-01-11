@@ -1,8 +1,11 @@
 #!/usr/bin/env python
 """Helper script for running end-to-end tests."""
+from __future__ import absolute_import
+from __future__ import division
 
 import getpass
 import logging
+import sys
 
 # We need to import the server_plugins module before other server init modules.
 # pylint: disable=unused-import,g-bad-import-order
@@ -42,6 +45,11 @@ flags.DEFINE_list("filenames_excluded_from_log", ["connectionpool.py"],
 flags.DEFINE_bool("upload_test_binaries", True,
                   "Whether to upload executables needed by some e2e tests.")
 
+flags.DEFINE_list(
+    "ignore_test_context", False,
+    "When set, run_end_to_end_tests doesn't load the config with a "
+    "default 'Test Context' added.")
+
 
 class E2ELogFilter(logging.Filter):
   """Logging filter that excludes log messages for particular files."""
@@ -52,7 +60,11 @@ class E2ELogFilter(logging.Filter):
 
 def main(argv):
   del argv  # Unused.
-  config.CONFIG.AddContext(contexts.TEST_CONTEXT, "Context for running tests.")
+
+  if not flags.FLAGS.ignore_test_context:
+    config.CONFIG.AddContext(contexts.TEST_CONTEXT,
+                             "Context for running tests.")
+
   server_startup.Init()
   for handler in logging.getLogger().handlers:
     handler.addFilter(E2ELogFilter())
@@ -66,7 +78,12 @@ def main(argv):
       blacklisted_tests=flags.FLAGS.blacklisted_tests,
       upload_test_binaries=flags.FLAGS.upload_test_binaries)
   test_runner.Initialize()
-  test_runner.RunTestsAgainstClient(flags.FLAGS.client_id)
+
+  results, _ = test_runner.RunTestsAgainstClient(flags.FLAGS.client_id)
+  # Exit with a non-0 error code if one of the tests failed.
+  for r in results.values():
+    if r.errors or r.failures:
+      sys.exit(1)
 
 
 if __name__ == "__main__":

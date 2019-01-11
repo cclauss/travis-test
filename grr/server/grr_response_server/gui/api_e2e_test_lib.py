@@ -5,6 +5,8 @@ API plugins are tested with their own dedicated unit-tests that are
 protocol- and server-independent. End-to-end tests are meant to use
 the full GRR server stack (web server + API client library).
 """
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import unicode_literals
 
 import logging
@@ -58,14 +60,20 @@ class ApiE2ETest(test_lib.GRRBaseTest, acl_test_lib.AclTestMixin):
       if not ApiE2ETest._api_set_up_done:
 
         # Set up HTTP server
-        port = portpicker.PickUnusedPort()
+        port = portpicker.pick_unused_port()
         ApiE2ETest.server_port = port
         logging.info("Picked free AdminUI port for HTTP %d.", port)
 
-        ApiE2ETest.trd = wsgiapp_testlib.ServerThread(port)
+        ApiE2ETest.trd = wsgiapp_testlib.ServerThread(
+            port, name="api_e2e_server")
         ApiE2ETest.trd.StartAndWaitUntilServing()
 
         ApiE2ETest._api_set_up_done = True
+
+  @classmethod
+  def tearDownClass(cls):
+    super(ApiE2ETest, cls).tearDownClass()
+    ApiE2ETest.trd.Stop()
 
 
 class RootApiBinaryManagementTestRouter(

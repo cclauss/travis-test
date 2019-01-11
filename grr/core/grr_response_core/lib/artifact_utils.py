@@ -5,11 +5,16 @@ This file contains non-GRR specific pieces of artifact processing and is
 intended to end up as an independent library.
 """
 
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import unicode_literals
 
 import itertools
 import logging
 import re
+
+from future.builtins import str
+from future.utils import string_types
 
 from grr_response_core.lib import objectfilter
 from grr_response_core.lib import utils
@@ -42,6 +47,14 @@ class KnowledgeBaseAttributesMissingError(Error):
 INTERPOLATED_REGEX = re.compile(r"%%([^%]+?)%%")
 
 
+def InterpolateListKbAttributes(input_list, knowledge_base, ignore_errors):
+  interpolated_list = []
+  for element in input_list:
+    interpolated_list.extend(
+        InterpolateKbAttributes(element, knowledge_base, ignore_errors))
+  return interpolated_list
+
+
 def InterpolateKbAttributes(pattern, knowledge_base, ignore_errors=False):
   """Interpolate all knowledgebase attributes in pattern.
 
@@ -70,7 +83,7 @@ def InterpolateKbAttributes(pattern, knowledge_base, ignore_errors=False):
         kb_value = knowledge_base.Get(base_name.lower())
         if not kb_value:
           raise AttributeError(base_name.lower())
-        elif isinstance(kb_value, basestring):
+        elif isinstance(kb_value, string_types):
           alternatives.append(kb_value)
         else:
           # Iterate over repeated fields (e.g. users)
@@ -79,7 +92,7 @@ def InterpolateKbAttributes(pattern, knowledge_base, ignore_errors=False):
             sub_attr = value.Get(attr_name)
             # Ignore empty results
             if sub_attr:
-              sub_attrs.append(unicode(sub_attr))
+              sub_attrs.append(str(sub_attr))
 
           # If we got some results we use them. On Windows it is common for
           # users.temp to be defined for some users, but not all users.
@@ -92,7 +105,7 @@ def InterpolateKbAttributes(pattern, knowledge_base, ignore_errors=False):
         kb_value = knowledge_base.Get(match.group(1).lower())
         if not kb_value:
           raise AttributeError(match.group(1).lower())
-        elif isinstance(kb_value, basestring):
+        elif isinstance(kb_value, string_types):
           alternatives.append(kb_value)
     except AttributeError as e:
       if ignore_errors:
@@ -199,7 +212,7 @@ def ExpandWindowsEnvironmentVariables(data_string, knowledge_base):
     # KB environment variables are prefixed with environ_.
     kb_value = getattr(knowledge_base, "environ_%s" % match.group(1).lower(),
                        None)
-    if isinstance(kb_value, basestring) and kb_value:
+    if isinstance(kb_value, string_types) and kb_value:
       components.append(kb_value)
     else:
       # Failed to expand, leave the variable as it was.
@@ -254,7 +267,7 @@ def ExpandWindowsUserEnvironmentVariables(data_string,
     kb_value = None
     if kb_user:
       kb_value = getattr(kb_user, match.group(1).lower(), None)
-    if isinstance(kb_value, basestring) and kb_value:
+    if isinstance(kb_value, string_types) and kb_value:
       components.append(kb_value)
     else:
       components.append("%%%s%%" % match.group(1))

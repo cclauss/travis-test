@@ -3,6 +3,9 @@
 # pyformat: disable
 
 """This is a test fixture for client objects.."""
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import unicode_literals
 
 from grr_response_core.lib.rdfvalues import protodict as rdf_protodict
 from grr_response_server.aff4_objects import aff4_grr
@@ -49,15 +52,15 @@ system_manufacturer: "Sample System Manufacturer"
         })),
     (u"/fs/tsk/c/bin/rbash", (aff4_grr.VFSMemoryFile, {
         "aff4:size": 12,
-        "aff4:content": "Hello world",
+        "aff4:content": b"Hello world",
     })),
     (u"/fs/tsk/c/bin/bash", (aff4_grr.VFSMemoryFile, {
         "aff4:size": 12,
-        "aff4:content": "Hello world",
+        "aff4:content": b"Hello world",
     })),
-    (ur"/fs/os/c/regex\V.*?]xx[{}--", (aff4_standard.VFSDirectory, {
+    (u"/fs/os/c/regex\\V.*?]xx[{}--", (aff4_standard.VFSDirectory, {
         })),
-    (ur"/fs/os/c/regex\V.*?]xx[{}--/regexchild", (aff4_standard.VFSDirectory, {
+    (u"/fs/os/c/regex\\V.*?]xx[{}--/regexchild", (aff4_standard.VFSDirectory, {
         })),
     (u"/fs/os/proc/", (aff4_standard.VFSDirectory, {
         })),
@@ -65,11 +68,11 @@ system_manufacturer: "Sample System Manufacturer"
         })),
     (u"/fs/os/c/bin %(client_id)s/rbash", (aff4_grr.VFSMemoryFile, {
         "aff4:size": 12,
-        "aff4:content": "Hello world",
+        "aff4:content": b"Hello world",
     })),
     (u"/fs/os/c/bin %(client_id)s/bash", (aff4_grr.VFSMemoryFile, {
         "aff4:size": 12,
-        "aff4:content": "Hello world",
+        "aff4:content": b"Hello world",
     })),
     (u"/fs/os/c/bin %(client_id)s/pidof", (aff4_grr.VFSFile, {
         "aff4:stat":
@@ -133,7 +136,7 @@ st_blksize: 4096
 st_rdev: 0
 pathspec {
   pathtype: OS
-  path: "/bin/bash"
+  path: "/c/bin/bash"
 }
 """
     })),
@@ -3129,7 +3132,7 @@ pathspec {
 """
     })),
     (u"/fs/os/proc/10/cmdline", (aff4_grr.VFSMemoryFile, {
-        "aff4:content": "ls\000hello world\'\000-l",
+        "aff4:content": b"ls\000hello world\'\000-l",
         "aff4:stat":
             """
 st_mode: 33261
@@ -3142,7 +3145,7 @@ pathspec {
 """
     })),
     (u"/fs/os/etc/lsb-release", (aff4_grr.VFSMemoryFile, {
-        "aff4:content": "DISTRIB_ID=Ubuntu\nDISTRIB_RELEASE=14.04\n",
+        "aff4:content": b"DISTRIB_ID=Ubuntu\nDISTRIB_RELEASE=14.04\n",
         "aff4:stat":
             """
 st_mode: 33261
@@ -4134,7 +4137,7 @@ path: "/C:/WINDOWS"
 
     (u"/fs/os/C:/WINDOWS/foo.exe", (aff4_grr.VFSMemoryFile, {
         "aff4:size": 11,
-        "aff4:content": "this is foo",
+        "aff4:content": b"this is foo",
         "aff4:stat":
             """
 st_mode: 33206
@@ -4149,7 +4152,7 @@ pathspec {
 
     (u"/fs/os/C:/WINDOWS/bar.exe", (aff4_grr.VFSMemoryFile, {
         "aff4:size": 8,
-        "aff4:content": "just bar",
+        "aff4:content": b"just bar",
         "aff4:stat":
             """
 st_mode: 33206

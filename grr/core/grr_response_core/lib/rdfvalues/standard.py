@@ -1,9 +1,13 @@
 #!/usr/bin/env python
 """Standard RDFValues."""
 
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import unicode_literals
 
 import re
+
+from future.builtins import str
 from future.moves.urllib import parse as urlparse
 
 from grr_response_core.lib import config_lib
@@ -111,4 +115,4 @@ class URI(rdf_structs.RDFProtoStruct):
 
   def SerializeToString(self):
     url = (self.transport, self.host, self.path, self.query, self.fragment)
-    return str(urlparse.urlunsplit(url))
+    return bytes(urlparse.urlunsplit(url))

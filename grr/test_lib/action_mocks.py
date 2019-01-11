@@ -1,6 +1,10 @@
 #!/usr/bin/env python
 """A library of client action mocks for use in tests."""
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import unicode_literals
 
+import io
 import itertools
 import socket
 
@@ -12,6 +16,10 @@ from grr_response_client.client_actions import file_finder
 from grr_response_client.client_actions import file_fingerprint
 from grr_response_client.client_actions import searching
 from grr_response_client.client_actions import standard
+# TODO(user): find a uniform way to register client specific classes
+# needed for tests. We shouldn't do this at import time, but rather fill
+# registries at runtime.
+from grr_response_client.vfs_handlers import registry_init  # pylint: disable=unused-import
 from grr_response_core import config
 from grr_response_core.lib import rdfvalue
 from grr_response_core.lib.rdfvalues import client as rdf_client
@@ -195,6 +203,37 @@ class FileFinderClientMock(ActionMock):
         standard.TransferBuffer, *args, **kwargs)
 
 
+class FileFinderClientMockWithTimestamps(FileFinderClientMock):
+  """A mock for the FileFinder that adds timestamps to some files."""
+
+  def HandleMessage(self, message):
+    responses = super(FileFinderClientMockWithTimestamps,
+                      self).HandleMessage(message)
+
+    predefined_values = {
+        "auth.log": (1333333330, 1333333332, 1333333334),
+        "dpkg.log": (1444444440, 1444444442, 1444444444),
+        "dpkg_false.log": (1555555550, 1555555552, 1555555554)
+    }
+
+    processed_responses = []
+
+    for response in responses:
+      payload = response.payload
+      if isinstance(payload, rdf_client_fs.FindSpec):
+        basename = payload.hit.pathspec.Basename()
+        try:
+          payload.hit.st_atime = predefined_values[basename][0]
+          payload.hit.st_mtime = predefined_values[basename][1]
+          payload.hit.st_ctime = predefined_values[basename][2]
+          response.payload = payload
+        except KeyError:
+          pass
+      processed_responses.append(response)
+
+    return processed_responses
+
+
 class ListProcessesMock(FileFinderClientMock):
   """Client with real file actions and mocked-out ListProcesses."""
 
@@ -245,6 +284,27 @@ class GrepClientMock(ActionMock):
         *args, **kwargs)
 
 
+class UpdateAgentClientMock(ActionMock):
+  """Client with a mocked-out UpdateAgent client-action."""
+
+  def __init__(self):
+    super(UpdateAgentClientMock, self).__init__()
+
+    self._requests = []
+
+  def UpdateAgent(self, execute_binary_request):
+    """Replacement for the real UpdateAgent client-action."""
+    self._requests.append(execute_binary_request)
+    return []
+
+  def GetDownloadedFileContents(self):
+    """Returns the raw contents of the file sent by the server."""
+    bytes_buffer = io.BytesIO()
+    for request in self._requests:
+      bytes_buffer.write(request.executable.data)
+    return bytes_buffer.getvalue()
+
+
 class InterrogatedClient(ActionMock):
   """A mock of client state."""
 
@@ -259,10 +319,12 @@ class InterrogatedClient(ActionMock):
                        system="Linux",
                        version="12.04",
                        kernel="3.13.0-39-generic",
-                       fqdn="test_node.test"):
+                       fqdn="test_node.test",
+                       release="5"):
     self.system = system
     self.version = version
     self.kernel = kernel
+    self.release = release
     self.response_count = 0
     self.recorded_messages = []
     self.fqdn = fqdn
@@ -278,7 +340,7 @@ class InterrogatedClient(ActionMock):
         rdf_client.Uname(
             system=self.system,
             fqdn=self.fqdn,
-            release="5",
+            release=self.release,
             version=self.version,
             kernel=self.kernel,
             machine="i386")
@@ -292,7 +354,7 @@ class InterrogatedClient(ActionMock):
     self.response_count += 1
     return [
         rdf_client_network.Interface(
-            mac_address="123456",
+            mac_address=b"123456",
             addresses=[
                 rdf_client_network.NetworkAddress(
                     address_type=rdf_client_network.NetworkAddress.Family.INET,

@@ -1,5 +1,8 @@
 #!/usr/bin/env python
 """Tests for grr.lib.console_utils."""
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import unicode_literals
 
 
 from grr_response_core.lib import flags
@@ -43,7 +46,7 @@ class ConsoleUtilsTest(flow_test_lib.FlowTestsBaseclass):
     client.Close()
 
     res = console_utils.FindClonedClients(token=self.token)
-    self.assertEqual(len(res), 1)
+    self.assertLen(res, 1)
     self.assertEqual(res[0].urn, client.urn)
 
 

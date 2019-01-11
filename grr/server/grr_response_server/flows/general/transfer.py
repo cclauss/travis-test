@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 """These flows are designed for high performance transfers."""
+from __future__ import absolute_import
 from __future__ import division
 from __future__ import unicode_literals
 
@@ -23,6 +24,7 @@ from grr_response_core.lib.rdfvalues import structs as rdf_structs
 from grr_response_proto import flows_pb2
 from grr_response_server import aff4
 from grr_response_server import data_store
+from grr_response_server import db
 from grr_response_server import events
 from grr_response_server import file_store
 from grr_response_server import flow
@@ -32,7 +34,6 @@ from grr_response_server import notification
 from grr_response_server import server_stubs
 from grr_response_server.aff4_objects import aff4_grr
 from grr_response_server.aff4_objects import filestore as legacy_filestore
-from grr_response_server.rdfvalues import file_store as rdf_file_store
 from grr_response_server.rdfvalues import objects as rdf_objects
 
 
@@ -163,14 +164,15 @@ class GetFileMixin(object):
         # TODO(user): when all the code can read files from REL_DB,
         # protect this with:
         # if not data_store.RelationalDBReadEnabled(category="filestore"):
-        with aff4.FACTORY.Create(
-            urn, aff4_grr.VFSBlobImage, token=self.token) as fd:
-          fd.SetChunksize(self.CHUNK_SIZE)
-          fd.Set(fd.Schema.STAT(stat_entry))
+        if data_store.AFF4Enabled():
+          with aff4.FACTORY.Create(
+              urn, aff4_grr.VFSBlobImage, token=self.token) as fd:
+            fd.SetChunksize(self.CHUNK_SIZE)
+            fd.Set(fd.Schema.STAT(stat_entry))
 
-          for data, length in self.state.blobs:
-            fd.AddBlob(data, length)
-            fd.Set(fd.Schema.CONTENT_LAST, rdfvalue.RDFDatetime.Now())
+            for data, length in self.state.blobs:
+              fd.AddBlob(rdf_objects.BlobID.FromBytes(data), length)
+              fd.Set(fd.Schema.CONTENT_LAST, rdfvalue.RDFDatetime.Now())
 
         if data_store.RelationalDBWriteEnabled():
           path_info = rdf_objects.PathInfo.FromStatEntry(stat_entry)
@@ -183,7 +185,8 @@ class GetFileMixin(object):
                 for data, _ in self.state.blobs
             ]
 
-            hash_id = file_store.AddFileWithUnknownHash(blob_ids)
+            client_path = db.ClientPath.FromPathInfo(self.client_id, path_info)
+            hash_id = file_store.AddFileWithUnknownHash(client_path, blob_ids)
 
             path_info.hash_entry.sha256 = hash_id.AsBytes()
 
@@ -195,9 +198,6 @@ class GetFileMixin(object):
 
   def NotifyAboutEnd(self):
     super(GetFileMixin, self).NotifyAboutEnd()
-
-    if not self.ShouldSendNotifications():
-      return
 
     stat_entry = self.state.stat_entry
     if not stat_entry:
@@ -343,12 +343,17 @@ class MultiGetFileLogic(object):
     if self.client_version >= 3221:
       stub = server_stubs.GetFileStat
       request = rdf_client_action.GetFileStatRequest(pathspec=pathspec)
+      request_name = "GetFileStat"
     else:
       stub = server_stubs.StatFile
       request = rdf_client_action.ListDirRequest(pathspec=pathspec)
+      request_name = "StatFile"
 
     self.CallClient(
-        stub, request, next_state="StoreStat", request_data=dict(index=index))
+        stub,
+        request,
+        next_state="StoreStat",
+        request_data=dict(index=index, request_name=request_name))
 
     request = rdf_client_action.FingerprintRequest(
         pathspec=pathspec, max_filesize=self.state.file_size)
@@ -425,7 +430,7 @@ class MultiGetFileLogic(object):
     if not responses.success:
       self.Log("Failed to stat file: %s", responses.status)
       # Report failure.
-      self._FileFetchFailed(index, responses.request.request.name)
+      self._FileFetchFailed(index, responses.request_data["request_name"])
       return
 
     tracker = self.state.pending_hashes[index]
@@ -433,24 +438,12 @@ class MultiGetFileLogic(object):
 
   def ReceiveFileHash(self, responses):
     """Add hash digest to tracker and check with filestore."""
-    # Support old clients which may not have the new client action in place yet.
-    # TODO(user): Deprecate once all clients have the HashFile action.
-    if not responses.success and responses.request.request.name == "HashFile":
-      logging.debug(
-          "HashFile action not available, falling back to FingerprintFile.")
-      self.CallClient(
-          server_stubs.FingerprintFile,
-          responses.request.request.payload,
-          next_state="ReceiveFileHash",
-          request_data=responses.request_data)
-      return
-
     index = responses.request_data["index"]
     if not responses.success:
       self.Log("Failed to hash file: %s", responses.status)
       self.state.pending_hashes.pop(index, None)
       # Report the error.
-      self._FileFetchFailed(index, responses.request.request.name)
+      self._FileFetchFailed(index, "HashFile")
       return
 
     self.state.files_hashed += 1
@@ -688,7 +681,7 @@ class MultiGetFileLogic(object):
       for file_tracker in hash_to_tracker.get(hash_id, []):
         stat_entry = file_tracker["stat_entry"]
         path_info = rdf_objects.PathInfo.FromStatEntry(stat_entry)
-        path_info.hash_entry = hash_obj
+        path_info.hash_entry = file_tracker["hash_obj"]
         data_store.REL_DB.WritePathInfos(self.client_id, [path_info])
 
         # Report this hit to the flow's caller.
@@ -725,6 +718,7 @@ class MultiGetFileLogic(object):
           length = file_tracker["size_to_download"] % self.CHUNK_SIZE
         else:
           length = self.CHUNK_SIZE
+
         self.CallClient(
             server_stubs.HashBuffer,
             pathspec=file_tracker["stat_entry"].pathspec,
@@ -775,10 +769,10 @@ class MultiGetFileLogic(object):
     blob_hashes = []
     for file_tracker in itervalues(self.state.pending_files):
       for hash_response in file_tracker.get("hash_list", []):
-        blob_hashes.append(hash_response.data.encode("hex"))
+        blob_hashes.append(rdf_objects.BlobID.FromBytes(hash_response.data))
 
     # This is effectively a BlobStore call.
-    existing_blobs = data_store.DB.BlobsExist(blob_hashes, token=self.token)
+    existing_blobs = data_store.BLOBS.CheckBlobsExist(blob_hashes)
 
     self.state.blob_hashes_pending = 0
 
@@ -789,7 +783,7 @@ class MultiGetFileLogic(object):
         # Make sure we read the correct pathspec on the client.
         hash_response.pathspec = file_tracker["stat_entry"].pathspec
 
-        if existing_blobs[hash_response.data.encode("hex")]:
+        if existing_blobs[rdf_objects.BlobID.FromBytes(hash_response.data)]:
           # If we have the data we may call our state directly.
           self.CallStateInline(
               messages=[hash_response],
@@ -827,25 +821,18 @@ class MultiGetFileLogic(object):
         stat_entry = file_tracker["stat_entry"]
         urn = stat_entry.pathspec.AFF4Path(self.client_urn)
 
-        # TODO(user): when all the code can read files from REL_DB,
-        # protect this with:
-        # if not data_store.RelationalDBReadEnabled(category="filestore"):
-        with aff4.FACTORY.Create(
-            urn, aff4_grr.VFSBlobImage, mode="w", token=self.token) as fd:
+        if data_store.AFF4Enabled():
+          with aff4.FACTORY.Create(
+              urn, aff4_grr.VFSBlobImage, mode="w", token=self.token) as fd:
 
-          fd.SetChunksize(self.CHUNK_SIZE)
-          fd.Set(fd.Schema.STAT(stat_entry))
-          fd.Set(fd.Schema.PATHSPEC(stat_entry.pathspec))
-          fd.Set(fd.Schema.CONTENT_LAST(rdfvalue.RDFDatetime().Now()))
+            fd.SetChunksize(self.CHUNK_SIZE)
+            fd.Set(fd.Schema.STAT(stat_entry))
+            fd.Set(fd.Schema.PATHSPEC(stat_entry.pathspec))
+            fd.Set(fd.Schema.CONTENT_LAST(rdfvalue.RDFDatetime().Now()))
 
-          for index in sorted(blob_dict):
-            digest, length = blob_dict[index]
-            fd.AddBlob(digest, length)
-
-        # Publish the new file event to cause the file to be added to the
-        # filestore.
-        events.Events.PublishEvent(
-            "LegacyFileStore.AddFileToStore", urn, token=self.token)
+            for index in sorted(blob_dict):
+              digest, length = blob_dict[index]
+              fd.AddBlob(rdf_objects.BlobID.FromBytes(digest), length)
 
         if data_store.RelationalDBWriteEnabled():
           path_info = rdf_objects.PathInfo.FromStatEntry(stat_entry)
@@ -860,7 +847,8 @@ class MultiGetFileLogic(object):
 
             hash_obj = file_tracker["hash_obj"]
 
-            hash_id = file_store.AddFileWithUnknownHash(blob_ids)
+            client_path = db.ClientPath.FromPathInfo(self.client_id, path_info)
+            hash_id = file_store.AddFileWithUnknownHash(client_path, blob_ids)
             # If the hash that we've calculated matches what we got from the
             # client, then simply store the full hash entry.
             # Otherwise store just the hash that we've calculated.
@@ -869,15 +857,12 @@ class MultiGetFileLogic(object):
             else:
               path_info.hash_entry.sha256 = hash_id.AsBytes()
 
-            # Publish the add file event to cause the file to be added to the
-            # filestore.
-            events.Events.PublishEvent(
-                "FileStore.Add",
-                rdf_file_store.FileStoreAddEvent(
-                    hash_id=hash_id, blob_ids=blob_ids),
-                token=self.token)
-
           data_store.REL_DB.WritePathInfos(self.client_id, [path_info])
+
+        # Publish the new file event to cause the file to be added to the
+        # filestore.
+        events.Events.PublishEvent(
+            "LegacyFileStore.AddFileToStore", urn, token=self.token)
 
         # Save some space.
         del file_tracker["blobs"]
@@ -960,6 +945,8 @@ class LegacyFileStoreCreateFile(events.EventListener):
 
   def ProcessMessages(self, msgs=None, token=None):
     """Process the new file and add to the file store."""
+    if not data_store.AFF4Enabled():
+      return
 
     filestore_fd = aff4.FACTORY.Create(
         legacy_filestore.FileStore.PATH,
@@ -973,28 +960,6 @@ class LegacyFileStoreCreateFile(events.EventListener):
           filestore_fd.AddFile(vfs_fd)
         except Exception as e:  # pylint: disable=broad-except
           logging.exception("Exception while adding file to filestore: %s", e)
-
-
-class FileStoreCreateFile(events.EventListener):
-  """Receive an event about a new file and add it to the file store.
-
-  The file store is a central place where files are managed in the data
-  store. Files are deduplicated and stored centrally.
-
-  This event listener will be fired when a new file is collected through
-  any of the file-collection flows (i.e. MultiGetFile).
-  """
-
-  EVENTS = ["FileStore.Add"]
-
-  def ProcessMessages(self, msgs=None, token=None):
-    """Process the new file and add to the file store."""
-
-    for event in msgs:
-      try:
-        file_store.EXTERNAL_FILE_STORE.AddFile(event.hash_id, event.blob_ids)
-      except Exception as e:  # pylint: disable=broad-except
-        logging.exception("Exception while adding file to filestore: %s", e)
 
 
 class GetMBRArgs(rdf_structs.RDFProtoStruct):
@@ -1057,14 +1022,15 @@ class GetMBRMixin(object):
       mbr_data = b"".join(self.state.buffers)
       self.state.buffers = None
 
-      mbr = aff4.FACTORY.Create(
-          self.client_urn.Add("mbr"),
-          aff4_grr.VFSFile,
-          mode="w",
-          token=self.token)
-      mbr.write(mbr_data)
-      mbr.Close()
-      self.Log("Successfully stored the MBR (%d bytes)." % len(mbr_data))
+      if data_store.AFF4Enabled():
+        with aff4.FACTORY.Create(
+            self.client_urn.Add("mbr"),
+            aff4_grr.VFSFile,
+            mode="w",
+            token=self.token) as mbr:
+          mbr.write(mbr_data)
+
+      self.Log("Successfully collected the MBR (%d bytes)." % len(mbr_data))
       self.SendReply(rdfvalue.RDFBytes(mbr_data))
 
 
@@ -1086,18 +1052,18 @@ class TransferStore(flow.WellKnownFlow):
       if not data:
         continue
 
-      if (read_buffer.compression == rdf_protodict.DataBlob.CompressionType
-          .ZCOMPRESSION):
+      if (read_buffer.compression ==
+          rdf_protodict.DataBlob.CompressionType.ZCOMPRESSION):
         data = zlib.decompress(data)
-      elif (read_buffer.compression == rdf_protodict.DataBlob.CompressionType
-            .UNCOMPRESSED):
+      elif (read_buffer.compression ==
+            rdf_protodict.DataBlob.CompressionType.UNCOMPRESSED):
         pass
       else:
         raise ValueError("Unsupported compression")
 
       blobs.append(data)
 
-    data_store.DB.StoreBlobs(blobs, token=self.token)
+    data_store.BLOBS.WriteBlobsWithUnknownHashes(blobs)
 
   def ProcessMessage(self, message):
     """Write the blob into the AFF4 blob storage area."""
@@ -1127,10 +1093,11 @@ class BlobHandler(message_handlers.MessageHandler):
 
       blobs.append(data)
 
-    data_store.DB.StoreBlobs(blobs, token=self.token)
+    data_store.BLOBS.WriteBlobsWithUnknownHashes(blobs)
 
 
-class SendFile(flow.GRRFlow):
+@flow_base.DualDBFlow
+class SendFileMixin(object):
   """This flow sends a file to remote listener.
 
   To use this flow, choose a key and an IV in hex format (if run from the GUI,

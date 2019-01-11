@@ -2,10 +2,14 @@
 # -*- mode: python; encoding: utf-8 -*-
 """Tests for utility classes."""
 
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import unicode_literals
 
 
-import unittest
+from absl.testing import absltest
+from future.builtins import str
+
 from grr_response_core.lib import flags
 from grr_response_core.lib import rdfvalue
 from grr.test_lib import test_lib
@@ -23,13 +27,13 @@ long_string = (
     "efficitur. Pellentesque aliquam placerat mauris non accumsan.")
 
 
-class RDFValueTest(unittest.TestCase):
+class RDFValueTest(absltest.TestCase):
   """RDFValue tests."""
 
   def testStr(self):
     """Test RDFValue.__str__."""
-    self.assertEqual(unicode(rdfvalue.RDFBool(True)), "1")
-    self.assertEqual(unicode(rdfvalue.RDFString(long_string)), long_string)
+    self.assertEqual(str(rdfvalue.RDFBool(True)), "1")
+    self.assertEqual(str(rdfvalue.RDFString(long_string)), long_string)
 
   # TODO(hanuszczak): Current implementation of `repr` for RDF values is broken
   # and not in line with Python guidelines. For example, `repr` should be
@@ -40,7 +44,7 @@ class RDFValueTest(unittest.TestCase):
   # The implementation should be fixed and proper tests should be written.
 
 
-class RDFBytesTest(unittest.TestCase):
+class RDFBytesTest(absltest.TestCase):
 
   def testParseFromHumanReadable(self):
     string = u"zażółć gęślą jaźń"
@@ -50,13 +54,13 @@ class RDFBytesTest(unittest.TestCase):
     self.assertEqual(result, expected)
 
 
-class RDFStringTest(unittest.TestCase):
+class RDFStringTest(absltest.TestCase):
 
   def testParseFromHumanReadable(self):
     string = u"pchnąć w tę łódź jeża lub ośm skrzyń fig"
 
     result = rdfvalue.RDFString.FromHumanReadable(string)
-    self.assertEqual(unicode(result), string)
+    self.assertEqual(str(result), string)
 
   def testEqualWithBytes(self):
     self.assertEqual(rdfvalue.RDFString(u"foo"), b"foo")
@@ -68,7 +72,7 @@ class RDFStringTest(unittest.TestCase):
     self.assertLess(rdfvalue.RDFString(u"012"), b"\x80\x81\x81")
 
 
-class RDFIntegerTest(unittest.TestCase):
+class RDFIntegerTest(absltest.TestCase):
 
   def testParseFromHumanReadable(self):
     result = rdfvalue.RDFInteger.FromHumanReadable(u"42")
@@ -95,7 +99,7 @@ class RDFIntegerTest(unittest.TestCase):
       rdfvalue.RDFInteger.FromHumanReadable(u"12A")
 
 
-class RDFBool(unittest.TestCase):
+class RDFBool(absltest.TestCase):
 
   def testParseFromHumanReadableTrue(self):
     self.assertTrue(rdfvalue.RDFBool.FromHumanReadable(u"true"))
@@ -118,7 +122,7 @@ class RDFBool(unittest.TestCase):
       rdfvalue.RDFBool.FromHumanReadable(u"yes")
 
 
-class RDFDateTimeTest(unittest.TestCase):
+class RDFDateTimeTest(absltest.TestCase):
 
   def testLerpMiddle(self):
     start_time = rdfvalue.RDFDatetime.FromHumanReadable("2010-01-01")
@@ -186,6 +190,15 @@ class RDFDateTimeTest(unittest.TestCase):
   def testFloorExact(self):
     datetime = rdfvalue.RDFDatetime.FromHumanReadable("2011-11-11 12:34:56")
     self.assertEqual(datetime.Floor(rdfvalue.Duration("1s")), datetime)
+
+
+class DurationTest(absltest.TestCase):
+
+  def testPublicAttributes(self):
+    duration = rdfvalue.Duration("1h")
+    self.assertEqual(duration.seconds, 3600)
+    self.assertEqual(duration.milliseconds, 3600 * 1000)
+    self.assertEqual(duration.microseconds, 3600 * 1000 * 1000)
 
 
 def main(argv):

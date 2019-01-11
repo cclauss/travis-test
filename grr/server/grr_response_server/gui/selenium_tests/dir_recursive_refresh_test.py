@@ -1,29 +1,24 @@
 #!/usr/bin/env python
 # -*- mode: python; encoding: utf-8 -*-
 """Test the vfs recursive refreshing functionality."""
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import unicode_literals
 
 
-import unittest
 from grr_response_core.lib import flags
-
 from grr_response_core.lib.rdfvalues import client as rdf_client
-from grr_response_server import aff4
 from grr_response_server.gui import gui_test_lib
-from grr.test_lib import action_mocks
 from grr.test_lib import db_test_lib
 from grr.test_lib import fixture_test_lib
 from grr.test_lib import flow_test_lib
+from grr.test_lib import test_lib
 
 
 @db_test_lib.DualDBTest
 class DirRecursiveRefreshTest(gui_test_lib.GRRSeleniumTest):
 
   def _RunUpdateFlow(self, client_id):
-    # Get the flows that should have been started and finish them.
-    fd = aff4.FACTORY.Open(client_id.Add("flows"), token=self.token)
-    flows = list(fd.ListChildren())
-
     gui_test_lib.CreateFileVersion(
         client_id,
         "fs/os/c/a.txt",
@@ -41,14 +36,7 @@ class DirRecursiveRefreshTest(gui_test_lib.GRRSeleniumTest):
         timestamp=gui_test_lib.TIME_0,
         token=self.token)
 
-    client_mock = action_mocks.ActionMock()
-    for flow_urn in flows:
-      flow_test_lib.TestFlowHelper(
-          flow_urn,
-          client_mock,
-          client_id=client_id,
-          token=self.token,
-          check_flow_errors=False)
+    flow_test_lib.FinishAllFlowsOnClient(client_id)
 
   def setUp(self):
     super(DirRecursiveRefreshTest, self).setUp()
@@ -208,11 +196,5 @@ class DirRecursiveRefreshTest(gui_test_lib.GRRSeleniumTest):
                    "css=.tab-content td.proto_value:contains(423)")
 
 
-def main(argv):
-  del argv  # Unused.
-  # Run the full test suite
-  unittest.main()
-
-
 if __name__ == "__main__":
-  flags.StartMain(main)
+  flags.StartMain(test_lib.main)

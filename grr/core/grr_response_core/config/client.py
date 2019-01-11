@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 """Configuration parameters for the client."""
 
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import unicode_literals
 
 from grr_response_core.lib import config_lib
@@ -49,11 +51,6 @@ config_lib.DEFINE_string(
     name="Client.install_path",
     default=r"%(SystemRoot|env)\\System32\\%(name)\\%(Template.version_string)",
     help="Where the client binaries are installed.")
-
-config_lib.DEFINE_string(
-    name="Client.rekall_profile_cache_path",
-    default=r"%(Client.install_path)\\rekall_profiles",
-    help="Where GRR stores cached Rekall profiles needed for memory analysis")
 
 config_lib.DEFINE_list(
     name="Client.server_urls", default=[], help="Base URL for client control.")

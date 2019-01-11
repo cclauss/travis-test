@@ -1,4 +1,6 @@
 #!/usr/bin/env python
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import unicode_literals
 
 import os
@@ -9,6 +11,7 @@ import unittest
 
 from future.utils import iteritems
 from future.utils import iterkeys
+from future.utils import string_types
 import mock
 
 from grr_response_client import vfs
@@ -28,9 +31,6 @@ class WindowsActionTests(client_test_lib.OSSpecificClientTests):
     self.win32com.client = mock.MagicMock()
     modules = {
         "_winreg":
-            mock.MagicMock(),
-        # Requires mocking because exceptions.WindowsError does not exist
-        "exceptions":
             mock.MagicMock(),
         "pythoncom":
             mock.MagicMock(),
@@ -92,11 +92,11 @@ class WindowsActionTests(client_test_lib.OSSpecificClientTests):
     enumif.SendReply = Collect
     enumif.Run(None)
 
-    self.assertEqual(len(replies), 1)
+    self.assertLen(replies, 1)
     interface = replies[0]
-    self.assertEqual(len(interface.addresses), 4)
+    self.assertLen(interface.addresses, 4)
     addresses = [x.human_readable_address for x in interface.addresses]
-    self.assertItemsEqual(addresses, [
+    self.assertCountEqual(addresses, [
         "192.168.1.20", "ffff::ffff:aaaa:1111:aaaa",
         "dddd:0:8888:6666:bbbb:aaaa:eeee:bbbb",
         "dddd:0:8888:6666:bbbb:aaaa:ffff:bbbb"
@@ -116,25 +116,25 @@ class WindowsActionTests(client_test_lib.OSSpecificClientTests):
     wmi_obj.ExecQuery.return_value = [mock_query_result]
 
     result_list = list(self.windows.RunWMIQuery("select blah"))
-    self.assertEqual(len(result_list), 1)
+    self.assertLen(result_list, 1)
 
     result = result_list.pop()
-    self.assertTrue(isinstance(result, rdf_protodict.Dict))
+    self.assertIsInstance(result, rdf_protodict.Dict)
     nest = result["NestingTest"]
 
     self.assertEqual(nest["one"]["two"], [3, 4])
     self.assertTrue("Unsupported type" in nest["one"]["broken"])
-    self.assertTrue(isinstance(nest["one"]["three"], rdf_protodict.Dict))
+    self.assertIsInstance(nest["one"]["three"], rdf_protodict.Dict)
 
     self.assertEqual(nest["four"], [])
     self.assertEqual(nest["five"], "astring")
     self.assertEqual(nest["six"], [None, None, ""])
     self.assertEqual(nest["seven"], None)
-    self.assertItemsEqual(iterkeys(nest["rdfvalue"]), ["a"])
+    self.assertCountEqual(iterkeys(nest["rdfvalue"]), ["a"])
 
     self.assertEqual(result["GatewayCostMetric"], [0, 256])
-    self.assertTrue(isinstance(result["OpaqueObject"], basestring))
-    self.assertTrue("Unsupported type" in result["OpaqueObject"])
+    self.assertIsInstance(result["OpaqueObject"], string_types)
+    self.assertIn("Unsupported type", result["OpaqueObject"])
 
 
 class RegistryVFSTests(client_test_lib.EmptyActionTest):
@@ -166,103 +166,6 @@ class RegistryVFSTests(client_test_lib.EmptyActionTest):
       self.assertEqual(base, pathspec.CollapsePath())
       self.assertIn(name, expected_names)
       self.assertIn(f.registry_data.GetValue(), expected_data)
-
-  def testRecursiveRegistryListing(self):
-    """Test our ability to walk over a registry tree."""
-
-    pathspec = rdf_paths.PathSpec(pathtype=rdf_paths.PathSpec.PathType.REGISTRY)
-
-    walk_tups_0 = list(vfs.VFSOpen(pathspec).RecursiveListNames())
-    walk_tups_1 = list(vfs.VFSOpen(pathspec).RecursiveListNames(depth=1))
-    walk_tups_2 = list(vfs.VFSOpen(pathspec).RecursiveListNames(depth=2))
-    walk_tups_inf = list(
-        vfs.VFSOpen(pathspec).RecursiveListNames(depth=float("inf")))
-
-    self.assertEqual(walk_tups_0,
-                     [(r"", [r"HKEY_LOCAL_MACHINE", r"HKEY_USERS"], [])])
-
-    self.assertEqual(
-        walk_tups_1,
-        [(r"", [r"HKEY_LOCAL_MACHINE", r"HKEY_USERS"], []),
-         (r"HKEY_LOCAL_MACHINE", [r"SOFTWARE", r"SYSTEM"], []),
-         (r"HKEY_USERS",
-          [r"S-1-5-20", r"S-1-5-21-702227000-2140022111-3110739999-1990"], [])])
-
-    self.assertEqual(walk_tups_2, [
-        (r"", [r"HKEY_LOCAL_MACHINE", r"HKEY_USERS"], []),
-        (r"HKEY_LOCAL_MACHINE", [r"SOFTWARE", r"SYSTEM"], []),
-        (r"HKEY_LOCAL_MACHINE\SOFTWARE", [r"ListingTest", r"Microsoft"], []),
-        (r"HKEY_LOCAL_MACHINE\SYSTEM", [r"CurrentControlSet", r"Select"], []),
-        (r"HKEY_USERS",
-         [r"S-1-5-20", r"S-1-5-21-702227000-2140022111-3110739999-1990"], []),
-        (r"HKEY_USERS\S-1-5-20", [r"Software"], []),
-        (r"HKEY_USERS\S-1-5-21-702227000-2140022111-3110739999-1990",
-         [r"Software"], []),
-    ])
-
-    self.assertEqual(walk_tups_inf, [
-        (r"", [r"HKEY_LOCAL_MACHINE", r"HKEY_USERS"], []),
-        (r"HKEY_LOCAL_MACHINE", [r"SOFTWARE", r"SYSTEM"], []),
-        (r"HKEY_LOCAL_MACHINE\SOFTWARE", [r"ListingTest", r"Microsoft"], []),
-        (r"HKEY_LOCAL_MACHINE\SOFTWARE\ListingTest", [],
-         [r"Value1", r"Value2"]), (r"HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft",
-                                   [r"Windows", r"Windows NT"], []),
-        (r"HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows", [r"CurrentVersion"],
-         []), (r"HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion",
-               [], [r"ProgramFilesDir", r"ProgramFilesDir (x86)"]),
-        (r"HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT",
-         [r"CurrentVersion"], []),
-        (r"HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion",
-         [r"ProfileList"], [r"SystemRoot"]),
-        (r"HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion"
-         r"\ProfileList", [
-             r"S-1-5-21-702227000-2140022111-3110739999-1990",
-             r"S-1-5-21-702227068-2140022151-3110739409-1000"
-         ], [r"ProfilesDirectory", r"ProgramData"]),
-        (r"HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion"
-         r"\ProfileList\S-1-5-21-702227000-2140022111-3110739999-1990", [],
-         [r"ProfileImagePath"]),
-        (r"HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion"
-         r"\ProfileList\S-1-5-21-702227068-2140022151-3110739409-1000", [],
-         [r"ProfileImagePath"]),
-        (r"HKEY_LOCAL_MACHINE\SYSTEM", [r"CurrentControlSet", r"Select"], []),
-        (r"HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet", [r"Control"], []),
-        (r"HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control",
-         [r"Nls", r"Session Manager", r"TimeZoneInformation"], []),
-        (r"HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Nls",
-         [r"CodePage"], []),
-        (r"HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Nls\CodePage",
-         [], [r"ACP"]),
-        (r"HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Session Manager",
-         [r"Environment"], []),
-        (r"HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Session Manager"
-         r"\Environment", [], [r"Path", r"TEMP", r"windir"]),
-        (r"HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control"
-         r"\TimeZoneInformation", [], [r"StandardName"]),
-        (r"HKEY_LOCAL_MACHINE\SYSTEM\Select", [],
-         [r"Current"]), (r"HKEY_USERS", [
-             r"S-1-5-20", r"S-1-5-21-702227000-2140022111-3110739999-1990"
-         ], []), (r"HKEY_USERS\S-1-5-20", [r"Software"],
-                  []), (r"HKEY_USERS\S-1-5-20\Software", [r"Microsoft"], []),
-        (r"HKEY_USERS\S-1-5-20\Software\Microsoft", [r"Windows"], []),
-        (r"HKEY_USERS\S-1-5-20\Software\Microsoft\Windows", [r"CurrentVersion"],
-         []), (r"HKEY_USERS\S-1-5-20\Software\Microsoft\Windows\CurrentVersion",
-               [r"Run"], []),
-        (r"HKEY_USERS\S-1-5-20\Software\Microsoft\Windows\CurrentVersion\Run",
-         [], [r"MctAdmin", r"Sidebar"
-             ]), (r"HKEY_USERS\S-1-5-21-702227000-2140022111-3110739999-1990",
-                  [r"Software"], []),
-        (r"HKEY_USERS\S-1-5-21-702227000-2140022111-3110739999-1990\Software",
-         [r"Microsoft"], []),
-        (r"HKEY_USERS\S-1-5-21-702227000-2140022111-3110739999-1990\Software"
-         r"\Microsoft", [r"Windows"], []),
-        (r"HKEY_USERS\S-1-5-21-702227000-2140022111-3110739999-1990\Software"
-         r"\Microsoft\Windows", [r"CurrentVersion"], []),
-        (r"HKEY_USERS\S-1-5-21-702227000-2140022111-3110739999-1990\Software"
-         r"\Microsoft\Windows\CurrentVersion", [r"Run"], []),
-        (r"HKEY_USERS\S-1-5-21-702227000-2140022111-3110739999-1990\Software"
-         r"\Microsoft\Windows\CurrentVersion\Run", [], [r"NothingToSeeHere"])
-    ])
 
 
 def main(argv):

@@ -1,5 +1,8 @@
 #!/usr/bin/env python
 """Tests for grr_response_server.aff4_objects.standard."""
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import unicode_literals
 
 
 from builtins import range  # pylint: disable=redefined-builtin
@@ -35,7 +38,7 @@ class LabelSetTest(aff4_test_lib.AFF4ObjectTest):
 class AFF4SparseImageTest(aff4_test_lib.AFF4ObjectTest):
 
   def AddBlobToBlobStore(self, blob_contents):
-    return data_store.DB.StoreBlob(blob_contents, token=self.token)
+    return data_store.BLOBS.WriteBlobWithUnknownHash(blob_contents)
 
   def assertChunkEqual(self, fd, chunk, contents):
     fd.Seek(chunk * fd.chunksize)
@@ -57,8 +60,8 @@ class AFF4SparseImageTest(aff4_test_lib.AFF4ObjectTest):
 
     chunk_number = 0
     # 1024 characters.
-    blob_contents = "A" * fd.chunksize
-    blob_hash = self.AddBlobToBlobStore(blob_contents).decode("hex")
+    blob_contents = b"A" * fd.chunksize
+    blob_hash = self.AddBlobToBlobStore(blob_contents)
 
     fd.AddBlob(
         blob_hash=blob_hash,
@@ -72,8 +75,8 @@ class AFF4SparseImageTest(aff4_test_lib.AFF4ObjectTest):
     self.assertChunkEqual(fd, chunk_number, blob_contents)
 
     # Change the contents of the blob.
-    blob_contents = "B" * fd.chunksize
-    blob_hash = self.AddBlobToBlobStore(blob_contents).decode("hex")
+    blob_contents = b"B" * fd.chunksize
+    blob_hash = self.AddBlobToBlobStore(blob_contents)
 
     # This time we're updating the blob.
     fd.AddBlob(blob_hash, len(blob_contents), chunk_number=chunk_number)
@@ -103,7 +106,7 @@ class AFF4SparseImageTest(aff4_test_lib.AFF4ObjectTest):
       # Make sure the blobs have unique content.
       blob_contents = str(chunk % 10) * fd.chunksize
       blobs.append(blob_contents)
-      blob_hash = self.AddBlobToBlobStore(blob_contents).decode("hex")
+      blob_hash = self.AddBlobToBlobStore(blob_contents)
       fd.AddBlob(
           blob_hash=blob_hash, length=len(blob_contents), chunk_number=chunk)
       blob_hashes.append(blob_hash)
@@ -114,7 +117,7 @@ class AFF4SparseImageTest(aff4_test_lib.AFF4ObjectTest):
     fd.Seek(start_chunk * fd.chunksize)
     fd.Read(fd.chunksize)
 
-    self.assertEqual(len(fd.chunk_cache._hash), num_chunks)
+    self.assertLen(fd.chunk_cache._hash, num_chunks)
 
     fd.Flush()
     # They shouldn't be in cache anymore, so the chunk_cache should be empty.
@@ -143,7 +146,7 @@ class AFF4SparseImageTest(aff4_test_lib.AFF4ObjectTest):
     for chunk in range(start_chunk, start_chunk + num_chunks):
       # Make sure the blobs have unique content.
       blob_contents = str(chunk % 10) * fd.chunksize
-      blob_hash = self.AddBlobToBlobStore(blob_contents).decode("hex")
+      blob_hash = self.AddBlobToBlobStore(blob_contents)
       fd.AddBlob(
           blob_hash=blob_hash, length=len(blob_contents), chunk_number=chunk)
 
@@ -154,7 +157,7 @@ class AFF4SparseImageTest(aff4_test_lib.AFF4ObjectTest):
     fd.Seek((start_chunk + num_chunks) * fd.chunksize)
     # We should get the empty string back.
 
-    self.assertEqual(fd.Read(10000), "")
+    self.assertEqual(fd.Read(10000), b"")
 
     # Seek to before our chunks start.
     fd.Seek((start_chunk - 1) * fd.chunksize)

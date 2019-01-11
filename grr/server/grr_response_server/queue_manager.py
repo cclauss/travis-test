@@ -1,5 +1,8 @@
 #!/usr/bin/env python
 """This is the manager for the various queues."""
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import unicode_literals
 
 import collections
 import logging
@@ -12,11 +15,9 @@ from future.utils import itervalues
 from grr_response_core import config
 from grr_response_core.lib import queues
 from grr_response_core.lib import rdfvalue
-from grr_response_core.lib import registry
-from grr_response_core.lib import stats
-from grr_response_core.lib import utils
 from grr_response_core.lib.rdfvalues import client as rdf_client
 from grr_response_core.lib.rdfvalues import flows as rdf_flows
+from grr_response_core.lib.util import collection
 from grr_response_server import data_store
 from grr_response_server import fleetspeak_utils
 from grr_response_server.rdfvalues import objects as rdf_objects
@@ -338,7 +339,7 @@ class QueueManager(object):
           data_store.REL_DB.DeleteClientMessages(
               list(itervalues(self.client_messages_to_delete)))
       else:
-        messages_by_queue = utils.GroupBy(
+        messages_by_queue = collection.Group(
             list(itervalues(self.client_messages_to_delete)),
             lambda request: request.queue)
         for queue, messages in iteritems(messages_by_queue):
@@ -346,7 +347,7 @@ class QueueManager(object):
 
       if self.new_client_messages:
         for timestamp, messages in iteritems(
-            utils.GroupBy(self.new_client_messages, lambda x: x[1])):
+            collection.Group(self.new_client_messages, lambda x: x[1])):
 
           self.Schedule([x[0] for x in messages],
                         timestamp=timestamp,
@@ -440,7 +441,7 @@ class QueueManager(object):
     """Schedule a set of Task() instances."""
     non_fleetspeak_tasks = []
     for queue, queued_tasks in iteritems(
-        utils.GroupBy(tasks, lambda x: x.queue)):
+        collection.Group(tasks, lambda x: x.queue)):
       if not queue:
         continue
 
@@ -535,7 +536,7 @@ class QueueManager(object):
     """
     extract_queue = lambda notification: notification.session_id.Queue()
     for queue, notifications in iteritems(
-        utils.GroupBy(notifications, extract_queue)):
+        collection.Group(notifications, extract_queue)):
       self._MultiNotifyQueue(queue, notifications, mutation_pool=mutation_pool)
 
   def _MultiNotifyQueue(self, queue, notifications, mutation_pool=None):
@@ -580,7 +581,7 @@ class QueueManager(object):
       end = self.frozen_timestamp or rdfvalue.RDFDatetime.Now()
 
     for queue, ids in iteritems(
-        utils.GroupBy(session_ids, lambda session_id: session_id.Queue())):
+        collection.Group(session_ids, lambda session_id: session_id.Queue())):
       queue_shards = self.GetAllNotificationShards(queue)
       self.data_store.DeleteNotifications(queue_shards, ids, start, end)
 
@@ -652,12 +653,3 @@ class WellKnownQueueManager(QueueManager):
     for response in self.data_store.FetchResponsesForWellKnownFlow(
         session_id, self.response_limit, timestamp=timestamp):
       yield response
-
-
-class QueueManagerInit(registry.InitHook):
-  """Registers vars used by the QueueManager."""
-
-  def Run(self):
-    # Counters used by the QueueManager.
-    stats.STATS.RegisterCounterMetric("grr_task_retransmission_count")
-    stats.STATS.RegisterCounterMetric("grr_task_ttl_expired_count")

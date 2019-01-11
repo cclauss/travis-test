@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 """The auditing system."""
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import unicode_literals
 
 import os
@@ -21,7 +23,7 @@ class TestAuditSystem(flow_test_lib.FlowTestsBaseclass):
     client_mock = action_mocks.ListDirectoryClientMock()
     client_id = self.SetupClient(0)
 
-    rollover = aff4.AUDIT_ROLLOVER_TIME.seconds
+    rollover = audit.AUDIT_ROLLOVER_TIME.seconds
     # Set time to epoch + 20 intervals
     with test_lib.FakeTime(20 * rollover):
       flow_test_lib.TestFlowHelper(
@@ -46,11 +48,11 @@ class TestAuditSystem(flow_test_lib.FlowTestsBaseclass):
           "aff4:/audit/logs", aff4.AFF4Volume, mode="r", token=self.token)
 
       logs = list(parentdir.ListChildren())
-      self.assertEqual(len(logs), 1)
-      log = aff4.CurrentAuditLog()
+      self.assertLen(logs, 1)
+      log = audit._CurrentAuditLog()
       stored_events = audit.AuditEventCollection(log)
 
-      self.assertEqual(len(stored_events), 2)
+      self.assertLen(stored_events, 2)
       for event in stored_events:
         self.assertEqual(event.action, rdf_events.AuditEvent.Action.RUN_FLOW)
         self.assertEqual(event.flow_name, filesystem.ListDirectory.__name__)
@@ -71,15 +73,15 @@ class TestAuditSystem(flow_test_lib.FlowTestsBaseclass):
           "aff4:/audit/logs", aff4.AFF4Volume, mode="r", token=self.token)
       # Now we should have two collections
       logs = list(parentdir.ListChildren())
-      self.assertEqual(len(logs), 2)
+      self.assertLen(logs, 2)
 
       # One with two events
       stored_events = audit.AuditEventCollection(logs[0])
-      self.assertEqual(len(stored_events), 2)
+      self.assertLen(stored_events, 2)
 
       # The other with one
       stored_events = audit.AuditEventCollection(logs[1])
-      self.assertEqual(len(stored_events), 1)
+      self.assertLen(stored_events, 1)
 
 
 def main(argv):

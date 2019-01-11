@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 """GRR HTTP server implementation."""
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import unicode_literals
 
 import base64
@@ -11,8 +13,13 @@ import string
 
 from cryptography.hazmat.primitives import constant_time
 
+from future.builtins import int
+from future.builtins import str
+
 import jinja2
 import psutil
+
+from typing import Text
 
 from werkzeug import exceptions as werkzeug_exceptions
 from werkzeug import routing as werkzeug_routing
@@ -24,6 +31,7 @@ from grr_response_core.lib import rdfvalue
 
 from grr_response_core.lib import registry
 from grr_response_core.lib import utils
+from grr_response_core.lib.util import precondition
 from grr_response_server import access_control
 from grr_response_server import server_logging
 from grr_response_server.gui import http_api
@@ -35,9 +43,8 @@ CSRF_TOKEN_DURATION = rdfvalue.Duration("10h")
 
 def GenerateCSRFToken(user_id, time):
   """Generates a CSRF token based on a secret key, id and time."""
-  utils.AssertType(user_id, unicode)
-  if time is not None:
-    utils.AssertType(time, int)
+  precondition.AssertType(user_id, Text)
+  precondition.AssertOptionalType(time, int)
 
   time = time or rdfvalue.RDFDatetime.Now().AsMicrosecondsSinceEpoch()
 
@@ -48,7 +55,7 @@ def GenerateCSRFToken(user_id, time):
   digester = hmac.new(secret.encode("ascii"), digestmod=hashlib.sha256)
   digester.update(user_id.encode("ascii"))
   digester.update(CSRF_DELIMITER)
-  digester.update(unicode(time).encode("ascii"))
+  digester.update(str(time).encode("ascii"))
   digest = digester.digest()
 
   token = base64.urlsafe_b64encode(b"%s%s%d" % (digest, CSRF_DELIMITER, time))
@@ -144,9 +151,9 @@ class HttpRequest(werkzeug_wrappers.Request):
 
   @user.setter
   def user(self, value):
-    if not isinstance(value, unicode):
+    if not isinstance(value, Text):
       message = "Expected instance of '%s' but got value '%s' of type '%s'"
-      message %= (unicode, value, type(value))
+      message %= (Text, value, type(value))
       raise TypeError(message)
 
     self._user = value

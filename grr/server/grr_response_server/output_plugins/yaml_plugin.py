@@ -1,5 +1,8 @@
 #!/usr/bin/env python
 """Plugins that produce results in YAML."""
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import unicode_literals
 
 import io
 import os
@@ -9,13 +12,14 @@ import yaml
 
 from grr_response_core.lib import utils
 from grr_response_core.lib.rdfvalues import structs as rdf_structs
+from grr_response_core.lib.util import collection
 from grr_response_server import instant_output_plugin
 
 
 def _SerializeToYaml(value):
   preserialized = []
   if isinstance(value, rdf_structs.RDFProtoStruct):
-    preserialized.append(value.ToPrimitiveDict(serialize_leaf_fields=True))
+    preserialized.append(value.ToPrimitiveDict(stringify_leaf_fields=True))
   else:
     preserialized.append(utils.SmartStr(value))
   # Produce a YAML list entry in block format.
@@ -64,7 +68,7 @@ class YamlInstantOutputPluginWithExportConversion(
                                 original_value_type.__name__))
     yield self.archive_generator.WriteFileChunk(_SerializeToYaml(first_value))
     counter = 1
-    for batch in utils.Grouper(exported_values, self.ROW_BATCH):
+    for batch in collection.Batch(exported_values, self.ROW_BATCH):
       counter += len(batch)
       # TODO(hanuszczak): YAML is supposed to be a unicode file format so we
       # should use `StringIO` here instead. However, because PyYAML dumps to
@@ -72,7 +76,7 @@ class YamlInstantOutputPluginWithExportConversion(
       # investigated whether there is a way to adjust behaviour of PyYAML.
       buf = io.BytesIO()
       for value in batch:
-        buf.write("\n")
+        buf.write(b"\n")
         buf.write(_SerializeToYaml(value))
 
       yield self.archive_generator.WriteFileChunk(buf.getvalue())

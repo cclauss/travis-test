@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 """Parsers for Linux PAM configuration files."""
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import unicode_literals
 
 import os
@@ -9,16 +11,13 @@ import re
 from builtins import zip  # pylint: disable=redefined-builtin
 
 from grr_response_core.lib import parser
+from grr_response_core.lib import utils
 from grr_response_core.lib.parsers import config_file
 from grr_response_core.lib.rdfvalues import config_file as rdf_config_file
 
 
-class PAMParser(parser.FileParser, config_file.FieldParser):
-  """Parser for PAM configurations."""
-
-  output_types = ["PamConfig"]
-  supported_artifacts = ["LinuxPamConfigs"]
-  process_together = True
+class PAMFieldParser(config_file.FieldParser):
+  """Field parser for PAM configurations."""
 
   # The syntax is based on:
   #   http://linux.die.net/man/5/pam.d
@@ -60,7 +59,7 @@ class PAMParser(parser.FileParser, config_file.FieldParser):
     # simple path keyed dict of file contents.
     cache = {}
     for stat_obj, file_obj in zip(stats, file_objects):
-      cache[stat_obj.pathspec.path] = file_obj.read()
+      cache[stat_obj.pathspec.path] = utils.ReadFileBytesAsUnicode(file_obj)
 
     result = []
     external = []
@@ -184,7 +183,19 @@ class PAMParser(parser.FileParser, config_file.FieldParser):
                   module_args=module_args))
     return result, external
 
+
+class PAMParser(parser.FileMultiParser):
+  """Artifact parser for PAM configurations."""
+
+  output_types = ["PamConfig"]
+  supported_artifacts = ["LinuxPamConfigs"]
+
+  def __init__(self, *args, **kwargs):
+    super(PAMParser, self).__init__(*args, **kwargs)
+    self._field_parser = PAMFieldParser()
+
   def ParseMultiple(self, stats, file_objects, knowledge_base):
     _ = knowledge_base
-    results, externals = self.EnumerateAllConfigs(stats, file_objects)
+    results, externals = self._field_parser.EnumerateAllConfigs(
+        stats, file_objects)
     yield rdf_config_file.PamConfig(entries=results, external_config=externals)

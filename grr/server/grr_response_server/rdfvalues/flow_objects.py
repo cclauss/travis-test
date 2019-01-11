@@ -1,7 +1,11 @@
 #!/usr/bin/env python
 """Rdfvalues for flows."""
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import unicode_literals
 
 import re
+from future.utils import iteritems
 
 from grr_response_core.lib import rdfvalue
 from grr_response_core.lib.rdfvalues import client as rdf_client
@@ -36,6 +40,15 @@ class FlowResponse(FlowMessage, rdf_structs.RDFProtoStruct):
   protobuf = flows_pb2.FlowResponse
   rdf_deps = []
 
+  def AsLegacyGrrMessage(self):
+    return rdf_flows.GrrMessage(
+        session_id="%s/flows/%s" % (self.client_id, self.flow_id),
+        request_id=self.request_id,
+        response_id=self.response_id,
+        type=rdf_flows.GrrMessage.Type.MESSAGE,
+        timestamp=self.timestamp,
+        payload=self.payload)
+
 
 class FlowIterator(FlowMessage, rdf_structs.RDFProtoStruct):
   protobuf = flows_pb2.FlowIterator
@@ -43,9 +56,52 @@ class FlowIterator(FlowMessage, rdf_structs.RDFProtoStruct):
 
 
 class FlowStatus(FlowMessage, rdf_structs.RDFProtoStruct):
+  """The flow status object."""
+
   protobuf = flows_pb2.FlowStatus
   rdf_deps = [
       rdf_client_stats.CpuSeconds,
+  ]
+
+  def AsLegacyGrrMessage(self):
+    payload = rdf_flows.GrrStatus(status=inv_status_map[self.status])
+    if self.error_message:
+      payload.error_message = self.error_message
+    if self.backtrace:
+      payload.backtrace = self.backtrace
+    if self.cpu_time_used:
+      payload.cpu_time_used = self.cpu_time_used
+    if self.network_bytes_sent:
+      payload.network_bytes_sent = self.network_bytes_sent
+
+    return rdf_flows.GrrMessage(
+        session_id="%s/flows/%s" % (self.client_id, self.flow_id),
+        request_id=self.request_id,
+        response_id=self.response_id,
+        type="STATUS",
+        timestamp=self.timestamp,
+        payload=payload)
+
+
+class FlowResult(rdf_structs.RDFProtoStruct):
+  protobuf = flows_pb2.FlowResult
+  rdf_deps = [
+      rdfvalue.RDFDatetime,
+  ]
+
+  def AsLegacyGrrMessage(self):
+    return rdf_flows.GrrMessage(
+        session_id="%s/flows/%s" % (self.client_id, self.flow_id),
+        source=self.client_id,
+        type="MESSAGE",
+        timestamp=self.timestamp,
+        payload=self.payload)
+
+
+class FlowLogEntry(rdf_structs.RDFProtoStruct):
+  protobuf = flows_pb2.FlowLogEntry
+  rdf_deps = [
+      rdfvalue.RDFDatetime,
   ]
 
 
@@ -83,6 +139,8 @@ status_map = {
     rdf_flows.GrrStatus.ReturnedStatus.GENERIC_ERROR:
         FlowStatus.Status.ERROR,
 }
+
+inv_status_map = {v: k for k, v in iteritems(status_map)}
 
 
 def FlowResponseForLegacyResponse(legacy_msg):

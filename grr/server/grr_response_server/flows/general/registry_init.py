@@ -1,6 +1,7 @@
 #!/usr/bin/env python
-"""Load all flows so that they are visible in the registry.
-"""
+"""Load all flows so that they are visible in the registry."""
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import unicode_literals
 
 # pylint: disable=unused-import
@@ -24,7 +25,6 @@ from grr_response_server.flows.general import find
 from grr_response_server.flows.general import fingerprint
 from grr_response_server.flows.general import hardware
 
-from grr_response_server.flows.general import memory
 from grr_response_server.flows.general import network
 from grr_response_server.flows.general import processes
 from grr_response_server.flows.general import registry

@@ -1,15 +1,20 @@
 #!/usr/bin/env python
 # -*- mode: python; encoding: utf-8 -*-
 """Test client vfs."""
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import unicode_literals
 
+import io
 import logging
 import os
 import shutil
 import stat
 
 
+from absl.testing import absltest
 from builtins import range  # pylint: disable=redefined-builtin
+import mock
 import psutil
 
 # pylint: disable=unused-import,g-bad-import-order
@@ -22,6 +27,7 @@ from grr_response_core.lib import flags
 from grr_response_core.lib import utils
 from grr_response_core.lib.rdfvalues import client as rdf_client
 from grr_response_core.lib.rdfvalues import paths as rdf_paths
+from grr.test_lib import temp
 from grr.test_lib import test_lib
 from grr.test_lib import vfs_test_lib
 
@@ -86,7 +92,7 @@ class VFSTest(test_lib.GRRBaseTest):
       fds.append(fd)
 
     # This should not create any new file handles.
-    self.assertTrue(len(current_process.open_files()) - num_open_files < 5)
+    self.assertLess(len(current_process.open_files()) - num_open_files, 5)
 
   def testOpenFilehandlesExpire(self):
     """Test that file handles expire from cache."""
@@ -109,7 +115,7 @@ class VFSTest(test_lib.GRRBaseTest):
       fds.append(child_fd)
 
     # This should not create any new file handles.
-    self.assertTrue(len(current_process.open_files()) - num_open_files < 5)
+    self.assertLess(len(current_process.open_files()) - num_open_files, 5)
 
     # Make sure we exceeded the size of the cache.
     self.assertGreater(fds, 20)
@@ -290,9 +296,9 @@ class VFSTest(test_lib.GRRBaseTest):
     # The tsk_fs_attr_type enum:
     tsk_fs_attr_type = rdf_paths.PathSpec.tsk_fs_attr_type
 
-    ref = [(65, tsk_fs_attr_type.TSK_FS_ATTR_TYPE_DEFAULT,
-            0), (65, tsk_fs_attr_type.TSK_FS_ATTR_TYPE_NTFS_DATA,
-                 4), (66, tsk_fs_attr_type.TSK_FS_ATTR_TYPE_DEFAULT, 0),
+    ref = [(65, tsk_fs_attr_type.TSK_FS_ATTR_TYPE_DEFAULT, 0),
+           (65, tsk_fs_attr_type.TSK_FS_ATTR_TYPE_NTFS_DATA, 4),
+           (66, tsk_fs_attr_type.TSK_FS_ATTR_TYPE_DEFAULT, 0),
            (67, tsk_fs_attr_type.TSK_FS_ATTR_TYPE_DEFAULT, 0)]
 
     # Make sure that the ADS is recovered.
@@ -345,7 +351,7 @@ class VFSTest(test_lib.GRRBaseTest):
 
     vfs.VFSOpen(ps, progress_callback=Progress)
 
-    self.assertTrue(self.progress_counter > 0)
+    self.assertGreater(self.progress_counter, 0)
 
   def testUnicodeFile(self):
     """Test ability to read unicode files from images."""
@@ -436,7 +442,7 @@ class VFSTest(test_lib.GRRBaseTest):
       self.assertEqual(s.pathspec.nested_path.path, "/home/image2.img")
       names.append(s.pathspec.nested_path.nested_path.path)
 
-    self.assertTrue("home/a.txt" in names)
+    self.assertIn("home/a.txt", names)
 
   def testRegistryListing(self):
     """Test our ability to list registry keys."""
@@ -537,132 +543,60 @@ class VFSTest(test_lib.GRRBaseTest):
     fd = vfs.VFSOpen(pathspec)
     self.assertEqual(fd.size, 100000000)
 
-  def testRecursiveListNames(self):
-    """Test our ability to walk over a directory tree."""
-    path = os.path.join(self.base_path, "a")
 
-    directory = vfs.VFSOpen(
-        rdf_paths.PathSpec(path=path, pathtype=rdf_paths.PathSpec.PathType.OS))
+class VFSMultiOpenTest(absltest.TestCase):
 
-    # Test the helper method
-    self.assertEqual(directory._GetDepth("/"), 0)
-    self.assertEqual(directory._GetDepth("/foo/bar/baz"), 3)
-    # Relative paths aren't supported
-    with self.assertRaises(RuntimeError):
-      directory._GetDepth("foo/bar")
-    # Multiple separators are redundant
-    self.assertEqual(directory._GetDepth("/////foo///bar//////baz//"), 3)
+  _VFS_OVERRIDER = vfs_test_lib.VFSOverrider(rdf_paths.PathSpec.PathType.OS,
+                                             files.File)
 
-    # Test the whole thing
-    walk_tups_0 = list(directory.RecursiveListNames())
-    walk_tups_1 = list(directory.RecursiveListNames(depth=1))
-    walk_tups_2 = list(directory.RecursiveListNames(depth=2))
-    walk_tups_inf = list(directory.RecursiveListNames(depth=float("inf")))
+  def setUp(self):
+    self._VFS_OVERRIDER.Start()
 
-    self.assertEqual(walk_tups_0, [(path, ["b"], [])])
-    self.assertEqual(walk_tups_1, [(path, ["b"], []), ("%s/b" % path,
-                                                       ["c", "d"], [])])
-    self.assertEqual(walk_tups_2,
-                     [(path, ["b"], []), ("%s/b" % path, ["c", "d"], []),
-                      ("%s/b/c" % path, [],
-                       ["helloc.txt"]), ("%s/b/d" % path, [], ["hellod.txt"])])
-    self.assertEqual(walk_tups_inf,
-                     [(path, ["b"], []), ("%s/b" % path, ["c", "d"], []),
-                      ("%s/b/c" % path, [],
-                       ["helloc.txt"]), ("%s/b/d" % path, [], ["hellod.txt"])])
+  def tearDown(self):
+    self._VFS_OVERRIDER.Stop()
 
-  def testTskRecursiveListNames(self):
-    path = os.path.join(self.base_path, u"test_img.dd")
-    ps2 = rdf_paths.PathSpec(pathtype=rdf_paths.PathSpec.PathType.TSK)
-    ps = rdf_paths.PathSpec(path=path, pathtype=rdf_paths.PathSpec.PathType.OS)
-    ps.Append(ps2)
-    directory = vfs.VFSOpen(ps)
+  def testMultipleFiles(self):
+    with temp.AutoTempDirPath(remove_non_empty=True) as tempdir:
+      foo_path = os.path.join(tempdir, "foo")
+      bar_path = os.path.join(tempdir, "bar")
+      baz_path = os.path.join(tempdir, "baz")
 
-    walk_tups_0 = list(directory.RecursiveListNames())
-    walk_tups_1 = list(directory.RecursiveListNames(depth=1))
-    walk_tups_2 = list(directory.RecursiveListNames(depth=2))
-    walk_tups_inf = list(directory.RecursiveListNames(depth=float("inf")))
+      self._Touch(foo_path, b"FOO")
+      self._Touch(bar_path, b"BAR")
+      self._Touch(baz_path, b"BAZ")
 
-    self.assertEqual(walk_tups_0, [
-        (u"/", [
-            u"Test Directory", u"glob_test", u"home", u"lost+found",
-            u"איןד ןד ש אקדא", u"入乡随俗 海外春节别样过法"
-        ], []),
-    ])
+      foo_pathspec = rdf_paths.PathSpec(
+          pathtype=rdf_paths.PathSpec.PathType.OS, path=foo_path)
+      bar_pathspec = rdf_paths.PathSpec(
+          pathtype=rdf_paths.PathSpec.PathType.OS, path=bar_path)
+      baz_pathspec = rdf_paths.PathSpec(
+          pathtype=rdf_paths.PathSpec.PathType.OS, path=baz_path)
 
-    self.assertEqual(walk_tups_1, [(u"/", [
-        u"Test Directory", u"glob_test", u"home", u"lost+found",
-        u"איןד ןד ש אקדא", u"入乡随俗 海外春节别样过法"
-    ], []), (u"/Test Directory", [],
-             [u"numbers.txt"]), (u"/glob_test", [u"a"],
-                                 []), (u"/home", [u"test"], [u"image2.img"]),
-                                   (u"/lost+found", [],
-                                    []), (u"/איןד ןד ש אקדא", [],
-                                          [u"איןד.txt"]), (u"/入乡随俗 海外春节别样过法",
-                                                           [], [u"入乡随俗.txt"])])
+      pathspecs = [foo_pathspec, bar_pathspec, baz_pathspec]
+      with vfs.VFSMultiOpen(pathspecs) as filedescs:
+        self.assertLen(filedescs, 3)
+        self.assertEqual(filedescs[0].Read(), b"FOO")
+        self.assertEqual(filedescs[1].Read(), b"BAR")
+        self.assertEqual(filedescs[2].Read(), b"BAZ")
 
-    self.assertEqual(walk_tups_2,
-                     [(u"/", [
-                         u"Test Directory", u"glob_test", u"home",
-                         u"lost+found", u"איןד ןד ש אקדא", u"入乡随俗 海外春节别样过法"
-                     ], []), (u"/Test Directory", [], [u"numbers.txt"]),
-                      (u"/glob_test", [u"a"], []), (u"/glob_test/a", [u"b"],
-                                                    []), (u"/home", [u"test"],
-                                                          [u"image2.img"]),
-                      (u"/home/test", [u".config", u".mozilla"],
-                       []), (u"/lost+found", [],
-                             []), (u"/איןד ןד ש אקדא", [],
-                                   [u"איןד.txt"]), (u"/入乡随俗 海外春节别样过法", [],
-                                                    [u"入乡随俗.txt"])])
+  def testProgressCallback(self):
+    with temp.AutoTempFilePath() as temppath:
+      self._Touch(temppath, b"QUUX")
 
-    self.assertEqual(walk_tups_inf, [
-        (u"/", [
-            u"Test Directory", u"glob_test", u"home", u"lost+found",
-            u"איןד ןד ש אקדא", u"入乡随俗 海外春节别样过法"
-        ], []), (u"/Test Directory", [],
-                 [u"numbers.txt"]), (u"/glob_test", [u"a"],
-                                     []), (u"/glob_test/a", [u"b"], []),
-        (u"/glob_test/a/b", [], [u"foo"]), (u"/home", [u"test"], [
-            u"image2.img"
-        ]), (u"/home/test", [u".config", u".mozilla"],
-             []), (u"/home/test/.config", [u"google-chrome"],
-                   []), (u"/home/test/.config/google-chrome", [u"Default"],
-                         []), (u"/home/test/.config/google-chrome/Default",
-                               [u"Cache", u"Extensions"], [u"History"]),
-        (u"/home/test/.config/google-chrome/Default/Cache", [], [
-            u"data_0", u"data_0", u"data_1", u"data_1", u"data_2", u"data_3",
-            u"f_000001", u"f_000001", u"f_000002", u"f_000002", u"f_000003",
-            u"f_000003", u"f_000004", u"f_000004", u"f_000005", u"f_000006",
-            u"f_000007", u"f_000008", u"f_000009", u"f_00000a", u"f_00000b",
-            u"f_00000c", u"f_00000e", u"f_00000f", u"f_000011", u"f_000012",
-            u"f_000013", u"f_000014", u"f_000015", u"f_000016", u"f_000017",
-            u"f_000018", u"f_00001a", u"f_00001c", u"f_00001d", u"f_00001e",
-            u"f_00001f", u"f_000020", u"f_000021", u"f_000023", u"f_000024",
-            u"f_000025", u"f_000026", u"f_000027", u"f_000028", u"f_000029",
-            u"f_00002c", u"f_00002d", u"f_00002e", u"f_00002f", u"f_000030",
-            u"f_000031", u"f_000032", u"f_000034", u"f_000035", u"f_000037",
-            u"f_000038", u"f_000039", u"f_00003a", u"f_00003c", u"f_00003d",
-            u"index"
-        ]), (u"/home/test/.config/google-chrome/Default/Extensions",
-             [u"nlbjncdgjeocebhnmkbbbdekmmmcbfjd"],
-             []), (u"/home/test/.config/google-chrome/Default/Extensions/"
-                   u"nlbjncdgjeocebhnmkbbbdekmmmcbfjd", [u"2.1.3_0"], []),
-        (u"/home/test/.config/google-chrome/Default/Extensions/"
-         u"nlbjncdgjeocebhnmkbbbdekmmmcbfjd/2.1.3_0", [u"_locales"], [
-             u".#testfile.txt", u"manifest.json", u"testfile.txt"
-         ]), (u"/home/test/.config/google-chrome/Default/Extensions/"
-              u"nlbjncdgjeocebhnmkbbbdekmmmcbfjd/2.1.3_0/_locales", [u"en"],
-              []), (u"/home/test/.config/google-chrome/Default/Extensions/"
-                    u"nlbjncdgjeocebhnmkbbbdekmmmcbfjd/2.1.3_0/_locales/en", [],
-                    [u"messages.json"]), (u"/home/test/.mozilla", [u"firefox"],
-                                          []), (u"/home/test/.mozilla/firefox",
-                                                [u"adts404t.default"], []),
-        (u"/home/test/.mozilla/firefox/adts404t.default", [],
-         [u"places.sqlite"]), (u"/lost+found", [],
-                               []), (u"/איןד ןד ש אקדא", [],
-                                     [u"איןד.txt"]), (u"/入乡随俗 海外春节别样过法", [],
-                                                      [u"入乡随俗.txt"])
-    ])
+      pathspec = rdf_paths.PathSpec(
+          pathtype=rdf_paths.PathSpec.PathType.OS, path=temppath)
+
+      func = mock.MagicMock()
+
+      with vfs.VFSMultiOpen([pathspec], progress_callback=func) as filedescs:
+        self.assertLen(filedescs, 1)
+        self.assertEqual(filedescs[0].Read(), b"QUUX")
+
+      self.assertTrue(func.called)
+
+  def _Touch(self, filepath, content=b""):
+    with io.open(filepath, mode="wb") as filedesc:
+      filedesc.write(content)
 
 
 def main(argv):

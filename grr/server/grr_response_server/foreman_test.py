@@ -1,5 +1,8 @@
 #!/usr/bin/env python
 """Tests for the GRR Foreman."""
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import unicode_literals
 
 from grr_response_core.lib import flags
 from grr_response_core.lib import rdfvalue
@@ -79,7 +82,7 @@ class ForemanTests(test_lib.GRRBaseTest):
       foreman_obj.AssignTasksToClient(u"C.1000000000000003")
 
       # Make sure that only the windows machines ran
-      self.assertEqual(len(self.clients_launched), 2)
+      self.assertLen(self.clients_launched, 2)
       self.assertEqual(self.clients_launched[0][0],
                        rdf_client.ClientURN(u"C.1000000000000001"))
       self.assertEqual(self.clients_launched[1][0],
@@ -92,7 +95,7 @@ class ForemanTests(test_lib.GRRBaseTest):
       foreman_obj.AssignTasksToClient(u"C.1000000000000002")
       foreman_obj.AssignTasksToClient(u"C.1000000000000003")
 
-      self.assertEqual(len(self.clients_launched), 0)
+      self.assertEmpty(self.clients_launched)
 
   def testIntegerComparisons(self):
     """Tests that we can use integer matching rules on the foreman."""
@@ -124,8 +127,8 @@ class ForemanTests(test_lib.GRRBaseTest):
               rule_type=foreman_rules.ForemanClientRule.Type.INTEGER,
               integer=foreman_rules.ForemanIntegerClientRule(
                   field="INSTALL_TIME",
-                  operator=foreman_rules.ForemanIntegerClientRule.Operator.
-                  LESS_THAN,
+                  operator=foreman_rules.ForemanIntegerClientRule.Operator
+                  .LESS_THAN,
                   value=one_hour_ago.AsSecondsSinceEpoch()))
       ])
 
@@ -148,8 +151,8 @@ class ForemanTests(test_lib.GRRBaseTest):
               rule_type=foreman_rules.ForemanClientRule.Type.INTEGER,
               integer=foreman_rules.ForemanIntegerClientRule(
                   field="INSTALL_TIME",
-                  operator=foreman_rules.ForemanIntegerClientRule.Operator.
-                  GREATER_THAN,
+                  operator=foreman_rules.ForemanIntegerClientRule.Operator
+                  .GREATER_THAN,
                   value=one_hour_ago.AsSecondsSinceEpoch()))
       ])
 
@@ -193,7 +196,7 @@ class ForemanTests(test_lib.GRRBaseTest):
       foreman_obj.AssignTasksToClient(u"C.1000000000000014")
 
       # Make sure that the clients ran the correct flows.
-      self.assertEqual(len(self.clients_launched), 4)
+      self.assertLen(self.clients_launched, 4)
       self.assertEqual(self.clients_launched[0][0],
                        rdf_client.ClientURN(u"C.1000000000000011"))
       self.assertEqual(self.clients_launched[0][1], new_flow)
@@ -262,12 +265,12 @@ class ForemanTests(test_lib.GRRBaseTest):
         foreman_obj = foreman.GetForeman(token=self.token)
         foreman_obj.AssignTasksToClient(client_id)
         rules = foreman_obj.Get(foreman_obj.Schema.RULES)
-        self.assertEqual(len(rules), num_rules)
+        self.assertLen(rules, num_rules)
 
     # Expiring rules that trigger hunts creates a notification for that hunt.
     with queue_manager.QueueManager(token=self.token) as manager:
       notifications = manager.GetNotificationsForAllShards(hunt_id.Queue())
-      self.assertEqual(len(notifications), 1)
+      self.assertLen(notifications, 1)
       self.assertEqual(notifications[0].session_id, hunt_id)
 
 
@@ -318,7 +321,7 @@ class RelationalForemanTests(db_test_lib.RelationalDBEnabledMixin,
       foreman_obj.AssignTasksToClient(u"C.1000000000000003")
 
       # Make sure that only the windows machines ran
-      self.assertEqual(len(self.clients_started), 2)
+      self.assertLen(self.clients_started, 2)
       self.assertEqual(self.clients_started[0][1], u"C.1000000000000001")
       self.assertEqual(self.clients_started[1][1], u"C.1000000000000003")
 
@@ -329,7 +332,7 @@ class RelationalForemanTests(db_test_lib.RelationalDBEnabledMixin,
       foreman_obj.AssignTasksToClient(u"C.1000000000000002")
       foreman_obj.AssignTasksToClient(u"C.1000000000000003")
 
-      self.assertEqual(len(self.clients_started), 0)
+      self.assertEmpty(self.clients_started)
 
   def testIntegerComparisons(self):
     """Tests that we can use integer matching rules on the foreman."""
@@ -367,8 +370,8 @@ class RelationalForemanTests(db_test_lib.RelationalDBEnabledMixin,
               rule_type=foreman_rules.ForemanClientRule.Type.INTEGER,
               integer=foreman_rules.ForemanIntegerClientRule(
                   field="INSTALL_TIME",
-                  operator=foreman_rules.ForemanIntegerClientRule.Operator.
-                  LESS_THAN,
+                  operator=foreman_rules.ForemanIntegerClientRule.Operator
+                  .LESS_THAN,
                   value=one_hour_ago.AsSecondsSinceEpoch()))
       ])
 
@@ -388,8 +391,8 @@ class RelationalForemanTests(db_test_lib.RelationalDBEnabledMixin,
               rule_type=foreman_rules.ForemanClientRule.Type.INTEGER,
               integer=foreman_rules.ForemanIntegerClientRule(
                   field="INSTALL_TIME",
-                  operator=foreman_rules.ForemanIntegerClientRule.Operator.
-                  GREATER_THAN,
+                  operator=foreman_rules.ForemanIntegerClientRule.Operator
+                  .GREATER_THAN,
                   value=one_hour_ago.AsSecondsSinceEpoch()))
       ])
 
@@ -424,7 +427,7 @@ class RelationalForemanTests(db_test_lib.RelationalDBEnabledMixin,
       foreman_obj.AssignTasksToClient(u"C.1000000000000014")
 
       # Make sure that the clients ran the correct flows.
-      self.assertEqual(len(self.clients_started), 4)
+      self.assertLen(self.clients_started, 4)
       self.assertEqual(self.clients_started[0][1], u"C.1000000000000011")
       self.assertEqual("H:222222", self.clients_started[0][0].Basename())
       self.assertEqual(self.clients_started[1][1], u"C.1000000000000012")
@@ -484,7 +487,7 @@ class RelationalForemanTests(db_test_lib.RelationalDBEnabledMixin,
             last_foreman=rdfvalue.RDFDatetime.FromSecondsSinceEpoch(100))
         foreman_obj.AssignTasksToClient(client_id)
         rules = data_store.REL_DB.ReadAllForemanRules()
-        self.assertEqual(len(rules), num_rules)
+        self.assertLen(rules, num_rules)
 
 
 def main(argv):

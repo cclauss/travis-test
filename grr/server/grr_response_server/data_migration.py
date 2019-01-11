@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 """Helper class to migrate data."""
-
+from __future__ import absolute_import
 from __future__ import division
+from __future__ import unicode_literals
 
 from multiprocessing import pool
 import sys
@@ -17,6 +18,7 @@ from grr_response_core.lib import type_info
 from grr_response_core.lib import utils
 from grr_response_core.lib.rdfvalues import client as rdf_client
 from grr_response_core.lib.rdfvalues import client_network as rdf_client_network
+from grr_response_core.lib.util import collection
 from grr_response_server import aff4
 from grr_response_server import data_store
 from grr_response_server import db
@@ -28,6 +30,13 @@ _CLIENT_BATCH_SIZE = 200
 _BLOB_BATCH_SIZE = 1000
 _CLIENT_VERSION_THRESHOLD = rdfvalue.Duration("24h")
 _PROGRESS_INTERVAL = rdfvalue.Duration("1s")
+
+
+def _MapWithPool(func, iterable, thread_count):
+  tp = pool.ThreadPool(processes=thread_count)
+  tp.map(func, iterable)
+  tp.terminate()
+  tp.join()
 
 
 class UsersMigrator(object):
@@ -129,11 +138,10 @@ class ClientsMigrator(object):
     self._migrated_count = 0
     self._start_time = rdfvalue.RDFDatetime.Now()
 
-    batches = utils.Grouper(client_urns, _CLIENT_BATCH_SIZE)
+    batches = collection.Batch(client_urns, _CLIENT_BATCH_SIZE)
 
     self._Progress()
-    tp = pool.ThreadPool(processes=thread_count)
-    tp.map(self._MigrateBatch, list(batches))
+    _MapWithPool(self._MigrateBatch, list(batches), thread_count)
     self._Progress()
 
     if self._migrated_count == self._total_count:
@@ -259,7 +267,6 @@ def ConvertVFSGRRClient(client):
   snapshot.filesystems = client.Get(client.Schema.FILESYSTEM)
   snapshot.hostname = client.Get(client.Schema.HOSTNAME)
   snapshot.fqdn = client.Get(client.Schema.FQDN)
-  snapshot.system = client.Get(client.Schema.SYSTEM)
   snapshot.os_release = client.Get(client.Schema.OS_RELEASE)
   snapshot.os_version = utils.SmartStr(client.Get(client.Schema.OS_VERSION))
   snapshot.arch = client.Get(client.Schema.ARCH)
@@ -335,14 +342,12 @@ class ClientVfsMigrator(object):
   Attributes:
     thread_count: A number of threads to use to perform the migration.
     client_batch_size: A size of a batch into which all client URNs to migrate
-                       are divided into.
+      are divided into.
     init_vfs_group_size: An upper bound for a size of a group into which VFS
-                         URNs of a particular batch are divided into to perform
-                         path initialization (clearing any old entries and
-                         writing latest known information).
+      URNs of a particular batch are divided into to perform path initialization
+      (clearing any old entries and writing latest known information).
     history_vfs_group_size: A size of a group into which VFS URNs of a
-                            particular batch are divided into to write the
-                            history information.
+      particular batch are divided into to write the history information.
   """
 
   def __init__(self):
@@ -391,10 +396,9 @@ class ClientVfsMigrator(object):
     to_migrate_count = len(self._client_urns_to_migrate)
     sys.stdout.write("Clients to migrate: {}\n".format(to_migrate_count))
 
-    batches = utils.Grouper(client_urns, self.client_batch_size)
+    batches = collection.Batch(client_urns, self.client_batch_size)
 
-    tp = pool.ThreadPool(processes=self.thread_count)
-    tp.map(self.MigrateClientBatch, list(batches))
+    _MapWithPool(self.MigrateClientBatch, list(batches), self.thread_count)
 
     migrated_count = len(self._client_urns_migrated)
     sys.stdout.write("Migrated clients: {}\n".format(migrated_count))
@@ -494,7 +498,7 @@ class ClientVfsMigrator(object):
 
   def _MigrateVfsUrns(self, vfs_urns):
     """Migrates history of given list of VFS URNs."""
-    for group in utils.Grouper(vfs_urns, self.history_vfs_group_size):
+    for group in collection.Batch(vfs_urns, self.history_vfs_group_size):
       self._MigrateVfsUrnGroup(group)
 
   def _MigrateVfsUrnGroup(self, vfs_urns):
@@ -561,10 +565,14 @@ class BlobsMigrator(object):
     sys.stdout.write(message)
     sys.stdout.flush()
 
-  def Execute(self, thread_count):
+  def Execute(self, thread_count, urns=None):
     """Runs the migration with a given thread count."""
 
-    blob_urns = list(aff4.FACTORY.ListChildren("aff4:/blobs"))
+    if urns is None:
+      blob_urns = list(aff4.FACTORY.ListChildren("aff4:/blobs"))
+    else:
+      blob_urns = [rdfvalue.RDFURN(urn) for urn in urns]
+
     sys.stdout.write("Blobs to migrate: {}\n".format(len(blob_urns)))
     sys.stdout.write("Threads to use: {}\n".format(thread_count))
 
@@ -572,11 +580,10 @@ class BlobsMigrator(object):
     self._migrated_count = 0
     self._start_time = rdfvalue.RDFDatetime.Now()
 
-    batches = utils.Grouper(blob_urns, _BLOB_BATCH_SIZE)
+    batches = collection.Batch(blob_urns, _BLOB_BATCH_SIZE)
 
     self._Progress()
-    tp = pool.ThreadPool(processes=thread_count)
-    tp.map(self._MigrateBatch, list(batches))
+    _MapWithPool(self._MigrateBatch, list(batches), thread_count)
     self._Progress()
 
     if self._migrated_count == self._total_count:

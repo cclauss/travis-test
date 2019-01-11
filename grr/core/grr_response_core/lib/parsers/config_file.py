@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 """Simple parsers for configuration files."""
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import unicode_literals
 
 import collections
@@ -9,9 +11,11 @@ import re
 
 from builtins import zip  # pylint: disable=redefined-builtin
 from future.utils import iteritems
+from future.utils import string_types
 
 from grr_response_core.lib import lexer
 from grr_response_core.lib import parser
+from grr_response_core.lib import utils
 from grr_response_core.lib.rdfvalues import anomaly as rdf_anomaly
 from grr_response_core.lib.rdfvalues import client_fs as rdf_client_fs
 from grr_response_core.lib.rdfvalues import config_file as rdf_config_file
@@ -21,7 +25,7 @@ from grr_response_core.lib.rdfvalues import standard as rdf_standard
 
 def AsIter(arg):
   """Encapsulates an argument in a tuple, if it's not already iterable."""
-  if isinstance(arg, basestring):
+  if isinstance(arg, string_types):
     rslt = [arg]
   elif isinstance(arg, collections.Iterable):
     rslt = arg
@@ -70,7 +74,9 @@ class FieldParser(lexer.Lexer):
                sep=r"[ \t\f\v]+",
                term=r"[\r\n]",
                verbose=0):
-    r"""A generalized field-based parser. Handles whitespace, csv etc.
+    r"""A generalized field-based parser.
+
+    Handles whitespace, csv etc.
 
     Args:
       comments: Line comment patterns (e.g. "#").
@@ -212,7 +218,9 @@ class KeyValueParser(FieldParser):
                sep=r"[ \t\f\v]+",
                term=r"[\r\n]",
                verbose=0):
-    """A generalized key-value parser. Handles whitespace, csv etc.
+    """A generalized key-value parser.
+
+    Handles whitespace, csv etc.
 
     Args:
       comments: Line comment patterns (e.g. "#").
@@ -307,14 +315,19 @@ class KeyValueParser(FieldParser):
     return result
 
 
-class NfsExportsParser(parser.FileParser, FieldParser):
+class NfsExportsParser(parser.FileParser):
   """Parser for NFS exports."""
 
   output_types = ["NfsExport"]
   supported_artifacts = ["NfsExportsFile"]
 
+  def __init__(self, *args, **kwargs):
+    super(NfsExportsParser, self).__init__(*args, **kwargs)
+    self._field_parser = FieldParser()
+
   def Parse(self, unused_stat, file_obj, unused_knowledge_base):
-    for entry in self.ParseEntries(file_obj.read()):
+    for entry in self._field_parser.ParseEntries(
+        utils.ReadFileBytesAsUnicode(file_obj)):
       if not entry:
         continue
       result = rdf_config_file.NfsExport()
@@ -337,10 +350,9 @@ class NfsExportsParser(parser.FileParser, FieldParser):
       yield result
 
 
-class SshdParserBase(object):
+class SshdFieldParser(object):
   """The base class for the ssh config parsers."""
 
-  output_types = ["SshdConfig"]
   # Specify the values that are boolean or integer. Anything else is a string.
   _integers = ["clientalivecountmax",
                "magicudsport",
@@ -415,7 +427,7 @@ class SshdParserBase(object):
   ]
 
   def __init__(self):
-    super(SshdParserBase, self).__init__()
+    super(SshdFieldParser, self).__init__()
     self.Flush()
 
   def Flush(self):
@@ -514,10 +526,15 @@ class SshdParserBase(object):
     yield rdf_config_file.SshdConfig(config=self.config, matches=matches)
 
 
-class SshdConfigParser(SshdParserBase, parser.FileParser):
+class SshdConfigParser(parser.FileParser):
   """A parser for sshd_config files."""
 
   supported_artifacts = ["SshdConfigFile"]
+  output_types = ["SshdConfig"]
+
+  def __init__(self, *args, **kwargs):
+    super(SshdConfigParser, self).__init__(*args, **kwargs)
+    self._field_parser = SshdFieldParser()
 
   def Parse(self, stat, file_object, knowledge_base):
     """Parse the sshd configuration.
@@ -537,41 +554,54 @@ class SshdConfigParser(SshdParserBase, parser.FileParser):
     """
     _, _ = stat, knowledge_base
     # Clean out any residual state.
-    self.Flush()
-    lines = [l.strip() for l in file_object.read().splitlines()]
+    self._field_parser.Flush()
+    lines = [
+        l.strip()
+        for l in utils.ReadFileBytesAsUnicode(file_object).splitlines()
+    ]
     for line in lines:
       # Remove comments (will break if it includes a quoted/escaped #)
       line = line.split("#")[0].strip()
       if line:
-        self.ParseLine(line)
-    for result in self.GenerateResults():
+        self._field_parser.ParseLine(line)
+    for result in self._field_parser.GenerateResults():
       yield result
 
 
-class SshdConfigCmdParser(SshdConfigParser, parser.CommandParser):
+class SshdConfigCmdParser(parser.CommandParser):
   """A command parser for sshd -T output."""
 
   supported_artifacts = ["SshdConfigCmd"]
+  output_types = ["SshdConfig"]
+
+  def __init__(self, *args, **kwargs):
+    super(SshdConfigCmdParser, self).__init__(*args, **kwargs)
+    self._field_parser = SshdFieldParser()
 
   def Parse(self, cmd, args, stdout, stderr, return_val, time_taken,
             knowledge_base):
     # Clean out any residual state.
-    self.Flush()
+    self._field_parser.Flush()
     lines = [l.strip() for l in stdout.splitlines()]
     for line in lines:
       if line:
-        self.ParseLine(line)
-    for result in self.GenerateResults():
+        self._field_parser.ParseLine(line)
+    for result in self._field_parser.GenerateResults():
       yield result
 
 
-class MtabParser(parser.FileParser, FieldParser):
+class MtabParser(parser.FileParser):
   """Parser for mounted filesystem data acquired from /proc/mounts."""
   output_types = ["Filesystem"]
   supported_artifacts = ["LinuxProcMounts", "LinuxFstab"]
 
+  def __init__(self, *args, **kwargs):
+    super(MtabParser, self).__init__(*args, **kwargs)
+    self._field_parser = FieldParser()
+
   def Parse(self, unused_stat, file_obj, unused_knowledge_base):
-    for entry in self.ParseEntries(file_obj.read()):
+    for entry in self._field_parser.ParseEntries(
+        utils.ReadFileBytesAsUnicode(file_obj)):
       if not entry:
         continue
       result = rdf_client_fs.Filesystem()
@@ -587,12 +617,16 @@ class MtabParser(parser.FileParser, FieldParser):
       yield result
 
 
-class MountCmdParser(parser.CommandParser, FieldParser):
+class MountCmdParser(parser.CommandParser):
   """Parser for mounted filesystem data acquired from the mount command."""
   output_types = ["Filesystem"]
   supported_artifacts = ["LinuxMountCmd"]
 
   mount_re = re.compile(r"(.*) on (.*) type (.*) \((.*)\)")
+
+  def __init__(self, *args, **kwargs):
+    super(MountCmdParser, self).__init__(*args, **kwargs)
+    self._field_parser = FieldParser()
 
   def Parse(self, cmd, args, stdout, stderr, return_val, time_taken,
             knowledge_base):
@@ -600,7 +634,7 @@ class MountCmdParser(parser.CommandParser, FieldParser):
     _ = stderr, time_taken, args, knowledge_base  # Unused.
     self.CheckReturn(cmd, return_val)
     result = rdf_protodict.AttributedDict()
-    for entry in self.ParseEntries(stdout):
+    for entry in self._field_parser.ParseEntries(stdout):
       line_str = " ".join(entry)
       mount_rslt = self.mount_re.match(line_str)
       if mount_rslt:
@@ -620,11 +654,8 @@ class MountCmdParser(parser.CommandParser, FieldParser):
         yield result
 
 
-class RsyslogParser(parser.FileParser, FieldParser):
-  """Parser for syslog configurations."""
-  output_types = ["AttributedDict"]
-  supported_artifacts = ["LinuxRsyslogConfigs"]
-  process_together = True
+class RsyslogFieldParser(FieldParser):
+  """Field parser for syslog configurations."""
 
   log_rule_re = re.compile(r"([\w,\*]+)\.([\w,!=\*]+)")
   destinations = collections.OrderedDict([
@@ -637,7 +668,7 @@ class RsyslogParser(parser.FileParser, FieldParser):
       ("FILE", re.compile(r"-?(/[^;]*)")), ("WALL", re.compile(r"(\*)"))
   ])  # pyformat: disable
 
-  def _ParseAction(self, action):
+  def ParseAction(self, action):
     """Extract log configuration data from rsyslog actions.
 
     Actions have the format:
@@ -668,15 +699,27 @@ class RsyslogParser(parser.FileParser, FieldParser):
         break
     return rslt
 
+
+class RsyslogParser(parser.FileMultiParser):
+  """Artifact parser for syslog configurations."""
+
+  output_types = ["AttributedDict"]
+  supported_artifacts = ["LinuxRsyslogConfigs"]
+
+  def __init__(self, *args, **kwargs):
+    super(RsyslogParser, self).__init__(*args, **kwargs)
+    self._field_parser = RsyslogFieldParser()
+
   def ParseMultiple(self, unused_stats, file_objs, unused_knowledge_base):
     # TODO(user): review quoting and line continuation.
     result = rdf_config_file.LogConfig()
     for file_obj in file_objs:
-      for entry in self.ParseEntries(file_obj.read()):
+      for entry in self._field_parser.ParseEntries(
+          utils.ReadFileBytesAsUnicode(file_obj)):
         directive = entry[0]
-        log_rule = self.log_rule_re.match(directive)
+        log_rule = self._field_parser.log_rule_re.match(directive)
         if log_rule and entry[1:]:
-          target = self._ParseAction(entry[1])
+          target = self._field_parser.ParseAction(entry[1])
           target.facility, target.priority = log_rule.groups()
           result.targets.append(target)
     return [result]
@@ -710,6 +753,7 @@ class PackageSourceParser(parser.FileParser):
     """Stub Method to be overriden by APT and Yum source parsers."""
     raise NotImplementedError("Please implement FindPotentialURIs.")
 
+  # TODO: Make sure all special cases are caught by this function.
   def ParseURIFromKeyValues(self, data, separator, uri_key):
     """Parse key/value formatted source listing and return potential URLs.
 
@@ -764,7 +808,7 @@ class APTPackageSourceParser(PackageSourceParser):
     rfc822_format = ""  # will contain all lines not in legacy format
     uris_to_parse = []
 
-    for line in file_obj.read().splitlines(True):
+    for line in utils.ReadFileBytesAsUnicode(file_obj).splitlines(True):
       # check if legacy style line - if it is then extract URL
       m = re.search(r"^\s*deb(?:-\S+)?(?:\s+\[[^\]]*\])*\s+(\S+)(?:\s|$)", line)
       if m:
@@ -782,7 +826,8 @@ class YumPackageSourceParser(PackageSourceParser):
 
   def FindPotentialURIs(self, file_obj):
     """Given a file, this will return all potenial Yum source URIs."""
-    return self.ParseURIFromKeyValues(file_obj.read(), "=", "baseurl")
+    return self.ParseURIFromKeyValues(
+        utils.ReadFileBytesAsUnicode(file_obj), "=", "baseurl")
 
 
 class CronAtAllowDenyParser(parser.FileParser):
@@ -791,7 +836,9 @@ class CronAtAllowDenyParser(parser.FileParser):
   supported_artifacts = ["CronAtAllowDenyFiles"]
 
   def Parse(self, stat, file_obj, unused_knowledge_base):
-    lines = set([l.strip() for l in file_obj.read().splitlines()])
+    lines = set([
+        l.strip() for l in utils.ReadFileBytesAsUnicode(file_obj).splitlines()
+    ])
 
     users = []
     bad_lines = []
@@ -815,11 +862,10 @@ class CronAtAllowDenyParser(parser.FileParser):
           finding=bad_lines)
 
 
-class NtpdParser(parser.FileParser, FieldParser):
-  """Parser for ntpd.conf file."""
+class NtpdFieldParser(FieldParser):
+  """Field parser for ntpd.conf file."""
   output_types = ["NtpConfig"]
   supported_artifacts = ["NtpConfFile"]
-  process_together = True
 
   # The syntax is based on:
   #   https://www.freebsd.org/cgi/man.cgi?query=ntp.conf&sektion=5
@@ -848,7 +894,7 @@ class NtpdParser(parser.FileParser, FieldParser):
       "requestkey", "trustedkey", "crypto", "control", "statsdir", "filegen"
   ])
 
-  _defaults = {
+  defaults = {
       "auth": True,
       "bclient": False,
       "calibrate": False,
@@ -858,6 +904,14 @@ class NtpdParser(parser.FileParser, FieldParser):
       "pps": False,
       "stats": False
   }
+
+  def __init__(self):
+    super(NtpdFieldParser, self).__init__()
+    # ntp.conf has no line continuation. Override the default 'cont' values
+    # then parse up the lines.
+    self.cont = ""
+    self.config = self.defaults.copy()
+    self.keyed = {}
 
   def ParseLine(self, entries):
     """Extracts keyword/value settings from the ntpd config.
@@ -889,7 +943,7 @@ class NtpdParser(parser.FileParser, FieldParser):
 
     if keyword not in self._repeated | self._duplicates:
       # We have a plain and simple single key/value config line.
-      if isinstance(values[0], basestring):
+      if isinstance(values[0], string_types):
         self.config[keyword] = " ".join(values)
       else:
         self.config[keyword] = values
@@ -929,26 +983,30 @@ class NtpdParser(parser.FileParser, FieldParser):
         prev_settings = self.config.setdefault(keyword, [])
         prev_settings.append(" ".join(values))
 
+
+class NtpdParser(parser.FileParser):
+  """Artifact parser for ntpd.conf file."""
+
   def Parse(self, stat, file_object, knowledge_base):
     """Parse a ntp config into rdf."""
     _, _ = stat, knowledge_base
-    # Clean out any residual state.
-    self.config = self._defaults.copy()
-    self.keyed = {}
-    # ntp.conf has no line continuation. Override the default 'cont' values
-    # then parse up the lines.
-    self.cont = ""
-    for line in self.ParseEntries(file_object.read()):
-      self.ParseLine(line)
+
+    # TODO(hanuszczak): This parser only allows single use because it messes
+    # with its state. This should be fixed.
+    field_parser = NtpdFieldParser()
+    for line in field_parser.ParseEntries(
+        utils.ReadFileBytesAsUnicode(file_object)):
+      field_parser.ParseLine(line)
+
     yield rdf_config_file.NtpConfig(
-        config=self.config,
-        server=self.keyed.get("server"),
-        restrict=self.keyed.get("restrict"),
-        fudge=self.keyed.get("fudge"),
-        trap=self.keyed.get("trap"),
-        peer=self.keyed.get("peer"),
-        broadcast=self.keyed.get("broadcast"),
-        manycastclient=self.keyed.get("manycastclient"))
+        config=field_parser.config,
+        server=field_parser.keyed.get("server"),
+        restrict=field_parser.keyed.get("restrict"),
+        fudge=field_parser.keyed.get("fudge"),
+        trap=field_parser.keyed.get("trap"),
+        peer=field_parser.keyed.get("peer"),
+        broadcast=field_parser.keyed.get("broadcast"),
+        manycastclient=field_parser.keyed.get("manycastclient"))
 
   def ParseMultiple(self, stats, file_objects, knowledge_base):
     for s, f in zip(stats, file_objects):
@@ -956,10 +1014,8 @@ class NtpdParser(parser.FileParser, FieldParser):
         yield rslt
 
 
-class SudoersParser(parser.FileParser, FieldParser):
+class SudoersFieldParser(FieldParser):
   """Parser for privileged configuration files such as sudoers and pam.d/su."""
-  output_types = ["SudoersConfig"]
-  supported_artifacts = ["UnixSudoersConfiguration"]
 
   # Regex to remove comments from the file. The first group in the OR condition
   # handles comments that cover a full line, while also ignoring #include(dir).
@@ -988,7 +1044,7 @@ class SudoersParser(parser.FileParser, FieldParser):
 
   def __init__(self, *args, **kwargs):
     kwargs["comments"] = []
-    super(SudoersParser, self).__init__(*args, **kwargs)
+    super(SudoersFieldParser, self).__init__(*args, **kwargs)
 
   def _ExtractList(self, fields, ignores=(",",), terminators=()):
     """Extract a list from the given fields."""
@@ -1014,27 +1070,27 @@ class SudoersParser(parser.FileParser, FieldParser):
 
     return extracted, fields[i + 1:]
 
-  def _ParseSudoersEntry(self, entry, sudoers_config):
+  def ParseSudoersEntry(self, entry, sudoers_config):
     """Parse an entry and add it to the given SudoersConfig rdfvalue."""
 
     key = entry[0]
-    if key in SudoersParser.ALIAS_TYPES:
+    if key in SudoersFieldParser.ALIAS_TYPES:
       # Alias.
       alias_entry = rdf_config_file.SudoersAlias(
-          type=SudoersParser.ALIAS_TYPES.get(key), name=entry[1])
+          type=SudoersFieldParser.ALIAS_TYPES.get(key), name=entry[1])
 
       # Members of this alias, comma-separated.
       members, _ = self._ExtractList(entry[2:], ignores=(",", "="))
-      field = SudoersParser.ALIAS_FIELDS.get(key)
+      field = SudoersFieldParser.ALIAS_FIELDS.get(key)
       getattr(alias_entry, field).Extend(members)
 
       sudoers_config.aliases.append(alias_entry)
-    elif key.startswith(SudoersParser.DEFAULTS_KEY):
+    elif key.startswith(SudoersFieldParser.DEFAULTS_KEY):
       # Default.
       # Identify scope if one exists (Defaults<scope> ...)
       scope = None
-      if len(key) > len(SudoersParser.DEFAULTS_KEY):
-        scope = key[len(SudoersParser.DEFAULTS_KEY) + 1:]
+      if len(key) > len(SudoersFieldParser.DEFAULTS_KEY):
+        scope = key[len(SudoersFieldParser.DEFAULTS_KEY) + 1:]
 
       # There can be multiple defaults on a line, for the one scope.
       entry = entry[1:]
@@ -1053,7 +1109,7 @@ class SudoersParser(parser.FileParser, FieldParser):
           default_entry.value = " ".join(value)
 
         sudoers_config.defaults.append(default_entry)
-    elif key in SudoersParser.INCLUDE_KEYS:
+    elif key in SudoersFieldParser.INCLUDE_KEYS:
       # TODO(user): make #includedir more obvious in the RDFValue somewhere
       target = " ".join(entry[1:])
       sudoers_config.includes.append(target)
@@ -1071,19 +1127,31 @@ class SudoersParser(parser.FileParser, FieldParser):
 
       sudoers_config.entries.append(sudoers_entry)
 
-  def _Preprocess(self, data):
+  def Preprocess(self, data):
     """Preprocess the given data, ready for parsing."""
     # Add whitespace to line continuations.
     data = data.replace(":\\", ": \\")
 
     # Strip comments manually because sudoers has multiple meanings for '#'.
-    data = SudoersParser.COMMENTS_RE.sub("", data)
+    data = SudoersFieldParser.COMMENTS_RE.sub("", data)
     return data
 
+
+class SudoersParser(parser.FileParser):
+  """Artifact parser for privileged configuration files."""
+
+  output_types = ["SudoersConfig"]
+  supported_artifacts = ["UnixSudoersConfiguration"]
+
+  def __init__(self, *args, **kwargs):
+    super(SudoersParser, self).__init__(*args, **kwargs)
+    self._field_parser = SudoersFieldParser()
+
   def Parse(self, unused_stat, file_obj, unused_knowledge_base):
-    self.ParseEntries(self._Preprocess(file_obj.read()))
+    self._field_parser.ParseEntries(
+        self._field_parser.Preprocess(utils.ReadFileBytesAsUnicode(file_obj)))
     result = rdf_config_file.SudoersConfig()
-    for entry in self.entries:
+    for entry in self._field_parser.entries:
       # Handle multiple entries in one line, eg:
       # foo bar : baz
       # ... would become ...
@@ -1105,6 +1173,6 @@ class SudoersParser(parser.FileParser, FieldParser):
         nested_entries.append(runner)
 
       for nested_entry in nested_entries:
-        self._ParseSudoersEntry(nested_entry, result)
+        self._field_parser.ParseSudoersEntry(nested_entry, result)
 
     yield result

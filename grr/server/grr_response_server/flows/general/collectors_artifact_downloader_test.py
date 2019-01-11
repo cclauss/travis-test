@@ -4,6 +4,8 @@
 These test cover the artifact downloader functionality which downloads files
 referenced by artifacts.
 """
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import unicode_literals
 
 from grr_response_core.lib import flags
@@ -11,15 +13,14 @@ from grr_response_core.lib import utils
 from grr_response_core.lib.rdfvalues import client_fs as rdf_client_fs
 from grr_response_core.lib.rdfvalues import paths as rdf_paths
 from grr_response_core.lib.rdfvalues import protodict as rdf_protodict
-from grr_response_server import aff4
-from grr_response_server import artifact
-from grr_response_server import flow
 from grr_response_server.flows.general import collectors
 from grr_response_server.flows.general import transfer
+from grr.test_lib import db_test_lib
 from grr.test_lib import flow_test_lib
 from grr.test_lib import test_lib
 
 
+@db_test_lib.DualDBTest
 class ArtifactFilesDownloaderFlowTest(flow_test_lib.FlowTestsBaseclass):
 
   def setUp(self):
@@ -66,22 +67,14 @@ class ArtifactFilesDownloaderFlowTest(flow_test_lib.FlowTestsBaseclass):
     if artifact_list is None:
       artifact_list = ["WindowsRunKeys"]
 
-    client_id = self.SetupClient(0, system="Windows", os_version="6.2")
-    with aff4.FACTORY.Open(client_id, token=self.token, mode="rw") as fd:
-      fd.Set(fd.Schema.SYSTEM("Windows"))
-      kb = fd.Schema.KNOWLEDGE_BASE()
-      artifact.SetCoreGRRKnowledgeBaseValues(kb, fd)
-      fd.Set(kb)
-
-    urn = flow_test_lib.TestFlowHelper(
+    session_id = flow_test_lib.TestFlowHelper(
         collectors.ArtifactFilesDownloaderFlow.__name__,
         client_id=client_id,
         artifact_list=artifact_list,
         use_tsk=use_tsk,
         token=self.token)
 
-    results_fd = flow.GRRFlow.ResultCollectionForFID(urn)
-    return list(results_fd)
+    return flow_test_lib.GetFlowResults(client_id, session_id)
 
   def MakeRegistryStatEntry(self, path, value):
     options = rdf_paths.PathSpec.Options.CASE_LITERAL
@@ -120,9 +113,9 @@ class ArtifactFilesDownloaderFlowTest(flow_test_lib.FlowTestsBaseclass):
 
     results = self.RunFlow(client_id)
 
-    self.assertEquals(len(results), 1)
-    self.assertEquals(results[0].found_pathspec,
-                      self.collector_replies[0].pathspec)
+    self.assertLen(results, 1)
+    self.assertEqual(results[0].found_pathspec,
+                     self.collector_replies[0].pathspec)
 
   def testSendsReplyEvenIfNoPathsAreGuessed(self):
     client_id = self.SetupClient(0)
@@ -133,8 +126,8 @@ class ArtifactFilesDownloaderFlowTest(flow_test_lib.FlowTestsBaseclass):
 
     results = self.RunFlow(client_id)
 
-    self.assertEquals(len(results), 1)
-    self.assertEquals(results[0].original_result, self.collector_replies[0])
+    self.assertLen(results, 1)
+    self.assertEqual(results[0].original_result, self.collector_replies[0])
     self.assertFalse(results[0].HasField("found_pathspec"))
     self.assertFalse(results[0].HasField("downloaded_file"))
 
@@ -150,8 +143,8 @@ class ArtifactFilesDownloaderFlowTest(flow_test_lib.FlowTestsBaseclass):
 
     results = self.RunFlow(client_id)
 
-    self.assertEquals(len(results), 1)
-    self.assertEquals(
+    self.assertLen(results, 1)
+    self.assertEqual(
         results[0].found_pathspec,
         rdf_paths.PathSpec(path="C:\\Windows\\bar.exe", pathtype="OS"))
     self.assertFalse(results[0].HasField("downloaded_file"))
@@ -166,8 +159,8 @@ class ArtifactFilesDownloaderFlowTest(flow_test_lib.FlowTestsBaseclass):
 
     results = self.RunFlow(client_id)
 
-    self.assertEquals(len(results), 1)
-    self.assertEquals(results[0].downloaded_file, self.received_files[0])
+    self.assertLen(results, 1)
+    self.assertEqual(results[0].downloaded_file, self.received_files[0])
 
 
 def main(argv):

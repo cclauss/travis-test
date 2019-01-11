@@ -1,19 +1,21 @@
 #!/usr/bin/env python
 """Test hunt creation by flow."""
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import unicode_literals
 
 
-import unittest
 from grr_response_core.lib import flags
 
-from grr_response_server import flow
 from grr_response_server.flows.general import processes as flows_processes
 from grr_response_server.gui import gui_test_lib
 from grr_response_server.output_plugins import email_plugin
 from grr_response_server.rdfvalues import output_plugin as rdf_output_plugin
 from grr.test_lib import action_mocks
 from grr.test_lib import db_test_lib
+from grr.test_lib import flow_test_lib
 from grr.test_lib import hunt_test_lib
+from grr.test_lib import test_lib
 
 
 @db_test_lib.DualDBTest
@@ -35,12 +37,11 @@ class TestFlowCreateHunt(gui_test_lib.GRRSeleniumTest,
     args = flows_processes.ListProcessesArgs(
         filename_regex="test[a-z]*", fetch_binaries=True)
 
-    flow.StartAFF4Flow(
-        flow_name=flows_processes.ListProcesses.__name__,
-        args=args,
+    flow_test_lib.StartFlow(
+        flows_processes.ListProcesses,
+        flow_args=args,
         client_id=self.client_id,
-        output_plugins=[email_descriptor],
-        token=self.token)
+        output_plugins=[email_descriptor])
 
     # Navigate to client and select newly created flow.
     self.Open("/#/clients/%s" % self.client_id)
@@ -89,10 +90,8 @@ class TestFlowCreateHunt(gui_test_lib.GRRSeleniumTest,
     self.WaitUntil(self.IsTextPresent, flows_processes.ListProcesses.__name__)
 
   def testCheckCreateHuntButtonIsOnlyEnabledWithFlowSelection(self):
-    flow.StartAFF4Flow(
-        client_id=self.client_id,
-        flow_name=gui_test_lib.RecursiveTestFlow.__name__,
-        token=self.token)
+    flow_test_lib.StartFlow(
+        gui_test_lib.RecursiveTestFlow, client_id=self.client_id)
 
     # Open client and find the flow.
     self.Open("/#/clients/%s" % self.client_id)
@@ -108,11 +107,5 @@ class TestFlowCreateHunt(gui_test_lib.GRRSeleniumTest,
                    "css=button[name=create_hunt]:not([disabled])")
 
 
-def main(argv):
-  del argv  # Unused.
-  # Run the full test suite
-  unittest.main()
-
-
 if __name__ == "__main__":
-  flags.StartMain(main)
+  flags.StartMain(test_lib.main)

@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 """Simple parsers for the output of WMI queries."""
 
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import unicode_literals
 
 import binascii
@@ -8,19 +10,21 @@ import calendar
 import struct
 import time
 
-from builtins import bytes  # pylint: disable=redefined-builtin
-from builtins import map  # pylint: disable=redefined-builtin
-from builtins import range  # pylint: disable=redefined-builtin
+from future.builtins import bytes
+from future.builtins import map
+from future.builtins import range
+from future.builtins import str
 from future.utils import iteritems
 
 from grr_response_core.lib import parser
 from grr_response_core.lib import rdfvalue
-from grr_response_core.lib import utils
 from grr_response_core.lib.rdfvalues import anomaly as rdf_anomaly
 from grr_response_core.lib.rdfvalues import client as rdf_client
 from grr_response_core.lib.rdfvalues import client_fs as rdf_client_fs
 from grr_response_core.lib.rdfvalues import client_network as rdf_client_network
 from grr_response_core.lib.rdfvalues import wmi as rdf_wmi
+from grr_response_core.lib.util import compatibility
+from grr_response_core.lib.util import precondition
 
 
 def BinarySIDtoStringSID(sid):
@@ -46,9 +50,9 @@ def BinarySIDtoStringSID(sid):
   Raises:
     ValueError: If the binary SID is malformed.
   """
-  utils.AssertType(sid, bytes)
+  precondition.AssertType(sid, bytes)
 
-  # TODO(hanuszczak): This seemingly no-op is actually not a no-op. The reason
+  # TODO: This seemingly no-op is actually not a no-op. The reason
   # is that `sid` might be either `bytes` from the future package or `str` (e.g.
   # a bytes literal on Python 2). This call ensures that we get a `bytes` object
   # with Python 3 semantics. Once GRR's codebase is ready to drop support for
@@ -84,7 +88,7 @@ def BinarySIDtoStringSID(sid):
       str_sid_components.append(struct.unpack("<L", authority)[0])
       start += 4
 
-  return u"S-%s" % (u"-".join(map(unicode, str_sid_components)))
+  return u"S-%s" % (u"-".join(map(str, str_sid_components)))
 
 
 class WMIEventConsumerParser(parser.WMIQueryParser):
@@ -92,10 +96,8 @@ class WMIEventConsumerParser(parser.WMIQueryParser):
 
   __abstract = True  # pylint: disable=invalid-name
 
-  def Parse(self, query, result, knowledge_base):
+  def Parse(self, result):
     """Parse a WMI Event Consumer."""
-    _ = query, knowledge_base
-
     wmi_dict = result.ToDict()
 
     try:
@@ -103,7 +105,7 @@ class WMIEventConsumerParser(parser.WMIQueryParser):
       wmi_dict["CreatorSID"] = BinarySIDtoStringSID(creator_sid_bytes)
     except ValueError:
       # We recover from corrupt SIDs by outputting it raw as a string
-      wmi_dict["CreatorSID"] = unicode(wmi_dict["CreatorSID"])
+      wmi_dict["CreatorSID"] = compatibility.Repr(wmi_dict["CreatorSID"])
     except KeyError:
       pass
 
@@ -160,9 +162,8 @@ class WMIInstalledSoftwareParser(parser.WMIQueryParser):
   output_types = [rdf_client.SoftwarePackage.__name__]
   supported_artifacts = ["WMIInstalledSoftware"]
 
-  def Parse(self, query, result, knowledge_base):
+  def Parse(self, result):
     """Parse the WMI packages output."""
-    _ = query, knowledge_base
     status = rdf_client.SoftwarePackage.InstallState.INSTALLED
     soft = rdf_client.SoftwarePackage(
         name=result["Name"],
@@ -187,9 +188,8 @@ class WMIHotfixesSoftwareParser(parser.WMIQueryParser):
     except ValueError:
       return 0
 
-  def Parse(self, query, result, knowledge_base):
+  def Parse(self, result):
     """Parse the WMI packages output."""
-    _ = query, knowledge_base
     status = rdf_client.SoftwarePackage.InstallState.INSTALLED
     result = result.ToDict()
 
@@ -221,9 +221,8 @@ class WMIUserParser(parser.WMIQueryParser):
       "LocalPath": "homedir"
   }
 
-  def Parse(self, query, result, knowledge_base):
+  def Parse(self, result):
     """Parse the WMI Win32_UserAccount output."""
-    _ = query, knowledge_base
     kb_user = rdf_client.User()
     for wmi_key, kb_key in iteritems(self.account_mapping):
       try:
@@ -244,9 +243,8 @@ class WMILogicalDisksParser(parser.WMIQueryParser):
   output_types = [rdf_client_fs.Volume.__name__]
   supported_artifacts = ["WMILogicalDisks"]
 
-  def Parse(self, query, result, knowledge_base):
+  def Parse(self, result):
     """Parse the WMI packages output."""
-    _ = query, knowledge_base
     result = result.ToDict()
     winvolume = rdf_client_fs.WindowsVolume(
         drive_letter=result.get("DeviceID"), drive_type=result.get("DriveType"))
@@ -281,13 +279,12 @@ class WMIComputerSystemProductParser(parser.WMIQueryParser):
   output_types = [rdf_client.HardwareInfo.__name__]
   supported_artifacts = ["WMIComputerSystemProduct"]
 
-  def Parse(self, query, result, knowledge_base):
+  def Parse(self, result):
     """Parse the WMI output to get Identifying Number."""
     # Currently we are only grabbing the Identifying Number
     # as the serial number (catches the unique number for VMs).
     # This could be changed to include more information from
     # Win32_ComputerSystemProduct.
-    _ = query, knowledge_base
 
     yield rdf_client.HardwareInfo(
         serial_number=result["IdentifyingNumber"],
@@ -345,10 +342,8 @@ class WMIInterfacesParser(parser.WMIQueryParser):
       output_dict[outputkey] = addresses
     return output_dict
 
-  def Parse(self, query, result, knowledge_base):
+  def Parse(self, result):
     """Parse the WMI packages output."""
-    _ = query, knowledge_base
-
     args = {"ifname": result["Description"]}
     args["mac_address"] = binascii.unhexlify(result["MACAddress"].replace(
         ":", ""))

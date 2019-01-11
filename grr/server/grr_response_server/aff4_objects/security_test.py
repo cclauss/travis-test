@@ -1,5 +1,8 @@
 #!/usr/bin/env python
-"""Tests for grr_response_server.aff4_objects.security."""
+"""Tests for aff4_objects.security."""
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import unicode_literals
 
 from grr_response_core import config
 from grr_response_core.lib import flags
@@ -37,8 +40,8 @@ class ApprovalTest(test_lib.GRRBaseTest, acl_test_lib.AclTestMixin):
 
     # Make sure approval is expired by the time we call GetApprovalForObject.
     now = rdfvalue.RDFDatetime.Now()
-    with test_lib.FakeTime(
-        now + self.approval_expiration + rdfvalue.Duration("1s")):
+    with test_lib.FakeTime(now + self.approval_expiration +
+                           rdfvalue.Duration("1s")):
       with self.assertRaisesRegexp(
           access_control.UnauthorizedAccess,
           "Need at least 2 additional approvers for access."):
@@ -52,8 +55,8 @@ class ApprovalTest(test_lib.GRRBaseTest, acl_test_lib.AclTestMixin):
     # Make sure that approvals are expired by the time we call
     # GetApprovalForObject.
     now = rdfvalue.RDFDatetime.Now()
-    with test_lib.FakeTime(
-        now + self.approval_expiration + rdfvalue.Duration("1s")):
+    with test_lib.FakeTime(now + self.approval_expiration +
+                           rdfvalue.Duration("1s")):
       with self.assertRaisesRegexp(
           access_control.UnauthorizedAccess,
           "Need at least 2 additional approvers for access."):
@@ -75,8 +78,8 @@ class ApprovalTest(test_lib.GRRBaseTest, acl_test_lib.AclTestMixin):
 
     # Make sure only the first approval is expired by the time
     # GetApprovalForObject is called.
-    with test_lib.FakeTime(
-        now + self.approval_expiration + rdfvalue.Duration("1h")):
+    with test_lib.FakeTime(now + self.approval_expiration +
+                           rdfvalue.Duration("1h")):
       approved_token = security.Approval.GetApprovalForObject(
           self.client_id, token=self.token)
       self.assertEqual(approved_token.reason, "reason2")
@@ -124,9 +127,9 @@ class ClientApprovalTest(test_lib.GRRBaseTest):
 
     approval_id = list(
         aff4.FACTORY.ListChildren(
-            "aff4:/users/test/approvals/client/C.1000000000000000"))[
-                0].Basename()
-    self.assertTrue(approval_id.startswith("approval:"))
+            "aff4:/users/test/approvals/client/C.1000000000000000")
+    )[0].Basename()
+    self.assertStartsWith(approval_id, "approval:")
 
     fd = aff4.FACTORY.Open(
         "aff4:/users/test/approvals/client/C.1000000000000000/%s" % approval_id,
@@ -154,7 +157,7 @@ class CronJobAprrovalTest(test_lib.GRRBaseTest):
     approval_id = list(
         aff4.FACTORY.ListChildren(
             "aff4:/users/test/approvals/cron/CronJobName"))[0].Basename()
-    self.assertTrue(approval_id.startswith("approval:"))
+    self.assertStartsWith(approval_id, "approval:")
 
     fd = aff4.FACTORY.Open(
         "aff4:/users/test/approvals/cron/CronJobName/%s" % approval_id,
@@ -182,7 +185,7 @@ class HuntApprovalTest(test_lib.GRRBaseTest):
     approval_id = list(
         aff4.FACTORY.ListChildren(
             "aff4:/users/test/approvals/hunt/H:ABCD1234"))[0].Basename()
-    self.assertTrue(approval_id.startswith("approval:"))
+    self.assertStartsWith(approval_id, "approval:")
 
     fd = aff4.FACTORY.Open(
         "aff4:/users/test/approvals/hunt/H:ABCD1234/%s" % approval_id,

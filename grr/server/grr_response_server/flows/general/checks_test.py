@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 """Test the collector flows."""
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import unicode_literals
 
 import os
@@ -8,20 +10,23 @@ from future.utils import iterkeys
 
 from grr_response_core import config
 from grr_response_core.lib import flags
+from grr_response_core.lib.parsers import config_file
+from grr_response_core.lib.parsers import linux_file_parser
 from grr_response_core.lib.rdfvalues import client as rdf_client
-from grr_response_server import aff4
-from grr_response_server import flow
 from grr_response_server.check_lib import checks
 from grr_response_server.check_lib import checks_test_lib
 from grr_response_server.flows.general import checks as flow_checks
 from grr.test_lib import action_mocks
+from grr.test_lib import db_test_lib
 from grr.test_lib import flow_test_lib
+from grr.test_lib import parser_test_lib
 from grr.test_lib import test_lib
 from grr.test_lib import vfs_test_lib
 
 # pylint: mode=test
 
 
+@db_test_lib.DualDBTest
 class TestCheckFlows(flow_test_lib.FlowTestsBaseclass,
                      checks_test_lib.HostCheckTest):
 
@@ -37,41 +42,22 @@ class TestCheckFlows(flow_test_lib.FlowTestsBaseclass,
       raise RuntimeError("No checks to test.")
     self.client_mock = action_mocks.FileFinderClientMock()
 
-  def SetLinuxKB(self):
-    client = aff4.FACTORY.Open(self.client_id, token=self.token, mode="rw")
-    kb = client.Schema.KNOWLEDGE_BASE()
-    kb.os = "Linux"
+  def SetupLinuxUser(self):
     user = rdf_client.User(username="user1", homedir="/home/user1")
-    kb.users = [user]
-    client.Set(client.Schema.KNOWLEDGE_BASE, kb)
-    client.Set(client.Schema.SYSTEM("Linux"))
-    client.Set(client.Schema.OS_VERSION("12.04"))
-    client.Flush()
+    return self.SetupClient(0, system="Linux", users=[user], os_version="12.04")
 
-  def SetWindowsKB(self):
-    client = aff4.FACTORY.Open(self.client_id, token=self.token, mode="rw")
-    kb = client.Schema.KNOWLEDGE_BASE()
-    kb.os = "Windows"
-    client.Set(client.Schema.KNOWLEDGE_BASE, kb)
-    client.Set(client.Schema.SYSTEM("Windows"))
-    client.Set(client.Schema.OS_VERSION("6.2"))
-    client.Flush()
+  def SetupWindowsUser(self):
+    return self.SetupClient(0, system="Windows", os_version="6.2")
 
-  def RunFlow(self):
-    with test_lib.Instrument(flow.GRRFlow, "SendReply") as send_reply:
-      with vfs_test_lib.FakeTestDataVFSOverrider():
-        session_id = flow_test_lib.TestFlowHelper(
-            flow_checks.CheckRunner.__name__,
-            client_mock=self.client_mock,
-            client_id=self.client_id,
-            token=self.token)
-    session = aff4.FACTORY.Open(session_id, token=self.token)
-    results = {
-        r.check_id: r
-        for _, r in send_reply.args
-        if isinstance(r, checks.CheckResult)
-    }
-    return session, results
+  def RunFlow(self, client_id):
+    with vfs_test_lib.FakeTestDataVFSOverrider():
+      session_id = flow_test_lib.TestFlowHelper(
+          flow_checks.CheckRunner.__name__,
+          client_mock=self.client_mock,
+          client_id=client_id,
+          token=self.token)
+    results = flow_test_lib.GetFlowResults(client_id, session_id)
+    return session_id, {r.check_id: r for r in results}
 
   def LoadChecks(self):
     """Load the checks, returning the names of the checks that were loaded."""
@@ -83,26 +69,33 @@ class TestCheckFlows(flow_test_lib.FlowTestsBaseclass,
     return list(iterkeys(checks.CheckRegistry.checks))
 
   def testSelectArtifactsForChecks(self):
-    self.SetLinuxKB()
-    session, _ = self.RunFlow()
-    self.assertTrue("DebianPackagesStatus" in session.state.artifacts_wanted)
-    self.assertTrue("SshdConfigFile" in session.state.artifacts_wanted)
+    client_id = self.SetupLinuxUser()
+    session_id, _ = self.RunFlow(client_id)
 
-    self.SetWindowsKB()
-    session, _ = self.RunFlow()
-    self.assertTrue("WMIInstalledSoftware" in session.state.artifacts_wanted)
+    state = flow_test_lib.GetFlowState(
+        self.client_id, session_id, token=self.token)
+    self.assertIn("DebianPackagesStatus", state.artifacts_wanted)
+    self.assertIn("SshdConfigFile", state.artifacts_wanted)
+
+    client_id = self.SetupWindowsUser()
+    session_id, _ = self.RunFlow(client_id)
+    state = flow_test_lib.GetFlowState(
+        self.client_id, session_id, token=self.token)
+    self.assertIn("WMIInstalledSoftware", state.artifacts_wanted)
 
   def testCheckFlowSelectsChecks(self):
     """Confirm the flow runs checks for a target machine."""
-    self.SetLinuxKB()
-    _, results = self.RunFlow()
+    client_id = self.SetupLinuxUser()
+    _, results = self.RunFlow(client_id)
     expected = ["SHADOW-HASH", "SSHD-CHECK", "SSHD-PERMS", "SW-CHECK"]
     self.assertRanChecks(expected, results)
 
+  @parser_test_lib.WithParser("Sshd", config_file.SshdConfigParser)
+  @parser_test_lib.WithParser("Pswd", linux_file_parser.LinuxSystemPasswdParser)
   def testChecksProcessResultContext(self):
     """Test the flow returns parser results."""
-    self.SetLinuxKB()
-    _, results = self.RunFlow()
+    client_id = self.SetupLinuxUser()
+    _, results = self.RunFlow(client_id)
 
     # Detected by result_context: PARSER
     exp = "Found: Sshd allows protocol 1."

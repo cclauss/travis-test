@@ -5,6 +5,8 @@ These tests cover the interaction of artifacts. They test that collection of
 good artifacts can still succeed if some bad artifacts are defined, and the
 various ways of loading artifacts.
 """
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import unicode_literals
 
 import os
@@ -26,6 +28,7 @@ from grr_response_server.flows.general import transfer
 from grr.test_lib import action_mocks
 from grr.test_lib import artifact_test_lib
 from grr.test_lib import flow_test_lib
+from grr.test_lib import parser_test_lib
 from grr.test_lib import test_lib
 from grr.test_lib import vfs_test_lib
 
@@ -110,6 +113,7 @@ supported_os: [ "Linux" ]
       with self.assertRaises(rdf_artifacts.ArtifactNotRegisteredError):
         artifact_registry.REGISTRY.GetArtifact("NotInDatastore")
 
+  @parser_test_lib.WithAllParsers
   def testProcessCollectedArtifacts(self):
     """Test downloading files from artifacts."""
     self.client_id = self.SetupClient(0, system="Windows", os_version="6.2")
@@ -150,7 +154,7 @@ supported_os: [ "Linux" ]
       # TODO(user): RunKeys for S-1-5-20 are not found because users.sid only
       # expands to users with profiles.
       pathspecs = getfile_instrument.args[0][0].args.pathspecs
-      self.assertItemsEqual([x.path for x in pathspecs],
+      self.assertCountEqual([x.path for x in pathspecs],
                             [u"C:\\Windows\\TEMP\\A.exe"])
 
     artifact_list = ["BadPathspecArtifact"]

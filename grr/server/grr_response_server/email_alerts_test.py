@@ -1,5 +1,8 @@
 #!/usr/bin/env python
 """Tests for grr.lib.email_alerts."""
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import unicode_literals
 
 
 import mock
@@ -40,9 +43,9 @@ class SendEmailTests(test_lib.GRRBaseTest):
         email_alerts.EMAIL_ALERTER.SendEmail(to_address, from_address, subject,
                                              message)
         c_from, c_to, msg = smtp_conn.sendmail.call_args[0]
-        self.assertItemsEqual(from_address, c_from)
-        self.assertItemsEqual([to_address], c_to)
-        self.assertFalse("CC:" in msg)
+        self.assertCountEqual(from_address, c_from)
+        self.assertCountEqual([to_address], c_to)
+        self.assertNotIn("CC:", msg)
 
         # Single fully qualified address as rdf_standard.DomainEmailAddress
         to_address = rdf_standard.DomainEmailAddress("testto@%s" % testdomain)
@@ -52,9 +55,9 @@ class SendEmailTests(test_lib.GRRBaseTest):
         email_alerts.EMAIL_ALERTER.SendEmail(to_address, from_address, subject,
                                              message)
         c_from, c_to, msg = smtp_conn.sendmail.call_args[0]
-        self.assertItemsEqual(from_address, c_from)
-        self.assertItemsEqual([to_address], c_to)
-        self.assertFalse("CC:" in msg)
+        self.assertCountEqual(from_address, c_from)
+        self.assertCountEqual([to_address], c_to)
+        self.assertNotIn("CC:", msg)
 
         # Multiple unqualified to addresses, one cc
         to_address = "testto,abc,def"
@@ -65,8 +68,8 @@ class SendEmailTests(test_lib.GRRBaseTest):
         email_alerts.EMAIL_ALERTER.SendEmail(
             to_address, from_address, subject, message, cc_addresses=cc_address)
         c_from, c_to, message = smtp_conn.sendmail.call_args[0]
-        self.assertItemsEqual(from_address, c_from)
-        self.assertItemsEqual(to_address_expected, c_to)
+        self.assertCountEqual(from_address, c_from)
+        self.assertCountEqual(to_address_expected, c_to)
         self.assertTrue("CC: testcc@%s" % testdomain in message)
 
         # Multiple unqualified to addresses as DomainEmailAddress, one cc
@@ -82,8 +85,8 @@ class SendEmailTests(test_lib.GRRBaseTest):
         email_alerts.EMAIL_ALERTER.SendEmail(
             to_address, from_address, subject, message, cc_addresses=cc_address)
         c_from, c_to, message = smtp_conn.sendmail.call_args[0]
-        self.assertItemsEqual(from_address, c_from)
-        self.assertItemsEqual(to_address_expected, c_to)
+        self.assertCountEqual(from_address, c_from)
+        self.assertCountEqual(to_address_expected, c_to)
         self.assertTrue("CC: testcc@%s" % testdomain in message)
 
         # Multiple unqualified to addresses, two cc, message_id set
@@ -102,10 +105,10 @@ class SendEmailTests(test_lib.GRRBaseTest):
             cc_addresses=cc_address,
             message_id=email_msg_id)
         c_from, c_to, message = smtp_conn.sendmail.call_args[0]
-        self.assertItemsEqual(from_address, c_from)
-        self.assertItemsEqual(to_address_expected, c_to)
-        self.assertTrue("CC: testcc@%s,testcc2@%s" % (testdomain,
-                                                      testdomain) in message)
+        self.assertCountEqual(from_address, c_from)
+        self.assertCountEqual(to_address_expected, c_to)
+        self.assertTrue(
+            "CC: testcc@%s,testcc2@%s" % (testdomain, testdomain) in message)
         self.assertTrue("Message-ID: %s" % email_msg_id)
 
       # Multiple address types, two cc, no default domain
@@ -122,10 +125,10 @@ class SendEmailTests(test_lib.GRRBaseTest):
         email_alerts.EMAIL_ALERTER.SendEmail(
             to_address, from_address, subject, message, cc_addresses=cc_address)
         c_from, c_to, message = smtp_conn.sendmail.call_args[0]
-        self.assertItemsEqual(from_address, c_from)
-        self.assertItemsEqual(to_address_expected, c_to)
-        self.assertTrue("CC: testcc@%s,testcc2@%s" % (testdomain,
-                                                      testdomain) in message)
+        self.assertCountEqual(from_address, c_from)
+        self.assertCountEqual(to_address_expected, c_to)
+        self.assertTrue(
+            "CC: testcc@%s,testcc2@%s" % (testdomain, testdomain) in message)
     finally:
       smtp_patcher.stop()
 

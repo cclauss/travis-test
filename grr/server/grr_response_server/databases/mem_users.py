@@ -1,9 +1,12 @@
 #!/usr/bin/env python
 """The in memory database methods for GRR users and approval handling."""
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import unicode_literals
 
 import os
 
+from future.builtins import str
 from future.utils import itervalues
 
 from grr_response_core.lib import rdfvalue
@@ -23,40 +26,45 @@ class InMemoryDBUsersMixin(object):
                    canary_mode=None,
                    user_type=None):
     """Writes user object for a user with a given name."""
-    u = self.users.setdefault(username, {"username": username})
+    u = self.users.setdefault(username, rdf_objects.GRRUser(username=username))
     if password is not None:
-      u["password"] = password
+      u.password = password
     if ui_mode is not None:
-      u["ui_mode"] = ui_mode
+      u.ui_mode = ui_mode
     if canary_mode is not None:
-      u["canary_mode"] = canary_mode
+      u.canary_mode = canary_mode
     if user_type is not None:
-      u["user_type"] = user_type
+      u.user_type = user_type
 
   @utils.Synchronized
   def ReadGRRUser(self, username):
     """Reads a user object corresponding to a given name."""
     try:
-      u = self.users[username]
-      return rdf_objects.GRRUser(
-          username=u["username"],
-          password=u.get("password"),
-          ui_mode=u.get("ui_mode"),
-          canary_mode=u.get("canary_mode"),
-          user_type=u.get("user_type"))
+      return self.users[username].Copy()
     except KeyError:
-      raise db.UnknownGRRUserError("Can't find user with name: %s" % username)
+      raise db.UnknownGRRUserError(username)
 
   @utils.Synchronized
-  def ReadAllGRRUsers(self):
-    """Reads all GRR users."""
-    for u in itervalues(self.users):
-      yield rdf_objects.GRRUser(
-          username=u["username"],
-          password=u.get("password"),
-          ui_mode=u.get("ui_mode"),
-          canary_mode=u.get("canary_mode"),
-          user_type=u.get("user_type"))
+  def ReadGRRUsers(self, offset=0, count=None):
+    """Reads GRR users with optional pagination, sorted by username."""
+    if count is None:
+      count = len(self.users)
+
+    users = sorted(self.users.values(), key=lambda user: user.username)
+    return [user.Copy() for user in users[offset:offset + count]]
+
+  @utils.Synchronized
+  def CountGRRUsers(self):
+    """Returns the total count of GRR users."""
+    return len(self.users)
+
+  @utils.Synchronized
+  def DeleteGRRUser(self, username):
+    """Deletes the user with the given username."""
+    try:
+      del self.users[username]
+    except KeyError:
+      raise db.UnknownGRRUserError(username)
 
   @utils.Synchronized
   def WriteApprovalRequest(self, approval_request):
@@ -64,7 +72,7 @@ class InMemoryDBUsersMixin(object):
     approvals = self.approvals_by_username.setdefault(
         approval_request.requestor_username, {})
 
-    approval_id = unicode(os.urandom(16).encode("hex"))
+    approval_id = str(os.urandom(16).encode("hex"))
     cloned_request = approval_request.Copy()
     cloned_request.timestamp = rdfvalue.RDFDatetime.Now()
     cloned_request.approval_id = approval_id
@@ -120,7 +128,7 @@ class InMemoryDBUsersMixin(object):
   def WriteUserNotification(self, notification):
     """Writes a notification for a given user."""
     if notification.username not in self.users:
-      raise db.UnknownGRRUserError("User %s not found!" % notification.username)
+      raise db.UnknownGRRUserError(notification.username)
 
     cloned_notification = notification.Copy()
     if not cloned_notification.timestamp:

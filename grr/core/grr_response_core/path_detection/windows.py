@@ -1,12 +1,15 @@
 #!/usr/bin/env python
 """Windows paths detection classes."""
 
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import unicode_literals
 
 import re
 
 
 from future.utils import iteritems
+from future.utils import string_types
 
 from grr_response_core.path_detection import core
 
@@ -119,7 +122,7 @@ class EnvVarsPostProcessor(core.PostProcessor):
       except KeyError:
         continue
 
-      if isinstance(var_value, basestring):
+      if isinstance(var_value, string_types):
         replacements = [var_value]
       else:
         replacements = var_value

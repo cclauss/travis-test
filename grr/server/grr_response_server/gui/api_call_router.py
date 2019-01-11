@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 """Router classes route API requests to particular handlers."""
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import unicode_literals
 
 import inspect
@@ -7,10 +9,11 @@ import re
 
 
 from future.utils import with_metaclass
+from typing import Text
 
 from grr_response_core.lib import registry
-from grr_response_core.lib import utils
-
+from grr_response_core.lib.util import compatibility
+from grr_response_core.lib.util import precondition
 from grr_response_server.gui import api_value_renderers
 from grr_response_server.gui.api_plugins import artifact as api_artifact
 from grr_response_server.gui.api_plugins import client as api_client
@@ -109,7 +112,7 @@ class RouterMethodMetadata(object):
                category=None,
                http_methods=None,
                no_audit_log_required=False):
-    utils.AssertType(name, unicode)
+    precondition.AssertType(name, Text)
 
     self.name = name
     self.doc = doc
@@ -174,7 +177,7 @@ class ApiCallRouter(with_metaclass(registry.MetaclassRegistry, object)):
     # We want methods with the highest call-order to be processed last,
     # so that their annotations have precedence.
     for i_cls in reversed(inspect.getmro(cls)):
-      for name in utils.ListAttrs(i_cls):
+      for name in compatibility.ListAttrs(i_cls):
         cls_method = getattr(i_cls, name)
 
         if not callable(cls_method):
@@ -460,6 +463,23 @@ class ApiCallRouterStub(ApiCallRouter):
   def GetVfsFileContentUpdateState(self, args, token=None):
     """Get state of a previously started content update operation."""
 
+    raise NotImplementedError()
+
+  @Category("Vfs")
+  @ArgsType(api_vfs.ApiGetFileDecodersArgs)
+  @ResultType(api_vfs.ApiGetFileDecodersResult)
+  @Http("GET", "/api/clients/<client_id>/vfs-decoders/<path:file_path>")
+  def GetFileDecoders(self, args, token=None):
+    """Get the decoder names that are applicable to the specified file."""
+    raise NotImplementedError()
+
+  @Category("Vfs")
+  @ArgsType(api_vfs.ApiGetDecodedFileArgs)
+  @ResultBinaryStream()
+  @Http("GET", "/api/clients/<client_id>/vfs-decoded-blob/"
+        "<decoder_name>/<path:file_path>")
+  def GetDecodedFileBlob(self, args, token=None):
+    """Get a decoded view of the specified file."""
     raise NotImplementedError()
 
   # Clients labels methods.
@@ -1068,6 +1088,15 @@ class ApiCallRouterStub(ApiCallRouter):
 
     raise NotImplementedError()
 
+  @Category("User")
+  @ArgsType(api_user.ApiListApproverSuggestionsArgs)
+  @ResultType(api_user.ApiListApproverSuggestionsResult)
+  @Http("GET", "/api/users/approver-suggestions")
+  def ListApproverSuggestions(self, args, token=None):
+    """List suggestions for approver usernames."""
+
+    raise NotImplementedError()
+
   # User settings methods.
   # =====================
   #
@@ -1124,24 +1153,6 @@ class ApiCallRouterStub(ApiCallRouter):
   @NoAuditLogRequired()
   def UpdateGrrUser(self, args, token=None):
     """Update current user settings."""
-
-    raise NotImplementedError()
-
-  @Category("User")
-  @ResultType(api_user.ApiListPendingGlobalNotificationsResult)
-  @Http("GET", "/api/users/me/notifications/pending/global")
-  @NoAuditLogRequired()
-  def ListPendingGlobalNotifications(self, args, token=None):
-    """List pending global notifications."""
-
-    raise NotImplementedError()
-
-  @Category("User")
-  @ArgsType(api_user.ApiDeletePendingGlobalNotificationArgs)
-  @Http("DELETE", "/api/users/me/notifications/pending/global/<type>")
-  @NoAuditLogRequired()
-  def DeletePendingGlobalNotification(self, args, token=None):
-    """Delete pending global notification (affects current user only)."""
 
     raise NotImplementedError()
 

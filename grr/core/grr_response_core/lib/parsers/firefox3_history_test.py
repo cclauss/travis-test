@@ -2,11 +2,14 @@
 # Copyright 2011 Google Inc. All Rights Reserved.
 """Tests for grr.parsers.firefox3_history."""
 
-
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import unicode_literals
 
 import datetime
 import os
+
+from future.builtins import str
 
 from grr_response_core.lib import flags
 from grr_response_core.lib.parsers import firefox3_history
@@ -27,7 +30,7 @@ class Firefox3HistoryTest(test_lib.GRRBaseTest):
     # Parse returns (timestamp, dtype, url, title)
     entries = [x for x in history.Parse()]
 
-    self.assertEqual(len(entries), 1)
+    self.assertLen(entries, 1)
 
     try:
       dt1 = datetime.datetime(1970, 1, 1)
@@ -45,14 +48,15 @@ class Firefox3HistoryTest(test_lib.GRRBaseTest):
     history = firefox3_history.Firefox3History(open(history_file, "rb"))
     entries = [x for x in history.Parse()]
 
-    self.assertEqual(len(entries), 3)
+    self.assertLen(entries, 3)
     self.assertEqual(entries[1][3],
                      "Slashdot: News for nerds, stuff that matters")
     self.assertEqual(entries[2][0], 1342526323608384)
     self.assertEqual(entries[2][1], "FIREFOX3_VISIT")
-    self.assertEqual(entries[2][2],
-                     "https://blog.duosecurity.com/2012/07/exploit-mitigations"
-                     "-in-android-jelly-bean-4-1/")
+    self.assertEqual(
+        entries[2][2],
+        "https://blog.duosecurity.com/2012/07/exploit-mitigations"
+        "-in-android-jelly-bean-4-1/")
 
     # Check that our results are properly time ordered
     time_results = [x[0] for x in entries]

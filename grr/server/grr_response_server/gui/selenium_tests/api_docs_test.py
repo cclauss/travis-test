@@ -1,11 +1,13 @@
 #!/usr/bin/env python
 """Tests for API docs view."""
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import unicode_literals
 
-import unittest
 from grr_response_core.lib import flags
 
 from grr_response_server.gui import gui_test_lib
+from grr.test_lib import test_lib
 
 
 class TestAPIDocs(gui_test_lib.GRRSeleniumTest):
@@ -38,11 +40,5 @@ class TestAPIDocs(gui_test_lib.GRRSeleniumTest):
         ])
 
 
-def main(argv):
-  del argv  # Unused.
-  # Run the full test suite
-  unittest.main()
-
-
 if __name__ == "__main__":
-  flags.StartMain(main)
+  flags.StartMain(test_lib.main)

@@ -1,8 +1,12 @@
 #!/usr/bin/env python
 """Tests for MultiTypeCollection."""
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import unicode_literals
 
 
-from builtins import range  # pylint: disable=redefined-builtin
+from future.builtins import range
+from future.builtins import str
 
 from grr_response_core.lib import flags
 from grr_response_core.lib import rdfvalue
@@ -29,7 +33,7 @@ class MultiTypeCollectionTest(aff4_test_lib.AFF4ObjectTest):
       self.collection.Add(rdfvalue.RDFInteger(42), mutation_pool=self.pool)
 
     items = list(self.collection)
-    self.assertTrue(isinstance(items[0], rdf_flows.GrrMessage))
+    self.assertIsInstance(items[0], rdf_flows.GrrMessage)
     self.assertEqual(items[0].payload, 42)
 
   def testValuesOfSingleTypeAreAddedAndIterated(self):
@@ -78,12 +82,12 @@ class MultiTypeCollectionTest(aff4_test_lib.AFF4ObjectTest):
             rdf_flows.GrrMessage(payload=rdfvalue.RDFInteger(i)))
 
         self.collection.Add(
-            rdf_flows.GrrMessage(payload=rdfvalue.RDFString(unicode(i))),
+            rdf_flows.GrrMessage(payload=rdfvalue.RDFString(str(i))),
             mutation_pool=self.pool)
         original_values.add(
-            rdf_flows.GrrMessage(payload=rdfvalue.RDFString(unicode(i))))
+            rdf_flows.GrrMessage(payload=rdfvalue.RDFString(str(i))))
 
-    self.assertItemsEqual([v.payload for v in original_values],
+    self.assertCountEqual([v.payload for v in original_values],
                           [v.payload for v in self.collection])
 
   def testLengthOfCollectionIsCorrectWhenMultipleTypesAreUsed(self):
@@ -93,10 +97,10 @@ class MultiTypeCollectionTest(aff4_test_lib.AFF4ObjectTest):
             rdf_flows.GrrMessage(payload=rdfvalue.RDFInteger(i)),
             mutation_pool=self.pool)
         self.collection.Add(
-            rdf_flows.GrrMessage(payload=rdfvalue.RDFString(unicode(i))),
+            rdf_flows.GrrMessage(payload=rdfvalue.RDFString(str(i))),
             mutation_pool=self.pool)
 
-    self.assertEqual(200, len(self.collection))
+    self.assertLen(self.collection, 200)
 
   def testValuesOfMultipleTypesCanBeIteratedPerType(self):
     with self.pool:
@@ -105,7 +109,7 @@ class MultiTypeCollectionTest(aff4_test_lib.AFF4ObjectTest):
             rdf_flows.GrrMessage(payload=rdfvalue.RDFInteger(i)),
             mutation_pool=self.pool)
         self.collection.Add(
-            rdf_flows.GrrMessage(payload=rdfvalue.RDFString(unicode(i))),
+            rdf_flows.GrrMessage(payload=rdfvalue.RDFString(str(i))),
             mutation_pool=self.pool)
 
     for index, (_, v) in enumerate(
@@ -114,7 +118,8 @@ class MultiTypeCollectionTest(aff4_test_lib.AFF4ObjectTest):
 
     for index, (_, v) in enumerate(
         self.collection.ScanByType(rdfvalue.RDFString.__name__)):
-      self.assertEqual(str(index), v.payload)
+      self.assertIsInstance(v.payload, rdfvalue.RDFString)
+      self.assertEqual(str(index), str(v.payload))
 
   def testLengthIsReportedCorrectlyForEveryType(self):
     with self.pool:
@@ -125,7 +130,7 @@ class MultiTypeCollectionTest(aff4_test_lib.AFF4ObjectTest):
 
       for i in range(101):
         self.collection.Add(
-            rdf_flows.GrrMessage(payload=rdfvalue.RDFString(unicode(i))),
+            rdf_flows.GrrMessage(payload=rdfvalue.RDFString(str(i))),
             mutation_pool=self.pool)
 
     self.assertEqual(99,
@@ -150,7 +155,7 @@ class MultiTypeCollectionTest(aff4_test_lib.AFF4ObjectTest):
     self.collection.Delete()
 
     for urn in data_store.DB.subjects:
-      self.assertFalse(utils.SmartStr(self.collection.collection_id) in urn)
+      self.assertNotIn(utils.SmartStr(self.collection.collection_id), urn)
 
 
 def main(argv):

@@ -1,5 +1,8 @@
 #!/usr/bin/env python
 """Tests for SequentialCollection and related subclasses."""
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import unicode_literals
 
 import threading
 import time
@@ -80,7 +83,7 @@ class SequentialCollectionTest(aff4_test_lib.AFF4ObjectTest):
                 value=None))
 
     even_results = sorted([r for r in collection.MultiResolve(records[::2])])
-    self.assertEqual(len(even_results), 50)
+    self.assertLen(even_results, 50)
     self.assertEqual(even_results[0], 0)
     self.assertEqual(even_results[49], 98)
 
@@ -109,6 +112,7 @@ class IndexedSequentialCollectionTest(aff4_test_lib.AFF4ObjectTest):
 
   def setUp(self):
     super(IndexedSequentialCollectionTest, self).setUp()
+
     # Create a new background thread for each test. In the default
     # configuration, this thread can sleep for quite a long time and
     # might therefore be unavailable in further tests so we just
@@ -119,9 +123,14 @@ class IndexedSequentialCollectionTest(aff4_test_lib.AFF4ObjectTest):
     except AttributeError:
       pass
     sequential_collection.BACKGROUND_INDEX_UPDATER = biu
-    t = threading.Thread(None, biu.UpdateLoop)
-    t.daemon = True
-    t.start()
+    self.worker_thread = threading.Thread(target=biu.UpdateLoop)
+    self.worker_thread.daemon = True
+    self.worker_thread.start()
+
+  def tearDown(self):
+    super(IndexedSequentialCollectionTest, self).tearDown()
+    sequential_collection.BACKGROUND_INDEX_UPDATER.ExitNow()
+    self.worker_thread.join()
 
   def testAddGet(self):
     collection = self._TestCollection("aff4:/sequential_collection/testAddGet")
@@ -133,23 +142,23 @@ class IndexedSequentialCollectionTest(aff4_test_lib.AFF4ObjectTest):
       self.assertEqual(collection[i], i)
 
     self.assertEqual(collection.CalculateLength(), 100)
-    self.assertEqual(len(collection), 100)
+    self.assertLen(collection, 100)
 
   def testStaticAddGet(self):
-    collection = self._TestCollection(
-        "aff4:/sequential_collection/testStaticAddGet")
+    aff4_path = "aff4:/sequential_collection/testStaticAddGet"
+    collection = self._TestCollection(aff4_path)
     self.assertEqual(collection.CalculateLength(), 0)
     with data_store.DB.GetMutationPool() as pool:
       for i in range(100):
         TestIndexedSequentialCollection.StaticAdd(
-            "aff4:/sequential_collection/testStaticAddGet",
+            rdfvalue.RDFURN(aff4_path),
             rdfvalue.RDFInteger(i),
             mutation_pool=pool)
     for i in range(100):
       self.assertEqual(collection[i], i)
 
     self.assertEqual(collection.CalculateLength(), 100)
-    self.assertEqual(len(collection), 100)
+    self.assertLen(collection, 100)
 
   def testIndexCreate(self):
     spacing = 10
@@ -189,7 +198,7 @@ class IndexedSequentialCollectionTest(aff4_test_lib.AFF4ObjectTest):
           timestamp, suffix = collection._index[index]
           self.assertLessEqual(twenty_seconds_ago, timestamp)
           self.assertLessEqual(timestamp, now)
-          self.assertTrue(0 <= suffix <= 0xFFFFFF)
+          self.assertBetween(suffix, 0, 0xFFFFFF)
 
       # Now check that the index was persisted to aff4 by re-opening
       # and checking that a read from head does load full index
@@ -207,7 +216,7 @@ class IndexedSequentialCollectionTest(aff4_test_lib.AFF4ObjectTest):
         timestamp, suffix = collection._index[index]
         self.assertLessEqual(twenty_seconds_ago, timestamp)
         self.assertLessEqual(timestamp, now)
-        self.assertTrue(0 <= suffix <= 0xFFFFFF)
+        self.assertBetween(suffix, 0, 0xFFFFFF)
 
   def testIndexedReads(self):
     spacing = 10
@@ -220,7 +229,8 @@ class IndexedSequentialCollectionTest(aff4_test_lib.AFF4ObjectTest):
       # slow on MySQL data store.
       with data_store.DB.GetMutationPool() as pool:
         for i in range(data_size):
-          collection.StaticAdd(urn, rdfvalue.RDFInteger(i), mutation_pool=pool)
+          collection.StaticAdd(
+              rdfvalue.RDFURN(urn), rdfvalue.RDFInteger(i), mutation_pool=pool)
       with test_lib.FakeTime(rdfvalue.RDFDatetime.Now() +
                              rdfvalue.Duration("10m")):
         for i in range(data_size - 1, data_size - 20, -1):
@@ -241,7 +251,7 @@ class IndexedSequentialCollectionTest(aff4_test_lib.AFF4ObjectTest):
 
     with test_lib.Instrument(sequential_collection.SequentialCollection,
                              "Scan") as scan:
-      self.assertEqual(len(list(collection)), 100)
+      self.assertLen(list(collection), 100)
       # Listing should be done using a single scan but there is another one
       # for calculating the length.
       self.assertEqual(scan.call_count, 2)
@@ -257,10 +267,10 @@ class IndexedSequentialCollectionTest(aff4_test_lib.AFF4ObjectTest):
     # indexing should happen instantaneously.
     isq = sequential_collection.IndexedSequentialCollection
     biu = sequential_collection.BACKGROUND_INDEX_UPDATER
-    with utils.MultiStubber((biu, "INDEX_DELAY", 0), (isq, "INDEX_WRITE_DELAY",
-                                                      rdfvalue.Duration("0s")),
-                            (isq, "INDEX_SPACING", 8), (isq, "UpdateIndex",
-                                                        UpdateIndex)):
+    with utils.MultiStubber((biu, "INDEX_DELAY", 0),
+                            (isq, "INDEX_WRITE_DELAY", rdfvalue.Duration("0s")),
+                            (isq, "INDEX_SPACING", 8),
+                            (isq, "UpdateIndex", UpdateIndex)):
       urn = "aff4:/sequential_collection/testAutoIndexing"
       collection = self._TestCollection(urn)
       # TODO(amoser): Without using a mutation pool, this test is really

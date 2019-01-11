@@ -1,17 +1,21 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import unicode_literals
 
 import io
 import os
 import shutil
+import unittest
 
 
+from absl.testing import absltest
 from builtins import zip  # pylint: disable=redefined-builtin
 
-import unittest
 from grr_response_client.client_actions.file_finder_utils import globbing
 from grr_response_core.lib import flags
+from grr.test_lib import temp
 from grr.test_lib import test_lib
 
 # TODO(hanuszczak): Consider refactoring these tests with `pyfakefs`.
@@ -21,7 +25,7 @@ class DirHierarchyTestMixin(object):
 
   def setUp(self):
     super(DirHierarchyTestMixin, self).setUp()
-    self.tempdir = test_lib.TempDirPath()
+    self.tempdir = temp.TempDirPath()
 
   def tearDown(self):
     super(DirHierarchyTestMixin, self).tearDown()
@@ -46,7 +50,7 @@ class DirHierarchyTestMixin(object):
       raise unittest.SkipTest("Unicode not supported by the filesystem")
 
 
-class RecursiveComponentTest(DirHierarchyTestMixin, unittest.TestCase):
+class RecursiveComponentTest(DirHierarchyTestMixin, absltest.TestCase):
 
   def testSimple(self):
     self.Touch("foo", "0")
@@ -58,7 +62,7 @@ class RecursiveComponentTest(DirHierarchyTestMixin, unittest.TestCase):
     component = globbing.RecursiveComponent()
 
     results = list(component.Generate(self.Path()))
-    self.assertItemsEqual(results, [
+    self.assertCountEqual(results, [
         self.Path("foo"),
         self.Path("foo", "0"),
         self.Path("foo", "1"),
@@ -70,7 +74,7 @@ class RecursiveComponentTest(DirHierarchyTestMixin, unittest.TestCase):
     ])
 
     results = list(component.Generate(self.Path("foo")))
-    self.assertItemsEqual(results, [
+    self.assertCountEqual(results, [
         self.Path("foo", "0"),
         self.Path("foo", "1"),
         self.Path("foo", "bar"),
@@ -78,13 +82,13 @@ class RecursiveComponentTest(DirHierarchyTestMixin, unittest.TestCase):
     ])
 
     results = list(component.Generate(self.Path("baz")))
-    self.assertItemsEqual(results, [
+    self.assertCountEqual(results, [
         self.Path("baz", "0"),
         self.Path("baz", "1"),
     ])
 
     results = list(component.Generate(self.Path("foo", "bar")))
-    self.assertItemsEqual(results, [
+    self.assertCountEqual(results, [
         self.Path("foo", "bar", "0"),
     ])
 
@@ -163,7 +167,7 @@ class RecursiveComponentTest(DirHierarchyTestMixin, unittest.TestCase):
 
     # It should resolve two links and recur to linked directories.
     results = list(component.Generate(self.Path("quux")))
-    self.assertItemsEqual(results, [
+    self.assertCountEqual(results, [
         self.Path("quux", "0"),
         self.Path("quux", "bar"),
         self.Path("quux", "bar", "0"),
@@ -174,7 +178,7 @@ class RecursiveComponentTest(DirHierarchyTestMixin, unittest.TestCase):
 
     # It should resolve symlinks recursively.
     results = list(component.Generate(self.Path("norf")))
-    self.assertItemsEqual(results, [
+    self.assertCountEqual(results, [
         self.Path("norf", "0"),
         self.Path("norf", "quux"),
         self.Path("norf", "quux", "0"),
@@ -190,7 +194,7 @@ class RecursiveComponentTest(DirHierarchyTestMixin, unittest.TestCase):
 
     # It should list symlinks but should not recur to linked directories.
     results = list(component.Generate(self.Path()))
-    self.assertItemsEqual(results, [
+    self.assertCountEqual(results, [
         self.Path("foo"),
         self.Path("foo", "0"),
         self.Path("foo", "bar"),
@@ -211,10 +215,10 @@ class RecursiveComponentTest(DirHierarchyTestMixin, unittest.TestCase):
     component = globbing.RecursiveComponent()
 
     results = list(component.Generate("/foo/bar/baz"))
-    self.assertItemsEqual(results, [])
+    self.assertCountEqual(results, [])
 
 
-class GlobComponentTest(DirHierarchyTestMixin, unittest.TestCase):
+class GlobComponentTest(DirHierarchyTestMixin, absltest.TestCase):
 
   def testLiterals(self):
     self.Touch("foo")
@@ -224,14 +228,14 @@ class GlobComponentTest(DirHierarchyTestMixin, unittest.TestCase):
     component = globbing.GlobComponent("foo")
 
     results = list(component.Generate(self.Path()))
-    self.assertItemsEqual(results, [
+    self.assertCountEqual(results, [
         self.Path("foo"),
     ])
 
     component = globbing.GlobComponent("bar")
 
     results = list(component.Generate(self.Path()))
-    self.assertItemsEqual(results, [
+    self.assertCountEqual(results, [
         self.Path("bar"),
     ])
 
@@ -244,7 +248,7 @@ class GlobComponentTest(DirHierarchyTestMixin, unittest.TestCase):
     component = globbing.GlobComponent("*")
 
     results = list(component.Generate(self.Path()))
-    self.assertItemsEqual(results, [
+    self.assertCountEqual(results, [
         self.Path("foo"),
         self.Path("bar"),
         self.Path("baz"),
@@ -254,7 +258,7 @@ class GlobComponentTest(DirHierarchyTestMixin, unittest.TestCase):
     component = globbing.GlobComponent("ba*")
 
     results = list(component.Generate(self.Path()))
-    self.assertItemsEqual(results, [
+    self.assertCountEqual(results, [
         self.Path("bar"),
         self.Path("baz"),
     ])
@@ -268,7 +272,7 @@ class GlobComponentTest(DirHierarchyTestMixin, unittest.TestCase):
     component = globbing.GlobComponent("ba?")
 
     results = list(component.Generate(self.Path()))
-    self.assertItemsEqual(results, [
+    self.assertCountEqual(results, [
         self.Path("bar"),
         self.Path("baz"),
     ])
@@ -282,7 +286,7 @@ class GlobComponentTest(DirHierarchyTestMixin, unittest.TestCase):
     component = globbing.GlobComponent("ba[rz]")
 
     results = list(component.Generate(self.Path()))
-    self.assertItemsEqual(results, [
+    self.assertCountEqual(results, [
         self.Path("baz"),
         self.Path("bar"),
     ])
@@ -297,7 +301,7 @@ class GlobComponentTest(DirHierarchyTestMixin, unittest.TestCase):
     component = globbing.GlobComponent("[a-z]*")
 
     results = list(component.Generate(self.Path()))
-    self.assertItemsEqual(results, [
+    self.assertCountEqual(results, [
         self.Path("foo"),
         self.Path("bar"),
         self.Path("quux42"),
@@ -306,7 +310,7 @@ class GlobComponentTest(DirHierarchyTestMixin, unittest.TestCase):
     component = globbing.GlobComponent("[0-9]*")
 
     results = list(component.Generate(self.Path()))
-    self.assertItemsEqual(results, [
+    self.assertCountEqual(results, [
         self.Path("8AR"),
         self.Path("4815162342"),
     ])
@@ -314,7 +318,7 @@ class GlobComponentTest(DirHierarchyTestMixin, unittest.TestCase):
     component = globbing.GlobComponent("*[0-9]")
 
     results = list(component.Generate(self.Path()))
-    self.assertItemsEqual(results, [
+    self.assertCountEqual(results, [
         self.Path("4815162342"),
         self.Path("quux42"),
     ])
@@ -328,7 +332,7 @@ class GlobComponentTest(DirHierarchyTestMixin, unittest.TestCase):
     component = globbing.GlobComponent("[a-z][a-z0-9]*")
 
     results = list(component.Generate(self.Path()))
-    self.assertItemsEqual(results, [
+    self.assertCountEqual(results, [
         self.Path("f00"),
         self.Path("b4R"),
         self.Path("quux"),
@@ -342,7 +346,7 @@ class GlobComponentTest(DirHierarchyTestMixin, unittest.TestCase):
     component = globbing.GlobComponent("*[!0-9]*")
 
     results = list(component.Generate(self.Path()))
-    self.assertItemsEqual(results, [
+    self.assertCountEqual(results, [
         self.Path("foo"),
         self.Path("bar"),
     ])
@@ -359,7 +363,7 @@ class GlobComponentTest(DirHierarchyTestMixin, unittest.TestCase):
     component = globbing.GlobComponent("[][-]")
 
     results = list(component.Generate(self.Path()))
-    self.assertItemsEqual(results, [
+    self.assertCountEqual(results, [
         self.Path("["),
         self.Path("-"),
         self.Path("]"),
@@ -368,7 +372,7 @@ class GlobComponentTest(DirHierarchyTestMixin, unittest.TestCase):
     component = globbing.GlobComponent("[!]f-]*")
 
     results = list(component.Generate(self.Path()))
-    self.assertItemsEqual(results, [
+    self.assertCountEqual(results, [
         self.Path("["),
         self.Path("*"),
         self.Path("!"),
@@ -378,7 +382,7 @@ class GlobComponentTest(DirHierarchyTestMixin, unittest.TestCase):
     component = globbing.GlobComponent("[*?]")
 
     results = list(component.Generate(self.Path()))
-    self.assertItemsEqual(results, [
+    self.assertCountEqual(results, [
         self.Path("*"),
         self.Path("?"),
     ])
@@ -391,7 +395,7 @@ class GlobComponentTest(DirHierarchyTestMixin, unittest.TestCase):
     component = globbing.GlobComponent("* *")
 
     results = list(component.Generate(self.Path()))
-    self.assertItemsEqual(results, [
+    self.assertCountEqual(results, [
         self.Path("foo bar"),
         self.Path("   "),
     ])
@@ -404,20 +408,20 @@ class GlobComponentTest(DirHierarchyTestMixin, unittest.TestCase):
 
     component = globbing.GlobComponent("b*")
     results = list(component.Generate(self.Path()))
-    self.assertItemsEqual(results, [
+    self.assertCountEqual(results, [
         self.Path("BAR"),
         self.Path("BaZ"),
     ])
 
     component = globbing.GlobComponent("quux")
     results = list(component.Generate(self.Path()))
-    self.assertItemsEqual(results, [
+    self.assertCountEqual(results, [
         self.Path("qUuX"),
     ])
 
     component = globbing.GlobComponent("FoO")
     results = list(component.Generate(self.Path()))
-    self.assertItemsEqual(results, [
+    self.assertCountEqual(results, [
         self.Path("foo"),
     ])
 
@@ -426,17 +430,17 @@ class GlobComponentTest(DirHierarchyTestMixin, unittest.TestCase):
     self.Touch("dróżka")
 
     results = list(globbing.GlobComponent("ścieżka").Generate(self.Path()))
-    self.assertItemsEqual(results, [
+    self.assertCountEqual(results, [
         self.Path("ścieżka"),
     ])
 
     results = list(globbing.GlobComponent("dróżka").Generate(self.Path()))
-    self.assertItemsEqual(results, [
+    self.assertCountEqual(results, [
         self.Path("dróżka"),
     ])
 
     results = list(globbing.GlobComponent("*żka").Generate(self.Path()))
-    self.assertItemsEqual(results, [
+    self.assertCountEqual(results, [
         self.Path("ścieżka"),
         self.Path("dróżka"),
     ])
@@ -446,13 +450,13 @@ class GlobComponentTest(DirHierarchyTestMixin, unittest.TestCase):
     self.Touch("zbiór", "poddróżka")
 
     results = list(globbing.GlobComponent("*").Generate(self.Path("zbiór")))
-    self.assertItemsEqual(results, [
+    self.assertCountEqual(results, [
         self.Path("zbiór", "podścieżka"),
         self.Path("zbiór", "poddróżka"),
     ])
 
 
-class CurrentComponentTest(DirHierarchyTestMixin, unittest.TestCase):
+class CurrentComponentTest(DirHierarchyTestMixin, absltest.TestCase):
 
   def testSimple(self):
     self.Touch("foo", "bar", "0")
@@ -461,16 +465,16 @@ class CurrentComponentTest(DirHierarchyTestMixin, unittest.TestCase):
     component = globbing.CurrentComponent()
 
     results = list(component.Generate(self.Path("foo")))
-    self.assertItemsEqual(results, [self.Path("foo")])
+    self.assertCountEqual(results, [self.Path("foo")])
 
     results = list(component.Generate(self.Path("foo", "bar")))
-    self.assertItemsEqual(results, [self.Path("foo", "bar")])
+    self.assertCountEqual(results, [self.Path("foo", "bar")])
 
     results = list(component.Generate(self.Path("foo", "baz")))
-    self.assertItemsEqual(results, [self.Path("foo", "baz")])
+    self.assertCountEqual(results, [self.Path("foo", "baz")])
 
 
-class ParentComponentTest(DirHierarchyTestMixin, unittest.TestCase):
+class ParentComponentTest(DirHierarchyTestMixin, absltest.TestCase):
 
   def testSimple(self):
     self.Touch("foo", "0")
@@ -480,16 +484,16 @@ class ParentComponentTest(DirHierarchyTestMixin, unittest.TestCase):
     component = globbing.ParentComponent()
 
     results = list(component.Generate(self.Path("foo")))
-    self.assertItemsEqual(results, [self.Path()])
+    self.assertCountEqual(results, [self.Path()])
 
     results = list(component.Generate(self.Path("foo", "bar")))
-    self.assertItemsEqual(results, [self.Path("foo")])
+    self.assertCountEqual(results, [self.Path("foo")])
 
     results = list(component.Generate(self.Path("foo", "bar", "baz")))
-    self.assertItemsEqual(results, [self.Path("foo", "bar")])
+    self.assertCountEqual(results, [self.Path("foo", "bar")])
 
 
-class ParsePathItemTest(unittest.TestCase):
+class ParsePathItemTest(absltest.TestCase):
 
   def testRecursive(self):
     component = globbing.ParsePathItem("**")
@@ -527,12 +531,12 @@ class ParsePathItemTest(unittest.TestCase):
       globbing.ParsePathItem("**10bar")
 
 
-class ParsePathTest(unittest.TestCase):
+class ParsePathTest(absltest.TestCase):
 
   def assertAreInstances(self, instances, classes):
     for instance, clazz in zip(instances, classes):
       self.assertIsInstance(instance, clazz)
-    self.assertEqual(len(instances), len(classes))
+    self.assertLen(instances, len(classes))
 
   def testSimple(self):
     path = os.path.join("foo", "**", "ba*")
@@ -562,13 +566,13 @@ class ParsePathTest(unittest.TestCase):
       list(globbing.ParsePath(path))
 
 
-class ExpandGroupsTest(unittest.TestCase):
+class ExpandGroupsTest(absltest.TestCase):
 
   def testSimple(self):
     path = "fooba{r,z}"
 
     results = list(globbing.ExpandGroups(path))
-    self.assertItemsEqual(results, [
+    self.assertCountEqual(results, [
         "foobar",
         "foobaz",
     ])
@@ -577,7 +581,7 @@ class ExpandGroupsTest(unittest.TestCase):
     path = os.path.join("f{o,0}o{bar,baz}", "{quux,norf}")
 
     results = list(globbing.ExpandGroups(path))
-    self.assertItemsEqual(results, [
+    self.assertCountEqual(results, [
         os.path.join("foobar", "quux"),
         os.path.join("foobar", "norf"),
         os.path.join("foobaz", "quux"),
@@ -592,7 +596,7 @@ class ExpandGroupsTest(unittest.TestCase):
     path = os.path.join("foo{bar,baz,quux,norf}thud")
 
     results = list(globbing.ExpandGroups(path))
-    self.assertItemsEqual(results, [
+    self.assertCountEqual(results, [
         os.path.join("foobarthud"),
         os.path.join("foobazthud"),
         os.path.join("fooquuxthud"),
@@ -603,39 +607,39 @@ class ExpandGroupsTest(unittest.TestCase):
     path = os.path.join("foo{}bar")
 
     results = list(globbing.ExpandGroups(path))
-    self.assertItemsEqual(results, ["foo{}bar"])
+    self.assertCountEqual(results, ["foo{}bar"])
 
   def testSingleton(self):
     path = os.path.join("foo{bar}baz")
 
     results = list(globbing.ExpandGroups(path))
-    self.assertItemsEqual(results, ["foo{bar}baz"])
+    self.assertCountEqual(results, ["foo{bar}baz"])
 
   def testUnclosed(self):
     path = os.path.join("foo{bar")
 
     results = list(globbing.ExpandGroups(path))
-    self.assertItemsEqual(results, ["foo{bar"])
+    self.assertCountEqual(results, ["foo{bar"])
 
     path = os.path.join("foo}bar")
 
     results = list(globbing.ExpandGroups(path))
-    self.assertItemsEqual(results, ["foo}bar"])
+    self.assertCountEqual(results, ["foo}bar"])
 
   def testEscaped(self):
     path = os.path.join("foo\\{baz}bar")
 
     results = list(globbing.ExpandGroups(path))
-    self.assertItemsEqual(results, ["foo\\{baz}bar"])
+    self.assertCountEqual(results, ["foo\\{baz}bar"])
 
   def testNoGroup(self):
     path = os.path.join("foobarbaz")
 
     results = list(globbing.ExpandGroups(path))
-    self.assertItemsEqual(results, ["foobarbaz"])
+    self.assertCountEqual(results, ["foobarbaz"])
 
 
-class ExpandGlobsTest(DirHierarchyTestMixin, unittest.TestCase):
+class ExpandGlobsTest(DirHierarchyTestMixin, absltest.TestCase):
 
   def testWildcards(self):
     self.Touch("foo", "bar", "0")
@@ -648,7 +652,7 @@ class ExpandGlobsTest(DirHierarchyTestMixin, unittest.TestCase):
     path = self.Path("*", "ba?", "0")
 
     results = list(globbing.ExpandGlobs(path))
-    self.assertItemsEqual(results, [
+    self.assertCountEqual(results, [
         self.Path("foo", "bar", "0"),
         self.Path("quux", "bar", "0"),
         self.Path("quux", "baz", "0"),
@@ -663,7 +667,7 @@ class ExpandGlobsTest(DirHierarchyTestMixin, unittest.TestCase):
     path = self.Path("foo", "**", "0")
 
     results = list(globbing.ExpandGlobs(path))
-    self.assertItemsEqual(results, [
+    self.assertCountEqual(results, [
         self.Path("foo", "bar", "baz", "0"),
         self.Path("foo", "bar", "0"),
         self.Path("foo", "quux", "0"),
@@ -682,7 +686,7 @@ class ExpandGlobsTest(DirHierarchyTestMixin, unittest.TestCase):
     path = self.Path("**", "ba?", "[0-2]")
 
     results = list(globbing.ExpandGlobs(path))
-    self.assertItemsEqual(results, [
+    self.assertCountEqual(results, [
         self.Path("foo", "bar", "0"),
         self.Path("norf", "bar", "0"),
         self.Path("norf", "baz", "0"),
@@ -708,7 +712,7 @@ class ExpandGlobsTest(DirHierarchyTestMixin, unittest.TestCase):
     path = self.Path("foo", os.path.curdir, "bar", "*")
 
     results = list(globbing.ExpandGlobs(path))
-    self.assertItemsEqual(results, [
+    self.assertCountEqual(results, [
         self.Path("foo", "bar", "0"),
         self.Path("foo", "bar", "1"),
     ])
@@ -716,7 +720,7 @@ class ExpandGlobsTest(DirHierarchyTestMixin, unittest.TestCase):
     path = self.Path(os.path.curdir, "*", "bar", "0")
 
     results = list(globbing.ExpandGlobs(path))
-    self.assertItemsEqual(results, [
+    self.assertCountEqual(results, [
         self.Path("foo", "bar", "0"),
         self.Path("quux", "bar", "0"),
     ])
@@ -730,7 +734,7 @@ class ExpandGlobsTest(DirHierarchyTestMixin, unittest.TestCase):
     path = self.Path("foo", "*")
 
     results = list(globbing.ExpandGlobs(path))
-    self.assertItemsEqual(results, [
+    self.assertCountEqual(results, [
         self.Path("foo", "0"),
         self.Path("foo", "1"),
         self.Path("foo", "bar"),
@@ -739,13 +743,13 @@ class ExpandGlobsTest(DirHierarchyTestMixin, unittest.TestCase):
     path = self.Path("foo", os.path.pardir, "*")
 
     results = list(globbing.ExpandGlobs(path))
-    self.assertItemsEqual(results, [
+    self.assertCountEqual(results, [
         self.Path("foo"),
         self.Path("bar"),
     ])
 
 
-class ExpandPathTest(DirHierarchyTestMixin, unittest.TestCase):
+class ExpandPathTest(DirHierarchyTestMixin, absltest.TestCase):
 
   def testGlobAndGroup(self):
     self.Touch("foo", "bar", "0")
@@ -757,7 +761,7 @@ class ExpandPathTest(DirHierarchyTestMixin, unittest.TestCase):
 
     path = self.Path("foo/ba{r,z}/*")
     results = list(globbing.ExpandPath(path))
-    self.assertItemsEqual(results, [
+    self.assertCountEqual(results, [
         self.Path("foo", "bar", "0"),
         self.Path("foo", "bar", "1"),
         self.Path("foo", "baz", "0"),
@@ -766,7 +770,7 @@ class ExpandPathTest(DirHierarchyTestMixin, unittest.TestCase):
 
     path = self.Path("foo/ba*/{0,1}")
     results = list(globbing.ExpandPath(path))
-    self.assertItemsEqual(results, [
+    self.assertCountEqual(results, [
         self.Path("foo", "bar", "0"),
         self.Path("foo", "bar", "1"),
         self.Path("foo", "baz", "0"),
@@ -781,7 +785,7 @@ class ExpandPathTest(DirHierarchyTestMixin, unittest.TestCase):
 
     path = self.Path("foo/**")
     results = list(globbing.ExpandPath(path))
-    self.assertItemsEqual(results, [
+    self.assertCountEqual(results, [
         self.Path("foo", "0"),
         self.Path("foo", "1"),
         self.Path("foo", "bar"),
@@ -793,7 +797,7 @@ class ExpandPathTest(DirHierarchyTestMixin, unittest.TestCase):
 
     path = self.Path("foo/{.,**}")
     results = list(globbing.ExpandPath(path))
-    self.assertItemsEqual(results, [
+    self.assertCountEqual(results, [
         self.Path("foo"),
         self.Path("foo", "0"),
         self.Path("foo", "1"),

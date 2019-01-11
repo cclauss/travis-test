@@ -1,12 +1,13 @@
 #!/usr/bin/env python
 """UI report plugins server-side interface."""
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import unicode_literals
 
 
 from future.utils import itervalues
 
 from grr_response_server.gui.api_plugins.report_plugins import client_report_plugins
-from grr_response_server.gui.api_plugins.report_plugins import filestore_report_plugins
 from grr_response_server.gui.api_plugins.report_plugins import server_report_plugins
 
 
@@ -73,11 +74,6 @@ REGISTRY.RegisterPlugin(client_report_plugins.OSReleaseBreakdown1ReportPlugin)
 REGISTRY.RegisterPlugin(client_report_plugins.OSReleaseBreakdown7ReportPlugin)
 REGISTRY.RegisterPlugin(client_report_plugins.OSReleaseBreakdown14ReportPlugin)
 REGISTRY.RegisterPlugin(client_report_plugins.OSReleaseBreakdown30ReportPlugin)
-
-# FileStore report plugins.
-
-REGISTRY.RegisterPlugin(
-    filestore_report_plugins.FileSizeDistributionReportPlugin)
 
 # Server report plugins.
 

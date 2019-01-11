@@ -7,17 +7,20 @@
 # system. The clients will not share their config keys if the registry keys they
 # use are hooked by WOW64.
 
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import unicode_literals
 
-import exceptions
 import logging
 import _winreg
 
 from future.moves.urllib import parse as urlparse
 from future.utils import iteritems
+from typing import Text
 
 from grr_response_core.lib import config_lib
 from grr_response_core.lib import utils
+from grr_response_core.lib.util import precondition
 
 
 class RegistryConfigParser(config_lib.GRRConfigParser):
@@ -36,20 +39,15 @@ class RegistryConfigParser(config_lib.GRRConfigParser):
     self.filename = url.path.replace("/", "\\")
     self.hive = url.netloc
     self.path = self.filename.lstrip("\\")
-    self._type_infos = None
 
     try:
       # Don't use _winreg.KEY_WOW64_64KEY since it breaks on Windows 2000
       self.root_key = _winreg.CreateKeyEx(
           getattr(_winreg, self.hive), self.path, 0, _winreg.KEY_ALL_ACCESS)
       self.parsed = self.path
-    except exceptions.WindowsError as e:
+    except OSError as e:
       logging.debug("Unable to open config registry key: %s", e)
       return
-
-  def SetTypeConversionInfo(self, type_infos):
-    """See base class for description."""
-    self._type_infos = type_infos
 
   def RawData(self):
     """Yields the valus in each section."""
@@ -59,20 +57,14 @@ class RegistryConfigParser(config_lib.GRRConfigParser):
     while True:
       try:
         name, value, value_type = _winreg.EnumValue(self.root_key, i)
-        i += 1
         # Only support strings here.
-        if value_type != _winreg.REG_SZ:
-          continue
-
-        value = utils.SmartStr(value)
-        if self._type_infos:
-          descriptor = self._type_infos.get(name)
-          logging.debug("Descriptor for %s is %s.", name, descriptor.__class__)
-          result[name] = descriptor.FromString(name) if descriptor else value
-        else:
+        if value_type == _winreg.REG_SZ:
+          precondition.AssertType(value, Text)
           result[name] = value
-      except (exceptions.WindowsError, TypeError):
+      except OSError:
         break
+
+      i += 1
 
     return result
 

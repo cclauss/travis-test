@@ -15,6 +15,7 @@ handler. The type of the handler is carried by the pathtype parameter.
 On the server the PathSpec is represented as a PathSpec object, and stored
 as an attribute of the AFF4 object. This module defines this abstraction.
 """
+from __future__ import absolute_import
 from __future__ import division
 from __future__ import unicode_literals
 
@@ -227,7 +228,7 @@ class PathSpec(rdf_structs.RDFProtoStruct):
     dev = first_component.path
     if first_component.HasField("offset"):
       # We divide here just to get prettier numbers in the GUI
-      dev += ":" + str(first_component.offset // 512)
+      dev += ":{}".format(first_component.offset // 512)
 
     if (len(self) > 1 and first_component.pathtype == PathSpec.PathType.OS and
         self[1].pathtype == PathSpec.PathType.TSK):
@@ -249,7 +250,7 @@ class PathSpec(rdf_structs.RDFProtoStruct):
       # reversible since we always use the PathSpec when accessing files on the
       # client.
       if p.HasField("offset"):
-        component += ":" + str(p.offset // 512)
+        component += ":{}".format(p.offset // 512)
 
       # Support ADS names.
       if p.HasField("stream_name"):
@@ -294,8 +295,8 @@ class GlobExpression(rdfvalue.RDFString):
       # sequences).
       pattern = utils.NormalizePath(pattern.replace("\\", "/"))
 
-      for pattern in self.InterpolateGrouping(pattern):
-        yield pattern
+      for p in self.InterpolateGrouping(pattern):
+        yield p
 
   def InterpolateGrouping(self, pattern):
     """Interpolate inline globbing groups."""

@@ -1,32 +1,31 @@
 #!/usr/bin/env python
 """Unittest for grr http server."""
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import unicode_literals
 
 import hashlib
 import os
 import socket
 import threading
+import time
 
 
+from future.builtins import range
 from future.utils import iteritems
 import ipaddr
 import portpicker
 import requests
 
-from google.protobuf import json_format
-
 from grr_response_core.lib import flags
 from grr_response_core.lib import utils
 from grr_response_core.lib.rdfvalues import file_finder as rdf_file_finder
 from grr_response_core.lib.rdfvalues import paths as rdf_paths
-from grr_response_core.lib.rdfvalues import rekall_types as rdf_rekall_types
 from grr_response_server import aff4
 from grr_response_server import data_store
 from grr_response_server import data_store_utils
 from grr_response_server import db
 from grr_response_server import file_store
-from grr_response_server import flow
-from grr_response_server import frontend_lib
 from grr_response_server.aff4_objects import aff4_grr
 from grr_response_server.aff4_objects import filestore
 from grr_response_server.bin import frontend
@@ -34,7 +33,6 @@ from grr_response_server.flows.general import file_finder
 from grr.test_lib import action_mocks
 from grr.test_lib import db_test_lib
 from grr.test_lib import flow_test_lib
-from grr.test_lib import rekall_test_lib
 from grr.test_lib import test_lib
 from grr.test_lib import worker_mocks
 
@@ -47,17 +45,8 @@ class GRRHTTPServerTest(test_lib.GRRBaseTest):
   def setUpClass(cls):
     super(GRRHTTPServerTest, cls).setUpClass()
 
-    cls.config_overrider = test_lib.ConfigOverrider({
-        "Rekall.profile_server":
-            rekall_test_lib.TestRekallRepositoryProfileServer.__name__,
-    })
-    cls.config_overrider.Start()
-
-    # Frontend must be initialized to register all the stats counters.
-    frontend_lib.FrontendInit().RunOnce()
-
     # Bring up a local server for testing.
-    port = portpicker.PickUnusedPort()
+    port = portpicker.pick_unused_port()
     ip = utils.ResolveHostnameToIP("localhost", port)
     cls.httpd = frontend.GRRHTTPServer((ip, port),
                                        frontend.GRRHTTPServerHandler)
@@ -69,23 +58,34 @@ class GRRHTTPServerTest(test_lib.GRRBaseTest):
       cls.address_family = socket.AF_INET
       cls.base_url = "http://%s:%d/" % (ip, port)
 
-    cls.httpd_thread = threading.Thread(target=cls.httpd.serve_forever)
+    cls.httpd_thread = threading.Thread(
+        name="GRRHTTPServerTestThread", target=cls.httpd.serve_forever)
     cls.httpd_thread.daemon = True
     cls.httpd_thread.start()
 
   @classmethod
   def tearDownClass(cls):
-    cls.httpd.shutdown()
-    cls.config_overrider.Stop()
+    cls.httpd.Shutdown()
+    cls.httpd_thread.join()
 
   def setUp(self):
     super(GRRHTTPServerTest, self).setUp()
     self.client_id = self.SetupClient(0)
 
+  def tearDown(self):
+    super(GRRHTTPServerTest, self).tearDown()
+
+    # Wait until all pending http requests have been handled.
+    for _ in range(100):
+      if frontend.GRRHTTPServerHandler.active_counter == 0:
+        return
+      time.sleep(0.01)
+    self.fail("HTTP server thread did not shut down in time.")
+
   def testServerPem(self):
     req = requests.get(self.base_url + "server.pem")
     self.assertEqual(req.status_code, 200)
-    self.assertTrue("BEGIN CERTIFICATE" in req.content)
+    self.assertIn("BEGIN CERTIFICATE", req.content)
 
   def _RunClientFileFinder(self,
                            paths,
@@ -113,16 +113,16 @@ class GRRHTTPServerTest(test_lib.GRRBaseTest):
     action = rdf_file_finder.FileFinderAction.Download()
 
     session_id = self._RunClientFileFinder(paths, action)
-    collection = flow.GRRFlow.ResultCollectionForFID(session_id)
-    results = list(collection)
-    self.assertEqual(len(results), 4)
+    results = flow_test_lib.GetFlowResults(self.client_id, session_id)
+    self.assertLen(results, 5)
     relpaths = [
         os.path.relpath(p.stat_entry.pathspec.path, self.base_path)
         for p in results
     ]
-    self.assertItemsEqual(relpaths, [
+    self.assertCountEqual(relpaths, [
         "History.plist", "History.xml.plist", "test.plist",
-        "parser_test/com.google.code.grr.plist"
+        "parser_test/com.google.code.grr.plist",
+        "parser_test/InstallHistory.plist"
     ])
 
     for r in results:
@@ -132,7 +132,7 @@ class GRRHTTPServerTest(test_lib.GRRBaseTest):
       self.assertEqual(aff4_obj.Read(100), data[:100])
 
       if data_store.RelationalDBReadEnabled(category="filestore"):
-        fd = file_store.OpenLatestFileVersion(
+        fd = file_store.OpenFile(
             db.ClientPath.FromPathSpec(self.client_id.Basename(),
                                        r.stat_entry.pathspec))
         self.assertEqual(fd.read(100), data[:100])
@@ -152,7 +152,8 @@ class GRRHTTPServerTest(test_lib.GRRBaseTest):
     # catch specific instance that was thrown. Unfortunately, all errors are
     # intercepted in the `MockWorker` class and converted to runtime errors.
     with self.assertRaisesRegexp(RuntimeError, "exceeded network send limit"):
-      self._RunClientFileFinder(paths, action, network_bytes_limit=1500)
+      with test_lib.SuppressLogs():
+        self._RunClientFileFinder(paths, action, network_bytes_limit=1500)
 
   def testClientFileFinderUploadBound(self):
     paths = [os.path.join(self.base_path, "{**,.}/*.plist")]
@@ -160,16 +161,16 @@ class GRRHTTPServerTest(test_lib.GRRBaseTest):
         oversized_file_policy="DOWNLOAD_TRUNCATED", max_size=300)
 
     session_id = self._RunClientFileFinder(paths, action)
-    collection = flow.GRRFlow.ResultCollectionForFID(session_id)
-    results = list(collection)
-    self.assertEqual(len(results), 4)
+    results = flow_test_lib.GetFlowResults(self.client_id, session_id)
+    self.assertLen(results, 5)
     relpaths = [
         os.path.relpath(p.stat_entry.pathspec.path, self.base_path)
         for p in results
     ]
-    self.assertItemsEqual(relpaths, [
+    self.assertCountEqual(relpaths, [
         "History.plist", "History.xml.plist", "test.plist",
-        "parser_test/com.google.code.grr.plist"
+        "parser_test/com.google.code.grr.plist",
+        "parser_test/InstallHistory.plist"
     ])
 
     for r in results:
@@ -186,8 +187,7 @@ class GRRHTTPServerTest(test_lib.GRRBaseTest):
         oversized_file_policy="SKIP", max_size=300)
 
     session_id = self._RunClientFileFinder(paths, action)
-    collection = flow.GRRFlow.ResultCollectionForFID(session_id)
-    results = list(collection)
+    results = flow_test_lib.GetFlowResults(self.client_id, session_id)
 
     skipped = []
     uploaded = []
@@ -197,14 +197,14 @@ class GRRHTTPServerTest(test_lib.GRRBaseTest):
       else:
         skipped.append(result)
 
-    self.assertEqual(len(uploaded), 2)
-    self.assertEqual(len(skipped), 2)
+    self.assertLen(uploaded, 2)
+    self.assertLen(skipped, 3)
 
     relpaths = [
         os.path.relpath(p.stat_entry.pathspec.path, self.base_path)
         for p in uploaded
     ]
-    self.assertItemsEqual(relpaths, ["History.plist", "test.plist"])
+    self.assertCountEqual(relpaths, ["History.plist", "test.plist"])
 
     for r in uploaded:
       aff4_obj = aff4.FACTORY.Open(
@@ -222,20 +222,20 @@ class GRRHTTPServerTest(test_lib.GRRBaseTest):
         c: self._RunClientFileFinder(paths, action, client_id=c)
         for c in client_ids
     }
-    collections = {
-        c: flow.GRRFlow.ResultCollectionForFID(session_id)
+    results_per_client = {
+        c: flow_test_lib.GetFlowResults(c, session_id)
         for c, session_id in iteritems(session_ids)
     }
-    for client_id, collection in iteritems(collections):
-      results = list(collection)
-      self.assertEqual(len(results), 4)
+    for client_id, results in iteritems(results_per_client):
+      self.assertLen(results, 5)
       relpaths = [
           os.path.relpath(p.stat_entry.pathspec.path, self.base_path)
           for p in results
       ]
-      self.assertItemsEqual(relpaths, [
+      self.assertCountEqual(relpaths, [
           "History.plist", "History.xml.plist", "test.plist",
-          "parser_test/com.google.code.grr.plist"
+          "parser_test/com.google.code.grr.plist",
+          "parser_test/InstallHistory.plist"
       ])
 
       for r in results:
@@ -267,32 +267,6 @@ class GRRHTTPServerTest(test_lib.GRRBaseTest):
         self.assertIsInstance(filestore_fd, aff4_grr.VFSBlobImage)
         # No STAT object attached.
         self.assertFalse(filestore_fd.Get(filestore_fd.Schema.STAT))
-
-  def testRekallProfiles(self):
-    req = requests.get(self.base_url + "rekall_profiles")
-    self.assertEqual(req.status_code, 500)
-
-    req = requests.get(self.base_url + "rekall_profiles/v1.0")
-    self.assertEqual(req.status_code, 500)
-
-    known_profile = "F8E2A8B5C9B74BF4A6E4A48F180099942"
-    unknown_profile = "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF"
-
-    req = requests.get(self.base_url + "rekall_profiles/v1.0/nt/GUID/" +
-                       unknown_profile)
-    self.assertEqual(req.status_code, 404)
-
-    req = requests.get(self.base_url + "rekall_profiles/v1.0/nt/GUID/" +
-                       known_profile)
-    self.assertEqual(req.status_code, 200)
-
-    pb = rdf_rekall_types.RekallProfile.protobuf()
-    json_format.Parse(req.content.lstrip(")]}'\n"), pb)
-    profile = rdf_rekall_types.RekallProfile.FromSerializedString(
-        pb.SerializeToString())
-    self.assertEqual(profile.name, "nt/GUID/F8E2A8B5C9B74BF4A6E4A48F180099942")
-    self.assertEqual(profile.version, "v1.0")
-    self.assertEqual(profile.data[:2], b"\x1f\x8b")
 
 
 def main(args):

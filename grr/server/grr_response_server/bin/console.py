@@ -3,6 +3,8 @@
 
 We can schedule a new flow for a specific client.
 """
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
@@ -52,8 +54,6 @@ from grr_response_server.aff4_objects import security
 # pylint: disable=wildcard-import
 from grr_response_server.console_utils import *
 # pylint: enable=wildcard-import
-
-from grr_response_server.flows.general import memory
 # pylint: enable=unused-import
 
 flags.DEFINE_string(
@@ -79,8 +79,6 @@ flags.DEFINE_bool(
     "If set to False and command_file or code_to_execute is "
     "set we keep the console alive after the code completes.")
 
-flags.DEFINE_version(config_server.VERSION["packageversion"])
-
 
 def Lister(arg):
   for x in arg:
@@ -94,6 +92,11 @@ def GetChildrenList(urn, token=None):
 def main(argv):
   """Main."""
   del argv  # Unused.
+
+  if flags.FLAGS.version:
+    print("GRR console {}".format(config_server.VERSION["packageversion"]))
+    return
+
   banner = ("\nWelcome to the GRR console\n")
 
   config.CONFIG.AddContext(contexts.COMMAND_LINE_CONTEXT)

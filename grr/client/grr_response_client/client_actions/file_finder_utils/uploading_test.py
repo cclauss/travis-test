@@ -1,47 +1,49 @@
 #!/usr/bin/env python
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import unicode_literals
 
 import collections
 import hashlib
 import zlib
 
+from absl.testing import absltest
 import mock
 
-import unittest
 from grr_response_client.client_actions.file_finder_utils import uploading
-from grr.test_lib import test_lib
+from grr.test_lib import temp
 
 
-class UploaderTest(unittest.TestCase):
+class UploaderTest(absltest.TestCase):
 
   def testEmpty(self):
     action = FakeAction()
     uploader = uploading.TransferStoreUploader(action, chunk_size=3)
 
-    with test_lib.AutoTempFilePath() as temp_filepath:
+    with temp.AutoTempFilePath() as temp_filepath:
       blobdesc = uploader.UploadFilePath(temp_filepath)
 
       self.assertEqual(action.charged_bytes, 0)
-      self.assertEqual(len(action.messages), 0)
+      self.assertEmpty(action.messages)
 
-      self.assertEqual(len(blobdesc.chunks), 0)
+      self.assertEmpty(blobdesc.chunks)
       self.assertEqual(blobdesc.chunk_size, 3)
 
   def testSingleChunk(self):
     action = FakeAction()
     uploader = uploading.TransferStoreUploader(action, chunk_size=6)
 
-    with test_lib.AutoTempFilePath() as temp_filepath:
+    with temp.AutoTempFilePath() as temp_filepath:
       with open(temp_filepath, "w") as temp_file:
         temp_file.write("foobar")
 
       blobdesc = uploader.UploadFilePath(temp_filepath)
 
       self.assertEqual(action.charged_bytes, 6)
-      self.assertEqual(len(action.messages), 1)
+      self.assertLen(action.messages, 1)
       self.assertEqual(action.messages[0].item.data, zlib.compress("foobar"))
 
-      self.assertEqual(len(blobdesc.chunks), 1)
+      self.assertLen(blobdesc.chunks, 1)
       self.assertEqual(blobdesc.chunk_size, 6)
       self.assertEqual(blobdesc.chunks[0].offset, 0)
       self.assertEqual(blobdesc.chunks[0].length, 6)
@@ -51,20 +53,20 @@ class UploaderTest(unittest.TestCase):
     action = FakeAction()
     uploader = uploading.TransferStoreUploader(action, chunk_size=3)
 
-    with test_lib.AutoTempFilePath() as temp_filepath:
+    with temp.AutoTempFilePath() as temp_filepath:
       with open(temp_filepath, "w") as temp_file:
         temp_file.write("1234567890")
 
       blobdesc = uploader.UploadFilePath(temp_filepath)
 
       self.assertEqual(action.charged_bytes, 10)
-      self.assertEqual(len(action.messages), 4)
+      self.assertLen(action.messages, 4)
       self.assertEqual(action.messages[0].item.data, zlib.compress("123"))
       self.assertEqual(action.messages[1].item.data, zlib.compress("456"))
       self.assertEqual(action.messages[2].item.data, zlib.compress("789"))
       self.assertEqual(action.messages[3].item.data, zlib.compress("0"))
 
-      self.assertEqual(len(blobdesc.chunks), 4)
+      self.assertLen(blobdesc.chunks, 4)
       self.assertEqual(blobdesc.chunk_size, 3)
       self.assertEqual(blobdesc.chunks[0].offset, 0)
       self.assertEqual(blobdesc.chunks[0].length, 3)
@@ -83,18 +85,18 @@ class UploaderTest(unittest.TestCase):
     action = FakeAction()
     uploader = uploading.TransferStoreUploader(action, chunk_size=3)
 
-    with test_lib.AutoTempFilePath() as temp_filepath:
+    with temp.AutoTempFilePath() as temp_filepath:
       with open(temp_filepath, "w") as temp_file:
         temp_file.write("1234567890")
 
       blobdesc = uploader.UploadFilePath(temp_filepath, amount=5)
 
       self.assertEqual(action.charged_bytes, 5)
-      self.assertEqual(len(action.messages), 2)
+      self.assertLen(action.messages, 2)
       self.assertEqual(action.messages[0].item.data, zlib.compress("123"))
       self.assertEqual(action.messages[1].item.data, zlib.compress("45"))
 
-      self.assertEqual(len(blobdesc.chunks), 2)
+      self.assertLen(blobdesc.chunks, 2)
       self.assertEqual(blobdesc.chunk_size, 3)
       self.assertEqual(blobdesc.chunks[0].offset, 0)
       self.assertEqual(blobdesc.chunks[0].length, 3)
@@ -107,19 +109,19 @@ class UploaderTest(unittest.TestCase):
     action = FakeAction()
     uploader = uploading.TransferStoreUploader(action, chunk_size=2)
 
-    with test_lib.AutoTempFilePath() as temp_filepath:
+    with temp.AutoTempFilePath() as temp_filepath:
       with open(temp_filepath, "w") as temp_file:
         temp_file.write("0123456")
 
       blobdesc = uploader.UploadFilePath(temp_filepath, offset=2)
 
       self.assertEqual(action.charged_bytes, 5)
-      self.assertEqual(len(action.messages), 3)
+      self.assertLen(action.messages, 3)
       self.assertEqual(action.messages[0].item.data, zlib.compress("23"))
       self.assertEqual(action.messages[1].item.data, zlib.compress("45"))
       self.assertEqual(action.messages[2].item.data, zlib.compress("6"))
 
-      self.assertEqual(len(blobdesc.chunks), 3)
+      self.assertLen(blobdesc.chunks, 3)
       self.assertEqual(blobdesc.chunk_size, 2)
       self.assertEqual(blobdesc.chunks[0].offset, 2)
       self.assertEqual(blobdesc.chunks[0].length, 2)
@@ -160,4 +162,4 @@ class FakeAction(mock.MagicMock):
 
 
 if __name__ == "__main__":
-  unittest.main()
+  absltest.main()

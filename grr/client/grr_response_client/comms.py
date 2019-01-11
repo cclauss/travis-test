@@ -67,6 +67,7 @@ Examples:
    URL/Proxy combination as in example 1.
 
 """
+from __future__ import absolute_import
 from __future__ import division
 from __future__ import unicode_literals
 
@@ -75,7 +76,6 @@ import logging
 import os
 import pdb
 import posixpath
-import Queue
 import signal
 import sys
 import threading
@@ -85,9 +85,8 @@ import traceback
 
 from builtins import range  # pylint: disable=redefined-builtin
 import psutil
+import queue
 import requests
-
-from google.protobuf import json_format
 
 from grr_response_client import actions
 from grr_response_client import client_stats
@@ -98,15 +97,13 @@ from grr_response_core.lib import communicator
 from grr_response_core.lib import flags
 from grr_response_core.lib import queues
 from grr_response_core.lib import rdfvalue
-from grr_response_core.lib import registry
-from grr_response_core.lib import stats
 from grr_response_core.lib import type_info
 from grr_response_core.lib import utils
 from grr_response_core.lib.rdfvalues import client as rdf_client
 from grr_response_core.lib.rdfvalues import crypto as rdf_crypto
 from grr_response_core.lib.rdfvalues import flows as rdf_flows
 from grr_response_core.lib.rdfvalues import protodict as rdf_protodict
-from grr_response_core.lib.rdfvalues import rekall_types as rdf_rekall_types
+from grr_response_core.stats import stats_collector_instance
 
 
 class HTTPObject(object):
@@ -210,11 +207,9 @@ class HTTPManager(object):
 
     Args:
       path: The URL path to access in this endpoint.
-
       verify_cb: A callback which should return True if the response is
-         reasonable. This is used to detect if we are able to talk to the
-         correct endpoint. If not we try a different endpoint/proxy combination.
-
+        reasonable. This is used to detect if we are able to talk to the correct
+        endpoint. If not we try a different endpoint/proxy combination.
       data: Parameters to send in POST bodies (See Requests documentation).
       params: Parameters to send in GET URLs (See Requests documentation).
       headers: Additional headers (See Requests documentation)
@@ -353,6 +348,17 @@ class HTTPManager(object):
         self.last_proxy_index = proxy_index + 1
         tries += 1
         last_error = 500
+      # Catch unexpected exceptions. If the error is proxy related it makes
+      # sense to cycle the proxy before reraising. One error we have seen here
+      # is ProxySchemeUnknown but urllib can raise many different exceptions, it
+      # doesn't make sense to enumerate them all.
+      except Exception:  # pylint: disable=broad-except
+        logging.exception(
+            "Got an unexpected exception while connecting to the server.")
+        # Try the next proxy
+        self.last_proxy_index = proxy_index + 1
+        tries += 1
+        last_error = 500
 
     # We failed to connect at all here.
     return HTTPObject(code=last_error)
@@ -472,14 +478,6 @@ class Timer(object):
                           max(self.poll_min, self.sleep_time) * self.poll_slew)
 
 
-class CommsInit(registry.InitHook):
-
-  def RunOnce(self):
-    # Counters used here
-    stats.STATS.RegisterCounterMetric("grr_client_received_bytes")
-    stats.STATS.RegisterCounterMetric("grr_client_sent_bytes")
-
-
 class GRRClientWorker(threading.Thread):
   """This client worker runs the main loop in another thread.
 
@@ -565,7 +563,7 @@ class GRRClientWorker(threading.Thread):
 
     Args:
        max_size: The size (in bytes) of the returned protobuf will be at most
-       one message length over this size.
+         one message length over this size.
 
     Returns:
        A MessageList protobuf
@@ -622,14 +620,15 @@ class GRRClientWorker(threading.Thread):
       response_id: The id of this response.
       session_id: The session id of the flow.
       message_type: The contents of this message, MESSAGE, STATUS, ITERATOR or
-                    RDF_VALUE.
+        RDF_VALUE.
       name: The name of the client action that sends this response.
       require_fastpoll: If set, this will set the client to fastpoll mode after
-                        sending this message.
+        sending this message.
       ttl: The time to live of this message.
       blocking: If the output queue is full, block until there is space.
       task_id: The task ID that the request was queued at. We send this back to
         the server so it can de-queue the request.
+
     Raises:
       RuntimeError: An object other than an RDFValue was passed for sending.
     """
@@ -646,7 +645,7 @@ class GRRClientWorker(threading.Thread):
         ttl=ttl,
         type=message_type)
 
-    if rdf_value:
+    if rdf_value is not None:
       message.payload = rdf_value
 
     serialized_message = message.SerializeToString()
@@ -660,7 +659,7 @@ class GRRClientWorker(threading.Thread):
 
     try:
       self.QueueResponse(message, blocking=blocking)
-    except Queue.Full:
+    except queue.Full:
       # In the case of a non blocking send, we reraise the exception to notify
       # the caller that something went wrong.
       if not blocking:
@@ -669,18 +668,6 @@ class GRRClientWorker(threading.Thread):
       # There is nothing we can do about it here - we just lose the message and
       # keep going.
       logging.info("Queue is full, dropping messages.")
-
-  def GetRekallProfile(self, profile_name, version="v1.0"):
-    response = self.http_manager.OpenServerEndpoint(
-        u"/rekall_profiles/%s/%s" % (version, profile_name))
-
-    if response.code != 200:
-      return None
-
-    pb = rdf_rekall_types.RekallProfile.protobuf()
-    json_format.Parse(response.data.lstrip(")]}'\n"), pb)
-    return rdf_rekall_types.RekallProfile.FromSerializedString(
-        pb.SerializeToString())
 
   @utils.Synchronized
   def ChargeBytesToSession(self, session_id, length, limit=0):
@@ -700,6 +687,7 @@ class GRRClientWorker(threading.Thread):
 
     Args:
         message: The GrrMessage that was delivered from the server.
+
     Raises:
         RuntimeError: The client action requested was not found.
     """
@@ -869,7 +857,7 @@ class SizeLimitedQueue(object):
         waiting on the queue.
 
     Raises:
-      Queue.Full: if the queue is full and block is False, or
+      queue.Full: if the queue is full and block is False, or
         timeout is exceeded.
     """
     # We only queue already serialized objects so we know how large they are.
@@ -877,7 +865,7 @@ class SizeLimitedQueue(object):
 
     if not block:
       if self.Full():
-        raise Queue.Full
+        raise queue.Full
 
     else:
       t0 = time.time()
@@ -886,7 +874,7 @@ class SizeLimitedQueue(object):
         self._heart_beat_cb()
 
         if time.time() - t0 > timeout:
-          raise Queue.Full
+          raise queue.Full
 
     with self._lock:
       self._queue.appendleft(message)
@@ -968,12 +956,10 @@ class GRRHTTPClient(object):
 
     Args:
       ca_cert: String representation of a CA certificate to use for checking
-          server certificate.
-
+        server certificate.
       worker_cls: The client worker class to use. Defaults to GRRClientWorker.
-
-      private_key: The private key for this client. Defaults to
-          config Client.private_key.
+      private_key: The private key for this client. Defaults to config
+        Client.private_key.
     """
     self.ca_cert = ca_cert
     if private_key is None:
@@ -1079,7 +1065,8 @@ class GRRHTTPClient(object):
 
   def MakeRequest(self, data):
     """Make a HTTP Post request to the server 'control' endpoint."""
-    stats.STATS.IncrementCounter("grr_client_sent_bytes", len(data))
+    stats_collector_instance.Get().IncrementCounter("grr_client_sent_bytes",
+                                                    len(data))
 
     # Verify the response is as it should be from the control endpoint.
     response = self.http_manager.OpenServerEndpoint(
@@ -1093,8 +1080,8 @@ class GRRHTTPClient(object):
       return response
 
     if response.code == 200:
-      stats.STATS.IncrementCounter("grr_client_received_bytes",
-                                   len(response.data))
+      stats_collector_instance.Get().IncrementCounter(
+          "grr_client_received_bytes", len(response.data))
       return response
 
     # An unspecified error occured.
@@ -1257,7 +1244,7 @@ class GRRHTTPClient(object):
               require_fastpoll=False,
               blocking=False)
           self.last_foreman_check = now
-        except Queue.Full:
+        except queue.Full:
           pass
 
       try:
@@ -1414,5 +1401,5 @@ class ClientCommunicator(communicator.Communicator):
     if common_name == self.server_name:
       return self.server_public_key
 
-    raise communicator.UnknownClientCert(
+    raise communicator.UnknownClientCertError(
         "Client wants to talk to %s, not %s" % (common_name, self.server_name))

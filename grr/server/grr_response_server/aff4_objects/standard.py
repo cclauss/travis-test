@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 """These are standard aff4 objects."""
+from __future__ import absolute_import
 from __future__ import division
+from __future__ import unicode_literals
 
 import io
 
@@ -15,6 +17,7 @@ from grr_response_core.lib.rdfvalues import paths as rdf_paths
 from grr_response_server import aff4
 from grr_response_server import data_store
 from grr_response_server import flow
+from grr_response_server.rdfvalues import objects as rdf_objects
 
 
 class VFSDirectory(aff4.AFF4Volume):
@@ -30,9 +33,7 @@ class VFSDirectory(aff4.AFF4Volume):
     anything about the current object - you need to reopen the same URN some
     time later to get fresh data.
 
-    Attributes:
-       CONTAINS - Refresh the content of the directory listing.
-
+    Attributes: CONTAINS - Refresh the content of the directory listing.
     Args:
        attribute: An attribute object as listed above.
 
@@ -122,8 +123,7 @@ class AFF4SparseImage(aff4.AFF4ImageBase):
     for k, v in iteritems(chunk_hashes):
       chunk_nrs.setdefault(v, []).append(k)
 
-    res = data_store.DB.ReadBlobs(
-        list(itervalues(chunk_hashes)), token=self.token)
+    res = data_store.BLOBS.ReadBlobs(list(itervalues(chunk_hashes)))
     for blob_hash, content in iteritems(res):
       for chunk_nr in chunk_nrs[blob_hash]:
         fd = io.BytesIO(content)
@@ -133,7 +133,7 @@ class AFF4SparseImage(aff4.AFF4ImageBase):
 
   def _WriteChunk(self, chunk):
     if chunk.dirty:
-      data_store.DB.StoreBlob(chunk.getvalue(), token=self.token)
+      data_store.BLOBS.WriteBlobWithUnknownHash(chunk.getvalue())
 
   def _ChunkNrToHash(self, chunk_nr):
     return self._ChunkNrsToHashes([chunk_nr])[chunk_nr]
@@ -148,7 +148,7 @@ class AFF4SparseImage(aff4.AFF4ImageBase):
       if isinstance(obj, aff4.AFF4Stream):
         hsh = obj.read(self._HASH_SIZE)
         if hsh:
-          res[chunk_names[obj.urn]] = hsh.encode("hex")
+          res[chunk_names[obj.urn]] = rdf_objects.BlobID.FromBytes(hsh)
     return res
 
   def _GetChunkForReading(self, chunk):
@@ -240,7 +240,7 @@ class AFF4SparseImage(aff4.AFF4ImageBase):
       length -= len(data)
       result.append(data)
 
-    return "".join(result)
+    return b"".join(result)
 
   def Initialize(self):
     super(AFF4SparseImage, self).Initialize()
@@ -265,7 +265,7 @@ class AFF4SparseImage(aff4.AFF4ImageBase):
 
   def AddBlob(self, blob_hash, length, chunk_number):
     """Add another blob to this image using its hash."""
-    if len(blob_hash) != self._HASH_SIZE:
+    if len(blob_hash.AsBytes()) != self._HASH_SIZE:
       raise ValueError("Hash '%s' doesn't have correct length (%d)." %
                        (blob_hash, self._HASH_SIZE))
 
@@ -288,7 +288,7 @@ class AFF4SparseImage(aff4.AFF4ImageBase):
     # TODO(amoser): This opens a subobject for each AddBlob call :/
     with aff4.FACTORY.Create(
         index_urn, aff4.AFF4MemoryStream, token=self.token) as fd:
-      fd.write(blob_hash)
+      fd.write(blob_hash.AsBytes())
     if chunk_number in self.chunk_cache:
       self.chunk_cache.Pop(chunk_number)
 

@@ -1,18 +1,20 @@
 #!/usr/bin/env python
 """Tests for the ThreadPool class."""
+from __future__ import absolute_import
 from __future__ import division
+from __future__ import unicode_literals
 
 import logging
-import Queue
 import threading
 import time
 
 
 from builtins import range  # pylint: disable=redefined-builtin
+import queue
 
 from grr_response_core.lib import flags
-from grr_response_core.lib import stats
 from grr_response_core.lib import utils
+from grr_response_core.stats import stats_collector_instance
 from grr_response_server import threadpool
 from grr.test_lib import test_lib
 
@@ -98,6 +100,41 @@ class ThreadPoolTest(test_lib.GRRBaseTest):
     test_list.sort()
     self.assertEqual(list(range(self.NUMBER_OF_TASKS)), test_list)
 
+  def testAdditionalWorkersAreAllocatedWhenSingleTaskTakesLong(self):
+    wait_event_1, wait_event_2 = threading.Event(), threading.Event()
+    signal_event_1, signal_event_2 = threading.Event(), threading.Event()
+
+    try:
+      sample = []
+
+      def RunFn(signal_event, wait_event, num):
+        sample.append(num)
+        signal_event.set()
+        wait_event.wait()
+
+      self.test_pool.AddTask(
+          RunFn, (wait_event_1, signal_event_1, 0),
+          blocking=False,
+          inline=False)
+      wait_event_1.wait(10)
+      self.assertEqual(sample, [0])
+      # Now task 1 is running, schedule task 2 and make sure it runs and
+      # completes.
+      self.test_pool.AddTask(
+          RunFn, (wait_event_2, signal_event_2, 1),
+          blocking=False,
+          inline=False)
+      wait_event_2.wait(10)
+      self.assertEqual(sample, [0, 1])
+    finally:
+      signal_event_1.set()
+      signal_event_2.set()
+
+  def testAddingTaskToNonStartedThreadPoolRaises(self):
+    pool = threadpool.ThreadPool.Factory("t", 10)
+    with self.assertRaises(threadpool.ThreadPoolNotStartedError):
+      pool.AddTask(lambda: None, ())
+
   def testRunRaisingTask(self):
     """Tests the behavior of the pool if a task throws an exception."""
 
@@ -124,14 +161,14 @@ class ThreadPoolTest(test_lib.GRRBaseTest):
     self.assertTrue(self.exception_args[1], "Raising")
 
     # Make sure that both exceptions have been counted.
-    exception_count = stats.STATS.GetMetricValue(
+    exception_count = stats_collector_instance.Get().GetMetricValue(
         threadpool._TASK_EXCEPTIONS_METRIC, fields=[self.test_pool.name])
     self.assertEqual(exception_count, 2)
 
   def testFailToCreateThread(self):
     """Test that we handle thread creation problems ok."""
     # The pool starts off with the minimum number of threads.
-    self.assertEqual(len(self.test_pool), self.NUMBER_OF_THREADS)
+    self.assertLen(self.test_pool, self.NUMBER_OF_THREADS)
 
     done_event = threading.Event()
 
@@ -145,8 +182,8 @@ class ThreadPoolTest(test_lib.GRRBaseTest):
     with utils.Stubber(threadpool._WorkerThread, "start", RaisingStart):
       # Fill all the existing threads and wait for them to become busy.
       self.test_pool.AddTask(Block, (done_event,))
-      self.WaitUntil(
-          lambda: self.test_pool.busy_threads == self.NUMBER_OF_THREADS)
+      self.WaitUntil(lambda: self.test_pool.busy_threads == self.
+                     NUMBER_OF_THREADS)
 
       # Now fill the queue completely..
       for _ in range(self.MAXIMUM_THREADS):
@@ -168,7 +205,7 @@ class ThreadPoolTest(test_lib.GRRBaseTest):
 
   def testBlockingTasks(self):
     # The pool starts off with the minimum number of threads.
-    self.assertEqual(len(self.test_pool), self.NUMBER_OF_THREADS)
+    self.assertLen(self.test_pool, self.NUMBER_OF_THREADS)
 
     done_event = threading.Event()
     self.lock = threading.Lock()
@@ -181,67 +218,59 @@ class ThreadPoolTest(test_lib.GRRBaseTest):
       with self.lock:
         list_obj.append(element)
 
-    # Ensure that the thread pool is able to add the correct number of threads
-    # deterministically.
-    with utils.Stubber(self.test_pool, "CPUUsage", lambda: 0):
-      # Schedule the maximum number of threads of blocking tasks and the same of
-      # insert tasks. The threads are now all blocked, and the inserts are
-      # waiting in the queue.
-      for _ in range(self.MAXIMUM_THREADS):
-        self.test_pool.AddTask(Block, (done_event,), "Blocking")
+    # Schedule the maximum number of threads of blocking tasks and the same of
+    # insert tasks. The threads are now all blocked, and the inserts are
+    # waiting in the queue.
+    for _ in range(self.MAXIMUM_THREADS):
+      self.test_pool.AddTask(Block, (done_event,), "Blocking")
 
-      # Wait until the threadpool picks up the task.
-      self.WaitUntil(
-          lambda: self.test_pool.busy_threads == self.NUMBER_OF_THREADS)
+    # Wait until the threadpool picks up tasks.
+    self.WaitUntil(lambda: self.test_pool.busy_threads == self.MAXIMUM_THREADS)
 
-      # Now there are minimum number of threads active and the rest are sitting
-      # on the queue.
-      self.assertEqual(self.test_pool.pending_tasks,
-                       self.MAXIMUM_THREADS - self.NUMBER_OF_THREADS)
+    # Now there's maximum number of threads active and the queue is empty.
+    self.assertEqual(self.test_pool.pending_tasks, 0)
 
-      # Now as we push these tasks on the queue, new threads will be created and
-      # they will receive the blocking tasks from the queue.
-      for i in range(self.MAXIMUM_THREADS):
-        self.test_pool.AddTask(
-            Insert, (res, i), "Insert", blocking=True, inline=False)
+    # Now we push these tasks on the queue, but they're not going to be
+    # processed, since all threads are busy.
+    for i in range(self.MAXIMUM_THREADS):
+      self.test_pool.AddTask(
+          Insert, (res, i), "Insert", blocking=True, inline=False)
 
-      # There should be 20 workers created and they should consume all the
-      # blocking tasks.
-      self.WaitUntil(
-          lambda: self.test_pool.busy_threads == self.MAXIMUM_THREADS)
+    # There should be 20 workers created and they should consume all the
+    # blocking tasks.
+    self.WaitUntil(lambda: self.test_pool.busy_threads == self.MAXIMUM_THREADS)
 
-      # No Insert tasks are running yet.
-      self.assertEqual(res, [])
+    # No Insert tasks are running yet.
+    self.assertEqual(res, [])
 
-      # There are 20 tasks waiting on the queue.
-      self.assertEqual(self.test_pool.pending_tasks, self.MAXIMUM_THREADS)
+    # There are 20 tasks waiting on the queue.
+    self.assertEqual(self.test_pool.pending_tasks, self.MAXIMUM_THREADS)
 
-      # Inserting more tasks than the queue can hold should lead to processing
-      # the tasks inline. This effectively causes these tasks to skip over the
-      # tasks which are waiting in the queue.
-      for i in range(10, 20):
-        self.test_pool.AddTask(Insert, (res, i), "Insert", inline=True)
+    # Inserting more tasks than the queue can hold should lead to processing
+    # the tasks inline. This effectively causes these tasks to skip over the
+    # tasks which are waiting in the queue.
+    for i in range(10, 20):
+      self.test_pool.AddTask(Insert, (res, i), "Insert", inline=True)
 
-      res.sort()
-      self.assertEqual(res, list(range(10, 20)))
+    res.sort()
+    self.assertEqual(res, list(range(10, 20)))
 
-      # This should release all the busy tasks. It will also cause the workers
-      # to process all the Insert tasks in the queue.
-      done_event.set()
+    # This should release all the busy tasks. It will also cause the workers
+    # to process all the Insert tasks in the queue.
+    done_event.set()
 
-      self.test_pool.Join()
+    self.test_pool.Join()
 
-      # Now the rest of the tasks should have been processed as well.
-      self.assertEqual(sorted(res[10:]), list(range(20)))
+    # Now the rest of the tasks should have been processed as well.
+    self.assertEqual(sorted(res[10:]), list(range(20)))
 
   def testThreadsReaped(self):
     """Check that threads are reaped when too old."""
     self.now = 0
     with utils.MultiStubber((time, "time", lambda: self.now),
                             (threading, "_time", lambda: self.now),
-                            (Queue, "_time",
-                             lambda: self.now), (self.test_pool, "CPUUsage",
-                                                 lambda: 0)):
+                            (queue, "_time", lambda: self.now),
+                            (self.test_pool, "CPUUsage", lambda: 0)):
       done_event = threading.Event()
 
       res = []
@@ -253,7 +282,7 @@ class ThreadPoolTest(test_lib.GRRBaseTest):
       for i in range(2 * self.MAXIMUM_THREADS):
         self.test_pool.AddTask(Block, (done_event, i), "Blocking", inline=False)
 
-      self.assertEqual(len(self.test_pool), self.MAXIMUM_THREADS)
+      self.assertLen(self.test_pool, self.MAXIMUM_THREADS)
 
       # Release the threads. All threads are now idle.
       done_event.set()
@@ -266,18 +295,41 @@ class ThreadPoolTest(test_lib.GRRBaseTest):
       self.WaitUntil(lambda: len(self.test_pool) == self.NUMBER_OF_THREADS)
 
       # Ensure we have the minimum number of threads left now.
-      self.assertEqual(len(self.test_pool), self.NUMBER_OF_THREADS)
+      self.assertLen(self.test_pool, self.NUMBER_OF_THREADS)
 
   def testExportedFunctions(self):
     """Tests if the outstanding tasks variable is exported correctly."""
+    signal_event, wait_event = threading.Event(), threading.Event()
+
+    def RunFn():
+      signal_event.set()
+      wait_event.wait()
+
     pool_name = "test_pool3"
     pool = threadpool.ThreadPool.Factory(pool_name, 10)
-    # Do not start but push some tasks on the pool.
-    for i in range(10):
-      pool.AddTask(lambda: None, ())
-      outstanding_tasks = stats.STATS.GetMetricValue(
-          threadpool._OUTSTANDING_TASKS_METRIC, fields=[pool_name])
-      self.assertEqual(outstanding_tasks, i + 1)
+    pool.Start()
+    try:
+      # First 10 tasks should be scheduled immediately, as we have max_threads
+      # set to 10.
+      for _ in range(10):
+        signal_event.clear()
+        pool.AddTask(RunFn, ())
+        signal_event.wait(10)
+
+        outstanding_tasks = stats_collector_instance.Get().GetMetricValue(
+            threadpool._OUTSTANDING_TASKS_METRIC, fields=[pool_name])
+        self.assertEqual(outstanding_tasks, 0)
+
+      # Next 5 tasks should sit in the queue.
+      for i in range(5):
+        pool.AddTask(RunFn, ())
+
+        outstanding_tasks = stats_collector_instance.Get().GetMetricValue(
+            threadpool._OUTSTANDING_TASKS_METRIC, fields=[pool_name])
+        self.assertEqual(outstanding_tasks, i + 1)
+    finally:
+      wait_event.set()
+      pool.Stop()
 
   def testDuplicateNameError(self):
     """Tests that creating two pools with the same name fails."""
@@ -290,24 +342,23 @@ class ThreadPoolTest(test_lib.GRRBaseTest):
     """Tests that we can get the same pool again through the factory."""
 
     prefix = "duplicate_name"
-
     pool = threadpool.ThreadPool.Factory(prefix, 10)
-    self.assertEqual(pool.started, False)
-    pool.Start()
-    self.assertEqual(pool.started, True)
+    try:
+      self.assertEqual(pool.started, False)
+      pool.Start()
+      self.assertEqual(pool.started, True)
 
-    # This should return the same pool as before.
-    pool2 = threadpool.ThreadPool.Factory(prefix, 10)
-    self.assertEqual(pool2.started, True)
+      # This should return the same pool as before.
+      pool2 = threadpool.ThreadPool.Factory(prefix, 10)
+      self.assertEqual(pool2.started, True)
+    finally:
+      pool.Stop()
 
   def testAnonymousThreadpool(self):
-    """Tests that we can starts anonymous threadpools."""
+    """Tests that we can't starts anonymous threadpools."""
     prefix = None
-    pool = threadpool.ThreadPool.Factory(prefix, 10)
-    self.assertEqual(pool.started, False)
-    pool.Start()
-    self.assertEqual(pool.started, True)
-    pool.Stop()
+    with self.assertRaises(ValueError):
+      threadpool.ThreadPool.Factory(prefix, 10)
 
 
 class DummyConverter(threadpool.BatchConverter):
@@ -342,13 +393,13 @@ class BatchConverterTest(test_lib.GRRBaseTest):
 
     converter.Convert(test_data)
 
-    self.assertEqual(len(set(converter.threads)), 5)
+    self.assertLen(set(converter.threads), 5)
 
-    self.assertEqual(len(converter.batches), 5)
+    self.assertLen(converter.batches, 5)
     for batch in converter.batches:
-      self.assertEqual(len(batch), 2)
+      self.assertLen(batch, 2)
 
-    self.assertEqual(len(converter.results), 10)
+    self.assertLen(converter.results, 10)
     for i, r in enumerate(sorted(converter.results)):
       self.assertEqual(r, str(i) + "*")
 
@@ -362,13 +413,13 @@ class BatchConverterTest(test_lib.GRRBaseTest):
 
     converter.Convert(test_data)
 
-    self.assertEqual(len(set(converter.threads)), 1)
+    self.assertLen(set(converter.threads), 1)
 
-    self.assertEqual(len(converter.batches), 5)
+    self.assertLen(converter.batches, 5)
     for batch in converter.batches:
-      self.assertEqual(len(batch), 2)
+      self.assertLen(batch, 2)
 
-    self.assertEqual(len(converter.results), 10)
+    self.assertLen(converter.results, 10)
     for i, r in enumerate(sorted(converter.results)):
       self.assertEqual(r, str(i) + "*")
 

@@ -7,15 +7,26 @@ client.
 This package needs to stay simple so that it can be installed on windows and
 ancient versions of linux to build clients.
 """
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import unicode_literals
 
-import ConfigParser
 import os
 import platform
 import shutil
+import sys
+
 from setuptools import find_packages
 from setuptools import setup
 from setuptools.command.sdist import sdist
+
+# TODO: Fix this import once support for Python 2 is dropped.
+# pylint: disable=g-import-not-at-top
+if sys.version_info.major == 2:
+  import ConfigParser as configparser
+else:
+  import configparser
+# pylint: enable=g-import-not-at-top
 
 THIS_DIRECTORY = os.path.dirname(os.path.realpath(__file__))
 
@@ -33,7 +44,7 @@ def get_config():
     if not os.path.exists(ini_path):
       raise RuntimeError("Couldn't find version.ini")
 
-  config = ConfigParser.SafeConfigParser()
+  config = configparser.SafeConfigParser()
   config.read(ini_path)
   return config
 
@@ -74,15 +85,23 @@ setup_args = dict(
     packages=find_packages(),
     include_package_data=True,
     install_requires=[
+        "absl-py==0.6.1",
         "grr-response-core==%s" % VERSION.get("Version", "packagedepends"),
-        "rekall-core==1.7.2rc1",
-        "pyinstaller==3.2.1",
+        # TODO: 3.4 has a bug that prevents it from being installed
+        # on macOS and CentOS [1]. On the other hand, 3.2.1 does not work with
+        # Python 3. The issue is already resolved but there has been no release
+        # since then.
+        #
+        # [1]: https://github.com/pyinstaller/pyinstaller/issues/3597
+        "pyinstaller==%s" % ("3.2.1" if sys.version_info < (3, 0) else "3.4"),
     ],
     extras_require={
         # The following requirements are needed in Windows.
         ':sys_platform=="win32"': [
             "WMI==1.4.9",
-            "pypiwin32==219",
+            # TODO(user): bind to specific version as soon as Rekall
+            # dependency is gone.
+            "pypiwin32",
         ],
     },
 )

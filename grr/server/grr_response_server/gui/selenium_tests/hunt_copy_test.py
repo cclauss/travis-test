@@ -1,10 +1,11 @@
 #!/usr/bin/env python
 """Test of "Copy Hunt" wizard."""
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import unicode_literals
 
-import unittest
-from grr_response_core.lib import flags
 
+from grr_response_core.lib import flags
 from grr_response_core.lib.rdfvalues import file_finder as rdf_file_finder
 from grr_response_core.lib.rdfvalues import paths as rdf_paths
 from grr_response_server import aff4
@@ -17,6 +18,7 @@ from grr_response_server.hunts import standard
 from grr_response_server.rdfvalues import flow_runner as rdf_flow_runner
 from grr_response_server.rdfvalues import output_plugin as rdf_output_plugin
 from grr.test_lib import db_test_lib
+from grr.test_lib import test_lib
 
 
 @db_test_lib.DualDBTest
@@ -162,7 +164,7 @@ class HuntCopyTest(gui_test_lib.GRRSeleniumHuntTest):
     hunts_root = aff4.FACTORY.Open("aff4:/hunts", token=self.token)
     hunts_list = sorted(list(hunts_root.ListChildren()), key=lambda x: x.age)
 
-    self.assertEqual(len(hunts_list), 2)
+    self.assertLen(hunts_list, 2)
 
     first_hunt = aff4.FACTORY.Open(hunts_list[0], token=self.token)
     last_hunt = aff4.FACTORY.Open(hunts_list[1], token=self.token)
@@ -259,7 +261,7 @@ class HuntCopyTest(gui_test_lib.GRRSeleniumHuntTest):
     hunts_root = aff4.FACTORY.Open("aff4:/hunts", token=self.token)
     hunts_list = sorted(list(hunts_root.ListChildren()), key=lambda x: x.age)
 
-    self.assertEqual(len(hunts_list), 2)
+    self.assertLen(hunts_list, 2)
     last_hunt = aff4.FACTORY.Open(hunts_list[-1], token=self.token)
 
     self.assertEqual(last_hunt.args.flow_args.pathspec.path,
@@ -268,7 +270,7 @@ class HuntCopyTest(gui_test_lib.GRRSeleniumHuntTest):
     self.assertEqual(last_hunt.args.flow_runner_args.flow_name,
                      transfer.GetFile.__name__)
 
-    self.assertEqual(len(last_hunt.runner_args.output_plugins), 2)
+    self.assertLen(last_hunt.runner_args.output_plugins, 2)
     self.assertEqual(last_hunt.runner_args.output_plugins[0].plugin_name,
                      "DummyOutputPlugin")
     self.assertEqual(
@@ -354,7 +356,7 @@ class HuntCopyTest(gui_test_lib.GRRSeleniumHuntTest):
     hunts_root = aff4.FACTORY.Open("aff4:/hunts", token=self.token)
     hunts_list = sorted(list(hunts_root.ListChildren()), key=lambda x: x.age)
 
-    self.assertEqual(len(hunts_list), 2)
+    self.assertLen(hunts_list, 2)
     last_hunt = aff4.FACTORY.Open(hunts_list[-1], token=self.token)
 
     # Check that the hunt was created with a correct literal value.
@@ -455,13 +457,13 @@ class HuntCopyTest(gui_test_lib.GRRSeleniumHuntTest):
     # Check that the hunt object was actually created
     hunts_root = aff4.FACTORY.Open("aff4:/hunts", token=self.token)
     hunts_list = list(hunts_root.OpenChildren())
-    self.assertEqual(len(hunts_list), 1)
+    self.assertLen(hunts_list, 1)
 
     hunt = hunts_list[0]
 
     # Check that the hunt was created with correct rules
     rules = hunt.runner_args.client_rule_set.rules
-    self.assertEqual(len(rules), 1)
+    self.assertLen(rules, 1)
     rule = rules[0]
 
     self.assertEqual(rule.rule_type,
@@ -472,11 +474,5 @@ class HuntCopyTest(gui_test_lib.GRRSeleniumHuntTest):
     self.assertFalse(rule.os.os_windows)
 
 
-def main(argv):
-  del argv  # Unused.
-  # Run the full test suite
-  unittest.main()
-
-
 if __name__ == "__main__":
-  flags.StartMain(main)
+  flags.StartMain(test_lib.main)

@@ -1,6 +1,9 @@
 #!/usr/bin/env python
 """Client actions requests and responses."""
 
+from __future__ import absolute_import
+from __future__ import division
+
 from grr_response_core.lib import rdfvalue
 
 from grr_response_core.lib.rdfvalues import crypto as rdf_crypto

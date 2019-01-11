@@ -1,16 +1,19 @@
 #!/usr/bin/env python
 """This module contains tests for user API handlers."""
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import unicode_literals
 
 
-from builtins import range  # pylint: disable=redefined-builtin
-from builtins import zip  # pylint: disable=redefined-builtin
+from future.builtins import range
+from future.builtins import str
+from future.builtins import zip
 
 from grr_response_core.lib import flags
 from grr_response_core.lib import rdfvalue
 from grr_response_core.lib import utils
 from grr_response_core.lib.rdfvalues import flows as rdf_flows
-
+from grr_response_core.lib.util import compatibility
 from grr_response_server import access_control
 from grr_response_server import aff4
 from grr_response_server import data_store
@@ -18,7 +21,6 @@ from grr_response_server import email_alerts
 from grr_response_server import notification
 from grr_response_server.aff4_objects import cronjobs as aff4_cronjobs
 from grr_response_server.aff4_objects import users as aff4_users
-from grr_response_server.flows.general import administrative
 from grr_response_server.gui import api_call_handler_base
 from grr_response_server.gui import api_test_lib
 
@@ -145,8 +147,8 @@ class ApiNotificationTest(acl_test_lib.AclTestMixin,
         rdf_objects.ObjectReference(
             reference_type=rdf_objects.ObjectReference.Type.APPROVAL_REQUEST,
             approval_request=rdf_objects.ApprovalRequestReference(
-                approval_type=rdf_objects.ApprovalRequest.ApprovalType.
-                APPROVAL_TYPE_CLIENT,
+                approval_type=rdf_objects.ApprovalRequest.ApprovalType
+                .APPROVAL_TYPE_CLIENT,
                 approval_id="foo-bar",
                 subject_id=self.client_id.Basename(),
                 requestor_username=self.token.username)))
@@ -164,8 +166,8 @@ class ApiNotificationTest(acl_test_lib.AclTestMixin,
         rdf_objects.ObjectReference(
             reference_type=rdf_objects.ObjectReference.Type.APPROVAL_REQUEST,
             approval_request=rdf_objects.ApprovalRequestReference(
-                approval_type=rdf_objects.ApprovalRequest.ApprovalType.
-                APPROVAL_TYPE_HUNT,
+                approval_type=rdf_objects.ApprovalRequest.ApprovalType
+                .APPROVAL_TYPE_HUNT,
                 approval_id="foo-bar",
                 subject_id="H:123456",
                 requestor_username=self.token.username)))
@@ -181,8 +183,8 @@ class ApiNotificationTest(acl_test_lib.AclTestMixin,
         rdf_objects.ObjectReference(
             reference_type=rdf_objects.ObjectReference.Type.APPROVAL_REQUEST,
             approval_request=rdf_objects.ApprovalRequestReference(
-                approval_type=rdf_objects.ApprovalRequest.ApprovalType.
-                APPROVAL_TYPE_CRON_JOB,
+                approval_type=rdf_objects.ApprovalRequest.ApprovalType
+                .APPROVAL_TYPE_CRON_JOB,
                 approval_id="foo-bar",
                 subject_id="FooBar",
                 requestor_username=self.token.username)))
@@ -198,7 +200,7 @@ class ApiNotificationTest(acl_test_lib.AclTestMixin,
         rdf_objects.UserNotification.Type.TYPE_FILE_ARCHIVE_GENERATION_FAILED,
         None,
         message="blah")
-    self.assertTrue(n.reference.type in ["UNSET", "UNKNOWN"])
+    self.assertIn(n.reference.type, ["UNSET", "UNKNOWN"])
     self.assertEqual(n.message, "blah")
 
   def testVfsListDirectoryCompletedIsParsedCorrectly(self):
@@ -277,7 +279,7 @@ class ApiCreateApprovalHandlerTestMixin(
     self.handler.Handle(self.args, token=self.token)
 
     notifications = self.GetUserNotifications(u"approver")
-    self.assertEqual(len(notifications), 1)
+    self.assertLen(notifications, 1)
 
   def testSendsEmailsToGrrUsersAndCcAddresses(self):
     addresses = []
@@ -293,7 +295,7 @@ class ApiCreateApprovalHandlerTestMixin(
     with utils.Stubber(email_alerts.EMAIL_ALERTER, "SendEmail", SendEmailStub):
       self.handler.Handle(self.args, token=self.token)
 
-    self.assertEqual(len(addresses), 1)
+    self.assertLen(addresses, 1)
     self.assertEqual(addresses[0],
                      (u"approver", self.token.username, "test@example.com"))
 
@@ -368,7 +370,7 @@ class ApiCreateClientApprovalHandlerTest(api_test_lib.ApiCallHandlerTest,
 
   def ReadApproval(self, approval_id):
     approvals = self.ListClientApprovals(requestor=self.token.username)
-    self.assertEqual(len(approvals), 1)
+    self.assertLen(approvals, 1)
     self.assertEqual(approvals[0].id, approval_id)
     return approvals[0]
 
@@ -390,12 +392,16 @@ class ApiCreateClientApprovalHandlerTest(api_test_lib.ApiCallHandlerTest,
     self.args.keep_client_alive = True
 
     self.handler.Handle(self.args, self.token)
-    flows = aff4.FACTORY.Open(
-        self.subject_urn.Add("flows"), token=self.token).OpenChildren()
-    keep_alive_flow = [
-        f for f in flows if f.__class__ == administrative.KeepAlive
-    ]
-    self.assertEqual(len(keep_alive_flow), 1)
+
+    if data_store.RelationalDBFlowsEnabled():
+      flows = data_store.REL_DB.ReadAllFlowObjects(
+          client_id=str(self.args.client_id))
+      flow_class_names = [f.flow_class_name for f in flows]
+    else:
+      flows = aff4.FACTORY.Open(
+          self.subject_urn.Add("flows"), token=self.token).OpenChildren()
+      flow_class_names = [compatibility.GetName(f.__class__) for f in flows]
+    self.assertEqual(flow_class_names, ["KeepAlive"])
 
 
 @db_test_lib.DualDBTest
@@ -423,7 +429,7 @@ class ApiListClientApprovalsHandlerTest(api_test_lib.ApiCallHandlerTest,
     result = self.handler.Handle(args, token=self.token)
 
     # All approvals should be returned.
-    self.assertEqual(len(result.items), self.CLIENT_COUNT)
+    self.assertLen(result.items, self.CLIENT_COUNT)
 
   def testFiltersApprovalsByClientId(self):
     client_id = self.client_ids[0]
@@ -434,7 +440,7 @@ class ApiListClientApprovalsHandlerTest(api_test_lib.ApiCallHandlerTest,
     args = user_plugin.ApiListClientApprovalsArgs(client_id=client_id)
     result = self.handler.Handle(args, token=self.token)
 
-    self.assertEqual(len(result.items), 1)
+    self.assertLen(result.items, 1)
     self.assertEqual(result.items[0].subject.client_id.ToClientURN(), client_id)
 
   def testFiltersApprovalsByInvalidState(self):
@@ -445,7 +451,7 @@ class ApiListClientApprovalsHandlerTest(api_test_lib.ApiCallHandlerTest,
         state=user_plugin.ApiListClientApprovalsArgs.State.INVALID)
     result = self.handler.Handle(args, token=self.token)
 
-    self.assertEqual(len(result.items), self.CLIENT_COUNT)
+    self.assertLen(result.items, self.CLIENT_COUNT)
 
     # Grant access to one client. Now all but one should be invalid.
     self.GrantClientApproval(
@@ -453,7 +459,7 @@ class ApiListClientApprovalsHandlerTest(api_test_lib.ApiCallHandlerTest,
         requestor=self.token.username,
         approval_id=approval_ids[0])
     result = self.handler.Handle(args, token=self.token)
-    self.assertEqual(len(result.items), self.CLIENT_COUNT - 1)
+    self.assertLen(result.items, self.CLIENT_COUNT - 1)
 
   def testFiltersApprovalsByValidState(self):
     approval_ids = self._RequestClientApprovals()
@@ -464,7 +470,7 @@ class ApiListClientApprovalsHandlerTest(api_test_lib.ApiCallHandlerTest,
     result = self.handler.Handle(args, token=self.token)
 
     # We do not have any approved approvals yet.
-    self.assertEqual(len(result.items), 0)
+    self.assertEmpty(result.items)
 
     # Grant access to one client. Now exactly one approval should be valid.
     self.GrantClientApproval(
@@ -472,7 +478,7 @@ class ApiListClientApprovalsHandlerTest(api_test_lib.ApiCallHandlerTest,
         requestor=self.token.username,
         approval_id=approval_ids[0])
     result = self.handler.Handle(args, token=self.token)
-    self.assertEqual(len(result.items), 1)
+    self.assertLen(result.items, 1)
     self.assertEqual(result.items[0].subject.client_id.ToClientURN(),
                      self.client_ids[0])
 
@@ -493,13 +499,13 @@ class ApiListClientApprovalsHandlerTest(api_test_lib.ApiCallHandlerTest,
     result = self.handler.Handle(args, token=self.token)
 
     # We have a valid approval for the requested client.
-    self.assertEqual(len(result.items), 1)
+    self.assertLen(result.items, 1)
 
     args.state = user_plugin.ApiListClientApprovalsArgs.State.INVALID
     result = self.handler.Handle(args, token=self.token)
 
     # However, we do not have any invalid approvals for the client.
-    self.assertEqual(len(result.items), 0)
+    self.assertEmpty(result.items)
 
   def testFilterConsidersOffsetAndCount(self):
     client_id = self.client_ids[0]
@@ -516,7 +522,7 @@ class ApiListClientApprovalsHandlerTest(api_test_lib.ApiCallHandlerTest,
 
     # Approvals are returned newest to oldest, so the first five approvals
     # have reason 9 to 5.
-    self.assertEqual(len(result.items), 5)
+    self.assertLen(result.items, 5)
     for item, i in zip(result.items, reversed(range(6, 10))):
       self.assertEqual(item.reason, "Request reason %d" % i)
 
@@ -524,7 +530,7 @@ class ApiListClientApprovalsHandlerTest(api_test_lib.ApiCallHandlerTest,
     args = user_plugin.ApiListClientApprovalsArgs(client_id=client_id, offset=7)
     result = self.handler.Handle(args, token=self.token)
 
-    self.assertEqual(len(result.items), 3)
+    self.assertLen(result.items, 3)
     for item, i in zip(result.items, reversed(range(0, 3))):
       self.assertEqual(item.reason, "Request reason %d" % i)
 
@@ -537,7 +543,7 @@ class ApiCreateHuntApprovalHandlerTest(api_test_lib.ApiCallHandlerTest,
 
   def ReadApproval(self, approval_id):
     approvals = self.ListHuntApprovals(requestor=self.token.username)
-    self.assertEqual(len(approvals), 1)
+    self.assertLen(approvals, 1)
     self.assertEqual(approvals[0].id, approval_id)
     return approvals[0]
 
@@ -580,7 +586,7 @@ class ApiListHuntApprovalsHandlerTest(acl_test_lib.AclTestMixin,
     args = user_plugin.ApiListHuntApprovalsArgs()
     result = self.handler.Handle(args, token=self.token)
 
-    self.assertEqual(len(result.items), 1)
+    self.assertLen(result.items, 1)
 
 
 @db_test_lib.DualDBTest
@@ -592,7 +598,7 @@ class ApiCreateCronJobApprovalHandlerTest(
 
   def ReadApproval(self, approval_id):
     approvals = self.ListCronJobApprovals(requestor=self.token.username)
-    self.assertEqual(len(approvals), 1)
+    self.assertLen(approvals, 1)
     self.assertEqual(approvals[0].id, approval_id)
     return approvals[0]
 
@@ -638,7 +644,7 @@ class ApiListCronJobApprovalsHandlerTest(acl_test_lib.AclTestMixin,
     args = user_plugin.ApiListCronJobApprovalsArgs()
     result = self.handler.Handle(args, token=self.token)
 
-    self.assertEqual(len(result.items), 1)
+    self.assertLen(result.items, 1)
 
 
 class ApiGetOwnGrrUserHandlerTest(api_test_lib.ApiCallHandlerTest):
@@ -777,8 +783,8 @@ class ApiDeletePendingUserNotificationHandlerTest(
   def testDeletesFromPendingAndAddsToShown(self):
     # Check that there are three pending notifications and no shown ones yet.
     (pending, shown) = self._GetNotifications()
-    self.assertEqual(len(pending), 3)
-    self.assertEqual(len(shown), 0)
+    self.assertLen(pending, 3)
+    self.assertEmpty(shown)
 
     # Delete a pending notification.
     args = user_plugin.ApiDeletePendingUserNotificationArgs(
@@ -787,16 +793,16 @@ class ApiDeletePendingUserNotificationHandlerTest(
 
     # After the deletion, two notifications should be pending and one shown.
     (pending, shown) = self._GetNotifications()
-    self.assertEqual(len(pending), 2)
-    self.assertEqual(len(shown), 1)
-    self.assertTrue("<some other message>" in shown[0].message)
+    self.assertLen(pending, 2)
+    self.assertLen(shown, 1)
+    self.assertIn("<some other message>", shown[0].message)
     self.assertEqual(shown[0].timestamp, self.TIME_1)
 
   def testRaisesOnDeletingMultipleNotifications(self):
     # Check that there are three pending notifications and no shown ones yet.
     (pending, shown) = self._GetNotifications()
-    self.assertEqual(len(pending), 3)
-    self.assertEqual(len(shown), 0)
+    self.assertLen(pending, 3)
+    self.assertEmpty(shown)
 
     # Delete all pending notifications on TIME_0.
     args = user_plugin.ApiDeletePendingUserNotificationArgs(
@@ -806,14 +812,14 @@ class ApiDeletePendingUserNotificationHandlerTest(
 
     # Check that the notifications were not changed in the process.
     (pending, shown) = self._GetNotifications()
-    self.assertEqual(len(pending), 3)
-    self.assertEqual(len(shown), 0)
+    self.assertLen(pending, 3)
+    self.assertEmpty(shown)
 
   def testUnknownTimestampIsIgnored(self):
     # Check that there are three pending notifications and no shown ones yet.
     (pending, shown) = self._GetNotifications()
-    self.assertEqual(len(pending), 3)
-    self.assertEqual(len(shown), 0)
+    self.assertLen(pending, 3)
+    self.assertEmpty(shown)
 
     # A timestamp not matching any pending notifications does not change any of
     # the collections.
@@ -823,80 +829,47 @@ class ApiDeletePendingUserNotificationHandlerTest(
 
     # We should still have the same number of pending and shown notifications.
     (pending, shown) = self._GetNotifications()
-    self.assertEqual(len(pending), 3)
-    self.assertEqual(len(shown), 0)
+    self.assertLen(pending, 3)
+    self.assertEmpty(shown)
 
 
-class ApiDeletePendingGlobalNotificationHandlerTest(
-    api_test_lib.ApiCallHandlerTest):
-  """Test for ApiDeletePendingGlobalNotificationHandler."""
+@db_test_lib.DualDBTest
+class ApiListApproverSuggestionsHandlerTest(acl_test_lib.AclTestMixin,
+                                            api_test_lib.ApiCallHandlerTest):
+  """Test for ApiListApproverSuggestionsHandler."""
 
   def setUp(self):
-    super(ApiDeletePendingGlobalNotificationHandlerTest, self).setUp()
-    self.handler = user_plugin.ApiDeletePendingGlobalNotificationHandler()
+    super(ApiListApproverSuggestionsHandlerTest, self).setUp()
+    self.handler = user_plugin.ApiListApproverSuggestionsHandler()
+    self.CreateUser("sanchezmorty")
+    self.CreateUser("sanchezrick")
+    self.CreateUser("sanchezsummer")
+    self.CreateUser("api_user_2")
 
-    with aff4.FACTORY.Create(
-        aff4_users.GlobalNotificationStorage.DEFAULT_PATH,
-        aff4_type=aff4_users.GlobalNotificationStorage,
-        mode="rw",
-        token=self.token) as storage:
-      storage.AddNotification(
-          aff4_users.GlobalNotification(
-              type=aff4_users.GlobalNotification.Type.ERROR,
-              header="Oh no, we're doomed!",
-              content="Houston, Houston, we have a prob...",
-              link="http://www.google.com"))
-      storage.AddNotification(
-          aff4_users.GlobalNotification(
-              type=aff4_users.GlobalNotification.Type.INFO,
-              header="Nothing to worry about!",
-              link="http://www.google.com"))
+  def _query(self, username):
+    args = user_plugin.ApiListApproverSuggestionsArgs(username_query=username)
+    return self.handler.Handle(args, token=self.token)
 
-  def _GetGlobalNotifications(self):
-    user_record = aff4.FACTORY.Create(
-        aff4.ROOT_URN.Add("users").Add(self.token.username),
-        aff4_type=aff4_users.GRRUser,
-        mode="r",
-        token=self.token)
+  def testListsSingleSuggestions(self):
+    result = self._query("sanchezsu")
+    self.assertLen(result.suggestions, 1)
+    self.assertEqual(result.suggestions[0].username, "sanchezsummer")
 
-    pending = user_record.GetPendingGlobalNotifications()
-    shown = list(user_record.Get(user_record.Schema.SHOWN_GLOBAL_NOTIFICATIONS))
-    return (pending, shown)
+  def testListsMultipleSuggestions(self):
+    result = self._query("san")
+    self.assertLen(result.suggestions, 3)
+    self.assertEqual(result.suggestions[0].username, "sanchezmorty")
+    self.assertEqual(result.suggestions[1].username, "sanchezrick")
+    self.assertEqual(result.suggestions[2].username, "sanchezsummer")
 
-  def testDeletesFromPendingAndAddsToShown(self):
-    # Check that there are two pending notifications and no shown ones yet.
-    (pending, shown) = self._GetGlobalNotifications()
-    self.assertEqual(len(pending), 2)
-    self.assertEqual(len(shown), 0)
+  def testEmptyResponse(self):
+    result = self._query("foo")
+    self.assertEmpty(result.suggestions)
 
-    # Delete one of the pending notifications.
-    args = user_plugin.ApiDeletePendingGlobalNotificationArgs(
-        type=aff4_users.GlobalNotification.Type.INFO)
-    self.handler.Handle(args, token=self.token)
-
-    # After the deletion, one notification should be pending and one shown.
-    (pending, shown) = self._GetGlobalNotifications()
-    self.assertEqual(len(pending), 1)
-    self.assertEqual(len(shown), 1)
-    self.assertEqual(pending[0].header, "Oh no, we're doomed!")
-    self.assertEqual(shown[0].header, "Nothing to worry about!")
-
-  def testRaisesOnDeletingNonExistingNotification(self):
-    # Check that there are two pending notifications and no shown ones yet.
-    (pending, shown) = self._GetGlobalNotifications()
-    self.assertEqual(len(pending), 2)
-    self.assertEqual(len(shown), 0)
-
-    # Delete a non-existing pending notification.
-    args = user_plugin.ApiDeletePendingGlobalNotificationArgs(
-        type=aff4_users.GlobalNotification.Type.WARNING)
-    with self.assertRaises(user_plugin.GlobalNotificationNotFoundError):
-      self.handler.Handle(args, token=self.token)
-
-    # Check that the notifications were not changed in the process.
-    (pending, shown) = self._GetGlobalNotifications()
-    self.assertEqual(len(pending), 2)
-    self.assertEqual(len(shown), 0)
+  def testExcludesCurrentUser(self):
+    result = self._query("api")
+    self.assertLen(result.suggestions, 1)
+    self.assertEqual(result.suggestions[0].username, "api_user_2")
 
 
 def main(argv):

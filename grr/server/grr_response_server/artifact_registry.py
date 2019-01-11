@@ -1,11 +1,15 @@
 #!/usr/bin/env python
 """Central registry for artifacts."""
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import unicode_literals
 
 import logging
 import os
 import threading
 
 
+from future.builtins import str
 from future.utils import iteritems
 from future.utils import itervalues
 import yaml
@@ -142,7 +146,13 @@ class ArtifactRegistry(object):
 
     for artifact_coll_urn in self._sources.GetDatastores():
       artifact_coll = ArtifactCollection(artifact_coll_urn)
-      for artifact_value in artifact_coll:
+
+      if data_store.RelationalDBReadEnabled(category="artifacts"):
+        artifact_list = data_store.REL_DB.ReadAllArtifacts()
+      else:
+        artifact_list = list(artifact_coll)
+
+      for artifact_value in artifact_list:
         try:
           self.RegisterArtifact(
               artifact_value,
@@ -550,6 +560,10 @@ def DeleteArtifactsFromDatastore(artifact_names, reload_artifacts=True):
   with data_store.DB.GetMutationPool() as pool:
     for artifact_value in filtered_artifacts:
       store.Add(artifact_value, mutation_pool=pool)
+
+  if data_store.RelationalDBWriteEnabled():
+    for artifact_name in to_delete:
+      data_store.REL_DB.DeleteArtifact(str(artifact_name))
 
   for artifact_value in to_delete:
     REGISTRY.UnregisterArtifact(artifact_value)

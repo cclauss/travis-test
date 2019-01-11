@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 """Tests for grr.lib.repacking."""
 
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import unicode_literals
 
 import glob
@@ -8,12 +10,14 @@ import os
 import shutil
 import zipfile
 
+
 import yaml
 
 from grr_response_core import config
 from grr_response_core.lib import build
 from grr_response_core.lib import config_lib
 from grr_response_core.lib import flags
+from grr_response_core.lib import package
 from grr_response_core.lib import repacking
 from grr_response_core.lib import utils
 from grr.test_lib import test_lib
@@ -25,7 +29,8 @@ class RepackingTests(test_lib.GRRBaseTest):
   @test_lib.RequiresPackage("grr-response-templates")
   def testRepackAll(self):
     """Test repacking all binaries."""
-    self.executables_dir = config_lib.Resource().Filter("executables")
+    self.executables_dir = package.ResourcePath("grr-response-core",
+                                                "executables")
     with utils.TempDirectory() as tmp_dir:
       new_dir = os.path.join(tmp_dir, "grr", "executables")
       os.makedirs(new_dir)
@@ -65,8 +70,9 @@ class RepackingTests(test_lib.GRRBaseTest):
       loaded.pop("Config.includes")
 
       packaged_config = config.CONFIG.MakeNewConfig()
+      data = yaml.safe_dump(loaded)
       packaged_config.Initialize(
-          parser=config_lib.YamlParser, data=yaml.safe_dump(loaded))
+          parser=config_lib.YamlParser, data=data.decode("utf-8"))
       packaged_config.Validate(sections=build.ClientRepacker.CONFIG_SECTIONS)
       repacker = build.ClientRepacker()
       repacker.ValidateEndConfig(packaged_config)

@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 """An LL(1) lexer. This lexer is very tolerant of errors and can resync."""
+from __future__ import absolute_import
+from __future__ import division
 
 from __future__ import unicode_literals
 
@@ -7,12 +9,15 @@ import logging
 import re
 
 
-# pytype: disable=import-error
-from builtins import filter  # pylint: disable=redefined-builtin
-from builtins import range  # pylint: disable=redefined-builtin
-# pytype: enable=import-error
+from future.builtins import filter
+from future.builtins import range
+from future.builtins import str
+from future.utils import python_2_unicode_compatible
+
+from typing import Text
 
 from grr_response_core.lib import utils
+from grr_response_core.lib.util import precondition
 
 
 class Token(object):
@@ -64,7 +69,7 @@ class Lexer(object):
   flags = 0
 
   def __init__(self, data=""):
-    utils.AssertType(data, unicode)
+    precondition.AssertType(data, Text)
     # Set the lexer up to process a new data feed.
     self.Reset()
     # Populate internal token list with class tokens, if defined.
@@ -155,7 +160,7 @@ class Lexer(object):
     return "Error"
 
   def Feed(self, data):
-    utils.AssertType(data, unicode)
+    precondition.AssertType(data, Text)
     self.buffer += data
 
   def Empty(self):
@@ -188,7 +193,7 @@ class Lexer(object):
 
   def PushBack(self, string="", **_):
     """Push the match back on the stream."""
-    utils.AssertType(string, unicode)
+    precondition.AssertType(string, Text)
     self.buffer = string + self.buffer
     self.processed_buffer = self.processed_buffer[:-len(string)]
 
@@ -251,6 +256,7 @@ class Expression(object):
         "%s does not implement Compile." % self.__class__.__name__)
 
 
+@python_2_unicode_compatible
 class BinaryExpression(Expression):
   """An expression which takes two other expressions."""
 

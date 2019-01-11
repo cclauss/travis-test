@@ -2,11 +2,14 @@
 # Copyright 2011 Google Inc. All Rights Reserved.
 """Tests for grr.parsers.chrome_history."""
 
-
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import unicode_literals
 
 import datetime
 import os
+
+from future.builtins import str
 
 from grr_response_core.lib import flags
 from grr_response_core.lib.parsers import chrome_history
@@ -39,13 +42,13 @@ class ChromeHistoryTest(test_lib.GRRBaseTest):
     self.assertEqual(time_results, sorted(time_results))
 
     self.assertEqual(str(dt1), "2013-05-03 15:11:26.556635")
-    self.assertTrue(entries[0][2].startswith(
-        "https://www.google.ch/search?q=why+you+shouldn"))
+    self.assertStartsWith(entries[0][2],
+                          "https://www.google.ch/search?q=why+you+shouldn")
 
     self.assertEqual(str(dt2), "2013-05-03 15:11:39.763984")
-    self.assertTrue(entries[-1][2].startswith("http://www.test.ch/"))
+    self.assertStartsWith(entries[-1][2], "http://www.test.ch/")
 
-    self.assertEqual(len(entries), 4)
+    self.assertLen(entries, 4)
 
   def testTimeOrderingDownload(self):
     """Test we can correctly time order downloads and visits."""
@@ -56,7 +59,7 @@ class ChromeHistoryTest(test_lib.GRRBaseTest):
     # Check that our results are properly time ordered
     time_results = [x[0] for x in entries]
     self.assertEqual(time_results, sorted(time_results))
-    self.assertEqual(len(entries), 23)
+    self.assertLen(entries, 23)
 
   def testBasicParsingOldFormat(self):
     """Test we can parse a standard file."""
@@ -84,11 +87,12 @@ class ChromeHistoryTest(test_lib.GRRBaseTest):
     self.assertEqual(entries[0][2], "http://start.ubuntu.com/10.04/Google/")
 
     self.assertEqual(str(dt2), "2011-05-23 08:37:27.061516")
-    self.assertTrue(entries[-1][2].startswith("https://chrome.google.com/webs"
-                                              "tore/detail/mfjkgbjaikamkkojmak"
-                                              "jclmkianficch"))
+    self.assertStartsWith(
+        entries[-1][2], "https://chrome.google.com/webs"
+        "tore/detail/mfjkgbjaikamkkojmak"
+        "jclmkianficch")
 
-    self.assertEqual(len(entries), 71)
+    self.assertLen(entries, 71)
 
 
 def main(argv):

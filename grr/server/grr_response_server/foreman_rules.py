@@ -1,5 +1,8 @@
 #!/usr/bin/env python
 """Foreman rules RDFValue classes."""
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import unicode_literals
 
 import itertools
 
@@ -12,6 +15,7 @@ from grr_response_core.lib.rdfvalues import structs as rdf_structs
 from grr_response_proto import jobs_pb2
 
 
+# Cannot use data_store here, because of circular dependency.
 def RelationalDBReadEnabled():
   return config.CONFIG["Database.useForReads"]
 

@@ -23,6 +23,8 @@ are meant for exploration and debugging. Intended use is through the
 Fingerprinter, as exemplified in main.
 """
 
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import unicode_literals
 
 import collections
@@ -332,8 +334,10 @@ class Fingerprinter(object):
     extents['SignedData'] = RelRange(start, length)
     return extents
 
-  def _CollectSignedData(self, (start, length)):
+  def _CollectSignedData(self, extent):
     """Extracts signedData blob from PECOFF binary and parses first layer."""
+    start, length = extent
+
     self.file.seek(start, os.SEEK_SET)
     buf = self.file.read(length)
     signed_data = []

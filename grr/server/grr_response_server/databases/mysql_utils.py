@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 """Utilities used by the MySQL database."""
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import unicode_literals
 
 import contextlib
@@ -18,6 +20,14 @@ def ClientIDToInt(client_id):
 
 def IntToClientID(client_id):
   return "C.%016x" % client_id
+
+
+def FlowIDToInt(flow_id):
+  return int(flow_id or "0", 16)
+
+
+def IntToFlowID(flow_id):
+  return "%08X" % flow_id
 
 
 def StringToRDFProto(proto_type, value):

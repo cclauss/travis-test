@@ -1,12 +1,14 @@
 #!/usr/bin/env python
 # -*- mode: python; encoding: utf-8 -*-
 """Test the inspect interface."""
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import unicode_literals
 
-import unittest
-from grr_response_core.lib import flags
 
+from grr_response_core.lib import flags
 from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_server import data_store
 from grr_response_server import flow
 from grr_response_server import queue_manager
 from grr_response_server.flows.general import discovery as flow_discovery
@@ -14,6 +16,7 @@ from grr_response_server.flows.general import processes
 from grr_response_server.gui import gui_test_lib
 from grr.test_lib import db_test_lib
 from grr.test_lib import flow_test_lib
+from grr.test_lib import test_lib
 
 
 class TestInspectViewBase(gui_test_lib.GRRSeleniumTest):
@@ -66,7 +69,6 @@ class TestClientLoadView(TestInspectViewBase):
 
     self.Open("/#/clients/%s/load-stats" % self.client_id)
     self.WaitUntil(self.IsTextPresent, processes.ListProcesses.__name__)
-    self.WaitUntil(self.IsTextPresent, "Task id")
     self.WaitUntil(self.IsTextPresent, "Leased until")
 
 
@@ -94,16 +96,10 @@ class TestDebugClientRequestsView(TestInspectViewBase):
     self.WaitUntil(self.IsTextPresent, "GetPlatformInfo")
     self.WaitUntil(self.IsTextPresent, "GetConfig")
     self.WaitUntil(self.IsTextPresent, "EnumerateInterfaces")
-    self.WaitUntil(self.IsTextPresent, "GENERIC_ERROR")
-    self.WaitUntil(self.IsTextPresent, "STATUS")
-    self.WaitUntil(self.IsTextPresent, "Task id")
-
-
-def main(argv):
-  del argv  # Unused.
-  # Run the full test suite
-  unittest.main()
+    if not data_store.RelationalDBFlowsEnabled():
+      self.WaitUntil(self.IsTextPresent, "GENERIC_ERROR")
+      self.WaitUntil(self.IsTextPresent, "STATUS")
 
 
 if __name__ == "__main__":
-  flags.StartMain(main)
+  flags.StartMain(test_lib.main)

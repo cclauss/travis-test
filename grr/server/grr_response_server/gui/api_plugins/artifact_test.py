@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 """This modules contains tests for artifact API handler."""
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import unicode_literals
 
 import os
@@ -11,10 +13,12 @@ from grr_response_server import artifact
 from grr_response_server.gui import api_test_lib
 from grr_response_server.gui.api_plugins import artifact as artifact_plugin
 from grr.test_lib import artifact_test_lib
+from grr.test_lib import db_test_lib
 from grr.test_lib import flow_test_lib
 from grr.test_lib import test_lib
 
 
+@db_test_lib.DualDBTest
 class ApiListArtifactsHandlerTest(flow_test_lib.FlowTestsBaseclass):
   """Test for ApiListArtifactsHandler."""
 
@@ -56,6 +60,7 @@ class ApiListArtifactsHandlerTest(flow_test_lib.FlowTestsBaseclass):
     self.assertTrue(fake_artifact.artifact.supported_os)
 
 
+@db_test_lib.DualDBTest
 class ApiUploadArtifactHandlerTest(api_test_lib.ApiCallHandlerTest):
 
   def setUp(self):
@@ -77,6 +82,7 @@ class ApiUploadArtifactHandlerTest(api_test_lib.ApiCallHandlerTest):
     registry.GetArtifact("TestDrivers")
 
 
+@db_test_lib.DualDBTest
 @artifact_test_lib.PatchDefaultArtifactRegistry
 class ApiDeleteArtifactsHandlerTest(api_test_lib.ApiCallHandlerTest):
 

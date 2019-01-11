@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 """Tests for API client and hunts-related API calls."""
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import unicode_literals
 
 import io
@@ -11,11 +13,13 @@ from grr_response_core.lib.rdfvalues import client as rdf_client
 from grr_response_server import aff4
 from grr_response_server.gui import api_e2e_test_lib
 from grr_response_server.output_plugins import csv_plugin
+from grr.test_lib import db_test_lib
 from grr.test_lib import flow_test_lib
 from grr.test_lib import hunt_test_lib
 from grr.test_lib import test_lib
 
 
+@db_test_lib.DualDBTest
 class ApiClientLibHuntTest(api_e2e_test_lib.ApiE2ETest,
                            hunt_test_lib.StandardHuntTestMixin):
   """Tests flows-related part of GRR Python API client library."""
@@ -26,7 +30,7 @@ class ApiClientLibHuntTest(api_e2e_test_lib.ApiE2ETest,
 
   def testListHunts(self):
     hs = list(self.api.ListHunts())
-    self.assertEqual(len(hs), 1)
+    self.assertLen(hs, 1)
     self.assertEqual(hs[0].hunt_id, self.hunt_obj.urn.Basename())
     self.assertEqual(hs[0].data.name, "GenericHunt")
 
@@ -94,7 +98,7 @@ class ApiClientLibHuntTest(api_e2e_test_lib.ApiE2ETest,
     self.hunt_obj.Log("Sample message: bar.")
 
     logs = list(self.api.Hunt(self.hunt_obj.urn.Basename()).ListLogs())
-    self.assertEqual(len(logs), 2)
+    self.assertLen(logs, 2)
 
     self.assertEqual(logs[0].client, None)
     self.assertEqual(logs[0].data.log_message, "Sample message: foo.")
@@ -124,7 +128,7 @@ class ApiClientLibHuntTest(api_e2e_test_lib.ApiE2ETest,
                                    "<some backtrace>")
 
     errors = list(self.api.Hunt(self.hunt_obj.urn.Basename()).ListErrors())
-    self.assertEqual(len(errors), 2)
+    self.assertLen(errors, 2)
 
     self.assertEqual(errors[0].log_message, "Error foo.")
     self.assertEqual(errors[0].client.client_id, client_urn_1.Basename())
@@ -146,7 +150,7 @@ class ApiClientLibHuntTest(api_e2e_test_lib.ApiE2ETest,
                                                   self.token)
 
     crashes = list(self.api.Hunt(self.hunt_obj.urn.Basename()).ListCrashes())
-    self.assertEqual(len(crashes), 2)
+    self.assertLen(crashes, 2)
 
     self.assertEqual(
         set(x.client.client_id for x in crashes),
@@ -162,13 +166,13 @@ class ApiClientLibHuntTest(api_e2e_test_lib.ApiE2ETest,
 
     h = self.api.Hunt(self.hunt_obj.urn.Basename())
     clients = list(h.ListClients(h.CLIENT_STATUS_STARTED))
-    self.assertEqual(len(clients), 5)
+    self.assertLen(clients, 5)
 
     clients = list(h.ListClients(h.CLIENT_STATUS_OUTSTANDING))
-    self.assertEqual(len(clients), 4)
+    self.assertLen(clients, 4)
 
     clients = list(h.ListClients(h.CLIENT_STATUS_COMPLETED))
-    self.assertEqual(len(clients), 1)
+    self.assertLen(clients, 1)
     self.assertEqual(clients[0].client_id, client_ids[-1].Basename())
 
   def testGetClientCompletionStats(self):
@@ -178,8 +182,8 @@ class ApiClientLibHuntTest(api_e2e_test_lib.ApiE2ETest,
 
     client_stats = self.api.Hunt(
         self.hunt_obj.urn.Basename()).GetClientCompletionStats()
-    self.assertEqual(len(client_stats.start_points), 0)
-    self.assertEqual(len(client_stats.complete_points), 0)
+    self.assertEmpty(client_stats.start_points)
+    self.assertEmpty(client_stats.complete_points)
 
   def testGetStats(self):
     self.client_ids = self.SetupClients(5)
@@ -188,7 +192,7 @@ class ApiClientLibHuntTest(api_e2e_test_lib.ApiE2ETest,
     self.RunHunt(failrate=-1)
 
     stats = self.api.Hunt(self.hunt_obj.urn.Basename()).GetStats()
-    self.assertEqual(len(stats.worst_performers), 5)
+    self.assertLen(stats.worst_performers, 5)
 
   def testGetFilesArchive(self):
     zip_stream = io.BytesIO()

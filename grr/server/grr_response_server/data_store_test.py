@@ -4,11 +4,11 @@
 
 Implementations should be able to pass these tests to be conformant.
 """
+from __future__ import absolute_import
 from __future__ import division
 from __future__ import unicode_literals
 
 import functools
-import hashlib
 import inspect
 import logging
 import operator
@@ -16,11 +16,11 @@ import os
 import random
 import string
 import tempfile
-import thread
 import threading
 import time
 
 
+import _thread
 from builtins import range  # pylint: disable=redefined-builtin
 from future.utils import iteritems
 from future.utils import iterkeys
@@ -29,11 +29,11 @@ import mock
 import pytest
 
 from grr_response_core.lib import rdfvalue
-from grr_response_core.lib import utils
 from grr_response_core.lib.rdfvalues import client as rdf_client
 from grr_response_core.lib.rdfvalues import client_fs as rdf_client_fs
 from grr_response_core.lib.rdfvalues import flows as rdf_flows
 from grr_response_core.lib.rdfvalues import paths as rdf_paths
+from grr_response_core.lib.util import csv
 from grr_response_server import aff4
 from grr_response_server import data_store
 from grr_response_server import flow
@@ -45,6 +45,7 @@ from grr_response_server.aff4_objects import aff4_grr
 from grr_response_server.aff4_objects import standard
 from grr_response_server.flows.general import filesystem
 from grr_response_server.rdfvalues import flow_runner as rdf_flow_runner
+from grr_response_server.rdfvalues import objects as rdf_objects
 from grr.test_lib import benchmark_test_lib
 from grr.test_lib import test_lib
 
@@ -310,10 +311,10 @@ class DataStoreTestMixin(object):
       data_store.DB.Set(row, predicate_1, "hello")
       data_store.DB.Set(row, predicate_2, "hello")
 
-    self.assertEqual(
-        10, len(list(data_store.DB.ScanAttribute("aff4:/row/", predicate_1))))
-    self.assertEqual(
-        10, len(list(data_store.DB.ScanAttribute("aff4:/row/", predicate_2))))
+    self.assertLen(
+        list(data_store.DB.ScanAttribute("aff4:/row/", predicate_1)), 10)
+    self.assertLen(
+        list(data_store.DB.ScanAttribute("aff4:/row/", predicate_2)), 10)
     data_store.DB.MultiDeleteAttributes(test_rows, [predicate_1, predicate_2])
     self.assertFalse(
         list(data_store.DB.ScanAttribute("aff4:/row/", predicate_1)))
@@ -324,7 +325,7 @@ class DataStoreTestMixin(object):
     all_attributes = data_store.DB.ResolveMulti(
         self.test_row, [predicate], timestamp=(0, 5000))
 
-    self.assertEqual(len(list(all_attributes)), l)
+    self.assertLen(list(all_attributes), l)
 
   def CheckLast(self, predicate, expected_value, exptected_ts):
     stored, ts = data_store.DB.Resolve(self.test_row, predicate)
@@ -415,7 +416,7 @@ class DataStoreTestMixin(object):
 
     subject_names = sorted(iterkeys(subjects))
 
-    self.assertEqual(len(subjects), 2)
+    self.assertLen(subjects, 2)
     self.assertEqual(subject_names, [u"aff4:/row:3", u"aff4:/row:7"])
 
     rows = []
@@ -428,15 +429,15 @@ class DataStoreTestMixin(object):
             row_name, "metadata:%s" % ("X" * i), str(i), timestamp=timestamp)
 
     subjects = dict(data_store.DB.MultiResolvePrefix(rows, ["metadata:"]))
-    self.assertItemsEqual(list(iterkeys(subjects)), rows)
+    self.assertCountEqual(list(iterkeys(subjects)), rows)
     row = subjects["aff4:/prefix_row_4"]
-    self.assertEqual(len(row), 5)
+    self.assertLen(row, 5)
 
     subjects = dict(data_store.DB.MultiResolvePrefix(rows, ["metadata:XXX"]))
-    self.assertItemsEqual(list(iterkeys(subjects)), rows)
+    self.assertCountEqual(list(iterkeys(subjects)), rows)
     for row in itervalues(subjects):
       # Those with 3-5 X's.
-      self.assertEqual(len(row), 3)
+      self.assertLen(row, 3)
       self.assertIn((u"metadata:XXX", "3", 3000), row)
       self.assertNotIn((u"metadata:XX", "2", 2000), row)
 
@@ -730,7 +731,7 @@ class DataStoreTestMixin(object):
 
     results = list(
         data_store.DB.ScanAttributes("aff4:/C", ["aff4:foo", "aff4:bar"]))
-    self.assertEqual(len(results), 10)
+    self.assertLen(results, 10)
     self.assertEqual([s for s, _ in results],
                      ["aff4:/C/" + str(i) for i in range(10)])
 
@@ -744,7 +745,7 @@ class DataStoreTestMixin(object):
     results = list(
         data_store.DB.ScanAttributes(
             "aff4:/C", ["aff4:foo", "aff4:bar"], max_records=5))
-    self.assertEqual(len(results), 5)
+    self.assertLen(results, 5)
 
   def testRDFDatetimeTimestamps(self):
 
@@ -1000,7 +1001,7 @@ class DataStoreTestMixin(object):
     # Check the time is reasonable
     end = int(time.time() + 60) * 1e6
 
-    self.assertTrue(ts >= start and ts <= end)
+    self.assertBetween(ts, start, end)
     self.assertEqual(stored, "1")
 
   def testSpecificTimestamps(self):
@@ -1036,7 +1037,7 @@ class DataStoreTestMixin(object):
 
     # Should return 2 results. Newest should be first.
     values = [x[1] for x in result]
-    self.assertEqual(len(values), 2)
+    self.assertLen(values, 2)
     self.assertListEqual(values, ["1.2", "1.1"])
     times = [x[2] for x in result]
     self.assertListEqual(times, [20000, 10000])
@@ -1045,7 +1046,7 @@ class DataStoreTestMixin(object):
         self.test_row, predicate1, timestamp=data_store.DB.NEWEST_TIMESTAMP)
 
     # Should return 1 result - the most recent.
-    self.assertEqual(len(result), 1)
+    self.assertLen(result, 1)
     self.assertEqual(result[0][1], "1.2")
     self.assertEqual(result[0][2], 20000)
 
@@ -1053,7 +1054,7 @@ class DataStoreTestMixin(object):
         data_store.DB.ResolvePrefix(
             self.test_row, "metadata:", timestamp=data_store.DB.ALL_TIMESTAMPS))
 
-    self.assertEqual(len(result), 4)
+    self.assertLen(result, 4)
     self.assertListEqual([r for r in result if r[0] == "metadata:predicate1"],
                          [(u"metadata:predicate1", "1.2", 20000),
                           (u"metadata:predicate1", "1.1", 10000)])
@@ -1068,7 +1069,7 @@ class DataStoreTestMixin(object):
             timestamp=data_store.DB.NEWEST_TIMESTAMP))
 
     # Should only return the latest version.
-    self.assertItemsEqual(result, [(u"metadata:predicate1", "1.2", 20000),
+    self.assertCountEqual(result, [(u"metadata:predicate1", "1.2", 20000),
                                    (u"metadata:predicate2", "2.2", 22000)])
 
   @DeletionTest
@@ -1084,14 +1085,14 @@ class DataStoreTestMixin(object):
     rows = data_store.DB.ResolvePrefix(
         row, "metadata:", timestamp=data_store.DB.ALL_TIMESTAMPS)
 
-    self.assertEqual(len(rows), 4)
-    self.assertItemsEqual([r[2] for r in rows], [0, 1000, 2000, 3000])
+    self.assertLen(rows, 4)
+    self.assertCountEqual([r[2] for r in rows], [0, 1000, 2000, 3000])
 
     data_store.DB.DeleteAttributes(row, [attribute], start=0, end=0)
     rows = data_store.DB.ResolvePrefix(
         row, "metadata:", timestamp=data_store.DB.ALL_TIMESTAMPS)
-    self.assertEqual(len(rows), 3)
-    self.assertItemsEqual([r[2] for r in rows], [1000, 2000, 3000])
+    self.assertLen(rows, 3)
+    self.assertCountEqual([r[2] for r in rows], [1000, 2000, 3000])
 
   def testResolvePrefix(self):
     predicate = "metadata:predicate"
@@ -1101,7 +1102,7 @@ class DataStoreTestMixin(object):
     data_store.DB.Set(subject, predicate, "3")
     results = [x for x in data_store.DB.ResolvePrefix(subject, "metadata:")]
 
-    self.assertEqual(len(results), 1)
+    self.assertLen(results, 1)
     # Value
     self.assertEqual(results[0][1], "3")
     # Predicate
@@ -1121,9 +1122,9 @@ class DataStoreTestMixin(object):
 
     results = [x for x in data_store.DB.ResolveMulti(subject, predicates)]
 
-    self.assertEqual(len(results), 100)
-    self.assertItemsEqual(predicates, [x[0] for x in results])
-    self.assertItemsEqual(predicate_values, [x[1] for x in results])
+    self.assertLen(results, 100)
+    self.assertCountEqual(predicates, [x[0] for x in results])
+    self.assertCountEqual(predicate_values, [x[1] for x in results])
 
     # Now try to query for non existent predicates.
     predicates = predicates[:10]
@@ -1133,35 +1134,35 @@ class DataStoreTestMixin(object):
 
     results = [x for x in data_store.DB.ResolveMulti(subject, predicates)]
 
-    self.assertEqual(10, len(results))
-    self.assertItemsEqual(predicates[:10], [x[0] for x in results])
-    self.assertItemsEqual(predicate_values, [x[1] for x in results])
+    self.assertLen(results, 10)
+    self.assertCountEqual(predicates[:10], [x[0] for x in results])
+    self.assertCountEqual(predicate_values, [x[1] for x in results])
 
   def testBlobs(self):
     data = b"randomdata" * 50
 
-    identifier = data_store.DB.StoreBlob(data)
+    identifier = data_store.BLOBS.WriteBlobWithUnknownHash(data)
 
-    self.assertTrue(data_store.DB.BlobExists(identifier))
-    self.assertEqual(data_store.DB.ReadBlob(identifier), data)
+    self.assertTrue(data_store.BLOBS.CheckBlobExists(identifier))
+    self.assertEqual(data_store.BLOBS.ReadBlob(identifier), data)
 
-    empty_digest = hashlib.sha256().hexdigest()
+    empty_digest = rdf_objects.BlobID.FromBlobData(b"")
 
-    self.assertFalse(data_store.DB.BlobExists(empty_digest))
-    self.assertIsNone(data_store.DB.ReadBlob(empty_digest))
+    self.assertFalse(data_store.BLOBS.CheckBlobExists(empty_digest))
+    self.assertIsNone(data_store.BLOBS.ReadBlob(empty_digest))
 
   def testAFF4BlobImage(self):
     # 500k
     data = b"randomdata" * 50 * 1024
 
-    identifier = data_store.DB.StoreBlob(data)
+    identifier = data_store.BLOBS.WriteBlobWithUnknownHash(data)
 
     # Now create the image containing the blob.
     with aff4.FACTORY.Create("aff4:/C.1235/image", aff4_grr.VFSBlobImage) as fd:
       fd.SetChunksize(512 * 1024)
       fd.Set(fd.Schema.STAT())
 
-      fd.AddBlob(identifier.decode("hex"), len(data))
+      fd.AddBlob(identifier, len(data))
 
     # Check if we can read back the data.
     with aff4.FACTORY.Open("aff4:/C.1235/image") as fd:
@@ -1183,11 +1184,11 @@ class DataStoreTestMixin(object):
 
     directory = aff4.FACTORY.Open("aff4:/C.1240/dir")
     dirs = list(directory.OpenChildren())
-    self.assertEqual(2, len(dirs))
-    self.assertItemsEqual([d.urn.Basename() for d in dirs], ["b", "a.b"])
+    self.assertLen(dirs, 2)
+    self.assertCountEqual([d.urn.Basename() for d in dirs], ["b", "a.b"])
     urns = list(directory.ListChildren())
-    self.assertEqual(2, len(urns))
-    self.assertItemsEqual([u.Basename() for u in urns], ["b", "a.b"])
+    self.assertLen(urns, 2)
+    self.assertCountEqual([u.Basename() for u in urns], ["b", "a.b"])
 
   OPEN_WITH_LOCK_NUM_THREADS = 5
   OPEN_WITH_LOCK_TRIES_PER_THREAD = 3
@@ -1228,7 +1229,7 @@ class DataStoreTestMixin(object):
 
             self.opened = True
             logging.info("Thread %s holding lock for 0.2 seconds.",
-                         thread.get_ident())
+                         _thread.get_ident())
             time.sleep(0.2)
 
             # We fail if someone has closed the object while we are holding it
@@ -1237,7 +1238,7 @@ class DataStoreTestMixin(object):
               self.close_failures += 1
               self.fail("Double close!")
 
-            self.results.append(thread.get_ident())
+            self.results.append(_thread.get_ident())
 
             self.opened = False
             return
@@ -1261,7 +1262,7 @@ class DataStoreTestMixin(object):
     self.assertEqual(self.close_failures, 0)
 
     # Make sure all threads got it eventually.
-    self.assertEqual(len(self.results), self.OPEN_WITH_LOCK_NUM_THREADS)
+    self.assertLen(self.results, self.OPEN_WITH_LOCK_NUM_THREADS)
 
   def _ListedMultiResolvePrefix(self, *args, **kwargs):
     return list(data_store.DB.MultiResolvePrefix(*args, **kwargs))
@@ -1294,7 +1295,7 @@ class DataStoreTestMixin(object):
     for limit in [1, 2, 5, 10, 100]:
       results = data_store.DB.ResolvePrefix(
           subjects[0], "metadata:", limit=limit)
-      self.assertEqual(len(results), min(limit, 10))
+      self.assertLen(results, min(limit, 10))
 
     # MultiResolvePrefix.
     for limit in [1, 2, 5, 9, 10, 11, 25, 100, 120]:
@@ -1304,7 +1305,7 @@ class DataStoreTestMixin(object):
       for subect_res in itervalues(results):
         all_results.extend(subect_res)
 
-      self.assertEqual(len(all_results), min(limit, 100))
+      self.assertLen(all_results, min(limit, 100))
 
     for limit in [1, 2, 5, 9, 10, 11, 25]:
       results = dict(
@@ -1314,20 +1315,18 @@ class DataStoreTestMixin(object):
       for subect_res in itervalues(results):
         all_results.extend(subect_res)
 
-      self.assertEqual(len(all_results), min(limit, 10))
+      self.assertLen(all_results, min(limit, 10))
 
     # ResolveMulti.
     for limit in [1, 2, 5, 9, 10, 11, 25]:
       results = list(
           data_store.DB.ResolveMulti(subjects[2], attributes, limit=limit))
 
-      self.assertEqual(len(results), min(limit, 10))
+      self.assertLen(results, min(limit, 10))
 
   def testApi(self):
     # pyformat: disable
     api = [
-        "BlobExists",
-        "BlobsExist",
         "CheckRequestsForCompletion",
         "CollectionReadIndex",
         "CollectionReadStoredTypes",
@@ -1352,8 +1351,6 @@ class DataStoreTestMixin(object):
         "MultiDestroyFlowStates",
         "MultiResolvePrefix",
         "MultiSet",
-        "ReadBlob",
-        "ReadBlobs",
         "ReadCompletedRequests",
         "ReadRequestsAndResponses",
         "ReadResponses",
@@ -1364,8 +1361,6 @@ class DataStoreTestMixin(object):
         "ScanAttribute",
         "ScanAttributes",
         "Set",
-        "StoreBlob",
-        "StoreBlobs",
         "StoreRequestsAndResponses",
     ]
 
@@ -1502,7 +1497,7 @@ class DataStoreTestMixin(object):
 
     # We only have one unanswered request on the queue.
     all_requests = list(manager.FetchRequestsAndResponses(session_id))
-    self.assertEqual(len(all_requests), 1)
+    self.assertLen(all_requests, 1)
     self.assertEqual(all_requests[0], (request, []))
 
     # FetchCompletedRequests should return nothing now.
@@ -1538,7 +1533,7 @@ class DataStoreTestMixin(object):
                 type=rdf_flows.GrrMessage.Type.STATUS))
 
     completed_requests = list(manager.FetchCompletedRequests(session_id))
-    self.assertEqual(len(completed_requests), 3)
+    self.assertLen(completed_requests, 3)
 
     # First completed message is request_id = 2 with 10 responses.
     self.assertEqual(completed_requests[0][0].id, 2)
@@ -1551,10 +1546,10 @@ class DataStoreTestMixin(object):
     # Now fetch all the completed responses. Set the limit so we only fetch some
     # of the responses.
     completed_response = list(manager.FetchCompletedResponses(session_id))
-    self.assertEqual(len(completed_response), 3)
+    self.assertLen(completed_response, 3)
     for i, (request, responses) in enumerate(completed_response, 2):
       self.assertEqual(request.id, i)
-      self.assertEqual(len(responses), 10)
+      self.assertLen(responses, 10)
 
     # Now check if the limit is enforced. The limit refers to the total number
     # of responses to return. We ask for maximum 15 responses, so we should get
@@ -1566,7 +1561,7 @@ class DataStoreTestMixin(object):
       partial_response = manager.FetchCompletedResponses(session_id, limit=15)
       for i, (request, responses) in enumerate(partial_response, 2):
         self.assertEqual(request.id, i)
-        self.assertEqual(len(responses), 10)
+        self.assertLen(responses, 10)
     except queue_manager.MoreDataException:
       more_data = True
 
@@ -1581,7 +1576,7 @@ class DataStoreTestMixin(object):
           rdf_flows.GrrNotification(session_id=session_id, timestamp=100))
     stored_notifications = manager.GetNotificationsForAllShards(
         session_id.Queue())
-    self.assertEqual(len(stored_notifications), 1)
+    self.assertLen(stored_notifications, 1)
 
 
 @pytest.mark.benchmark
@@ -1644,7 +1639,7 @@ class DataStoreCSVBenchmarks(benchmark_test_lib.MicroBenchmarks):
 
   def WriteCSV(self, remove=False):
     """Write results to a CSV file."""
-    writer = utils.CsvWriter(delimiter=u" ")
+    writer = csv.Writer(delimiter=u" ")
     writer.WriteRow([
         u"Benchmark",
         u"Time",
@@ -1970,7 +1965,7 @@ class DataStoreCSVBenchmarks(benchmark_test_lib.MicroBenchmarks):
 
     for count in range(howmany):
       data = self._GenerateRandomString(1024 * size)
-      data_store.DB.StoreBlob(data)
+      data_store.WriteBlobWithUnknownHash(data)
 
       if count % often == 0:
         # Because adding blobs, takes too long we force the output of
@@ -2171,7 +2166,7 @@ class DataStoreBenchmarks(benchmark_test_lib.MicroBenchmarks):
                    self.RECORDS)
 
     start_time = time.time()
-    self.assertEqual(len(indexed_collection), self.RECORDS)
+    self.assertLen(indexed_collection, self.RECORDS)
     elapsed_time = time.time() - start_time
     self.AddResult("Seq. Coll. Read to end", elapsed_time, 1)
 
@@ -2336,8 +2331,8 @@ class DataStoreBenchmarks(benchmark_test_lib.MicroBenchmarks):
           "aff4:/largerow%d" % i,
           "task:largeflow",
           timestamp=data_store.DB.ALL_TIMESTAMPS)
-      self.assertEqual(len(res), 1)
-      self.assertEqual(len(res[0][1]), 10 * 1024 * 1024)
+      self.assertLen(res, 1)
+      self.assertLen(res[0][1], 10 * 1024 * 1024)
 
     data_store.DB.Flush()
     end_time = time.time()
@@ -2402,7 +2397,7 @@ class DataStoreBenchmarks(benchmark_test_lib.MicroBenchmarks):
   def ResolvePrefixAndCheck(self, subject, predicate, expected_items=1000):
     res = data_store.DB.ResolvePrefix(
         subject, predicate, timestamp=data_store.DB.ALL_TIMESTAMPS)
-    self.assertEqual(len(list(res)), expected_items)
+    self.assertLen(list(res), expected_items)
 
   def BenchmarkReadingThreaded(self):
 
@@ -2490,7 +2485,7 @@ class DataStoreBenchmarks(benchmark_test_lib.MicroBenchmarks):
 
     self.AddResult("OpenWithLock", (end_time - start_time) / self.n, self.n)
 
-    self.assertEqual(len(self.fails), 0)
+    self.assertEmpty(self.fails)
 
     start_time = time.time()
     for _ in range(self.n):
@@ -2501,4 +2496,4 @@ class DataStoreBenchmarks(benchmark_test_lib.MicroBenchmarks):
     self.AddResult("Multithreaded: OpenWithLock",
                    (end_time - start_time) / self.n, self.n)
 
-    self.assertEqual(len(self.fails), 0)
+    self.assertEmpty(self.fails)

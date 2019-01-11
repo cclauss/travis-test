@@ -9,6 +9,9 @@ AccessControlManager Classes:
     labels.
   FullAccessControlManager: Provides for multiparty authorization.
 """
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import unicode_literals
 
 import fnmatch
 import functools
@@ -19,13 +22,13 @@ import re
 from builtins import map  # pylint: disable=redefined-builtin
 
 from grr_response_core.lib import rdfvalue
-from grr_response_core.lib import registry
-from grr_response_core.lib import stats
 from grr_response_core.lib import utils
 from grr_response_core.lib.rdfvalues import client as rdf_client
+from grr_response_core.lib.util import compatibility
+from grr_response_core.stats import stats_collector_instance
+from grr_response_core.stats import stats_utils
 from grr_response_server import access_control
 from grr_response_server import aff4
-
 from grr_response_server import flow
 from grr_response_server.aff4_objects import security
 from grr_response_server.aff4_objects import users as aff4_users
@@ -51,7 +54,7 @@ class LoggedACL(object):
           logging.debug(
               u"%s GRANTED by %s to %s%s (%s, %s) with reason: %s",
               utils.SmartUnicode(self.access_type),
-              utils.GetName(this.__class__.__name__),
+              compatibility.GetName(this.__class__.__name__),
               utils.SmartUnicode(token and token.username),
               utils.SmartUnicode(
                   token and token.supervisor and " (supervisor)" or ""),
@@ -64,7 +67,7 @@ class LoggedACL(object):
           logging.debug(
               u"%s REJECTED by %s to %s%s (%s, %s) with reason: %s",
               utils.SmartUnicode(self.access_type),
-              utils.GetName(this.__class__.__name__),
+              compatibility.GetName(this.__class__.__name__),
               utils.SmartUnicode(token and token.username),
               utils.SmartUnicode(
                   token and token.supervisor and " (supervisor)" or ""),
@@ -81,8 +84,9 @@ def ValidateToken(token, targets):
 
   Args:
     token: User's credentials as access_control.ACLToken.
-    targets: List of targets that were meant to be accessed by the token.
-             This is used for logging purposes only.
+    targets: List of targets that were meant to be accessed by the token. This
+      is used for logging purposes only.
+
   Returns:
     True if token is valid.
 
@@ -120,8 +124,8 @@ def ValidateAccessAndSubjects(requested_access, subjects):
 
   Args:
     requested_access: String consisting or 'r', 'w' and 'q' characters.
-    subjects: A list of subjects that are about to be accessed with a
-              given requested_access. Used for logging purposes only.
+    subjects: A list of subjects that are about to be accessed with a given
+      requested_access. Used for logging purposes only.
 
   Returns:
     True if requested_access is valid.
@@ -137,8 +141,8 @@ def ValidateAccessAndSubjects(requested_access, subjects):
 
   for s in requested_access:
     if s not in "rwq":
-      raise ValueError("Invalid access requested for %s: %s" %
-                       (subjects, requested_access))
+      raise ValueError(
+          "Invalid access requested for %s: %s" % (subjects, requested_access))
 
   if "q" in requested_access and "r" not in requested_access:
     raise access_control.UnauthorizedAccess(
@@ -178,6 +182,7 @@ def CheckFlowCanBeStartedOnClient(flow_name):
 
   Args:
     flow_name: Name of the flow to check access for.
+
   Returns:
     True if flow is externally accessible.
   Raises:
@@ -190,17 +195,6 @@ def CheckFlowCanBeStartedOnClient(flow_name):
   else:
     raise access_control.UnauthorizedAccess(
         "Flow %s can't be started on a client by non-suid users." % flow_name)
-
-
-def CheckFlowAuthorizedLabels(token, flow_name):
-  """Checks if user has a label in flow's authorized_labels list."""
-  flow_cls = flow.GRRFlow.GetPlugin(flow_name)
-
-  if flow_cls.AUTHORIZED_LABELS:
-    return CheckUserForLabels(
-        token.username, flow_cls.AUTHORIZED_LABELS, token=token)
-  else:
-    return True
 
 
 class CheckAccessHelper(object):
@@ -240,9 +234,9 @@ class CheckAccessHelper(object):
       require: Function that will be called to perform additional checks.
                None by default. It will be called like this:
                require(subject_urn, *args, **kwargs).
-               If this function returns True, the check is considered
-               passed. If it raises, the check is considered failed, no
-               other checks are made and exception is propagated.
+               If this function returns True, the check is considered passed.
+               If it raises, the check is considered failed, no other checks
+               are made and exception is propagated.
       *args: Positional arguments that will be passed to "require" function.
       **kwargs: Keyword arguments that will be passed to "require" function.
     """
@@ -282,14 +276,13 @@ class CheckAccessHelper(object):
         # If require() fails, it raises access_control.UnauthorizedAccess.
         require(subject, token, *require_args, **require_kwargs)
 
-      logging.debug(u"Datastore access granted to %s on %s by pattern: %s "
-                    u"with reason: %s (require=%s, require_args=%s, "
-                    u"require_kwargs=%s, helper_name=%s)",
-                    utils.SmartUnicode(token.username),
-                    utils.SmartUnicode(subject_str),
-                    utils.SmartUnicode(regex_text),
-                    utils.SmartUnicode(token.reason), require, require_args,
-                    require_kwargs, self.helper_name)
+      logging.debug(
+          u"Datastore access granted to %s on %s by pattern: %s "
+          u"with reason: %s (require=%s, require_args=%s, "
+          u"require_kwargs=%s, helper_name=%s)",
+          utils.SmartUnicode(token.username), utils.SmartUnicode(subject_str),
+          utils.SmartUnicode(regex_text), utils.SmartUnicode(token.reason),
+          require, require_args, require_kwargs, self.helper_name)
       return True
 
     logging.warn("Datastore access denied to %s (no matched rules)",
@@ -416,8 +409,6 @@ class FullAccessControlManager(access_control.AccessControlManager):
     # object is stored there.
     h.Allow("aff4:/stats")
     h.Allow("aff4:/stats/*")
-    h.Allow("aff4:/stats/FileStoreStats")
-    h.Allow("aff4:/stats/FileStoreStats/*")
 
     # Configuration namespace used for reading drivers, python hacks etc.
     h.Allow("aff4:/config")
@@ -555,7 +546,7 @@ class FullAccessControlManager(access_control.AccessControlManager):
 
     try:
       cached_token = self.acl_cache.Get(approval_root_urn)
-      stats.STATS.IncrementCounter(
+      stats_collector_instance.Get().IncrementCounter(
           "approval_searches", fields=["without_reason", "cache"])
 
       token.is_emergency = cached_token.is_emergency
@@ -563,7 +554,7 @@ class FullAccessControlManager(access_control.AccessControlManager):
 
       return True
     except KeyError:
-      stats.STATS.IncrementCounter(
+      stats_collector_instance.Get().IncrementCounter(
           "approval_searches", fields=["without_reason", "data_store"])
 
       approved_token = security.Approval.GetApprovalForObject(
@@ -579,51 +570,50 @@ class FullAccessControlManager(access_control.AccessControlManager):
     return self._CheckApprovalsForTokenWithoutReason(token, target)
 
   @LoggedACL("client_access")
-  @stats.Timed("acl_check_time", fields=["client_access"])
+  @stats_utils.Timed("acl_check_time", fields=["client_access"])
   def CheckClientAccess(self, token, client_urn):
     if not client_urn:
       raise ValueError("Client urn can't be empty.")
     client_urn = rdf_client.ClientURN(client_urn)
 
-    return ValidateToken(token, [
-        client_urn
-    ]) and (token.supervisor or self._CheckApprovals(token, client_urn))
+    return ValidateToken(
+        token, [client_urn]) and (token.supervisor or
+                                  self._CheckApprovals(token, client_urn))
 
   @LoggedACL("hunt_access")
-  @stats.Timed("acl_check_time", fields=["hunt_access"])
+  @stats_utils.Timed("acl_check_time", fields=["hunt_access"])
   def CheckHuntAccess(self, token, hunt_urn):
     if not hunt_urn:
       raise ValueError("Hunt urn can't be empty.")
     hunt_urn = rdfvalue.RDFURN(hunt_urn)
 
-    return ValidateToken(token, [
-        hunt_urn
-    ]) and (token.supervisor or self._CheckApprovals(token, hunt_urn))
+    return ValidateToken(token,
+                         [hunt_urn]) and (token.supervisor or
+                                          self._CheckApprovals(token, hunt_urn))
 
   @LoggedACL("cron_job_access")
-  @stats.Timed("acl_check_time", fields=["cron_job_access"])
+  @stats_utils.Timed("acl_check_time", fields=["cron_job_access"])
   def CheckCronJobAccess(self, token, cron_job_urn):
     if not cron_job_urn:
       raise ValueError("Cron job urn can't be empty.")
     cron_job_urn = rdfvalue.RDFURN(cron_job_urn)
 
-    return ValidateToken(token, [
-        cron_job_urn
-    ]) and (token.supervisor or self._CheckApprovals(token, cron_job_urn))
+    return ValidateToken(
+        token, [cron_job_urn]) and (token.supervisor or
+                                    self._CheckApprovals(token, cron_job_urn))
 
   @LoggedACL("can_start_flow")
-  @stats.Timed("acl_check_time", fields=["can_start_flow"])
+  @stats_utils.Timed("acl_check_time", fields=["can_start_flow"])
   def CheckIfCanStartFlow(self, token, flow_name):
     if not flow_name:
       raise ValueError("Flow name can't be empty.")
 
     return ValidateToken(
         token, [flow_name]) and (token.supervisor or
-                                 (CheckFlowCanBeStartedOnClient(flow_name) and
-                                  CheckFlowAuthorizedLabels(token, flow_name)))
+                                 CheckFlowCanBeStartedOnClient(flow_name))
 
   @LoggedACL("data_store_access")
-  @stats.Timed("acl_check_time", fields=["data_store_access"])
+  @stats_utils.Timed("acl_check_time", fields=["data_store_access"])
   def CheckDataStoreAccess(self, token, subjects, requested_access="r"):
     """Allow all access if token and requested access are valid."""
     if any(not x for x in subjects):
@@ -634,17 +624,3 @@ class FullAccessControlManager(access_control.AccessControlManager):
             ValidateToken(token, subjects) and
             (token.supervisor or
              self._CheckAccessWithHelpers(token, subjects, requested_access)))
-
-
-class UserManagersInit(registry.InitHook):
-  """Install the selected security manager.
-
-  Since many security managers depend on AFF4, we must run after the AFF4
-  subsystem is ready.
-  """
-
-  def RunOnce(self):
-    stats.STATS.RegisterEventMetric(
-        "acl_check_time", fields=[("check_type", str)])
-    stats.STATS.RegisterCounterMetric(
-        "approval_searches", fields=[("reason_presence", str), ("source", str)])

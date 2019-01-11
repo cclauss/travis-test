@@ -1,13 +1,15 @@
 #!/usr/bin/env python
 # Copyright 2012 Google Inc. All Rights Reserved.
 """Tests for grr.lib.objectfilter."""
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
 
+from absl.testing import absltest
 from future.utils import iteritems
 
-import unittest
 from grr_response_core.lib import objectfilter
 
 attr1 = "Backup"
@@ -34,6 +36,9 @@ class HashObject(object):
 
   def __eq__(self, y):
     return self.value == y
+
+  def __ne__(self, other):
+    return not self.__eq__(other)
 
   def __lt__(self, y):
     return self.value < y
@@ -114,7 +119,7 @@ class DummyFile(object):
     return 123.9823
 
 
-class ObjectFilterTest(unittest.TestCase):
+class ObjectFilterTest(absltest.TestCase):
 
   def setUp(self):
     self.file = DummyFile()
@@ -332,9 +337,8 @@ class ObjectFilterTest(unittest.TestCase):
     # "One imported_dll imports 2 functions AND one imported_dll imports
     # function RegQueryValueEx"
     arguments = [
-        objectfilter.Equals(
-            ["imported_dlls.num_imported_functions", 1],
-            value_expander=self.value_expander),
+        objectfilter.Equals(["imported_dlls.num_imported_functions", 1],
+                            value_expander=self.value_expander),
         objectfilter.Contains(
             ["imported_dlls.imported_functions", "RegQueryValueEx"],
             value_expander=self.value_expander)
@@ -344,11 +348,10 @@ class ObjectFilterTest(unittest.TestCase):
     self.assertEqual(True, condition.Matches(self.file))
 
     arguments = [
-        objectfilter.Equals(
-            ["num_imported_functions", 2], value_expander=self.value_expander),
-        objectfilter.Contains(
-            ["imported_functions", "RegQueryValueEx"],
-            value_expander=self.value_expander)
+        objectfilter.Equals(["num_imported_functions", 2],
+                            value_expander=self.value_expander),
+        objectfilter.Contains(["imported_functions", "RegQueryValueEx"],
+                              value_expander=self.value_expander)
     ]
     condition = objectfilter.AndFilter(arguments=arguments)
     # "The same DLL imports 2 functions AND one of these is RegQueryValueEx"
@@ -364,13 +367,12 @@ class ObjectFilterTest(unittest.TestCase):
         objectfilter.Equals(
             arguments=["num_imported_functions", 1],
             value_expander=self.value_expander),
-        objectfilter.Contains(
-            ["imported_functions", "RegQueryValueEx"],
-            value_expander=self.value_expander)
+        objectfilter.Contains(["imported_functions", "RegQueryValueEx"],
+                              value_expander=self.value_expander)
     ])
     # "The same DLL imports 1 function AND it"s RegQueryValueEx"
-    context = objectfilter.Context(
-        ["imported_dlls", condition], value_expander=self.value_expander)
+    context = objectfilter.Context(["imported_dlls", condition],
+                                   value_expander=self.value_expander)
     self.assertEqual(True, context.Matches(self.file))
 
     # Now test the context with a straight query
@@ -554,4 +556,4 @@ AND @exported_symbols(name is 'inject')
 
 
 if __name__ == "__main__":
-  unittest.main()
+  absltest.main()

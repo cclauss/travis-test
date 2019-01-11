@@ -1,29 +1,31 @@
 #!/usr/bin/env python
 """This modules contains regression tests for clients API handlers."""
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import unicode_literals
 
 
-from builtins import range  # pylint: disable=redefined-builtin
-import psutil
+from future.builtins import range
+from future.builtins import str
 
 from grr_response_core.lib import flags
 from grr_response_core.lib import rdfvalue
 
-from grr_response_core.lib import utils
 from grr_response_core.lib.rdfvalues import client as rdf_client
 from grr_response_core.lib.rdfvalues import client_network as rdf_client_network
 from grr_response_core.lib.rdfvalues import client_stats as rdf_client_stats
+from grr_response_core.lib.util import compatibility
 from grr_response_server import aff4
 from grr_response_server import data_store
 from grr_response_server import flow
-from grr_response_server import queue_manager
 from grr_response_server.aff4_objects import aff4_grr
 from grr_response_server.aff4_objects import stats as aff4_stats
 from grr_response_server.flows.general import processes
 
 from grr_response_server.gui import api_regression_test_lib
 from grr_response_server.gui.api_plugins import client as client_plugin
-from grr.test_lib import client_test_lib
+from grr_response_server.rdfvalues import flow_objects as rdf_flow_objects
+from grr.test_lib import action_mocks
 from grr.test_lib import flow_test_lib
 from grr.test_lib import hunt_test_lib
 from grr.test_lib import test_lib
@@ -213,6 +215,10 @@ class ApiListClientCrashesHandlerRegressionTest(
   api_method = "ListClientCrashes"
   handler = client_plugin.ApiListClientCrashesHandler
 
+  # This test runs a hunt which is not yet supported on the relational db.
+  # TODO(amoser): Fix this test once hunts are feature complete.
+  aff4_flows_only_test = True
+
   def Run(self):
     if data_store.RelationalDBReadEnabled():
       client = self.SetupTestClientObject(0)
@@ -221,6 +227,7 @@ class ApiListClientCrashesHandlerRegressionTest(
     else:
       client_ids = self.SetupClients(1)
       client_id = client_ids[0].Basename()
+
     client_mock = flow_test_lib.CrashClientMock(
         rdf_client.ClientURN(client_id), self.token)
 
@@ -230,15 +237,20 @@ class ApiListClientCrashesHandlerRegressionTest(
 
     with test_lib.FakeTime(45):
       self.AssignTasksToClients(client_ids)
-      hunt_test_lib.TestHuntHelperWithMultipleMocks({
-          client_id: client_mock
-      }, False, self.token)
+      hunt_test_lib.TestHuntHelperWithMultipleMocks({client_id: client_mock},
+                                                    False, self.token)
 
-    crashes = aff4_grr.VFSGRRClient.CrashCollectionForCID(
-        rdf_client.ClientURN(client_id))
+    if data_store.RelationalDBReadEnabled():
+      crashes = data_store.REL_DB.ReadClientCrashInfoHistory(str(client_id))
+    else:
+      crashes = aff4_grr.VFSGRRClient.CrashCollectionForCID(
+          rdf_client.ClientURN(client_id))
+
     crash = list(crashes)[0]
-    session_id = crash.session_id.Basename()
-    replace = {hunt_obj.urn.Basename(): "H:123456", session_id: "H:11223344"}
+    replace = {
+        hunt_obj.urn.Basename(): "H:123456",
+        str(crash.session_id): "<some session id>"
+    }
 
     self.Check(
         "ListClientCrashes",
@@ -263,41 +275,56 @@ class ApiListClientActionRequestsHandlerRegressionTest(
   api_method = "ListClientActionRequests"
   handler = client_plugin.ApiListClientActionRequestsHandler
 
-  def Run(self):
-    client_id = self.SetupClient(0)
-
-    replace = {}
-    with test_lib.FakeTime(42):
-      flow_urn = flow.StartAFF4Flow(
+  def _StartFlow(self, client_id, flow_cls, **kw):
+    if data_store.RelationalDBFlowsEnabled():
+      flow_id = flow.StartFlow(flow_cls=flow_cls, client_id=client_id, **kw)
+      # Lease the client message.
+      data_store.REL_DB.LeaseClientMessages(
+          client_id, lease_time=rdfvalue.Duration("10000s"))
+      # Write some responses.
+      response = rdf_flow_objects.FlowResponse(
           client_id=client_id,
-          flow_name=processes.ListProcesses.__name__,
+          flow_id=flow_id,
+          request_id=1,
+          response_id=1,
+          payload=rdf_client.Process(name="test_process"))
+      status = rdf_flow_objects.FlowStatus(
+          client_id=client_id, flow_id=flow_id, request_id=1, response_id=2)
+      data_store.REL_DB.WriteFlowResponses([response, status])
+      return flow_id
+
+    else:
+      flow_id = flow.StartAFF4Flow(
+          flow_name=compatibility.GetName(flow_cls),
+          client_id=client_id,
+          token=self.token,
+          **kw).Basename()
+      # Have the client write some responses.
+      test_process = rdf_client.Process(name="test_process")
+      mock = flow_test_lib.MockClient(
+          client_id,
+          action_mocks.ListProcessesMock([test_process]),
           token=self.token)
-      replace[flow_urn.Basename()] = "F:123456"
+      mock.Next()
+      return flow_id
 
-      test_process = client_test_lib.MockWindowsProcess(name="test_process")
-      with utils.Stubber(psutil, "Process", lambda: test_process):
-        # Here we emulate a mock client with no actions (None) that
-        # should produce an error.
-        mock = flow_test_lib.MockClient(client_id, None, token=self.token)
-        while mock.Next():
-          pass
+  def Run(self):
+    client_urn = self.SetupClient(0)
+    client_id = client_urn.Basename()
 
-    manager = queue_manager.QueueManager(token=self.token)
-    requests_responses = manager.FetchRequestsAndResponses(flow_urn)
-    for request, responses in requests_responses:
-      replace[str(request.request.task_id)] = "42"
-      for response in responses:
-        replace[str(response.task_id)] = "43"
+    with test_lib.FakeTime(42):
+      flow_id = self._StartFlow(client_id, processes.ListProcesses)
+
+    replace = api_regression_test_lib.GetFlowTestReplaceDict(client_id, flow_id)
 
     self.Check(
         "ListClientActionRequests",
-        args=client_plugin.ApiListClientActionRequestsArgs(
-            client_id=client_id.Basename()),
+        args=client_plugin.ApiListClientActionRequestsArgs(client_id=client_id),
         replace=replace)
     self.Check(
         "ListClientActionRequests",
         args=client_plugin.ApiListClientActionRequestsArgs(
-            client_id=client_id.Basename(), fetch_responses=True),
+            client_id=client_id, fetch_responses=True),
         replace=replace)
 
 
@@ -313,7 +340,6 @@ class ApiGetClientLoadStatsHandlerRegressionTest(
         aff4_type=aff4_stats.ClientStats,
         token=self.token,
         mode="rw") as stats_fd:
-
       for i in range(6):
         with test_lib.FakeTime((i + 1) * 10):
           timestamp = int((i + 1) * 10 * 1e6)
@@ -331,6 +357,10 @@ class ApiGetClientLoadStatsHandlerRegressionTest(
           st.io_samples.Append(sample)
 
           stats_fd.AddAttribute(stats_fd.Schema.STATS(st))
+
+          if data_store.RelationalDBWriteEnabled():
+            data_store.REL_DB.WriteClientStats(
+                client_id=client_id.Basename(), stats=st)
 
   def Run(self):
     client_id = self.SetupClient(0)

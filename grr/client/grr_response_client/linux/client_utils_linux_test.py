@@ -1,24 +1,27 @@
 #!/usr/bin/env python
 """Tests for client_utils_linux.py."""
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import unicode_literals
 
 import os
 import platform
 import tempfile
-import time
 import unittest
 
+from absl.testing import absltest
 from builtins import range  # pylint: disable=redefined-builtin
 import mock
 
-import unittest
-
 from grr_response_client import client_utils_linux
+from grr_response_client import client_utils_osx_linux
 from grr_response_core.lib import flags
+from grr_response_core.lib import rdfvalue
 from grr_response_core.lib import utils
 from grr_response_core.lib.rdfvalues import flows as rdf_flows
 from grr_response_core.lib.rdfvalues import paths as rdf_paths
 from grr.test_lib import client_test_lib
+from grr.test_lib import temp
 from grr.test_lib import test_lib
 
 
@@ -57,8 +60,9 @@ server.nfs:/vol/home /home/user nfs rw,nosuid,relatime 0 0
         ("/etc/passwd", "/dev/mapper/root", "/etc/passwd",
          rdf_paths.PathSpec.PathType.OS),
         ("/usr/local/bin/ls", "/dev/mapper/usr", "/bin/ls",
-         rdf_paths.PathSpec.PathType.OS), ("/proc/net/sys", "none", "/net/sys",
-                                           rdf_paths.PathSpec.PathType.UNSET),
+         rdf_paths.PathSpec.PathType.OS),
+        ("/proc/net/sys", "none", "/net/sys",
+         rdf_paths.PathSpec.PathType.UNSET),
         ("/home/user/test.txt", "server.nfs:/vol/home", "/test.txt",
          rdf_paths.PathSpec.PathType.UNSET)
     ]:
@@ -71,30 +75,27 @@ server.nfs:/vol/home /home/user nfs rw,nosuid,relatime 0 0
 
   def testLinuxNanny(self):
     """Tests the linux nanny."""
-    self.exit_called = False
 
-    def MockExit(value):
-      self.exit_called = value
-      # Kill the nanny thread.
-      raise RuntimeError("Nannythread exiting.")
+    def MockExit(unused_value):
+      raise RuntimeError("Exit was called.")
+
+    now = rdfvalue.RDFDatetime.Now()
 
     with utils.Stubber(os, "_exit", MockExit):
-      nanny_controller = client_utils_linux.NannyController()
-      nanny_controller.StartNanny(unresponsive_kill_period=0.5)
-      try:
-        for _ in range(10):
-          # Unfortunately we really need to sleep because we cant mock out
-          # time.time.
-          time.sleep(0.1)
-          nanny_controller.Heartbeat()
+      nanny = client_utils_osx_linux.NannyThread(unresponsive_kill_period=5)
+      with test_lib.FakeTime(now):
+        nanny.Heartbeat()
 
-        self.assertEqual(self.exit_called, False)
+      for i in range(10):
+        with test_lib.FakeTime(now + i * rdfvalue.Duration("1s")):
+          nanny._CheckHeartbeatDeadline(nanny.last_heart_beat_time +
+                                        nanny.unresponsive_kill_period)
+          nanny.Heartbeat()
 
-        # Main thread sleeps for long enough for the nanny to fire.
-        time.sleep(1)
-        self.assertEqual(self.exit_called, -1)
-      finally:
-        nanny_controller.StopNanny()
+      with test_lib.FakeTime(now + (10 + 5) * rdfvalue.Duration("1s")):
+        with self.assertRaises(RuntimeError):
+          nanny._CheckHeartbeatDeadline(nanny.last_heart_beat_time +
+                                        nanny.unresponsive_kill_period)
 
   def testLinuxTransactionLog(self):
     """Tests the linux transaction log."""
@@ -110,22 +111,22 @@ server.nfs:/vol/home /home/user nfs rw,nosuid,relatime 0 0
 
 
 @unittest.skipIf(platform.system() != "Linux", "only Linux is supported")
-class GetExtAttrsText(unittest.TestCase):
+class GetExtAttrsText(absltest.TestCase):
 
   def testEmpty(self):
-    with test_lib.AutoTempFilePath() as temp_filepath:
+    with temp.AutoTempFilePath() as temp_filepath:
       attrs = list(client_utils_linux.GetExtAttrs(temp_filepath))
 
-      self.assertEqual(len(attrs), 0)
+      self.assertEmpty(attrs)
 
   def testMany(self):
-    with test_lib.AutoTempFilePath() as temp_filepath:
+    with temp.AutoTempFilePath() as temp_filepath:
       client_test_lib.SetExtAttr(temp_filepath, name="user.foo", value="bar")
       client_test_lib.SetExtAttr(temp_filepath, name="user.quux", value="norf")
 
       attrs = list(client_utils_linux.GetExtAttrs(temp_filepath))
 
-      self.assertEqual(len(attrs), 2)
+      self.assertLen(attrs, 2)
       self.assertEqual(attrs[0].name, "user.foo")
       self.assertEqual(attrs[0].value, "bar")
       self.assertEqual(attrs[1].name, "user.quux")
@@ -134,17 +135,17 @@ class GetExtAttrsText(unittest.TestCase):
   def testIncorrectFilePath(self):
     attrs = list(client_utils_linux.GetExtAttrs("/foo/bar/baz/quux"))
 
-    self.assertEqual(len(attrs), 0)
+    self.assertEmpty(attrs)
 
   @mock.patch("xattr.listxattr", return_value=["user.foo", "user.bar"])
   def testAttrChangeAfterListing(self, listxattr):
-    with test_lib.AutoTempFilePath() as temp_filepath:
+    with temp.AutoTempFilePath() as temp_filepath:
       client_test_lib.SetExtAttr(temp_filepath, name="user.bar", value="baz")
 
       attrs = list(client_utils_linux.GetExtAttrs(temp_filepath))
 
       self.assertTrue(listxattr.called)
-      self.assertEqual(len(attrs), 1)
+      self.assertLen(attrs, 1)
       self.assertEqual(attrs[0].name, "user.bar")
       self.assertEqual(attrs[0].value, "baz")
 

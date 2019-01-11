@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 """An implementation of an in-memory data store for testing."""
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
@@ -8,10 +10,14 @@ import threading
 import time
 
 
+from future.builtins import str
 from future.utils import iteritems
+from future.utils import string_types
+from typing import Text
 
 from grr_response_core.lib import rdfvalue
 from grr_response_core.lib import utils
+from grr_response_core.lib.util import precondition
 from grr_response_server import aff4
 from grr_response_server import data_store
 
@@ -131,7 +137,7 @@ class FakeDataStore(data_store.DataStore):
                        end=None,
                        sync=None):
     _ = sync  # Unimplemented.
-    if isinstance(attributes, basestring):
+    if isinstance(attributes, string_types):
       raise ValueError(
           "String passed to DeleteAttributes (non string iterable expected).")
 
@@ -168,6 +174,9 @@ class FakeDataStore(data_store.DataStore):
                      after_urn="",
                      max_records=None,
                      relaxed_order=False):
+    precondition.AssertType(subject_prefix, Text)
+    precondition.AssertIterableType(attributes, Text)
+
     subject_prefix = utils.SmartStr(rdfvalue.RDFURN(subject_prefix))
     if subject_prefix[-1] != "/":
       subject_prefix += "/"
@@ -302,7 +311,7 @@ class FakeDataStore(data_store.DataStore):
 
     # TODO(hanuszczak): Make this function accept only one attribute prefix and
     # only a unicode object.
-    if isinstance(attribute_prefix, basestring):
+    if isinstance(attribute_prefix, string_types):
       attribute_prefix = [attribute_prefix]
 
     try:
@@ -320,7 +329,7 @@ class FakeDataStore(data_store.DataStore):
           break
         # TODO(hanuszczak): After resolving the TODO comment above this call to
         # `unicode` should be redundant.
-        if unicode(attribute).startswith(prefix):
+        if str(attribute).startswith(prefix):
           for encoded_value, ts in values:
             results_list = results.setdefault(attribute, [])
             # If we are always after the latest ts we clear older ones.

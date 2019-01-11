@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 # -*- mode: python; encoding: utf-8 -*-
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import unicode_literals
 
 from builtins import range  # pylint: disable=redefined-builtin
@@ -45,11 +47,36 @@ class DatabaseTestUsersMixin(object):
 
     self.assertEqual(u_expected, u)
 
+  def testInsertUserTwice(self):
+    d = self.db
+
+    d.WriteGRRUser("foo")
+    d.WriteGRRUser("foo")
+    u = d.ReadGRRUser("foo")
+    u_expected = rdf_objects.GRRUser(username="foo")
+
+    self.assertEqual(u_expected, u)
+
+  def testUpdateUserTwice(self):
+    d = self.db
+
+    d.WriteGRRUser(
+        "foo", user_type=rdf_objects.GRRUser.UserType.USER_TYPE_STANDARD)
+    d.WriteGRRUser(
+        "foo", user_type=rdf_objects.GRRUser.UserType.USER_TYPE_ADMIN)
+    u = d.ReadGRRUser("foo")
+    u_expected = rdf_objects.GRRUser(
+        username="foo", user_type=rdf_objects.GRRUser.UserType.USER_TYPE_ADMIN)
+
+    self.assertEqual(u_expected, u)
+
   def testReadingUnknownGRRUserFails(self):
     d = self.db
 
-    with self.assertRaises(db.UnknownGRRUserError):
+    with self.assertRaises(db.UnknownGRRUserError) as context:
       d.ReadGRRUser("foo")
+
+    self.assertEqual(context.exception.username, "foo")
 
   def testReadingMultipleGRRUsersEntriesWorks(self):
     d = self.db
@@ -67,9 +94,61 @@ class DatabaseTestUsersMixin(object):
     u_bar = rdf_objects.GRRUser(username="bar")
     d.WriteGRRUser(u_bar.username)
 
-    users = sorted(d.ReadAllGRRUsers(), key=lambda x: x.username)
+    users = d.ReadGRRUsers()
     self.assertEqual(users[0], u_bar)
     self.assertEqual(users[1], u_foo)
+
+  def testReadGRRUsersWithOffset(self):
+    self.db.WriteGRRUser("foo1")
+    self.db.WriteGRRUser("foo0")
+    self.db.WriteGRRUser("foo2")
+
+    users = self.db.ReadGRRUsers(offset=1)
+    self.assertLen(users, 2)
+    self.assertEqual(users[0].username, "foo1")
+    self.assertEqual(users[1].username, "foo2")
+
+  def testReadGRRUsersWithCount(self):
+    self.db.WriteGRRUser("foo1")
+    self.db.WriteGRRUser("foo0")
+    self.db.WriteGRRUser("foo2")
+
+    users = self.db.ReadGRRUsers(count=2)
+    self.assertLen(users, 2)
+    self.assertEqual(users[0].username, "foo0")
+    self.assertEqual(users[1].username, "foo1")
+
+  def testReadGRRUsersWithCountAndOffset(self):
+    self.db.WriteGRRUser("foo1")
+    self.db.WriteGRRUser("foo0")
+    self.db.WriteGRRUser("foo2")
+    self.db.WriteGRRUser("foo3")
+
+    users = self.db.ReadGRRUsers(count=2, offset=1)
+    self.assertLen(users, 2)
+    self.assertEqual(users[0].username, "foo1")
+    self.assertEqual(users[1].username, "foo2")
+
+  def testDeleteGRRUser(self):
+    self.db.WriteGRRUser("foo")
+    self.db.DeleteGRRUser("foo")
+
+    with self.assertRaises(db.UnknownGRRUserError):
+      self.db.ReadGRRUser("foo")
+
+  def testDeleteUnknownGRRUserFails(self):
+    self.db.WriteGRRUser("foobar")
+
+    with self.assertRaises(db.UnknownGRRUserError):
+      self.db.DeleteGRRUser("foo")
+
+    self.db.ReadGRRUser("foobar")
+
+  def testDeleteGRRUserDoesNotAffectOthers(self):
+    self.db.WriteGRRUser("foobar")
+    self.db.WriteGRRUser("foo")
+    self.db.DeleteGRRUser("foo")
+    self.db.ReadGRRUser("foobar")
 
   def testReadWriteApprovalRequestWithEmptyNotifiedUsersEmailsAndGrants(self):
     d = self.db
@@ -153,7 +232,7 @@ class DatabaseTestUsersMixin(object):
 
     d.GrantApproval("requestor", approval_id, "grantor")
     read_request = d.ReadApprovalRequest("requestor", approval_id)
-    self.assertEqual(len(read_request.grants), 1)
+    self.assertLen(read_request.grants, 1)
     self.assertEqual(read_request.grants[0].grantor_username, "grantor")
 
   def testGrantApprovalAddsMultipleGrantorsWithSameName(self):
@@ -176,7 +255,7 @@ class DatabaseTestUsersMixin(object):
       d.GrantApproval("requestor", approval_id, "grantor")
 
     read_request = d.ReadApprovalRequest("requestor", approval_id)
-    self.assertEqual(len(read_request.grants), 3)
+    self.assertLen(read_request.grants, 3)
     self.assertEqual([g.grantor_username for g in read_request.grants],
                      ["grantor"] * 3)
 
@@ -213,7 +292,7 @@ class DatabaseTestUsersMixin(object):
             "requestor",
             rdf_objects.ApprovalRequest.ApprovalType.APPROVAL_TYPE_CLIENT))
 
-    self.assertEqual(len(approvals), 1)
+    self.assertLen(approvals, 1)
     self.assertEqual(approvals[0].approval_id, approval_id)
     # Make sure that commit timestamp gets written and then read back correctly.
     self.assertIsNotNone(approvals[0].timestamp)
@@ -248,7 +327,7 @@ class DatabaseTestUsersMixin(object):
             "requestor",
             rdf_objects.ApprovalRequest.ApprovalType.APPROVAL_TYPE_CLIENT))
 
-    self.assertEqual(len(approvals), 10)
+    self.assertLen(approvals, 10)
     self.assertEqual(set(a.approval_id for a in approvals), approval_ids)
 
   def testReadApprovalRequestsIncludesGrantsIntoSingleApproval(self):
@@ -276,7 +355,7 @@ class DatabaseTestUsersMixin(object):
             "requestor",
             rdf_objects.ApprovalRequest.ApprovalType.APPROVAL_TYPE_CLIENT))
 
-    self.assertEqual(len(approvals), 1)
+    self.assertLen(approvals, 1)
     self.assertEqual(approvals[0].approval_id, approval_id)
 
     self.assertEqual(
@@ -309,7 +388,7 @@ class DatabaseTestUsersMixin(object):
             rdf_objects.ApprovalRequest.ApprovalType.APPROVAL_TYPE_CLIENT),
         key=lambda a: a.reason)
 
-    self.assertEqual(len(approvals), 10)
+    self.assertLen(approvals, 10)
 
     for i, approval in enumerate(approvals):
       self.assertEqual(
@@ -344,7 +423,7 @@ class DatabaseTestUsersMixin(object):
             "requestor",
             rdf_objects.ApprovalRequest.ApprovalType.APPROVAL_TYPE_CLIENT))
 
-    self.assertEqual(len(approvals), 5)
+    self.assertLen(approvals, 5)
     self.assertEqual(
         set(a.approval_id for a in approvals), non_expired_approval_ids)
 
@@ -375,7 +454,7 @@ class DatabaseTestUsersMixin(object):
             rdf_objects.ApprovalRequest.ApprovalType.APPROVAL_TYPE_CLIENT,
             include_expired=True))
 
-    self.assertEqual(len(approvals), 10)
+    self.assertLen(approvals, 10)
     self.assertEqual(set(a.approval_id for a in approvals), approval_ids)
 
   def testReadApprovalRequestsForSubjectReturnsNothingWhenNoApprovals(self):
@@ -414,7 +493,7 @@ class DatabaseTestUsersMixin(object):
             rdf_objects.ApprovalRequest.ApprovalType.APPROVAL_TYPE_CLIENT,
             subject_id=client_id))
 
-    self.assertEqual(len(approvals), 1)
+    self.assertLen(approvals, 1)
     self.assertEqual(approvals[0].approval_id, approval_id)
 
     # Approval id and timestamp are generated in WriteApprovalRequest so we're
@@ -449,7 +528,7 @@ class DatabaseTestUsersMixin(object):
             rdf_objects.ApprovalRequest.ApprovalType.APPROVAL_TYPE_CLIENT,
             subject_id=client_id))
 
-    self.assertEqual(len(approvals), 10)
+    self.assertLen(approvals, 10)
     self.assertEqual(set(a.approval_id for a in approvals), approval_ids)
 
   def testReadApprovalRequestsForSubjectIncludesGrantsIntoSingleResult(self):
@@ -478,7 +557,7 @@ class DatabaseTestUsersMixin(object):
             rdf_objects.ApprovalRequest.ApprovalType.APPROVAL_TYPE_CLIENT,
             subject_id=client_id))
 
-    self.assertEqual(len(approvals), 1)
+    self.assertLen(approvals, 1)
     self.assertEqual(approvals[0].approval_id, approval_id)
 
     self.assertEqual(
@@ -513,7 +592,7 @@ class DatabaseTestUsersMixin(object):
             subject_id=client_id),
         key=lambda a: a.reason)
 
-    self.assertEqual(len(approvals), 10)
+    self.assertLen(approvals, 10)
 
     for i, approval in enumerate(approvals):
       self.assertEqual(
@@ -550,7 +629,7 @@ class DatabaseTestUsersMixin(object):
             rdf_objects.ApprovalRequest.ApprovalType.APPROVAL_TYPE_CLIENT,
             subject_id=client_id))
 
-    self.assertEqual(len(approvals), 5)
+    self.assertLen(approvals, 5)
     self.assertEqual(
         set(a.approval_id for a in approvals), non_expired_approval_ids)
 
@@ -583,7 +662,7 @@ class DatabaseTestUsersMixin(object):
             subject_id=client_id,
             include_expired=True))
 
-    self.assertEqual(len(approvals), 10)
+    self.assertLen(approvals, 10)
     self.assertEqual(set(a.approval_id for a in approvals), approval_ids)
 
   def testNotificationForUnknownUser(self):
@@ -610,7 +689,7 @@ class DatabaseTestUsersMixin(object):
     d.WriteUserNotification(n)
 
     ns = d.ReadUserNotifications(username)
-    self.assertEqual(len(ns), 1)
+    self.assertLen(ns, 1)
     self.assertEqual(ns[0], n)
 
   def testMultipleNotificationsCanBeWrittenAndRead(self):
@@ -631,7 +710,7 @@ class DatabaseTestUsersMixin(object):
       d.WriteUserNotification(n)
 
     read_ns = d.ReadUserNotifications(username)
-    self.assertEqual(len(read_ns), 10)
+    self.assertLen(read_ns, 10)
     self.assertEqual(ns, sorted(read_ns, key=lambda x: x.timestamp))
 
   def testNotificationTimestampIsGeneratedWhenNotExplicit(self):
@@ -648,7 +727,7 @@ class DatabaseTestUsersMixin(object):
     d.WriteUserNotification(n)
 
     ns = d.ReadUserNotifications(username)
-    self.assertEqual(len(ns), 1)
+    self.assertLen(ns, 1)
     self.assertNotEqual(int(ns[0].timestamp), 0)
 
     self.assertNotEqual(ns[0], n)
@@ -694,7 +773,7 @@ class DatabaseTestUsersMixin(object):
 
     ns = d.ReadUserNotifications(username, timerange=(None, None))
     ns = sorted(ns, key=lambda x: x.message)
-    self.assertEqual(len(ns), 2)
+    self.assertLen(ns, 2)
     self.assertEqual(ns[0].message, "n0")
     self.assertEqual(ns[1].message, "n1")
 
@@ -705,12 +784,12 @@ class DatabaseTestUsersMixin(object):
     ts = self._SetupUserNotificationTimerangeTest()
 
     ns = d.ReadUserNotifications(username, timerange=(ts[0], ts[1]))
-    self.assertEqual(len(ns), 1)
+    self.assertLen(ns, 1)
     self.assertEqual(ns[0].message, "n0")
 
     ns = d.ReadUserNotifications(username, timerange=(ts[0], ts[2]))
     ns = sorted(ns, key=lambda x: x.message)
-    self.assertEqual(len(ns), 2)
+    self.assertLen(ns, 2)
     self.assertEqual(ns[0].message, "n0")
     self.assertEqual(ns[1].message, "n1")
 
@@ -721,7 +800,7 @@ class DatabaseTestUsersMixin(object):
     ts = self._SetupUserNotificationTimerangeTest()
 
     ns = d.ReadUserNotifications(username, timerange=(ts[1], None))
-    self.assertEqual(len(ns), 1)
+    self.assertLen(ns, 1)
     self.assertEqual(ns[0].message, "n1")
 
   def testReadUserNotificationsWithTimerangeWithToOnly(self):
@@ -731,7 +810,7 @@ class DatabaseTestUsersMixin(object):
     ts = self._SetupUserNotificationTimerangeTest()
 
     ns = d.ReadUserNotifications(username, timerange=(None, ts[1]))
-    self.assertEqual(len(ns), 1)
+    self.assertLen(ns, 1)
     self.assertEqual(ns[0].message, "n0")
 
   def testReadUserNotificationsWithTimerangeEdgeCases(self):
@@ -740,12 +819,12 @@ class DatabaseTestUsersMixin(object):
 
     self._SetupUserNotificationTimerangeTest()
     all_ns = d.ReadUserNotifications(username)
-    self.assertEqual(len(all_ns), 2)
+    self.assertLen(all_ns, 2)
 
     for n in all_ns:
       ns = d.ReadUserNotifications(
           username, timerange=(n.timestamp, n.timestamp))
-      self.assertEqual(len(ns), 1)
+      self.assertLen(ns, 1)
       self.assertEqual(ns[0], n)
 
     v_from = min(all_ns[0].timestamp, all_ns[1].timestamp)
@@ -753,7 +832,7 @@ class DatabaseTestUsersMixin(object):
 
     ns = d.ReadUserNotifications(username, timerange=(v_from, v_to))
     ns = sorted(ns, key=lambda x: x.message)
-    self.assertEqual(len(ns), 2)
+    self.assertLen(ns, 2)
     self.assertEqual(ns[0].message, "n0")
     self.assertEqual(ns[1].message, "n1")
 
@@ -765,11 +844,11 @@ class DatabaseTestUsersMixin(object):
 
     ns = d.ReadUserNotifications(
         username, state=rdf_objects.UserNotification.State.STATE_NOT_PENDING)
-    self.assertEqual(len(ns), 0)
+    self.assertEmpty(ns)
 
     ns = d.ReadUserNotifications(
         username, state=rdf_objects.UserNotification.State.STATE_PENDING)
-    self.assertEqual(len(ns), 2)
+    self.assertLen(ns, 2)
 
   def testReadUserNotificationsWithStateAndTimerange(self):
     d = self.db
@@ -781,13 +860,13 @@ class DatabaseTestUsersMixin(object):
         username,
         timerange=(ts[0], ts[1]),
         state=rdf_objects.UserNotification.State.STATE_NOT_PENDING)
-    self.assertEqual(len(ns), 0)
+    self.assertEmpty(ns)
 
     ns = d.ReadUserNotifications(
         username,
         timerange=(ts[0], ts[1]),
         state=rdf_objects.UserNotification.State.STATE_PENDING)
-    self.assertEqual(len(ns), 1)
+    self.assertLen(ns, 1)
     self.assertEqual(ns[0].message, "n0")
 
   def testUpdateUserNotificationsUpdatesState(self):

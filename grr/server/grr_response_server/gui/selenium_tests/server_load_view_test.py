@@ -1,15 +1,14 @@
 #!/usr/bin/env python
 """Test the server load view interface."""
+from __future__ import absolute_import
 from __future__ import division
 from __future__ import unicode_literals
 
-import unittest
-from grr_response_core.lib import flags
 
+from grr_response_core.lib import flags
 from grr_response_core.lib import rdfvalue
-from grr_response_core.lib import stats
-from grr_response_server import aff4
-from grr_response_server.aff4_objects import stats_store
+from grr_response_core.stats import stats_collector_instance
+from grr_response_server import stats_store
 from grr_response_server.gui import gui_test_lib
 from grr.test_lib import db_test_lib
 from grr.test_lib import test_lib
@@ -21,11 +20,6 @@ class TestServerLoadView(gui_test_lib.GRRSeleniumTest):
 
   @staticmethod
   def SetupSampleMetrics(token=None):
-    store = aff4.FACTORY.Create(
-        None, stats_store.StatsStore, mode="w", token=token)
-
-    stats.STATS.RegisterCounterMetric("grr_frontendserver_handle_num")
-
     now = rdfvalue.RDFDatetime.Now()
     handle_data = [(3, now - rdfvalue.Duration("50m")),
                    (0, now - rdfvalue.Duration("45m")),
@@ -43,8 +37,9 @@ class TestServerLoadView(gui_test_lib.GRRSeleniumTest):
                    for value, timestamp in handle_data]
     for value, timestamp in handle_data:
       with test_lib.FakeTime(timestamp / 1e6):
-        stats.STATS.IncrementCounter("grr_frontendserver_handle_num", value)
-        store.WriteStats(process_id="frontend")
+        stats_collector_instance.Get().IncrementCounter(
+            "grr_frontendserver_handle_num", value)
+        stats_store._WriteStats(process_id="frontend")
 
   def testServerLoadPageContainsIndicatorsAndGraphs(self):
     self.Open("/#main=ServerLoadView")
@@ -68,11 +63,5 @@ class TestServerLoadView(gui_test_lib.GRRSeleniumTest):
     self.WaitUntil(self.IsTextPresent, "Frontends load")
 
 
-def main(argv):
-  del argv  # Unused.
-  # Run the full test suite
-  unittest.main()
-
-
 if __name__ == "__main__":
-  flags.StartMain(main)
+  flags.StartMain(test_lib.main)

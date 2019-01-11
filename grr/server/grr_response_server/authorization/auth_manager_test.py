@@ -1,5 +1,8 @@
 #!/usr/bin/env python
 """Tests for AuthorizationManager."""
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import unicode_literals
 
 
 from builtins import range  # pylint: disable=redefined-builtin

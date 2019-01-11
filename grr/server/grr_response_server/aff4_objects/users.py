@@ -1,5 +1,8 @@
 #!/usr/bin/env python
 """AFF4 object representing grr users."""
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import unicode_literals
 
 import hashlib
 import itertools
@@ -8,10 +11,9 @@ import time
 from builtins import range  # pylint: disable=redefined-builtin
 
 from grr_response_core.lib import rdfvalue
-from grr_response_core.lib import utils
 from grr_response_core.lib.rdfvalues import flows as rdf_flows
 from grr_response_core.lib.rdfvalues import structs as rdf_structs
-from grr_response_proto import jobs_pb2
+from grr_response_core.lib.util import random
 from grr_response_proto import user_pb2
 from grr_response_server import aff4
 
@@ -22,91 +24,6 @@ class Error(Exception):
 
 class UniqueKeyError(Error):
   pass
-
-
-class GlobalNotification(rdf_structs.RDFProtoStruct):
-  """Global notification shown to all the users of GRR."""
-
-  protobuf = jobs_pb2.GlobalNotification
-  rdf_deps = [
-      rdfvalue.Duration,
-      rdfvalue.RDFDatetime,
-  ]
-
-  def __init__(self, *args, **kwargs):
-    super(GlobalNotification, self).__init__(*args, **kwargs)
-
-    if not self.duration:
-      self.duration = rdfvalue.Duration("2w")
-
-    if not self.show_from:
-      self.show_from = rdfvalue.RDFDatetime.Now()
-
-  @property
-  def hash(self):
-    return hash(self)
-
-  @property
-  def type_name(self):
-    return self.Type.reverse_enum[self.type]
-
-
-class GlobalNotificationSet(rdf_structs.RDFProtoStruct):
-  """A set of global notifications: one notification per notification's type."""
-
-  protobuf = jobs_pb2.GlobalNotificationSet
-  rdf_deps = [
-      GlobalNotification,
-  ]
-
-  def AddNotification(self, new_notification):
-    """Adds new notification to the set.
-
-    There can be only one notification of particular type (info, warning,
-    error) in the set. Notifications are guaranteed to be stored in the
-    order of their priority.
-
-    Args:
-      new_notification: New notification to add.
-    """
-    current_list = [
-        notification for notification in self.notifications
-        if notification.type != new_notification.type
-    ]
-    current_list.append(new_notification)
-    current_list = sorted(current_list, key=lambda x: x.type)
-    self.notifications = current_list
-
-  def __iter__(self):
-    for notification in self.notifications:
-      yield notification
-
-  def __contains__(self, notification):
-    return notification in self.notifications
-
-
-class GlobalNotificationStorage(aff4.AFF4Object):
-  """Object that stores GRR's GlobalNotifications."""
-
-  DEFAULT_PATH = rdfvalue.RDFURN("aff4:/config/global_notifications")
-
-  class SchemaCls(aff4.AFF4Object.SchemaCls):
-    """Schema for GlobalNotificationsManager."""
-
-    NOTIFICATIONS = aff4.Attribute(
-        "aff4:global_notification_storage/notifications",
-        GlobalNotificationSet,
-        "List of currently active notifications",
-        versioned=False)
-
-  def AddNotification(self, new_notification):
-    """Adds new notification to the set."""
-    current_set = self.GetNotifications()
-    current_set.AddNotification(new_notification)
-    self.Set(self.Schema.NOTIFICATIONS, current_set)
-
-  def GetNotifications(self):
-    return self.Get(self.Schema.NOTIFICATIONS, default=GlobalNotificationSet())
 
 
 class CryptedPassword(rdfvalue.RDFString):
@@ -129,7 +46,7 @@ class CryptedPassword(rdfvalue.RDFString):
 
   def SetPassword(self, password, salt=None):
     if salt is None:
-      salt = "%08x" % utils.PRNG.GetUInt32()
+      salt = "%08x" % random.UInt32()
 
     self._value = self._CalculateHash(password, salt)
     return self
@@ -159,7 +76,8 @@ class GRRUser(aff4.AFF4Object):
 
   SYSTEM_USERS = set([
       "GRRWorker", "GRRCron", "GRRSystem", "GRRFrontEnd", "GRRConsole",
-      "GRRArtifactRegistry", "GRRStatsStore", "GRREndToEndTest", "GRR"
+      "GRRArtifactRegistry", "GRRStatsStore", "GRREndToEndTest", "GRR",
+      "GRRBenchmarkTest"
   ])
 
   _SYSTEM_USERS_LOWERCASE = set(username.lower() for username in SYSTEM_USERS)
@@ -178,13 +96,6 @@ class GRRUser(aff4.AFF4Object):
         rdf_flows.NotificationList,
         "Notifications already shown to the user.",
         default=rdf_flows.NotificationList(),
-        versioned=False)
-
-    SHOWN_GLOBAL_NOTIFICATIONS = aff4.Attribute(
-        "aff4:global_notification/timestamp_list",
-        GlobalNotificationSet,
-        "Global notifications shown to this user.",
-        default=GlobalNotificationSet(),
         versioned=False)
 
     GUI_SETTINGS = aff4.Attribute(
@@ -320,31 +231,3 @@ class GRRUser(aff4.AFF4Object):
   def CheckPassword(self, password):
     password_obj = self.Get(self.Schema.PASSWORD)
     return password_obj and password_obj.CheckPassword(password)
-
-  def GetPendingGlobalNotifications(self):
-    storage = aff4.FACTORY.Create(
-        GlobalNotificationStorage.DEFAULT_PATH,
-        aff4_type=GlobalNotificationStorage,
-        mode="r",
-        token=self.token)
-    current_notifications = storage.GetNotifications()
-
-    shown_notifications = self.Get(
-        self.Schema.SHOWN_GLOBAL_NOTIFICATIONS, default=GlobalNotificationSet())
-
-    result = []
-    for notification in current_notifications:
-      if notification in shown_notifications:
-        continue
-
-      current_time = rdfvalue.RDFDatetime.Now()
-      if (notification.show_from + notification.duration >= current_time and
-          current_time >= notification.show_from):
-        result.append(notification)
-
-    return result
-
-  def MarkGlobalNotificationAsShown(self, notification):
-    shown_notifications = self.Get(self.Schema.SHOWN_GLOBAL_NOTIFICATIONS)
-    shown_notifications.AddNotification(notification)
-    self.Set(self.Schema.SHOWN_GLOBAL_NOTIFICATIONS, shown_notifications)

@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 """Tests client actions related to administrating the client."""
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import unicode_literals
 
 import os
@@ -15,11 +17,11 @@ from grr_response_client.client_actions import admin
 from grr_response_core import config
 from grr_response_core.lib import flags
 from grr_response_core.lib import rdfvalue
-from grr_response_core.lib import stats
 from grr_response_core.lib import utils
 from grr_response_core.lib.rdfvalues import client_action as rdf_client_action
 from grr_response_core.lib.rdfvalues import client_stats as rdf_client_stats
 from grr_response_core.lib.rdfvalues import protodict as rdf_protodict
+from grr_response_core.stats import stats_collector_instance
 from grr.test_lib import client_test_lib
 from grr.test_lib import test_lib
 
@@ -66,7 +68,7 @@ Client.server_urls:
 - http://www.example1.com/
 - http://www.example2.com/
 """
-    self.assertTrue(server_urls in data)
+    self.assertIn(server_urls, data)
 
     self.urls = []
 
@@ -84,7 +86,7 @@ Client.server_urls:
       client_context.MakeRequest("")
 
     # Since the request is successful we only connect to one location.
-    self.assertTrue(location[0] in self.urls[0])
+    self.assertIn(location[0], self.urls[0])
 
   def testUpdateConfigBlacklist(self):
     """Tests that disallowed fields are not getting updated."""
@@ -188,12 +190,9 @@ class GetClientStatsActionTest(client_test_lib.EmptyActionTest):
 
   def testReturnsAllDataByDefault(self):
     """Checks that stats collection works."""
-
-    stats.STATS.RegisterCounterMetric("grr_client_received_bytes")
-    stats.STATS.IncrementCounter("grr_client_received_bytes", 1566)
-
-    stats.STATS.RegisterCounterMetric("grr_client_sent_bytes")
-    stats.STATS.IncrementCounter("grr_client_sent_bytes", 2000)
+    stats_collector = stats_collector_instance.Get()
+    stats_collector.IncrementCounter("grr_client_received_bytes", 1566)
+    stats_collector.IncrementCounter("grr_client_sent_bytes", 2000)
 
     results = self.RunAction(
         admin.GetClientStats,
@@ -204,7 +203,7 @@ class GetClientStatsActionTest(client_test_lib.EmptyActionTest):
     self.assertEqual(response.bytes_received, 1566)
     self.assertEqual(response.bytes_sent, 2000)
 
-    self.assertEqual(len(response.cpu_samples), 3)
+    self.assertLen(response.cpu_samples, 3)
     for i in range(3):
       self.assertEqual(response.cpu_samples[i].timestamp,
                        rdfvalue.RDFDatetime.FromSecondsSinceEpoch(100 + i * 10))
@@ -213,7 +212,7 @@ class GetClientStatsActionTest(client_test_lib.EmptyActionTest):
                              0.1 * (i + 1))
       self.assertAlmostEqual(response.cpu_samples[i].cpu_percent, 10.0 + 5 * i)
 
-    self.assertEqual(len(response.io_samples), 3)
+    self.assertLen(response.io_samples, 3)
     for i in range(3):
       self.assertEqual(response.io_samples[i].timestamp,
                        rdfvalue.RDFDatetime.FromSecondsSinceEpoch(100 + i * 10))
@@ -230,11 +229,11 @@ class GetClientStatsActionTest(client_test_lib.EmptyActionTest):
         arg=rdf_client_action.GetClientStatsRequest(start_time=start_time))
 
     response = results[0]
-    self.assertEqual(len(response.cpu_samples), 1)
+    self.assertLen(response.cpu_samples, 1)
     self.assertEqual(response.cpu_samples[0].timestamp,
                      rdfvalue.RDFDatetime.FromSecondsSinceEpoch(120))
 
-    self.assertEqual(len(response.io_samples), 1)
+    self.assertLen(response.io_samples, 1)
     self.assertEqual(response.io_samples[0].timestamp,
                      rdfvalue.RDFDatetime.FromSecondsSinceEpoch(120))
 
@@ -246,11 +245,11 @@ class GetClientStatsActionTest(client_test_lib.EmptyActionTest):
         arg=rdf_client_action.GetClientStatsRequest(end_time=end_time))
 
     response = results[0]
-    self.assertEqual(len(response.cpu_samples), 1)
+    self.assertLen(response.cpu_samples, 1)
     self.assertEqual(response.cpu_samples[0].timestamp,
                      rdfvalue.RDFDatetime.FromSecondsSinceEpoch(100))
 
-    self.assertEqual(len(response.io_samples), 1)
+    self.assertLen(response.io_samples, 1)
     self.assertEqual(response.io_samples[0].timestamp,
                      rdfvalue.RDFDatetime.FromSecondsSinceEpoch(100))
 
@@ -264,11 +263,11 @@ class GetClientStatsActionTest(client_test_lib.EmptyActionTest):
             start_time=start_time, end_time=end_time))
 
     response = results[0]
-    self.assertEqual(len(response.cpu_samples), 1)
+    self.assertLen(response.cpu_samples, 1)
     self.assertEqual(response.cpu_samples[0].timestamp,
                      rdfvalue.RDFDatetime.FromSecondsSinceEpoch(110))
 
-    self.assertEqual(len(response.io_samples), 1)
+    self.assertLen(response.io_samples, 1)
     self.assertEqual(response.io_samples[0].timestamp,
                      rdfvalue.RDFDatetime.FromSecondsSinceEpoch(110))
 

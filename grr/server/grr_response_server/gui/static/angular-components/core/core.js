@@ -17,7 +17,6 @@ const {DownloadCollectionFilesDirective} = goog.require('grrUi.core.downloadColl
 const {EncodeUriComponentFilter} = goog.require('grrUi.core.encodeUriComponentFilter');
 const {FirebaseService} = goog.require('grrUi.core.firebaseService');
 const {ForceRefreshDirective} = goog.require('grrUi.core.forceRefreshDirective');
-const {GlobalNotificationsDirective} = goog.require('grrUi.core.globalNotificationsDirective');
 const {HexNumberFilter} = goog.require('grrUi.core.hexNumberFilter');
 const {InfiniteTableDirective} = goog.require('grrUi.core.infiniteTableDirective');
 const {LoadingIndicatorDirective} = goog.require('grrUi.core.loadingIndicatorDirective');
@@ -49,7 +48,7 @@ const {WizardFormPageDirective} = goog.require('grrUi.core.wizardFormPageDirecti
  * Angular module for core GRR UI components.
  */
 exports.coreModule =
-    angular.module('grrUi.core', ['ngCookies', 'ui.bootstrap']);
+    angular.module('grrUi.core', ['ngCookies', 'ngSanitize', 'ui.bootstrap']);
 
 
 exports.coreModule.directive(
@@ -115,9 +114,6 @@ exports.coreModule.directive(
     ServerErrorDialogDirective.directive_name, ServerErrorDialogDirective);
 exports.coreModule.directive(
     ServerErrorPreviewDirective.directive_name, ServerErrorPreviewDirective);
-exports.coreModule.directive(
-    GlobalNotificationsDirective.directive_name, GlobalNotificationsDirective);
-
 exports.coreModule.directive(TroggleDirective.directive_name, TroggleDirective);
 
 exports.coreModule.service(ApiService.service_name, ApiService);

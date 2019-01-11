@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 """Configuration parameters for the data stores."""
 
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import unicode_literals
 
 from grr_response_core.lib import config_lib
@@ -12,7 +14,7 @@ config_lib.DEFINE_integer("Datastore.maximum_blob_size", 512 * 1024,
 config_lib.DEFINE_string("Datastore.implementation", "FakeDataStore",
                          "Storage subsystem to use.")
 
-config_lib.DEFINE_string("Blobstore.implementation", "MemoryStreamBlobstore",
+config_lib.DEFINE_string("Blobstore.implementation", "MemoryStreamBlobStore",
                          "Blob storage subsystem to use.")
 
 config_lib.DEFINE_string("Database.implementation", "",
@@ -22,6 +24,13 @@ config_lib.DEFINE_bool(
     "Database.useForReads", False,
     "Use relational database for reading as well as for writing.")
 
+config_lib.DEFINE_bool("Database.useForReads.audit", False,
+                       "Use relational database for reading audit logs.")
+
+config_lib.DEFINE_bool(
+    "Database.useForReads.artifacts", False,
+    "Enable reading artifact data from the relational database.")
+
 config_lib.DEFINE_bool(
     "Database.useForReads.message_handlers", False,
     "Enable message handlers using the relational database.")
@@ -29,13 +38,20 @@ config_lib.DEFINE_bool(
 config_lib.DEFINE_bool("Database.useForReads.cronjobs", False,
                        "Enable storing cronjobs in the relational database.")
 
-config_lib.DEFINE_bool("Database.useForReads.flows", False,
+# Previously `Database.useForReads.flows`. This has been changed to allow
+# testing relational flows separately and prevent confusion in the usage of
+# RelationalDBReadEnabled(). This flag should not be True, when
+# Database.useForReads is False.
+config_lib.DEFINE_bool("Database.useRelationalFlows", False,
                        "Enable storing flows in the relational database.")
 
 config_lib.DEFINE_bool(
     "Database.useForReads.client_messages", False,
     "Enable storing client messages in the relational "
     "database.")
+
+config_lib.DEFINE_bool("Database.useForReads.client_stats", False,
+                       "Use relational database for reading ClientStats.")
 
 config_lib.DEFINE_bool("Database.useForReads.foreman", False,
                        "Enable the foreman using the relational database.")
@@ -46,6 +62,18 @@ config_lib.DEFINE_bool("Database.useForReads.vfs", False,
 config_lib.DEFINE_bool(
     "Database.useForReads.filestore", False,
     "Use relational database for reading files from filestore.")
+
+config_lib.DEFINE_bool("Database.useForReads.stats", False,
+                       "Read server metrics from the relational database.")
+
+config_lib.DEFINE_bool("Database.useForReads.signed_binaries", False,
+                       "Read signed binary data from the relational database.")
+
+config_lib.DEFINE_bool("Database.useForReads.client_reports", False,
+                       "Read client-report data from the relational database.")
+
+config_lib.DEFINE_bool("Database.aff4_enabled", True,
+                       "Enables reading/writing to the legacy data store.")
 
 DATASTORE_PATHING = [
     r"%{(?P<path>files/hash/generic/sha256/...).*}",
@@ -161,6 +189,28 @@ config_lib.DEFINE_integer(
     "Mysql.max_retries",
     10,
     help="Maximum number of retries (happens in case a query fails).")
+
+config_lib.DEFINE_string(
+    "Mysql.rel_db_name", default="grr_db", help="Name of the database to use.")
+
+# Support for MySQL SSL connections.
+
+config_lib.DEFINE_string(
+    "Mysql.client_key_path",
+    default="",
+    help="The path name of the client private key file.")
+
+config_lib.DEFINE_string(
+    "Mysql.client_cert_path",
+    default="",
+    help="The path name of the client public key certificate file.")
+
+config_lib.DEFINE_string(
+    "Mysql.ca_cert_path",
+    default="",
+    help="The path name of the Certificate Authority (CA) certificate file. "
+    "This option, if used, must specify the same certificate used by the "
+    "server.")
 
 # CloudBigTable data store.
 config_lib.DEFINE_string(

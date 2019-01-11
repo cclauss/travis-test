@@ -2,13 +2,16 @@
 # -*- coding: utf-8 -*-
 """Crypto rdfvalue tests."""
 
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import unicode_literals
 
 import hashlib
 import os
 
-from builtins import chr  # pylint: disable=redefined-builtin
-from builtins import range  # pylint: disable=redefined-builtin
+from future.builtins import chr
+from future.builtins import range
+from future.builtins import str
 from future.utils import iterkeys
 
 from grr_response_core import config
@@ -112,7 +115,7 @@ certificate = -----BEGIN CERTIFICATE-----
     config.CONFIG.context = []
 
     errors = config.CONFIG.Validate("Frontend")
-    self.assertItemsEqual(list(iterkeys(errors)), ["Frontend.certificate"])
+    self.assertCountEqual(list(iterkeys(errors)), ["Frontend.certificate"])
 
   def testInvalidRSAPrivateKey(self):
     """Deliberately try to parse invalid RSA keys."""
@@ -157,7 +160,7 @@ executable_signing_public_key = -----BEGIN PUBLIC KEY-----
     config.CONFIG.context = []
 
     errors = config.CONFIG.Validate("Client")
-    self.assertItemsEqual(
+    self.assertCountEqual(
         list(iterkeys(errors)), ["Client.executable_signing_public_key"])
 
   def testRSAPrivate(self):
@@ -275,8 +278,8 @@ class SymmetricCipherTest(rdf_test_base.RDFValueTestMixin,
 
   def _testEncrypt(self, plain_text):
     sample = self.GenerateSample()
-    self.assertEqual(len(sample._key.RawBytes()), 16)
-    self.assertEqual(len(sample._iv.RawBytes()), 16)
+    self.assertLen(sample._key.RawBytes(), 16)
+    self.assertLen(sample._iv.RawBytes(), 16)
     self.assertEqual(sample._key.RawBytes(), sample._key)
 
     cipher_text = sample.Encrypt(plain_text)

@@ -1,5 +1,8 @@
 #!/usr/bin/env python
 """Tests for grr_response_server.hunts.results."""
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import unicode_literals
 
 
 from builtins import range  # pylint: disable=redefined-builtin
@@ -40,7 +43,7 @@ class ResultTest(aff4_test_lib.AFF4ObjectTest):
     results = hunts_results.HuntResultQueue.ClaimNotificationsForCollection(
         token=self.token)
     self.assertEqual(collection_urn, results[0])
-    self.assertEqual(5, len(results[1]))
+    self.assertLen(results[1], 5)
 
     # Read all the results, using the contained (ts, suffix) pairs.
     values_read = []
@@ -62,12 +65,12 @@ class ResultTest(aff4_test_lib.AFF4ObjectTest):
 
     results_1 = hunts_results.HuntResultQueue.ClaimNotificationsForCollection(
         token=self.token)
-    self.assertEqual(5, len(results_1[1]))
+    self.assertLen(results_1[1], 5)
 
     # Check that we have a claim - that another read returns nothing.
     results_2 = hunts_results.HuntResultQueue.ClaimNotificationsForCollection(
         token=self.token)
-    self.assertEqual(0, len(results_2[1]))
+    self.assertEmpty(results_2[1])
 
     # Push time forward past the default claim timeout, then we should be able
     # to re-read (and re-claim).
@@ -88,7 +91,7 @@ class ResultTest(aff4_test_lib.AFF4ObjectTest):
 
     results_1 = hunts_results.HuntResultQueue.ClaimNotificationsForCollection(
         token=self.token)
-    self.assertEqual(5, len(results_1[1]))
+    self.assertLen(results_1[1], 5)
 
     hunts_results.HuntResultQueue.DeleteNotifications(
         results_1[1], token=self.token)
@@ -99,7 +102,7 @@ class ResultTest(aff4_test_lib.AFF4ObjectTest):
                            rdfvalue.Duration("45m")):
       results_2 = hunts_results.HuntResultQueue.ClaimNotificationsForCollection(
           token=self.token)
-    self.assertEqual(0, len(results_2[1]))
+    self.assertEmpty(results_2[1])
 
   def testNotificationsSplitByCollection(self):
     # Create two HuntResultCollections.
@@ -125,7 +128,7 @@ class ResultTest(aff4_test_lib.AFF4ObjectTest):
     results_1 = hunts_results.HuntResultQueue.ClaimNotificationsForCollection(
         token=self.token)
     self.assertEqual(collection_urn_1, results_1[0])
-    self.assertEqual(100, len(results_1[1]))
+    self.assertLen(results_1[1], 100)
 
     # The first call claimed all the notifications for collection 1. These are
     # claimed, so another call should skip them and give all notifications for
@@ -133,7 +136,7 @@ class ResultTest(aff4_test_lib.AFF4ObjectTest):
     results_2 = hunts_results.HuntResultQueue.ClaimNotificationsForCollection(
         token=self.token)
     self.assertEqual(collection_urn_2, results_2[0])
-    self.assertEqual(100, len(results_2[1]))
+    self.assertLen(results_2[1], 100)
 
     values_read = []
     collection_2 = hunts_results.HuntResultCollection(collection_urn_2)

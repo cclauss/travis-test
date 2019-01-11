@@ -4,6 +4,7 @@
 This module contains the RDFValue implementations used to communicate with the
 client.
 """
+from __future__ import absolute_import
 from __future__ import division
 from __future__ import unicode_literals
 
@@ -15,20 +16,22 @@ import socket
 import struct
 
 
+from future.builtins import str
 from future.utils import iteritems
+from future.utils import string_types
 from past.builtins import long
 import psutil
+from typing import Text
 
 from grr_response_core.lib import rdfvalue
 from grr_response_core.lib import type_info
 from grr_response_core.lib import utils
-
 from grr_response_core.lib.rdfvalues import client_fs as rdf_client_fs
 from grr_response_core.lib.rdfvalues import client_network as rdf_client_network
 from grr_response_core.lib.rdfvalues import paths as rdf_paths
 from grr_response_core.lib.rdfvalues import protodict as rdf_protodict
 from grr_response_core.lib.rdfvalues import structs as rdf_structs
-
+from grr_response_core.lib.util import precondition
 from grr_response_proto import jobs_pb2
 from grr_response_proto import knowledge_base_pb2
 from grr_response_proto import sysinfo_pb2
@@ -66,7 +69,7 @@ class ClientURN(rdfvalue.RDFURN):
     Args:
       value: string value to parse
     """
-    utils.AssertType(value, unicode)
+    precondition.AssertType(value, Text)
     value = value.strip()
 
     super(ClientURN, self).ParseFromUnicode(value)
@@ -84,7 +87,7 @@ class ClientURN(rdfvalue.RDFURN):
   @classmethod
   def Validate(cls, value):
     if value:
-      return bool(cls.CLIENT_ID_RE.match(unicode(value)))
+      return bool(cls.CLIENT_ID_RE.match(str(value)))
 
     return False
 
@@ -122,7 +125,7 @@ class ClientURN(rdfvalue.RDFURN):
     Raises:
        ValueError: if the path component is not a string.
     """
-    if not isinstance(path, basestring):
+    if not isinstance(path, string_types):
       raise ValueError("Only strings should be added to a URN.")
 
     result = rdfvalue.RDFURN(self.Copy(age))
@@ -616,9 +619,8 @@ class VersionString(rdfvalue.RDFString):
 
   @property
   def versions(self):
-    version = str(self)
     result = []
-    for x in version.split("."):
+    for x in str(self).split("."):
       try:
         result.append(int(x))
       except ValueError:

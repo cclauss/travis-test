@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 # -*- mode: python; encoding: utf-8 -*-
 """Tests for API client and VFS-related API calls."""
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import unicode_literals
 
 import io
@@ -87,7 +89,7 @@ class ApiClientLibVfsTest(api_e2e_test_lib.ApiE2ETest):
   def testGetVersionTimes(self):
     vtimes = self.api.Client(client_id=self.client_urn.Basename()).File(
         "fs/os/c/Downloads/a.txt").GetVersionTimes()
-    self.assertEqual(len(vtimes), 1)
+    self.assertLen(vtimes, 1)
 
   def testRefresh(self):
     operation = self.api.Client(client_id=self.client_urn.Basename()).File(
@@ -144,7 +146,7 @@ class ApiClientLibVfsTest(api_e2e_test_lib.ApiE2ETest):
         client_id=self.client_urn.Basename()).File("fs").GetTimeline()
     self.assertTrue(timeline)
     for item in timeline:
-      self.assertTrue(isinstance(item, vfs_pb2.ApiVfsTimelineItem))
+      self.assertIsInstance(item, vfs_pb2.ApiVfsTimelineItem)
 
   def testGetTimelineAsCsv(self):
     out = io.BytesIO()

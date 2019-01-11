@@ -3,6 +3,8 @@
 # Copyright 2012 Google Inc. All Rights Reserved.
 """Tests for grr.lib.type_info."""
 
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import unicode_literals
 
 from grr_response_core.lib import flags
@@ -97,7 +99,7 @@ class TypeInfoTest(test_lib.GRRBaseTest):
     self.assertRaises(type_info.TypeValueError, a.Validate, dict(foo="bar"))
 
     v = a.Validate(dict(path="blah", pathtype="TSK"))
-    self.assertTrue(isinstance(v, rdf_paths.PathSpec))
+    self.assertIsInstance(v, rdf_paths.PathSpec)
     self.assertEqual(v.path, "blah")
     self.assertEqual(v.pathtype, "TSK")
 
@@ -128,16 +130,16 @@ class TypeInfoTest(test_lib.GRRBaseTest):
     self.assertEqual(info.descriptor_map, updated_info.descriptor_map)
     self.assertEqual(sorted(info.descriptors), sorted(updated_info.descriptors))
 
-    self.assertTrue(type_infos[1] in updated_info.descriptors)
-    self.assertTrue("plugins" in updated_info)
+    self.assertIn(type_infos[1], updated_info.descriptors)
+    self.assertIn("plugins", updated_info)
 
     removed_info = updated_info.Remove("plugins")
 
-    self.assertTrue(type_infos[1] in updated_info.descriptors)
-    self.assertTrue("plugins" in updated_info)
+    self.assertIn(type_infos[1], updated_info.descriptors)
+    self.assertIn("plugins", updated_info)
 
-    self.assertFalse(type_infos[2] in removed_info.descriptors)
-    self.assertFalse("plugins" in removed_info)
+    self.assertNotIn(type_infos[2], removed_info.descriptors)
+    self.assertNotIn("plugins", removed_info)
 
 
 def main(args):

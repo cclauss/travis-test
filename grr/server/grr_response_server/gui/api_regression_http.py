@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 """Base test classes for API handlers tests."""
+from __future__ import absolute_import
+from __future__ import division
 from __future__ import unicode_literals
 
 # pylint:mode=test
@@ -24,7 +26,7 @@ from grr_response_server.gui import api_call_router
 from grr_response_server.gui import api_value_renderers
 from grr_response_server.gui import http_api
 from grr_response_server.gui import wsgiapp_testlib
-from grr.test_lib import test_lib
+from grr.test_lib import db_test_lib
 
 DOCUMENT_ROOT = os.path.join(os.path.dirname(gui.__file__), "static")
 
@@ -46,13 +48,14 @@ class HttpApiRegressionTestMixinBase(object):
 
     with _HTTP_ENDPOINTS_LOCK:
       if api_version not in _HTTP_ENDPOINTS:
-        port = portpicker.PickUnusedPort()
+        port = portpicker.pick_unused_port()
         logging.info("Picked free AdminUI port %d.", port)
 
         # Force creation of new APIAuthorizationManager.
         api_auth_manager.APIACLInit.InitApiAuthManager()
 
-        trd = wsgiapp_testlib.ServerThread(port)
+        trd = wsgiapp_testlib.ServerThread(
+            port, name="ApiRegressionHttpConnectorV%d" % api_version)
         trd.StartAndWaitUntilServing()
 
         _HTTP_ENDPOINTS[api_version] = "http://localhost:%d" % port
@@ -63,21 +66,6 @@ class HttpApiRegressionTestMixinBase(object):
   def setUp(self):
     super(HttpApiRegressionTestMixinBase, self).setUp()
     self.connector = self.GetConnector(self.__class__.api_version)
-
-    if (not getattr(self, "aff4_only_test", False) and
-        self.__class__.read_from_relational_db):
-      self.db_config_overrider = test_lib.ConfigOverrider({
-          "Database.useForReads": True,
-          "Database.useForReads.cronjobs": True,
-      })
-      self.db_config_overrider.Start()
-    else:
-      self.db_config_overrider = None
-
-  def tearDown(self):
-    super(HttpApiRegressionTestMixinBase, self).tearDown()
-    if self.db_config_overrider:
-      self.db_config_overrider.Stop()
 
   def _ParseJSON(self, json_str):
     """Parses response JSON."""
@@ -165,6 +153,22 @@ class HttpApiRegressionTestMixinBase(object):
     return check_result
 
 
+# Each mixin below configures a different way for regression tests to run. After
+# AFF4 is gone, there will be only 2 mixins left here (http API v1 and http
+# API v2) at the moment we have (v1 with rel_db, v1 without, v2 with rel_db,
+# v2 without, v2 with "stable" configuration - i.e. with a current prod
+# configuration).
+#
+# Duplicated test methods are added to these classes explicitly to make sure
+# they were not misconfigured and REL_DB is enabled in tests that count on
+# REL_DB being enabled - this will go away with AFF4 support going away.
+#
+# output_file_name denotes where golden regression data should be read from -
+# the point of REL_DB enabled tests is that they should stay compatible with
+# the current API behavior. So we direct them to use same golden files -
+# hence the duplication. Again, this will go away soon.
+
+
 class HttpApiV1RegressionTestMixin(HttpApiRegressionTestMixinBase):
   """Test class for HTTP v1 protocol."""
 
@@ -174,6 +178,26 @@ class HttpApiV1RegressionTestMixin(HttpApiRegressionTestMixinBase):
 
   def testRelationalDBReadsDisabled(self):
     self.assertFalse(data_store.RelationalDBReadEnabled())
+
+  @property
+  def output_file_name(self):
+    return os.path.join(DOCUMENT_ROOT,
+                        "angular-components/docs/api-docs-examples.json")
+
+
+class HttpApiV1RelationalDBRegressionTestMixin(
+    db_test_lib.RelationalDBEnabledMixin, HttpApiRegressionTestMixinBase):
+  """Test class for HTTP v1 protocol with Database.useForReads=True."""
+
+  read_from_relational_db = True
+  connection_type = "http_v1_rel_db"
+  use_golden_files_of = "http_v1"
+  skip_legacy_dynamic_proto_tests = False
+  api_version = 1
+
+  def testRelationalDBReadsEnabled(self):
+    if not getattr(self, "aff4_only_test", False):
+      self.assertTrue(data_store.RelationalDBReadEnabled())
 
   @property
   def output_file_name(self):
@@ -197,11 +221,32 @@ class HttpApiV2RegressionTestMixin(HttpApiRegressionTestMixinBase):
                         "angular-components/docs/api-v2-docs-examples.json")
 
 
-class HttpApiV2RelationalDBRegressionTestMixin(HttpApiRegressionTestMixinBase):
+class HttpApiV2RelationalDBRegressionTestMixin(
+    db_test_lib.RelationalDBEnabledMixin, HttpApiRegressionTestMixinBase):
   """Test class for HTTP v2 protocol with Database.useForReads=True."""
 
   read_from_relational_db = True
   connection_type = "http_v2_rel_db"
+  use_golden_files_of = "http_v2"
+  skip_legacy_dynamic_proto_tests = True
+  api_version = 2
+
+  def testRelationalDBReadsEnabled(self):
+    if not getattr(self, "aff4_only_test", False):
+      self.assertTrue(data_store.RelationalDBReadEnabled())
+
+  @property
+  def output_file_name(self):
+    return os.path.join(DOCUMENT_ROOT,
+                        "angular-components/docs/api-v2-docs-examples.json")
+
+
+class HttpApiV2StableRelationalDBRegressionTestMixin(
+    db_test_lib.StableRelationalDBEnabledMixin, HttpApiRegressionTestMixinBase):
+  """Test class for HTTP v2 protocol with relational flows enabled."""
+
+  read_from_relational_db = True
+  connection_type = "http_v2_rel_db_stable"
   use_golden_files_of = "http_v2"
   skip_legacy_dynamic_proto_tests = True
   api_version = 2
