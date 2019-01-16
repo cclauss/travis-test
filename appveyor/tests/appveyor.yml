@@ -8,6 +8,7 @@ environment:
   PROTOC: "${HOME}/protobuf/bin/protoc"
   GRR_VENV: "${HOME}/INSTALL"
   CHROME_DEB: google-chrome-stable_current_amd64.deb
+  APPVEYOR_SSH_KEY: 'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDrle8Kzm6S6u0Sg5rJSybVGGrrhLHjvDQkjUID8rwlW/nSfbB2TItp0Q+WILR+HosEJ7PDTMgGoIhq5uWC3Kk5x99cLSbzKGmJJOUp3q94ZjyBD+KoUIwyiRtNwV42Dze34PB9ZposleZWWlDttYPpM0GRr53N/B8u6Oux18HcUd23EE0pAyo3oT3PEeKmf4iCzJMAxf54yv96PH9SmPkZCH8zrQxyNjiKeAVp3GPn4RAk1GGySjZgcDaGFSXkybvCJ1XlVpykra9k6R2eAU70qvkEcZLFnxALSezSeNN0YltwkCaZkzdWqncgmzZLPOTqA5hsU4bCZ+fHyiTTqNER ogaro@ogaro-xenial'
 
 cache:
  - ${HOME}/.cache/pip
@@ -49,3 +50,7 @@ test_script:
 - pytest -n 3 grr/ --ignore grr/server/grr_response_server/gui/selenium_tests/
 # jsTree tests seem to fail on Chrome 71 headless due to https://github.com/GoogleChrome/puppeteer/issues/3463
 - if [ $(google-chrome --version | grep -Eo " [0-9]{1,3}") != "71" ]; then (cd grr/server/grr_response_server/gui/static/ && npm run gulp test); fi
+
+on_finish:
+- sh: export APPVEYOR_SSH_BLOCK=true
+- sh: curl -sflL 'https://raw.githubusercontent.com/appveyor/ci/master/scripts/enable-ssh.sh' | bash -e -
