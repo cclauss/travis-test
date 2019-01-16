@@ -18,6 +18,7 @@ install:
 - echo "${PATH}"
 - free -hmw
 - lscpu
+- sudo apt clean
 - sudo apt update -qq
 - sudo apt install -y libmysqlclient-dev
 # Install chrome if absent.
